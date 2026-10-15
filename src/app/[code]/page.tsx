@@ -79,6 +79,8 @@ import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
 import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
 import { keepRecordFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
+import { unreachedDue, unreachedLine, unreachedPartners } from "@/lib/domain/unreached";
+import { channelsOffered } from "@/lib/coach/reach";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
@@ -436,6 +438,22 @@ async function EventPage({ params, searchParams }: Props) {
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()) && !playedKeys.has(r.name.trim().toLowerCase()));
   // A held row whose record is one of those past players: it keeps their matches (the line under it).
   const pastIds = new Set(pastPlayers.map((p) => p.id));
+  // "Kicksmash can't reach Tim and Adrian. Send them the link." (the owner's decision of 15 October 2026,
+  // DECIDING rule 7): the free-seat offer's own past partners of this match (a match that ended in the
+  // last 60 days, `partnersQuery`) that it would want and cannot reach, first names only. For the
+  // organiser's own view of a match with a seat open, before it starts; from the rows and the activity
+  // this page read (who left or was taken out) and one bounded read (`unreachedPartners`). Nobody else ever gets it.
+  const gone = new Set(detail.activity.flatMap((a) => (a.verb === "left" && a.actorPlayerId ? [a.actorPlayerId] : a.verb === "removed" && typeof a.meta?.targetPlayerId === "string" ? [a.meta.targetPlayerId] : [])));
+  const unreachedNames = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedPartners(db, ev, { ids: idsHere, names: namesHere, gone }, channelsOffered(), now) : [];
+  const unreachedParts = unreachedLine(unreachedNames);
+  const unreached =
+    unreachedNames.length > 0
+      ? {
+          text: t("creator.unreached", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format([...unreachedParts.shown, ...(unreachedParts.more ? [t("creator.unreachedMore", { count: unreachedParts.more })] : [])]) }),
+          url,
+          shareText,
+        }
+      : null;
   // "That's me" (DECIDING rule 34): a browser that knows nobody signs in as a record of this match or
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
@@ -1007,6 +1025,7 @@ async function EventPage({ params, searchParams }: Props) {
             isCancelled={cancelled}
             groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
             paste={!cancelled && !over ? { namesHere, spots: spotsLeft, past: pastAsk } : null}
+            unreached={unreached}
           />
         )}
 

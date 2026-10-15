@@ -8,7 +8,7 @@ import { EditMatch } from "./EditMatch";
 import { PasteNames } from "./PasteNames";
 import type { PastView } from "@/lib/domain/pastAsk";
 import type { EventFormValues } from "./EventFields";
-import { CopyButton, ShareButtons } from "./ShareSheet";
+import { CopyButton, ShareButtons, WhatsAppShare } from "./ShareSheet";
 import type { VenueOption } from "./VenueCombobox";
 
 export function CreatorPanel({
@@ -23,6 +23,7 @@ export function CreatorPanel({
   isCancelled,
   groupInvite,
   paste = null,
+  unreached = null,
 }: {
   code: string;
   initial: EventFormValues;
@@ -39,6 +40,13 @@ export function CreatorPanel({
   /** The names already in the match and the open spots, while there are any: "Paste the names from the group". */
   /** `past`: the organiser's past players as names, days and clubs, for "Is this Danny…?" before a pasted name is held. */
   paste?: { namesHere: readonly string[]; spots: number; past?: readonly PastView[] } | null;
+  /**
+   * "Kicksmash can't reach Tim and Adrian. Send them the link." (the owner, 15 October 2026): the line,
+   * worded on the server with first names only, and the match's link and share text for its one
+   * action, the WhatsApp share. Null when nobody is unreached, and for every viewer but the organiser
+   * (`unreachedPartners` on the match page).
+   */
+  unreached?: { text: string; url: string; shareText: string } | null;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
@@ -65,6 +73,13 @@ export function CreatorPanel({
         <span className="chip bg-ink text-on-ink">{t("common.organizer")}</span>
         <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
       </div>
+
+      {!isCancelled && unreached && (
+        <div className="mt-4 border-t border-line pt-4" data-testid="unreached">
+          <p className="text-sm text-muted">{unreached.text}</p>
+          <WhatsAppShare url={unreached.url} text={unreached.shareText} label={t("creator.unreachedSend")} className=" mt-1.5" testId="unreached-send" quiet />
+        </div>
+      )}
 
       {!isCancelled && paste && paste.spots > 0 && <PasteNames code={code} namesHere={paste.namesHere} spots={paste.spots} past={paste.past} />}
 

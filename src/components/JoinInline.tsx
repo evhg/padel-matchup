@@ -8,6 +8,8 @@ import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { heldNameOf, NameHereLine } from "./TakeHeld";
+import { SeatedAsk } from "./SeatedAsk";
+import { normalName } from "@/lib/domain/dupes";
 
 /**
  * In-flow name (and level, on ranged events) entry for joining the waitlist without an identity: the
@@ -45,6 +47,8 @@ export function JoinInline({
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
   const [error, setError] = useState<string | null>(null);
+  /** The typed name the server answered with `name_seated` ("Sign in as Danny?"). */
+  const [seated, setSeated] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -70,6 +74,21 @@ export function JoinInline({
 
   if (!open) return null;
   const askLevel = Boolean(levelRange) && level == null;
+  /** `different`: "I'm a different Danny", the one tap that sends the join past "Sign in as Danny?". */
+  const send = (different = false) =>
+    start(async () => {
+      setError(null);
+      const typed = hasIdentity ? undefined : name;
+      const r = await joinAction(code, typed, level ?? undefined, undefined, different ? { differentPerson: true } : undefined);
+      startTransition(() => {
+        if (r.ok) setSeated(null);
+        else if (r.error === "name_seated" && typed) setSeated(typed);
+        else setError(r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+      });
+    });
+  // "Sign in as Danny?" while the field still holds the name the server asked about; with the record's own doors in it when "That's me" cannot sign it in.
+  const asking = !hasIdentity && seated !== null && normalName(seated) === normalName(name);
+  const askHasDoors = asking && !claimable.some((n) => normalName(n) === normalName(name));
   return (
     <div className="mt-4">
       <form
@@ -81,13 +100,7 @@ export function JoinInline({
           // The Go key and the button while "Take Danny's held place" is on screen: a second Danny would close the place for good.
           if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
           if (levelRange && level == null) return setError(t("errors.level_required"));
-          start(async () => {
-            setError(null);
-            const r = await joinAction(code, hasIdentity ? undefined : name, level ?? undefined);
-            startTransition(() => {
-              if (!r.ok) setError(r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
-            });
-          });
+          send();
         }}
       >
         <div className="text-sm font-bold text-court">{hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</div>
@@ -99,11 +112,15 @@ export function JoinInline({
               {pending ? t("common.working") : label}
             </button>
           </div>
-          {!hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />}
+          {asking ? (
+            <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} doors={backIn} pending={pending} onDifferent={() => send(true)} />
+          ) : (
+            !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />
+          )}
         </div>
         {error ? <p className="mt-1 text-sm font-semibold text-danger">{error}</p> : <p className="mt-1 text-xs text-faint">{levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</p>}
       </form>
-      {!hasIdentity && backIn && <BackInHelp doors={backIn} />}
+      {!hasIdentity && backIn && !askHasDoors && <BackInHelp doors={backIn} />}
     </div>
   );
 }

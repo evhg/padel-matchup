@@ -805,6 +805,21 @@ Wall clock first, credits second. What actually moved it, measured:
   page gives it, with the shipped catalogue. Use it for a label, a name or an `aria-label`
   (`tests/court-booked.test.ts`, `tests/roles.test.ts`); a tap still needs the browser.
 
+- **`vi.mock` does not belong in this suite.** Files share a worker and its module cache (`isolate:
+  false`), so a mock reaches only the modules that file loads first: when an earlier file already
+  loaded `src/actions/shared.ts`, a later `vi.mock("next-intl/server")` changes nothing there, and when
+  the mocking file loads it first, the mocked copy stays cached for the files after it (probed with
+  two files in one worker, 15 October 2026). The need was an action that makes a record:
+  `requirePlayer` reads `getLocale`, which next-intl answers only inside a page Next.js renders, so the
+  action returns "generic" under `asAction`. Test what the action decides before that step (a
+  refusal, a counter), the record itself in the browser suite (`tests/name-seated.test.ts` says so).
+- **A full-page shot of a long page is a strip nobody can read.** The match page at 390 px and 2x is
+  5,500 pixels tall, and the line under test is a few of them. Centre the element and take the
+  viewport (`view` in `e2e/player-states.mjs` and `e2e/passkeys.mjs`), beside the full-page `shot`.
+- **The organiser's page carries names a stranger's never does.** "Tomasz is nowhere in the page" was
+  right for a stranger and wrong for the organiser, whose page holds every past player for "Is this
+  Tomasz…?" in "Paste the names". Check a leak on the viewer it is about; on the organiser's page,
+  check the element.
 - **Anchor on the name, never the line number.** Keys have landed in `coach.home` when they were meant
   for `coach.page` because the insertion point was found by counting.
 - **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that

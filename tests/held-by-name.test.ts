@@ -193,6 +193,7 @@ describe("the held place by name on a real match", () => {
         return makePlayer(db, typed ?? "");
       });
       if ("held" in who) return { refused: who.held };
+      if ("seated" in who) return { seated: who.seated };
       const d = await joinWithPolicy(db, detail, who.player, who.player.level);
       return { outcome: d.kind === "joined" ? d.result.outcome : d.kind };
     };

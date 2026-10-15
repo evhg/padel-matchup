@@ -1136,6 +1136,16 @@ Everything in this list is live. The README describes each in detail.
   "1,600 THB per player"). Opening a match page marks the viewer's notices about that match as read
   (`markMatchNoticesRead`, one indexed update after the response), so the bell counts only what is
   unseen. The share page names the day, the time, the club and the court under "Your match is live".
+- **The owner's decisions of 15 October: whom Kicksmash cannot reach, and "Sign in as Danny?" (no
+  migration).** 13 of 16 past matches never filled, and the free-seat offer reaches only a past partner
+  with a channel (7 records of 21). The organiser's panel now says "Kicksmash can't reach Tim and
+  Adrian. Send them the link." with the match's WhatsApp share: the offer's own past partners (a match
+  that ended in the last 60 days) whom it cannot reach, first names only, only for the organiser, only while a place is open and
+  before the start (DECIDING rule 7, `src/lib/domain/unreached.ts`). A browser that knows nobody and
+  types the name of a player seated or waiting in the match no longer makes a second one: Join asks
+  "Danny is in this match. Sign in as Danny?" with "That's me", or for a record with an email or a
+  passkey its own doors, and "I'm a different Danny" joins as typed; `join_match` with a name and no
+  token answers 409 `name_seated` (DECIDING rule 34).
 
 ## The finish line
 

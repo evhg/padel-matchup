@@ -18,7 +18,8 @@ export type BackInDoors = { email: boolean; telegram: { botId: string; lang: str
  * Telegram. It renders only once the join form opens, so a view of the page costs no call (rule 12).
  * A typed name that is already here ("That's me" on a record that can prove itself) scrolls to it.
  */
-export function BackInHelp({ doors }: { doors: BackInDoors }) {
+/** `bare`: the doors alone, with no box and no heading, under a question of the caller's own ("Danny is in this match. Sign in as Danny?", `SeatedAsk`). */
+export function BackInHelp({ doors, bare = false }: { doors: BackInDoors; bare?: boolean }) {
   const t = useTranslations();
   const box = useRef<HTMLDivElement>(null);
   useEffect(
@@ -38,9 +39,9 @@ export function BackInHelp({ doors }: { doors: BackInDoors }) {
       </div>
     );
   return (
-    <div ref={box} data-testid="back-in-open" className="mt-3 rounded-2xl border border-line bg-card px-3 py-3">
-      <p className="text-sm font-bold">{t("identity.usedBefore")}</p>
-      <div className="mt-2">
+    <div ref={box} data-testid="back-in-open" className={bare ? "mt-2" : "mt-3 rounded-2xl border border-line bg-card px-3 py-3"}>
+      {!bare && <p className="text-sm font-bold">{t("identity.usedBefore")}</p>}
+      <div className={bare ? "" : "mt-2"}>
         <PasskeySignIn />
       </div>
       {doors.email && (

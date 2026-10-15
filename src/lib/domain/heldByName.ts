@@ -42,6 +42,11 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  * own record instead (`takeHeld`: the WhatsApp JOIN, and through `joinAsPlayer` the Telegram ✅ and
  * "+1", the Discord and LINE buttons), because a chat's link to the match page opens a browser that
  * knows nobody, where the take would make a second record.
+ *
+ * Beside the held place, the plain join of a name a record already holds a seat or a waiting place
+ * with, from a browser that knows nobody, asks "Danny is in this match. Sign in as Danny?" first
+ * (`seatedNamed`, `name_seated`; the owner's decision of 15 October 2026), unless the person tapped
+ * "I'm a different Danny".
  */
 
 /** A place in the match as the rule reads it: the row, and the name of the record on it when there is one. */
@@ -148,6 +153,24 @@ export function heldRecordNamed<S extends Pick<JoinSeat, "kind" | "status" | "pl
 }
 
 /**
+ * The record of the typed name that already holds a seat or a waiting place in this match, by the
+ * held-name rule's normalisation (`normalName`), or null. The owner's decision of 15 October 2026 (D2,
+ * DECIDING rule 34): a returning Danny opens the match in a browser that does not know him, types his
+ * own name and taps Join, and Join used to make a second Danny. Now the plain join asks first, "Danny is
+ * in this match. Sign in as Danny?", and joins a second record of the name only when the person said
+ * they are somebody else ("I'm a different Danny", `different`). A browser that knows a record joins as
+ * that record, so it is never asked. The name is on the line-up already, so the refusal tells nobody
+ * anything the page does not show. Pure.
+ */
+export function seatedNamed<S extends Pick<JoinSeat, "status" | "playerId" | "player">>(seats: readonly S[], known: { id: string } | null, typed: string | null | undefined, different = false): string | null {
+  if (known || different) return null;
+  const key = normalName(typed);
+  if (key.length < 2) return null;
+  const seat = seats.find((s) => placeOf(s) && normalName(s.player?.displayName) === key);
+  return seat?.player?.displayName ?? null;
+}
+
+/**
  * Who a plain join on the web seats, decided before anything is made or seated: the browser's own
  * record, else a new record from the typed name (`make`, called only then). A join that would put a
  * second record of a held place's name beside it, in a seat or on the waiting list (`heldNameFor`),
@@ -158,7 +181,11 @@ export function heldRecordNamed<S extends Pick<JoinSeat, "kind" | "status" | "pl
  * because the join would make a second Danny and seat him beside the place (review of 11 October
  * 2026). That one (`kind: "record"`) is "That's me" for the record, which the open spot offers under
  * the typed name, or the place's own link; the API's hint says so (`NameHeldError`). `keepsRecord` costs two lookups that stop at their first row, and only for such
- * a name; a tournament's placeholder is no player, so its name joins as before.
+ * a name; a tournament's placeholder is no player, so its name joins as before. Last, a browser that
+ * knows nobody, typing the name of a record that holds a seat or a waiting place here, gets
+ * `{ seated }` and no record (`seatedNamed`, the owner's decision of 15 October 2026), unless the person
+ * said they are a different person (`different`, set only by "I'm a different Danny"): `joinAction`
+ * refuses it with `name_seated`, and the API with 409 `name_seated` (`NameSeatedError`).
  */
 export async function whoJoins<P extends { id: string; displayName: string }>(
   detail: { event: HeldMatch; roster: readonly JoinSeat[]; waitlist: readonly JoinSeat[] },
@@ -166,15 +193,17 @@ export async function whoJoins<P extends { id: string; displayName: string }>(
   typed: string | null | undefined,
   now: Date,
   make: () => Promise<P>,
-  keepsRecord?: (playerId: string) => Promise<boolean>,
-): Promise<{ held: string; kind: HeldKind } | { player: P }> {
+  o: { keepsRecord?: (playerId: string) => Promise<boolean>; different?: boolean } = {},
+): Promise<{ held: string; kind: HeldKind } | { seated: string } | { player: P }> {
   const seats = [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
   const held = heldNameFor(detail.event, seats, known ? { id: known.id, name: known.displayName } : null, typed, now);
   if (held) return { held, kind: "by_name" };
-  if (!known && keepsRecord) {
+  if (!known && o.keepsRecord) {
     const place = heldRecordNamed(seats, typed);
-    if (place?.playerId && (await keepsRecord(place.playerId))) return { held: place.invitedName ?? place.player?.displayName ?? "", kind: "record" };
+    if (place?.playerId && (await o.keepsRecord(place.playerId))) return { held: place.invitedName ?? place.player?.displayName ?? "", kind: "record" };
   }
+  const seated = seatedNamed(seats, known, typed, o.different);
+  if (seated) return { seated };
   return { player: known ?? (await make()) };
 }
 

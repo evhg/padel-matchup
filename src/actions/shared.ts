@@ -18,8 +18,11 @@ import { nameOnlySession } from "@/lib/domain/thatsMe";
 import { baseUrl } from "@/lib/config";
 import { manageUrl } from "@/lib/share";
 
-/** `name_held`: the name has a held place this browser may take (DECIDING rule 34); a plain join would leave it behind for good. */
-export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held";
+/**
+ * `name_held`: the name has a held place this browser may take (DECIDING rule 34); a plain join would leave it behind for good.
+ * `name_seated`: a record of the typed name holds a seat or a waiting place here, so the join asks "Sign in as Danny?" first (the owner, 15 October 2026).
+ */
+export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held" | "name_seated";
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError; detail?: string };
 
 export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
