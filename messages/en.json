@@ -972,7 +972,8 @@
     "feedGone": "This calendar link no longer works. Open one of your matches and add the calendar again.",
     "feedName": "{app}: my matches",
     "viaWhatsapp": "on WhatsApp",
-    "linkSent": "Your link is in your email. If a place opens, the invitation follows."
+    "linkSent": "Your link is in your email. If a place opens, the invitation follows.",
+    "emailHelpUpdates": "Enter your email, and the changes to this match reach you there."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

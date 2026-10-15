@@ -53,3 +53,19 @@ export function welcomeKind(o: { emailOn: boolean; seated: boolean; cancelled: b
   if (!o.emailOn || o.byNameOnly) return null;
   return o.seated && !o.cancelled ? "invite" : "link";
 }
+
+/**
+ * What a card says about the address on file, and nothing more: the "Stay updated" card on the match
+ * page and `CalendarEmail` on the invitation page ask this one rule (15 October 2026: the invitation
+ * page still said "Calendar invite sent" after a save that sent none).
+ *   - before a save on the card (`welcome` undefined): `invite` only where the page says the address
+ *     brought the invitation (`invited`: a seat, mail on, not a session by name), else nothing;
+ *   - after a save: what the save answered (`updateMyEmail`'s `welcome`): `invite`, `link` or nothing.
+ * `invite` is the "📅 Calendar invite sent" line (and "Send it again" for a seat), `link` the line
+ * that the personal link went, null no mail line at all.
+ */
+export function mailLine(o: { sentTo: string | null; invited: boolean; welcome: WelcomeKind | null | undefined }): WelcomeKind | null {
+  if (!o.sentTo) return null;
+  if (o.welcome === undefined) return o.invited ? "invite" : null;
+  return o.welcome;
+}

@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { resendCalendarInviteAction } from "@/actions/calendar";
 import { updateMyEmail } from "@/actions/identity";
-import type { StayChannel, StayState, WelcomeKind } from "@/lib/domain/stayUpdated";
+import { mailLine, type StayChannel, type StayState, type WelcomeKind } from "@/lib/domain/stayUpdated";
 import { CalendarSubscribe } from "./CalendarSubscribe";
 import { placeholderWidth } from "@/lib/fieldWidth";
 
@@ -37,6 +37,9 @@ type Props = {
  * A chat tap leaves the page, so when the person comes back the page asks the server again rather
  * than guessing: the card turns into the quiet line only once the bot has actually linked them.
  */
+/** No store to follow: the snapshots alone say whether this render hydrates the page's own HTML (false) or mounts on a page already live (true). */
+const noStore = () => () => undefined;
+
 export function StayUpdated({ code, member, invited, email, state, links, feed }: Props) {
   const t = useTranslations();
   const locale = useLocale();
@@ -47,13 +50,24 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
   const sentTo = typed ?? email;
   // What the save here sent (`updateMyEmail`'s `welcome`); undefined until an address is typed here.
   const [welcome, setWelcome] = useState<WelcomeKind | null | undefined>(undefined);
-  // The card says only what went: after a save here, the save's own answer; before it, the page's.
-  const inviteSent = welcome === undefined ? invited : welcome === "invite";
+  // The card says only what went: after a save here, the save's own answer; before it, the page's (`mailLine`).
+  const said = mailLine({ sentTo, invited, welcome });
   const [emailOpen, setEmailOpen] = useState(false);
   const [waiting, setWaiting] = useState<"whatsapp" | "telegram" | null>(null);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // The card appears in the hero at the join, and the join's form sat lower: from the third seat on, and on
+  // the waiting list, the page kept the form in view and the card was above the screen, wholly from the sixth
+  // joiner of a night (review, 15 October 2026). So a card that mounts on a live page (the join, a sign-in)
+  // comes into view when it is above it. A card that the page's own HTML holds hydrates and stays where the
+  // reader is, so a reload never moves the page.
+  const box = useRef<HTMLDivElement>(null);
+  const live = useSyncExternalStore(noStore, () => true, () => false);
+  const cameLive = useRef(live);
+  useEffect(() => {
+    if (cameLive.current && box.current && box.current.getBoundingClientRect().top < 0) box.current.scrollIntoView({ block: "start" });
+  }, []);
 
   useEffect(() => {
     if (!waiting) return;
@@ -77,7 +91,7 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
     // What the address brought, and nothing else: the invitation (and "Send it again" for a seat); on the
     // waiting list the personal link, whose invitation follows a place; for a session by name no line at
     // all, because it gets neither (DECIDING rule 34).
-    const mailLine = !sentTo ? null : inviteSent ? (
+    const mail = said === "invite" && sentTo ? (
       <>
         <div className="mt-1 text-muted">📅 {t("calendar.sentTo", { email: sentTo })}</div>
         {member && (
@@ -105,13 +119,13 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
           </div>
         )}
       </>
-    ) : welcome === "link" ? (
+    ) : said === "link" ? (
       <div className="mt-1 text-muted">✉️ {t("calendar.linkSent")}</div>
     ) : null;
     return (
-      <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
+      <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
         <div className="font-semibold text-ok">{line}</div>
-        {sentTo ? mailLine : feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />}
+        {sentTo ? mail : feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />}
       </div>
     );
   }
@@ -122,7 +136,7 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
   // Email alone needs no choosing: the form is the card.
   const showForm = emailChoice && (emailOpen || chats.length === 0);
   return (
-    <div className="mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-4" data-testid="stay-updated">
+    <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-4" data-testid="stay-updated">
       <div className="font-bold">🔔 {t("calendar.stayTitle")}</div>
       <p className="mt-0.5 text-sm text-muted">{t("calendar.stayHelp")}</p>
       {chats.length > 0 && (
@@ -149,7 +163,8 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
             if (!value.trim()) return;
             start(async () => {
               setError(null);
-              const r = await updateMyEmail(value, code);
+              // The card's own save: the one that answers "Stay updated" (`stay_linked_email`).
+              const r = await updateMyEmail(value, code, { from: "stay" });
               if (!r.ok || !r.data.email) {
                 setError(t("common.somethingWrong"));
                 return;

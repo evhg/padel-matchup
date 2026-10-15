@@ -63,8 +63,11 @@ export async function updateMyName(name: string): Promise<ActionResult<PublicPla
  *
  * `welcome` is what went out because of this save (`welcomeFor`): `invite`, `link`, or null when the
  * address did not change or nothing goes. The "Stay updated" card says that and nothing else.
+ *
+ * `o.from: "stay"` marks the save on the "Stay updated" card itself, the one save `stay_linked_email`
+ * counts. The invitation page's form, the match page's email row and My matches save without it.
  */
-export async function updateMyEmail(email: string, eventCode?: string): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean; kept: boolean; welcome: WelcomeKind | null }>> {
+export async function updateMyEmail(email: string, eventCode?: string, o?: { from?: "stay" }): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean; kept: boolean; welcome: WelcomeKind | null }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
@@ -87,9 +90,11 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
       const byNameOnly = await nameOnly(me);
       welcome = welcomeFor(p, detail, byNameOnly);
       if (welcome) after(() => welcomeEmail(db, p, detail?.event ?? null, { byNameOnly, detail }));
-      // "Stay updated" answered by email (docs/OPERATING.md): a save on a match page, by a player the card
+      // "Stay updated" answered by email (docs/OPERATING.md): a save on the card itself, by a player the card
       // asked (no channel before it), that now reaches them by email. One upsert per save, after the answer.
-      if (eventCode) {
+      // Until 15 October 2026 any save with a match code counted, the invitation page's too, which never
+      // shows the card (review), so the count ran ahead of the asks.
+      if (eventCode && o?.from === "stay") {
         const runs = stayChannels();
         const reached = stayUpdated(p, runs);
         if (stayUpdated(me, runs).kind === "ask" && reached.kind === "reached" && reached.via.includes("email")) after(() => bumpMetric(db, "stay_linked_email").catch(() => undefined));
