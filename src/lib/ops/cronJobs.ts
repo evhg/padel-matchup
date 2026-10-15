@@ -30,8 +30,10 @@ export const CRON_JOBS = [
  * of 15 October 2026). pg_cron writes a row to `cron.job_run_details` for each run, 456 a day, and
  * nothing deleted them: 18,071 rows and 7.27 MB on 15 October, the largest relation in the database.
  * Each Sunday at 03:17 UTC the job deletes the rows that ended more than 14 days ago, so the log keeps
- * 14 to 21 days, which is more than `listCronJobs` needs. `tests/cron-jobs.test.ts` holds this to the
- * migration. It needs pg_cron only, no secret, so `POST /api/admin/cron` leaves it alone.
+ * 14 to 21 days. So `listCronJobs` shows the last run of each job that runs at least once in 14 days,
+ * which the four scheduled jobs do. A job paused for 14 days or more shows no last run (null).
+ * `tests/cron-jobs.test.ts` holds this to the migration. It needs pg_cron only, no secret, so
+ * `POST /api/admin/cron` leaves it alone.
  */
 export const CRON_LOG_CLEANUP = {
   name: "kicksmash-cron-log-cleanup",

@@ -328,8 +328,10 @@ relation in a 32 MB database, and 11,687 of those rows ended more than 14 days a
 
 - `kicksmash-cron-log-cleanup` runs at 03:17 UTC each Sunday. It deletes the rows that ended more
   than 14 days ago, and nothing else. The log then keeps 14 to 21 days, about 9,600 rows at most.
-- A run that is still going has no `end_time`, so it stays. Each job's last run, which
-  `GET /api/admin/cron` shows, is always inside the days that stay.
+- A run that is still going has no `end_time`, so it stays. A job that runs at least once in 14
+  days keeps its last run, which `GET /api/admin/cron` shows. The four scheduled jobs all do that.
+  A job that has not run for 14 days, for example a paused job (`active` false), loses its last run.
+  `GET /api/admin/cron` then shows its `lastStatus` and `lastStart` as null.
 - `CRON_LOG_CLEANUP` in `src/lib/ops/cronJobs.ts` holds the same definition, and
   `tests/cron-jobs.test.ts` holds it to the migration. The job needs pg_cron only, not a secret, so
   `POST /api/admin/cron` does not touch it.
