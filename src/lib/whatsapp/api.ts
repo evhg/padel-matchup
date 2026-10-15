@@ -43,11 +43,11 @@ export type WaResult<T = unknown> = { ok: true; result: T } | { ok: false; statu
 export const LIMITS = { body: 1024, buttonTitle: 20, buttons: 3, rowTitle: 24, rowDescription: 72, rows: 10, header: 60 } as const;
 const cut = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
 
-/** One counter per call, for the service board; never blocks a send and never throws. */
+/** One counter per call, for the service board, written after the answer through `later()` (never a floating `void`); never blocks a send and never throws. */
 async function count(key: "whatsapp_sent" | "whatsapp_failed"): Promise<void> {
   try {
-    const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
-    await bumpMetric(await getDb(), key);
+    const [{ later }, { getDb }, { bumpMetric }] = await Promise.all([import("@/lib/later"), import("@/db"), import("@/lib/domain/metrics")]);
+    await later(async () => bumpMetric(await getDb(), key));
   } catch {
     /* metrics are optional */
   }
@@ -64,13 +64,13 @@ async function send<T = unknown>(body: Record<string, unknown>): Promise<WaResul
     });
     const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     if (!res.ok) {
-      void count("whatsapp_failed");
+      await count("whatsapp_failed");
       return { ok: false, status: res.status, error: json?.error?.message ?? `whatsapp ${res.status}` };
     }
-    void count("whatsapp_sent");
+    await count("whatsapp_sent");
     return { ok: true, result: json as T };
   } catch (e) {
-    void count("whatsapp_failed");
+    await count("whatsapp_failed");
     return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
   }
 }

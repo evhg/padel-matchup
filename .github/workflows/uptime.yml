@@ -1,6 +1,8 @@
 name: Uptime
 
-# An outside eye on kicksma.sh every ten minutes; three tries before it counts.
+# An outside eye on kicksma.sh when GitHub runs it: about every five hours; three tries before it counts.
+# The schedule below asks for every ten minutes, and GitHub delays or drops scheduled runs at will: the
+# 100 runs to 15 October 2026 came a median of 301 minutes apart, and once 585 (24 September to 15 October).
 # State lives in a GitHub issue labelled `uptime`: opened when the site stops
 # answering, closed when it is back. With the two optional repository secrets
 # TELEGRAM_BOT_TOKEN and TELEGRAM_OWNER_ID the owner hears about both moments

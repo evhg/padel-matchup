@@ -514,6 +514,11 @@ export const isClaimable = (slot: Pick<Slot, "status">) => slot.status === "empt
 export const isOccupied = (slot: Pick<Slot, "status">) => slot.status === "joined" || slot.status === "confirmed";
 /** Does this player hold a real seat on the roster (joined or confirmed)? The waitlist is not a seat. */
 export const isSeated = (detail: { roster: Pick<Slot, "status" | "playerId">[] }, playerId: string | null | undefined): boolean => Boolean(playerId) && detail.roster.some((s) => s.playerId === playerId && isOccupied(s));
+/** The organiser holds the only seat on the roster: a match nobody has joined yet (the match page counts `view_lone` for it). */
+export const organiserAlone = (roster: Pick<Slot, "status" | "playerId">[], creatorPlayerId: string | null | undefined): boolean => {
+  const taken = roster.filter(isOccupied);
+  return taken.length === 1 && Boolean(creatorPlayerId) && taken[0].playerId === creatorPlayerId;
+};
 
 /**
  * Who may change a match's details (time, length, place, court, note, price): the organiser, and

@@ -54,6 +54,18 @@ export function viewCounter(o: { source: string | null; seated: boolean; ua: str
 }
 
 /**
+ * Every day key one view bumps: `viewCounter`'s, and `view_lone` beside it when the organiser holds the
+ * only seat (`lone`). A new organiser's match that never fills has no seat to count, and no step of the
+ * path above said whether anybody opened its link at all; `view_lone` does. Its cost: one more
+ * counter upsert after the response, on such views only.
+ */
+export function viewCounters(o: { source: string | null; seated: boolean; ua: string; fullLoad: boolean; lone: boolean }): string[] {
+  const key = viewCounter(o);
+  if (!key) return [];
+  return o.lone ? [key, "view_lone"] : [key];
+}
+
+/**
  * A full page load, from the headers a page can read. Next.js deletes the `RSC` header and the other
  * router headers before `headers()` returns them, so they cannot tell a refresh from a load. The
  * browser's own `Sec-Fetch-Dest` can: a tapped link, a typed address and a reload say `document`;

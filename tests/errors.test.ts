@@ -93,6 +93,67 @@ describe("production error store", () => {
     }
   });
 
+  it("the hour's budget counts the lines sent: errors back after their fix spend it, and a new error past it stays quiet", async () => {
+    // Until the review of 15 October 2026 the budget counted rows whose first_at fell in the last hour,
+    // so an error back after its fix (an old first_at) was never counted and four of them sent four lines.
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+    const tg: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
+      tg.push(String(JSON.parse(String(init?.body)).text));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { headers: { "content-type": "application/json" } });
+    });
+    try {
+      const old = new Date("2026-09-18T05:00:00Z");
+      const t = new Date("2026-09-20T05:00:00Z");
+      const words = ["one", "two", "three", "four"];
+      for (const w of words) {
+        const r = await recordError(db, "server", new Error(`returning ${w} failed`), {}, old);
+        await markErrorFixed(db, r.fingerprint, "PR 1", new Date(old.getTime() + 1000));
+      }
+      for (const [i, w] of words.entries()) await recordAndAlert(db, "server", new Error(`returning ${w} failed`), {}, new Date(t.getTime() + i * 1000));
+      expect(tg).toHaveLength(ERROR_ALERTS.perHour);
+      expect(tg.every((m) => m.includes("came back after the fix"))).toBe(true);
+      await recordAndAlert(db, "server", new Error("brand new in a spent hour"), {}, new Date(t.getTime() + 10_000));
+      expect(tg).toHaveLength(ERROR_ALERTS.perHour);
+      // The next clock hour has a budget of its own.
+      await recordAndAlert(db, "server", new Error("brand new the next hour"), {}, new Date(t.getTime() + 60 * 60_000));
+      expect(tg).toHaveLength(ERROR_ALERTS.perHour + 1);
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.TELEGRAM_OWNER_ID;
+    }
+  });
+
+  it("two requests that meet a new error at once send one line, and so do two that meet it back after its fix", async () => {
+    // Both read "never seen" before either wrote the row (the review of 15 October 2026). On PGlite the
+    // two reads run before either write, so without the claim this sends two lines.
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+    const tg: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string | URL | Request, init?: RequestInit) => {
+      tg.push(String(JSON.parse(String(init?.body)).text));
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { headers: { "content-type": "application/json" } });
+    });
+    try {
+      const t = new Date("2026-09-22T05:00:00Z");
+      const twin = () => new Error("twin crash");
+      const [a] = await Promise.all([recordAndAlert(db, "server", twin(), {}, t), recordAndAlert(db, "server", twin(), {}, new Date(t.getTime() + 5))]);
+      expect(tg).toHaveLength(1);
+      expect(tg[0]).toContain("New production error (server): twin crash");
+      expect((await listErrors(db)).find((e) => e.fingerprint === a.fingerprint)?.count).toBe(2);
+
+      await markErrorFixed(db, a.fingerprint, "PR 2", new Date(t.getTime() + 60_000));
+      const back = new Date(t.getTime() + 2 * 60 * 60_000);
+      await Promise.all([recordAndAlert(db, "server", twin(), {}, back), recordAndAlert(db, "server", twin(), {}, new Date(back.getTime() + 5))]);
+      expect(tg).toHaveLength(2);
+      expect(tg[1]).toContain("came back after the fix");
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.TELEGRAM_OWNER_ID;
+    }
+  });
+
   it("later() outside a request runs the work at once, waits for it, and swallows its failure", async () => {
     // In a request, after() holds the function open until the work is done. Here there is no request
     // scope, so after() throws and the work runs in line: the caller's await covers it.

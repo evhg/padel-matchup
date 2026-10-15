@@ -172,20 +172,26 @@ try {
   check("the phone's share sheet sends the link tagged ?s=share", String(await a.evaluate(() => window.__shared?.url)).endsWith(`/${code}?s=share`), code);
   await a.evaluate(() => void delete navigator.share);
   // A stranger who opens the WhatsApp link is the funnel's second step: one view_src_wa, written after
-  // the response (`later`), so it is read back until it lands.
-  const viewsWa = async () => {
-    const r = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select coalesce(sum(value), 0)::int as n from metrics_daily where key = 'view_src_wa'")}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
-    return Number(r.rows?.[0]?.n ?? -1);
+  // the response (`later`), so it is read back until it lands. The organiser holds the only seat of this
+  // new match, so the same view counts view_lone too (`organiserAlone` on the match page), one query for both.
+  const viewCounts = async () => {
+    const q = "select coalesce(sum(value) filter (where key = 'view_src_wa'), 0)::int as wa, coalesce(sum(value) filter (where key = 'view_lone'), 0)::int as lone from metrics_daily where key in ('view_src_wa', 'view_lone')";
+    const r = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(q)}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+    return { wa: Number(r.rows?.[0]?.wa ?? -1), lone: Number(r.rows?.[0]?.lone ?? -1) };
   };
-  const wasViews = await viewsWa();
+  const viewsWa = async () => (await viewCounts()).wa;
+  const was = await viewCounts();
+  const wasViews = was.wa;
   const viewer = await newPage();
   await viewer.goto(`${BASE}/${code}?s=wa`);
-  let views = wasViews;
-  for (let i = 0; i < 20 && views <= wasViews; i++) {
+  let seen = was;
+  for (let i = 0; i < 20 && (seen.wa <= was.wa || seen.lone <= was.lone); i++) {
     await viewer.waitForTimeout(500);
-    views = await viewsWa();
+    seen = await viewCounts();
   }
+  const views = seen.wa;
   check("a stranger's view of a ?s=wa link counts once under view_src_wa", wasViews >= 0 && views === wasViews + 1, `${wasViews} -> ${views}`);
+  check("a stranger's view of a match where the organiser holds the only seat counts once under view_lone", was.lone >= 0 && seen.lone === was.lone + 1, `${was.lone} -> ${seen.lone}`);
   // A refresh of the open page is no view: router.refresh() is what the live night's AutoRefresh calls
   // every 20 seconds. Next.js removes the RSC header before the page reads it, so the page reads the
   // browser's Sec-Fetch-Dest instead (isFullPageLoad in src/lib/source.ts). A reload by hand is a view.
@@ -206,6 +212,22 @@ try {
     reloaded = await viewsWa();
   }
   check("a full load of the match page adds one view", reloaded === afterRefresh + 1, `${afterRefresh} -> ${reloaded}`);
+  // PLAY has Dana seated beside its organiser: a stranger's view there is a view_src_wa and no
+  // view_lone. view_lone is written after view_src_wa, so the reload's lands first and this one gets time.
+  let beforePlay = await viewCounts();
+  for (let i = 0; i < 20 && beforePlay.lone <= seen.lone; i++) {
+    await viewer.waitForTimeout(500);
+    beforePlay = await viewCounts();
+  }
+  await viewer.goto(`${BASE}/PLAY?s=wa`);
+  let afterPlay = beforePlay;
+  for (let i = 0; i < 20 && afterPlay.wa <= beforePlay.wa; i++) {
+    await viewer.waitForTimeout(500);
+    afterPlay = await viewCounts();
+  }
+  await viewer.waitForTimeout(1500);
+  afterPlay = await viewCounts();
+  check("a stranger's view of a match with more than the organiser seated counts no view_lone", afterPlay.wa === beforePlay.wa + 1 && afterPlay.lone === beforePlay.lone, `${JSON.stringify(beforePlay)} -> ${JSON.stringify(afterPlay)}`);
   await viewer.context().close();
 
   await a.goto(`${BASE}/${code}`);

@@ -18,6 +18,7 @@ const IGNORED = {
   VERCEL: "set by Vercel",
   VERCEL_URL: "set by Vercel",
   VERCEL_PROJECT_PRODUCTION_URL: "set by Vercel",
+  NEXT_RUNTIME: "set by Next.js: nodejs or edge, read by src/instrumentation.ts",
   BASE: "the browser suites pass the server's own URL to each suite",
   E2E_DISCORD_PRIVATE_KEY: "the Discord browser suite signs its own interactions",
   E2E_ONLY: "run one browser suite",

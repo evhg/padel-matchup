@@ -5,7 +5,8 @@ import { catalogue } from "./helpers/render";
 import { formatWeekdayTime } from "@/lib/dates";
 import { createRequestStoreForRender } from "next/dist/server/async-storage/request-store";
 import { nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
-import { countedSource, isCrawler, isFullPageLoad, viewCounter } from "@/lib/source";
+import { countedSource, isCrawler, isFullPageLoad, viewCounter, viewCounters } from "@/lib/source";
+import { organiserAlone } from "@/lib/domain/events";
 
 /**
  * The owner, 10 October 2026: "you have to leave the chat group". No link keeps a player inside a
@@ -137,6 +138,29 @@ describe("every share button says where the link went", () => {
     // live night), a server action, a client navigation and a prefetch are not.
     expect(view({ source: "wa", fullLoad: false })).toBeNull();
     expect(isCrawler("")).toBe(false);
+  });
+
+  // A new organiser's match that never fills has no seat to count, so nothing said whether anybody
+  // opened its link at all (15 October 2026). `view_lone` rides beside the view while the organiser
+  // holds the only seat: one more upsert, on such views only.
+  it("counts view_lone beside the view while the organiser holds the only seat, and only then", () => {
+    const phone = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36";
+    const views = (o: { source?: string | null; seated?: boolean; ua?: string; fullLoad?: boolean; lone: boolean }) => viewCounters({ source: "wa", seated: false, ua: phone, fullLoad: true, ...o });
+    expect(views({ lone: true })).toEqual(["view_src_wa", "view_lone"]);
+    expect(views({ lone: true, source: null })).toEqual(["view_src_none", "view_lone"]);
+    expect(views({ lone: false })).toEqual(["view_src_wa"]);
+    // Whatever is not a view is not a lone view either: the organiser, a seat, a preview, a refresh.
+    expect(views({ lone: true, seated: true })).toEqual([]);
+    expect(views({ lone: true, ua: "WhatsApp/2.23.20.0 A" })).toEqual([]);
+    expect(views({ lone: true, fullLoad: false })).toEqual([]);
+    // What the match page passes as `lone`: the organiser in the only taken seat, held places and empty seats aside.
+    const seat = (status: string, playerId: string | null) => ({ status: status as never, playerId });
+    expect(organiserAlone([seat("joined", "org"), seat("empty", null), seat("empty", null), seat("empty", null)], "org")).toBe(true);
+    expect(organiserAlone([seat("confirmed", "org"), seat("invited", null), seat("declined", null), seat("empty", null)], "org")).toBe(true);
+    expect(organiserAlone([seat("joined", "org"), seat("joined", "ana"), seat("empty", null), seat("empty", null)], "org")).toBe(false);
+    expect(organiserAlone([seat("joined", "ana"), seat("empty", null), seat("empty", null), seat("empty", null)], "org")).toBe(false);
+    expect(organiserAlone([seat("empty", null), seat("empty", null)], "org")).toBe(false);
+    expect(organiserAlone([seat("joined", null)], null)).toBe(false);
   });
 
   // Next.js deletes the RSC header and the other router headers before `headers()` returns

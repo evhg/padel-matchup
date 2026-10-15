@@ -102,6 +102,12 @@ try {
   // ---- Discovery ----
   const llms = await api.get(`${BASE}/llms.txt`);
   check("llms.txt points to the MCP server and the API", llms.status() === 200 && (await llms.text()).includes("/mcp") && (await llms.text()).includes("/api/openapi.json"));
+  // The middleware once sent every root .txt name of 8 to 128 characters to the IndexNow key route,
+  // so /llms-full.txt answered 404 in production until 15 October 2026.
+  const llmsFull = await api.get(`${BASE}/llms-full.txt`);
+  check("llms-full.txt answers 200 with the long form", llmsFull.status() === 200 && (await llmsFull.text()).includes("## How Kicksmash works, in detail"));
+  const favicon = await api.get(`${BASE}/favicon.ico`);
+  check("favicon.ico is the static icon", favicon.status() === 200 && /^image\//.test(favicon.headers()["content-type"] ?? ""));
   const wk = await j(await api.get(`${BASE}/.well-known/mcp.json`));
   check("well-known mcp.json names the server URL", wk.servers[0].url.endsWith("/mcp") && wk.servers[0].transport === "streamable-http");
   const oa = await j(await api.get(`${BASE}/api/openapi.json`));
