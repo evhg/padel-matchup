@@ -55,7 +55,7 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
 - `ANTHROPIC_ADMIN_KEY` (an Admin API key from the console) turns the Anthropic row from
   "estimated" into "billed". `ANTHROPIC_MONTHLY_CAP_USD` mirrors the cap set in the console
   (default 20). Both live in Vercel's environment, never in the repository.
-- A refused `ANTHROPIC_API_KEY` (a 401 or a 403) turns the Anthropic row red. The owner gets one
+- A refused `ANTHROPIC_API_KEY` (a 401, a 403, or a key with no workspace: below) turns the Anthropic row red. The owner gets one
   alert for it each month, with its own line and no spending-cap text (`svc_alert_anthropic_key_<month>`).
   Set a new key in Vercel's environment and redeploy. The first call the new key gets accepted puts
   back to `new` the listening items that the refused key failed and that are still inside the 7-day
@@ -73,6 +73,20 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
   feature, so a long refusal can use them all. Then the button waits for an accepted call of another
   feature, or for a new UTC day and a new item. When an item waits and the forty has room, a run of
   the hourly job by hand makes the call at once.
+- A key with no workspace is a refused key too. The Messages API answers it with a 400: "This API
+  key is not scoped to a workspace, so this request must include the anthropic-workspace-id header
+  …". `keyRefused` reads that message beside the status. So the run stops, the items stay `new`, and
+  the row turns red with the same alert. Its line names both fixes: a new `ANTHROPIC_API_KEY`, or
+  `ANTHROPIC_WORKSPACE_ID` when the key has no workspace. The owner chose the second on 15 October
+  2026 and kept the key. The id is in the Claude Console, under Settings, then Workspaces, and starts
+  with `wrkspc_`. Set it in Vercel's environment and redeploy. Every Messages API call then sends it
+  as the `anthropic-workspace-id` header (`anthropicHeaders` in `src/lib/ops/anthropic.ts`). With the
+  variable unset, the calls send the three headers they always sent. The cost report reads the Admin
+  API with the admin key and sends no workspace. On 14 October 2026 the code still read the status
+  alone, so this answer failed listening items as ordinary failures. The SQL of `restoreRefusedItems`
+  matches the answer's words too, in any case (`NO_WORKSPACE_PHRASES`). So the first accepted call
+  puts those items back, as it does for a dead key's items. The dead key's last refusal (12:00:01 UTC on 14
+  October) is newer than any accepted call, so that first call meets the condition.
 - Anything else the owner pastes in chat goes to Vercel's environment through the API, then
   the session redeploys by merging or, when nothing changed in code, leaves it for the next deploy.
 
@@ -558,8 +572,8 @@ both set (`bookMailOpen`). On 11 October 2026 no mail had reached book@ yet.
 
 **A booking screenshot.** "Add screenshot" in the landing page's paste box sends one picture to the
 AI model for one read (DECIDING rule 9, the owner, 11 October 2026). The call uses `ANTHROPIC_API_KEY`
-and the model that `LISTEN_MODEL` names, and `recordModelCall` counts its tokens with every other
-call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
+(with `ANTHROPIC_WORKSPACE_ID` when it is set) and the model that `LISTEN_MODEL` names, and
+`recordModelCall` counts its tokens with every other call. A 1568-pixel screenshot is about 1,600 tokens in and a short answer out: about one US cent.
 Kicksmash keeps no picture, no reply and no log line of either. Four limits come before the call.
 The key and the month's spend come first, so a refused key or a spent month takes nothing from the
 other limits. While the key is refused or the spend is at the cap, the paste box does not show "Add

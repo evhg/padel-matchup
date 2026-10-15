@@ -3,7 +3,7 @@ import { later } from "@/lib/alerts";
 import { parseShotReply, sniffShot, type BookingShot } from "@/lib/domain/bookingShot";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
-import { listenModel, modelGate, recordModelCall } from "@/lib/ops/anthropic";
+import { anthropicHeaders, listenModel, modelGate, recordModelCall } from "@/lib/ops/anthropic";
 import { pasteBooking, type PasteResult } from "./paste";
 
 /**
@@ -154,8 +154,9 @@ export async function readScreenshot(
 
 /**
  * The one Messages API call: the picture as a base64 image block before a one-line request, through the
- * app's model (`listenModel`) and its bookkeeping (`recordModelCall`: the tokens, a failure, and a 401
- * or 403 that turns the service board red and stops the next screenshot before its call). `accepted` is
+ * app's model (`listenModel`) and its bookkeeping (`recordModelCall`: the tokens, a failure, and a 401,
+ * a 403 or a key with no workspace, which turns the service board red and stops the next screenshot
+ * before its call). `accepted` is
  * false when the API did not accept the call; `shot` is null when it did and the reply held no booking.
  * The reply lives in this function's memory only.
  */
@@ -166,7 +167,7 @@ async function callModel(db: Db, img: { bytes: Uint8Array; type: string; key: st
     calling = true;
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": img.key, "anthropic-version": "2023-06-01" },
+      headers: anthropicHeaders(img.key),
       body: JSON.stringify({
         model: listenModel(),
         max_tokens: SHOT_MAX_TOKENS,
@@ -183,11 +184,11 @@ async function callModel(db: Db, img: { bytes: Uint8Array; type: string; key: st
       }),
       signal: AbortSignal.timeout(SHOT_TIMEOUT_MS),
     });
-    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number } } | null;
+    const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; stop_reason?: string; usage?: { input_tokens?: number; output_tokens?: number }; error?: { message?: string } } | null;
     calling = false;
     const usage = { input: json?.usage?.input_tokens ?? 0, output: json?.usage?.output_tokens ?? 0 };
     const ok = res.ok && json !== null;
-    await recordModelCall(db, { status: res.status, ok, usage, now: img.now }).catch(() => undefined);
+    await recordModelCall(db, { status: res.status, ok, usage, error: json?.error?.message, now: img.now }).catch(() => undefined);
     if (!ok) return { accepted: false, shot: null };
     // A declined or cut answer is an answer with no booking in it: the tokens are spent, the place is used.
     if (json.stop_reason === "refusal" || json.stop_reason === "max_tokens") return { accepted: true, shot: null };

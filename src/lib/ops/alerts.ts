@@ -28,8 +28,9 @@ const whatNext: Record<string, string> = {
   resend_month: "Past the ceiling Resend refuses to send; the rule is to move up only past fifty emails a day, so I will slow the non-essential mail first.",
   resend_day: "Today's remaining mail waits for tomorrow; reminders go by push and Telegram meanwhile.",
   anthropic: "At the cap the feedback replies and drafts stop until the month turns. Raising the cap is your call in the console.",
-  // A refused key is not the cap: every model call stops, whatever the month's spend.
-  anthropic_key: `Every AI feature is off until a new ANTHROPIC_API_KEY is in Vercel and the app is deployed again: ${AI_FEATURES.join(", ")}.`,
+  // A refused key is not the cap: every model call stops, whatever the month's spend. A key with no
+  // workspace is refused too (`keyRefused`), and ANTHROPIC_WORKSPACE_ID is its fix.
+  anthropic_key: `Every AI feature is off until a new ANTHROPIC_API_KEY, or ANTHROPIC_WORKSPACE_ID when the key has no workspace, is in Vercel and the app is deployed again: ${AI_FEATURES.join(", ")}.`,
   supabase_db: "I will prune old activity rows and error events before it matters.",
   tavily: "The desk stops searching before the meter does.",
   pg_cron: "The scheduled jobs have not run on time; I am looking at Supabase pg_cron.",
