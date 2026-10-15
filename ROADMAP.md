@@ -839,7 +839,8 @@ Everything in this list is live. The README describes each in detail.
   within three hours. A switched-off kind stays in the inbox and is never sent; what quiet hours held
   goes as one short message per channel when they end, from the hourly job. The inbox on My matches
   shows the latest twenty, newest first, in the reader's own language (the rows keep a message key
-  and plain facts, never words and never a link), reads itself when opened, and counts the unread on
+  and plain facts, never words and never a link), reads itself when opened, reads a match's notices
+  when the person opens that match's page (since 15 October 2026), and counts the unread on
   the header as a bell with a number, a link of its own named "2 new updates" (since 12 October 2026:
   a bare "2" on My matches read as a count of matches), which opens the inbox, also when the tap is on
   My matches itself; while it has new notices the inbox sits first on My matches. The bell sits on the
@@ -934,8 +935,8 @@ Everything in this list is live. The README describes each in detail.
   with its question mark in a group, "when can we play?", /times), as one reply a minute at most
   whose buttons make the match and post its card. Each read is bounded: the create form reads the
   feeds of the twelve clubs a person is likely to pick, /play thirty of the city's own clubs first, and
-  every read cuts the cache to seven days in the database. On the match page the organiser and the players get
-  "Book this court" (Playtomic and MATCHi open on the match's day; every other platform on the club's
+  every read cuts the cache to seven days in the database. On the match page the organiser and the players get,
+  until the match starts, "Book this court" (Playtomic and MATCHi open on the match's day; every other platform on the club's
   page), with the court, day, time and length beside it, and "I booked it", which the page, the cards,
   the share text and the API then show as "Court booked ✓ (by Ana)" (`events.court_booked_at`,
   `court_booked_by`; any player takes it back, and a new hour clears it). The club directory gained
@@ -946,7 +947,9 @@ Everything in this list is live. The README describes each in detail.
   app and asked: "how do I turn this into a match and match card/link by just copy and pasting the
   link?" A person pastes the booking's link or its share text on the first page or to the bot. Kicksmash
   fills what the paste gives: the club, the day, the time, the length, the court, the price and the
-  players, where the words, a screenshot or the link's preview carry them. The owner's own Padel Society
+  players, where the words, a screenshot or the link's preview carry them. A price is the cost per player
+  only when the paste says so; any other price is the court's total, which the form names in one line
+  (since 15 October 2026). The owner's own Padel Society
   link alone gives none of them (see the end of this entry).
   `src/lib/domain/bookingPaste.ts` is the reader. `src/lib/booking/unfurl.ts` reads a pasted link once,
   as a chat app's preview robot reads it (DECIDING rule 35). It skips a platform that rests after a
@@ -1110,6 +1113,21 @@ Everything in this list is live. The README describes each in detail.
   download of a player's data lists each phone by its label and dates. `src/lib/domain/passkeys.ts`,
   `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in
   `tests/passkey-ceremony.test.ts` and with Chromium's virtual authenticator in `e2e/passkeys.mjs`.
+- **The match page on a phone, and the organiser's screens (15 October 2026, no migration).** All 11
+  joins in production came through the web match page. The fixed "Join this match" now sends the open
+  name form when a name is in it, through the form's own checks (the name, the held place, the level);
+  before, a second tap did nothing. The venue line takes two lines before it cuts, so the court shows
+  ("WAREHAUS.club · Co…" at 390 px). A match under way says "Started 1 hour ago". "Leave waitlist" asks
+  "Leave the waiting list?". The score form starts empty, with 6 and 4 as placeholders, and "Save score"
+  waits for typed numbers (`typedSets` in `src/lib/domain/scores.ts`), because an untouched 6-4 could be
+  saved as a real result. "Book this court" goes at the start, and the club is not read for it then;
+  "I booked it", the booked line and "Undo" stay until the end. After a join, "Your level?" waits while
+  "Stay updated" still asks for a channel. For the organiser: a pasted price fills "Cost per player"
+  only when it says it is per player ("/person", "pp", "each"); a bare price is the court's total, one
+  line under the form and in the bot's and the thread's answer, and never the match's cost (it once read
+  "1,600 THB per player"). Opening a match page marks the viewer's notices about that match as read
+  (`markMatchNoticesRead`, one indexed update after the response), so the bell counts only what is
+  unseen. The share page names the day, the time, the club and the court under "Your match is live".
 
 ## The finish line
 

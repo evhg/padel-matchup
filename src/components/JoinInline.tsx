@@ -49,9 +49,15 @@ export function JoinInline({
   const box = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  // The fixed Join button: a second tap, with the form open and a name in it, sends the form through its
+  // own checks (the name, the held place, the level), as the form's own Join does. Before that it opens
+  // the form. The DOM holds the state the handler needs, so it registers once and keeps its place.
   useEffect(
     () =>
       registerJoinHandler(() => {
+        const form = box.current;
+        // While the form's own Join is busy (disabled), a second tap sends nothing more.
+        if (form && (!input.current || input.current.value.trim())) return void (form.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled || form.requestSubmit());
         setOpen(true);
         requestAnimationFrame(() => {
           box.current?.scrollIntoView({ block: "center", behavior: "smooth" });

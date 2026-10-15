@@ -8,6 +8,7 @@ import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/sourc
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
 import { bumpMetric } from "@/lib/domain/metrics";
+import { markMatchNoticesRead } from "@/lib/domain/notices";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
 import { AutoRefresh } from "@/components/tournament/AutoRefresh";
@@ -19,6 +20,7 @@ import { Footer, Header } from "@/components/Header";
 import { SourceTag } from "@/components/SourceTag";
 import { JoinBar, type JoinState } from "@/components/JoinBar";
 import { JoinInline } from "@/components/JoinInline";
+import { KeepTogether } from "@/components/KeepTogether";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
 import type { BackInDoors } from "@/components/BackInHelp";
 import { BackInOpener } from "@/components/BackInOpener";
@@ -172,6 +174,10 @@ async function EventPage({ params, searchParams }: Props) {
   const h = await headers();
   const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", fullLoad: isFullPageLoad(h) });
   if (viewKey) await later(() => bumpMetric(db, viewKey));
+  // Opening the match reads its notices, so the bell counts only what this person has not seen (the
+  // owner's question, 12 October 2026). One indexed update after the response, for a signed-in viewer,
+  // a tap from My matches included; the header of this response may still show the old count.
+  if (me) await later(() => markMatchNoticesRead(db, me.id, ev.id, now));
 
   // Level range: players outside it ask to join; the organizer decides.
   const levelRange = { min: ev.levelMin, max: ev.levelMax };
@@ -379,7 +385,9 @@ async function EventPage({ params, searchParams }: Props) {
   const invite = madeToShare(ev.bookingUrl);
   // With the head of its cache for a match inside the three days a read covers: Playtomic's checkout,
   // filled in, when Playtomic listed exactly this start and length (the owner, 11 October 2026; `checkoutFor`).
-  const venueClub = canMarkBooked && !ev.bookingUrl && ev.venueSlug ? await getClubForBooking(db, ev.venueSlug, { cache: ev.startsAt.getTime() < now.getTime() + 4 * 24 * 3600_000 }) : null;
+  // Not once the match has started: nobody books a court that is already being played on, so "Book this
+  // court" goes and the club is not read. "I booked it", the booked line and "Undo" stay until the end.
+  const venueClub = canMarkBooked && !started && !ev.bookingUrl && ev.venueSlug ? await getClubForBooking(db, ev.venueSlug, { cache: ev.startsAt.getTime() < now.getTime() + 4 * 24 * 3600_000 }) : null;
   // Only a club somebody vetted (`mayPrepareFor`): never the website a player typed when listing a club.
   const prepared = venueClub ? prepareBooking(venueClub, { start: ev.startsAt, minutes: ev.durationMinutes, tz: ev.tz, court: ev.court }, { cache: venueClub.cache, now }) : null;
   // The slot beside the link in the club's own zone, the one its day link uses, so the two never name different days.
@@ -734,13 +742,17 @@ async function EventPage({ params, searchParams }: Props) {
                 {t("event.until", { time: formatEventTime(eventEnd(ev), ev.tz, locale) })} · {t("event.minutes", { minutes: ev.durationMinutes })}
               </div>
               <div className="text-xs font-semibold text-faint">
-                {tzLabel(ev.startsAt, ev.tz, locale)} · {!over && !cancelled ? t("event.startsIn", { when: relativeTime(ev.startsAt, locale, now) }) : relativeTime(ev.startsAt, locale, now)}
+                {/* "Started 1 hour ago" while it is on: "Starts 1 hour ago" read as a start still to come. */}
+                {tzLabel(ev.startsAt, ev.tz, locale)} · {over || cancelled ? relativeTime(ev.startsAt, locale, now) : t(started ? "event.startedAgo" : "event.startsIn", { when: relativeTime(ev.startsAt, locale, now) })}
               </div>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-bg px-4 py-3">
             <div className="min-w-0">
-              <div className={`truncate text-base font-bold ${ev.venueName ? "" : "text-muted"}`}>{venue}</div>
+              {/* Two lines before it is cut: the court is the end of the line, and one line cut "WAREHAUS.club · Co…" at 390 px. */}
+              <div className={`line-clamp-2 break-words text-base font-bold ${ev.venueName ? "" : "text-muted"}`} data-testid="venue-line">
+                <KeepTogether parts={venue.split(" · ")} />
+              </div>
               <div className="text-xs text-muted">{t("event.organizedBy", { name: creator.displayName })}</div>
             </div>
             <div className="flex shrink-0 gap-1.5">
@@ -800,7 +812,9 @@ async function EventPage({ params, searchParams }: Props) {
               feed={stayFeed ? { webcal: stayFeed.webcal, google: stayFeed.google } : null}
             />
           )}
-          {me && askLevel && <LevelAfterJoin playerId={me.id} />}
+          {/* One ask at a time after a join: while "Stay updated" still asks for a channel, the level waits
+              for the next visit. Eight buttons at once left the channel ask, the one that reaches the player, competing. */}
+          {me && askLevel && !(stay && stay.kind === "ask") && <LevelAfterJoin playerId={me.id} />}
           {rememberSession && <RememberPhone offer={rememberOffer} />}
         </section>
 

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
-import { checkSets, isUsualSet, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, tally, unusualSets, validateSets } from "@/lib/domain/scores";
+import { checkSets, isUsualSet, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, setsComplete, tally, typedSets, unusualSets, validateSets } from "@/lib/domain/scores";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -98,6 +98,23 @@ describe("score-lock rules (pure)", () => {
     expect(checkSets(sets([6, 5], [6, 4]))).toEqual({ ask: [0] });
     expect(checkSets(sets([6, 3], [6, 4]))).toEqual({ ask: [] });
   });
+  it("lets the score form save only what was typed: every box of every set", () => {
+    // The form once started at 6-4, so an untouched 6-4 saved as a real result. It starts empty now.
+    const set = (sideA: number | null, sideB: number | null, setNumber = 1) => ({ setNumber, sideA, sideB });
+    expect(setsComplete([set(null, null)])).toBe(false);
+    expect(setsComplete([set(6, null)])).toBe(false);
+    expect(setsComplete([set(null, 4)])).toBe(false);
+    expect(setsComplete([set(6, 4), set(null, null, 2)])).toBe(false);
+    expect(setsComplete([set(6, 4), set(3, Number.NaN, 2)])).toBe(false);
+    expect(setsComplete([])).toBe(false);
+    expect(setsComplete(Array.from({ length: MAX_SETS + 1 }, (_, i) => set(6, 4, i + 1)))).toBe(false);
+    expect(setsComplete([set(6, 4)])).toBe(true);
+    expect(typedSets([set(6, 4), set(4, 6, 2), set(10, 8, 3)])).toEqual([set(6, 4), set(4, 6, 2), set(10, 8, 3)]);
+    // A typed 0-0 is complete: the refusal is `checkSets`' and the server's, with their own message.
+    expect(setsComplete([set(0, 0)])).toBe(true);
+    expect(checkSets(typedSets([set(0, 0)])!)).toEqual({ refuse: "empty_set" });
+  });
+
   it("tallies sets and derives outcomes per team", () => {
     const sets = [
       { sideA: 6, sideB: 4 },

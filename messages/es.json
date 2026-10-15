@@ -276,7 +276,8 @@
     "askPastChange": "Cambiar",
     "askPastFirst": "Primero responde la pregunta sobre {name}.",
     "playedWithYou": "Jugaron contigo",
-    "keepsRecord": "Mantiene los partidos de {name}"
+    "keepsRecord": "Mantiene los partidos de {name}",
+    "pasteTotal": "La reserva dice {total} por la pista. Añade el precio por jugador en «Más opciones»."
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -403,7 +404,9 @@
     "heldFor": "{count, plural, one {# plaza reservada para {names}} other {# plazas reservadas para {names}}}",
     "heldCount": "{count, plural, one {# plaza reservada} other {# plazas reservadas}}",
     "courtBookedUndoMark": "Deshacer",
-    "courtBookedUndoName": "Deshacer: marcar la pista como no reservada"
+    "courtBookedUndoName": "Deshacer: marcar la pista como no reservada",
+    "startedAgo": "Empezó {when}",
+    "leaveWaitlistConfirm": "¿Salir de la lista de espera?"
   },
   "creator": {
     "tools": "Herramientas de organizador",

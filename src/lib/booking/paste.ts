@@ -116,6 +116,6 @@ export async function pasteBooking(
     if (club) read = readBooking({ ...base, preview, fallbackClub: club });
   }
   // Did the preview change any field? Then the organiser checks the form before a match is made.
-  const fields = (r: BookingRead) => JSON.stringify([r.club?.slug ?? null, r.date, r.time, r.minutes, r.court, r.cost]);
+  const fields = (r: BookingRead) => JSON.stringify([r.club?.slug ?? null, r.date, r.time, r.minutes, r.court, r.cost, r.courtTotal]);
   return { ok: true, read, href: bookingHref(read), previewed: preview !== null && fields(fromWords) !== fields(readBooking({ ...base, preview })) };
 }

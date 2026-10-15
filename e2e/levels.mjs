@@ -125,6 +125,18 @@ try {
   await fay.getByPlaceholder("e.g. Alex").fill("Fay");
   await fay.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
   await fay.getByText("You're in").waitFor({ timeout: 20000 });
+  // One ask at a time after a join (15 October 2026): while "Stay updated" still asks for a channel, the
+  // level waits. Eight buttons at once left the channel ask, the one that reaches her, competing.
+  const stayAsk = fay.getByTestId("stay-updated");
+  await stayAsk.waitFor({ timeout: 20000 });
+  check("right after the join, 'Stay updated' asks and 'Your level?' waits", (await stayAsk.getByText("Stay updated").count()) === 1 && (await fay.getByTestId("level-after-join").count()) === 0 && (await fay.getByText("Your level?").count()) === 0);
+  await shot(fay, "l6b-stay-before-level");
+  await stayAsk.getByTestId("stay-email").click();
+  await stayAsk.getByPlaceholder("you@example.com").fill("fay-levels@example.com");
+  await stayAsk.getByRole("button", { name: "Send invite" }).click();
+  await fay.getByText(/Calendar invite sent to fay-levels@example.com/).waitFor({ timeout: 20000 });
+  // With a channel saved, the next visit asks the level.
+  await fay.reload();
   const ask = fay.getByTestId("level-after-join");
   await ask.waitFor({ timeout: 20000 });
   check("a new player on an open match is asked 'Your level?' with the named bands, Playtomic and Skip", (await ask.getByText("Your level?").count()) === 1 && (await ask.getByRole("button", { name: "Intermediate", exact: true }).count()) === 1 && (await ask.getByRole("button", { name: "I have a Playtomic number" }).count()) === 1 && (await ask.getByRole("button", { name: "Skip", exact: true }).count()) === 1);
@@ -168,6 +180,9 @@ try {
   await pia.getByRole("button", { name: "Enter score" }).click();
   await pia.getByRole("button", { name: /^Pia/ }).click();
   await pia.getByRole("button", { name: /^Rae/ }).click();
+  // The form starts empty (an untouched 6-4 once saved as a real result): the score is typed.
+  await pia.locator("#score input[type=number]").nth(0).fill("6");
+  await pia.locator("#score input[type=number]").nth(1).fill("4");
   await pia.getByRole("button", { name: "Save score" }).click();
   await pia.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   const gold = await api.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", levelMin: 3, levelMax: 4.5, organizer: { name: "Pia", token: past.organizer.personalToken } } }).then((r) => r.json());

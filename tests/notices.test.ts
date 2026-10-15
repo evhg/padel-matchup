@@ -13,7 +13,7 @@ import { clubs, events, notices, players, pushSubscriptions, type Event, type Pl
 import { createEvent } from "@/lib/domain/events";
 import { createGroup } from "@/lib/domain/groups";
 import { joinEvent } from "@/lib/domain/slots";
-import { inboxOf, markInboxRead, noticeSettingsOf, pruneNotices, recordNotice, recordNotices, releasesFor } from "@/lib/domain/notices";
+import { inboxOf, markInboxRead, markMatchNoticesRead, noticeSettingsOf, pruneNotices, recordNotice, recordNotices, releasesFor } from "@/lib/domain/notices";
 import { noticeSummary } from "@/lib/domain/noticeKinds";
 import { rolesFor } from "@/lib/domain/roles";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
@@ -204,6 +204,30 @@ describe("notices: the switch for each kind, quiet hours and the inbox", () => {
     expect((await rolesFor(db, ana.id)).unread).toBe(1);
     expect(await markInboxRead(db, ana.id)).toBe(1);
     expect((await rolesFor(db, ana.id)).unread).toBe(0);
+  });
+
+  it("reads one match's notices when its page opens: only that player's, only that match's, and keeps every row", async () => {
+    // The owner's question of 12 October 2026: the bell said 3 on every page for facts the match page showed.
+    const org = await person("Org8", {}, false);
+    const ana = await person("AnaRead", {}, false);
+    const bo = await person("BoRead", {}, false);
+    const seen = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 2 * DAY), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    const other = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 3 * DAY), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    const row = (playerId: string, eventId: string | null) => ({ playerId, eventId, kind: "changes" as const, key: "noticeItem.lineupOpen", params: {} });
+    const earlier = new Date(NOW.getTime() - HOUR);
+    await db.insert(notices).values([row(ana.id, seen.id), row(ana.id, seen.id), row(ana.id, other.id), row(ana.id, null), row(bo.id, seen.id), { ...row(ana.id, seen.id), readAt: earlier }]);
+    expect((await rolesFor(db, ana.id)).unread).toBe(4);
+    expect(await markMatchNoticesRead(db, ana.id, seen.id, NOW)).toBe(2);
+    // The bell counts what Ana has not seen: the other match's notice and the one about no match.
+    expect((await rolesFor(db, ana.id)).unread).toBe(2);
+    const anas = await rowsOf(ana.id);
+    expect(anas).toHaveLength(5);
+    expect(anas.filter((r) => r.eventId === seen.id).map((r) => r.readAt?.getTime() ?? 0).sort((a, b) => a - b)).toEqual([earlier.getTime(), NOW.getTime(), NOW.getTime()]);
+    expect(anas.filter((r) => r.eventId !== seen.id).every((r) => r.readAt === null)).toBe(true);
+    // Bo's notice about the same match is Bo's to see.
+    expect((await rowsOf(bo.id)).map((r) => r.readAt)).toEqual([null]);
+    // A second visit marks nothing more.
+    expect(await markMatchNoticesRead(db, ana.id, seen.id, NOW)).toBe(0);
   });
 
   it("prunes notices older than ninety days, a bounded batch at a time", async () => {

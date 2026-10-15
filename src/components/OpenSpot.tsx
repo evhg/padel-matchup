@@ -115,11 +115,21 @@ export function OpenSpot({
 
   const needsLevel = Boolean(levelRange) && myLevel == null;
 
-  // The fixed Join button hands its no-identity (or no-level) case to the first open row.
+  // The fixed Join button hands its no-identity (or no-level) case to the first open row. A second tap,
+  // with the form open and a name in it, sends the form: the same submit as the form's own Join, so every
+  // check it makes runs (the name, the held place, the level). The DOM holds what the handler reads, so
+  // it registers once per state and keeps its place in front of the other open rows.
+  const form = useRef<HTMLFormElement>(null);
+  const onFixedJoin = useCallback(() => {
+    const f = form.current;
+    // While the form's own Join is busy (disabled), a second tap sends nothing more.
+    if (f && (!input.current || input.current.value.trim())) return void (f.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled || f.requestSubmit());
+    expand();
+  }, [expand]);
   useEffect(() => {
     if (mode !== "join" || (hasIdentity && !needsLevel)) return;
-    return registerJoinHandler(expand);
-  }, [mode, hasIdentity, needsLevel, expand]);
+    return registerJoinHandler(onFixedJoin);
+  }, [mode, hasIdentity, needsLevel, onFixedJoin]);
 
   const join = (withName?: string) =>
     start(async () => {
@@ -258,6 +268,7 @@ export function OpenSpot({
         <span className="text-sm font-bold text-court">{mode === "reserve" ? t("creator.reserveInline") : hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</span>
       </div>
       <form
+        ref={form}
         className="flex flex-col gap-2"
         onSubmit={(e) => {
           e.preventDefault();

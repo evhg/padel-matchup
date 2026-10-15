@@ -187,6 +187,9 @@ try {
   await p.getByRole("button", { name: "Enter score" }).click();
   await p.getByRole("button", { name: /^Ana/ }).click();
   await p.getByRole("button", { name: /^Bo/ }).click();
+  // The form starts empty (an untouched 6-4 once saved as a real result): the score is typed.
+  await p.locator("#score input[type=number]").nth(0).fill("6");
+  await p.locator("#score input[type=number]").nth(1).fill("4");
   await p.getByRole("button", { name: "Save score" }).click();
   await p.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   check("the organizer's score is confirmed at once", true);

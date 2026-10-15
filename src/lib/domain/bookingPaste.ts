@@ -56,7 +56,14 @@ export type BookingRead = {
   /** How long the court is booked, as read (30 to 360). The form takes 60, 90 or 120 (`parseMatchLength`). */
   minutes: number | null;
   court: string | null;
+  /** A price the paste says is for each player ("400 THB/person"): the form's "Cost per player". */
   cost: string | null;
+  /**
+   * A price the paste does not say is for each player ("Total: 1,600 THB"): what the court costs, which
+   * the form names in one line and never puts in "Cost per player", so a page never asks each player for
+   * the whole court. Nobody divides it: no arithmetic on money.
+   */
+  courtTotal: string | null;
   names: string[];
   missing: ("club" | "date" | "time")[];
   /** The paste named a weekday and a date that fall on different days ("Sun 12 Oct" when 12 October is a Monday). The date is kept; the organiser checks it. */
@@ -184,7 +191,9 @@ const CURRENCY_BEFORE = "US\\$|S\\$|A\\$|HK\\$|RM|Rp|฿|€|\\$|£|₽|THB|SGD|
 const CURRENCY_AFTER = `${CURRENCY_BEFORE}|baht|бат(?:ов|а)?|евро|руб(?:лей|ля|\\.)?|р\\.|euros?|dirhams?|дирхам(?:ов|а)?`;
 // A plain space never groups thousands: "Court 3 600 THB" is court 3 and 600 baht.
 const AMOUNT = "\\d{1,3}(?:[,.\\u00a0\\u202f]\\d{3})+(?:[.,]\\d{1,2})?|\\d{1,6}(?:[.,]\\d{1,2})?";
-const PER = "(?:\\s?\\/\\s?(?:person|pax|player|pp|чел|persona)|\\s(?:pp|each|per person|с человека|por persona))?";
+// What makes a price a price for each player: "400 THB/person", "฿400 pp", "400 each", "400 por persona",
+// "400 с человека". The one capturing group of `COST_RE`: a price without it is the court's total.
+const PER = "(\\s?\\/\\s?(?:person|pax|player|pp|чел|persona)|\\s(?:pp|each|per person|per player|с человека|с игрока|por persona|por jugador))?";
 const COST_RE = new RegExp(`(?<![\\p{L}\\d])(?:(?:${CURRENCY_BEFORE})\\s?(?:${AMOUNT})|(?:${AMOUNT})\\s?(?:${CURRENCY_AFTER}))(?![\\p{L}\\d])${PER}`, "iu");
 
 /** Words that are never a player's name in a booking: what the booking says about itself, in three languages. */
@@ -252,6 +261,7 @@ type Scan = {
   minutes: number | null;
   court: string | null;
   cost: string | null;
+  courtTotal: string | null;
   names: string[];
   rest: string;
 };
@@ -323,7 +333,7 @@ const okLength = (n: number) => (Number.isFinite(n) && n >= 30 && n <= 360 ? Mat
  * ("1.5 hr" is a length, never the first of May) and what is left is where the club's name is.
  */
 function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: string | null; names: boolean }): Scan {
-  const out: Scan = { day: null, rel: null, weekday: null, time: null, minutes: null, court: null, cost: null, names: [], rest: "" };
+  const out: Scan = { day: null, rel: null, weekday: null, time: null, minutes: null, court: null, cost: null, courtTotal: null, names: [], rest: "" };
   let text = ` ${input
     .slice(0, PASTE_TEXT_MAX)
     .replace(/\r/g, "")
@@ -348,11 +358,14 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
     };
   };
 
-  // The price first: its digits are no day and no time. "฿1,600", "1600 THB", "S$60".
+  // The price first: its digits are no day and no time. "฿1,600", "1600 THB", "S$60". It is the cost
+  // per player only when it says so ("/person", "pp", "each"); else it is the court's total.
   take(
     COST_RE,
     once((m) => {
-      out.cost = m[0].replace(/\s+/g, " ").trim().slice(0, FIELD_MAX);
+      const price = m[0].replace(/\s+/g, " ").trim().slice(0, FIELD_MAX);
+      if (m[1]) out.cost = price;
+      else out.courtTotal = price;
     }),
   );
   // A level ("Level 3.5-4.5") is not a date.
@@ -766,6 +779,7 @@ function scanShot(shot: BookingShot, o: { clubWords: ReadonlySet<string>; selfNa
     minutes: ranged?.minutes ?? (shot.minutes !== null ? okLength(shot.minutes) : null),
     court: court?.court ?? null,
     cost: one(shot.price)?.cost ?? null,
+    courtTotal: one(shot.price)?.courtTotal ?? null,
     names: team?.names ?? [],
     rest: shot.club ?? "",
   };
@@ -832,6 +846,9 @@ export function readBooking(input: {
   const time = mine.time ?? seen?.time ?? theirs?.time ?? null;
   const daySource = [mine, seen, theirs].find(hasDay) ?? null;
   const date = daySource ? dayIn({ ...daySource, time }, today) : null;
+  // The price as the first source that names one says it, per player or for the court: never a court's
+  // total from the words beside a price per player from the preview.
+  const priced = [mine, seen, theirs].find((s) => Boolean(s && (s.cost || s.courtTotal))) ?? null;
 
   const read: BookingRead = {
     platform: platformOf ? { id: platformOf.id, name: platformOf.name } : null,
@@ -843,7 +860,8 @@ export function readBooking(input: {
     tz,
     minutes: mine.minutes ?? seen?.minutes ?? theirs?.minutes ?? null,
     court: mine.court ?? seen?.court ?? theirs?.court ?? null,
-    cost: mine.cost ?? seen?.cost ?? theirs?.cost ?? null,
+    cost: priced?.cost ?? null,
+    courtTotal: priced?.courtTotal ?? null,
     // The names as a whole list: the person's own, else the picture's, never a mix of the two.
     names: mine.names.length ? mine.names : (seen?.names ?? []),
     missing: [],
@@ -859,12 +877,12 @@ export function readBooking(input: {
  * last venue is a guess about the club, not a sign of a booking. Pure.
  */
 export const showsBooking = (read: BookingRead): boolean =>
-  Boolean(read.platform) || (Boolean(read.time) && ((Boolean(read.club) && read.clubFrom !== "history") || Boolean(read.court) || Boolean(read.cost)));
+  Boolean(read.platform) || (Boolean(read.time) && ((Boolean(read.club) && read.clubFrom !== "history") || Boolean(read.court) || Boolean(read.cost) || Boolean(read.courtTotal)));
 
 /**
  * The create form, filled: `/?src=paste` and every field read, in the names the form already takes
- * (`venue`, `date`, `time`, `tz`, `names`) and the new ones (`len`, `court`, `cost`, `booked`,
- * `check`, `invite`). `tz` goes only when the read knows a zone (the club's, the browser's, the
+ * (`venue`, `date`, `time`, `tz`, `names`) and the new ones (`len`, `court`, `cost` for a price per
+ * player, `total` for the court's, `booked`, `check`, `invite`). `tz` goes only when the read knows a zone (the club's, the browser's, the
  * chat's): without it the form takes the person's own zone, never UTC. The length goes only when it
  * is one the form offers (60, 90 or 120); `booked=1`
  * only when the paste shows a booking (`showsBooking`); `check` names the fields the organiser must look
@@ -881,6 +899,8 @@ export function bookingHref(read: BookingRead): string {
   if (len) q.set("len", String(len));
   if (read.court) q.set("court", read.court);
   if (read.cost) q.set("cost", read.cost);
+  // The court's total is a line under the form, never "Cost per player".
+  if (read.courtTotal) q.set("total", read.courtTotal);
   if (read.names.length) q.set("names", read.names.join(","));
   if (showsBooking(read)) q.set("booked", "1");
   const check = [...(read.club && read.clubFrom === "history" ? ["venue"] : []), ...(read.dayClash ? ["date"] : [])];
