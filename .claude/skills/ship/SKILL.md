@@ -1212,6 +1212,12 @@ Wall clock first, credits second. What actually moved it, measured:
   whose defaults are guesses moves on to the next field on Enter (`enterMovesOn`), and a field that
   answers Enter itself calls `preventDefault` first. `e2e/core.mjs` presses Enter and counts the server
   actions sent.
+- **A field that answers Go itself answers only when the answer changes something.** The venue field
+  took Go with its list open as a pick, and the list opens on focus. A returning organiser's own club is
+  filled in, so Go there picked the club the field already held, kept the focus, and "next" took two
+  presses on the most common returning path (review, 15 October 2026). The check pressed Go on a typed
+  part of a name only. A pick that would change nothing is no pick (`venueGo`), and the suite presses
+  Go on the filled-in club too.
 - **A closed `<details>` keeps its fields laid out in Chrome, and `focus()` on one does nothing.**
   Chrome hides a closed fold's content with `content-visibility`, so `getClientRects()` still gave the
   email field of "Played before?" a box, Go "moved" to it, and the focus stayed on the name (15 October

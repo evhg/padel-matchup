@@ -1155,7 +1155,9 @@ Everything in this list is live. The README describes each in detail.
   from three try-outs that nobody joined. An organiser with no such match keeps the chips of the whole
   history. The keyboard's Go key on the name, the venue or the court moves to the next field and never
   creates a match (`enterMovesOn` in `CreateEventForm.tsx`): 14 of the 27 matches of the 60 days before
-  started exactly at the default time. Go with the venue list open picks the first suggestion.
+  started exactly at the default time. Go with the venue list open picks the first suggestion, but the
+  club that the field already holds is no pick (`venueGo` in `VenueCombobox.tsx`): a returning
+  organiser's own club is filled in, and one Go there moves on to the court.
 
 ## The finish line
 

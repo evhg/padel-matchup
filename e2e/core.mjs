@@ -288,9 +288,22 @@ try {
   const sg = (t) => sp.find((p) => p.type === t).value;
   await a.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
   await a.locator("input[type=time]").fill("11:30");
+  // Dana's own club is filled in. Go there is "next", not a second pick of the club the field already
+  // holds: the list opens on the focus, and one press moves on to the court (review, 15 October 2026).
+  const venueBox = a.getByPlaceholder("Court TBD · or pick a club");
+  const prefilledVenue = await venueBox.inputValue();
+  await venueBox.focus();
+  await a.locator("ul button", { hasText: "Club Padel Test" }).first().waitFor({ timeout: 10000 });
+  actionsSent.length = 0;
+  a.on("request", onAction);
+  await venueBox.press("Enter");
+  await a.waitForTimeout(800);
+  a.off("request", onAction);
+  const afterVenueGo = await a.evaluate(() => document.activeElement?.getAttribute("placeholder") ?? document.activeElement?.tagName);
+  await shot(a, "05a-new-venue-go");
+  check("Go on the organiser's own club, filled in, moves on to the court in one press and sends nothing", prefilledVenue === "Club Padel Test" && afterVenueGo === "e.g. 3 or Centre court" && (await venueBox.inputValue()) === "Club Padel Test" && actionsSent.length === 0 && new URL(a.url()).pathname === "/", `${prefilledVenue}, focus on ${afterVenueGo}, ${actionsSent.length} sent, ${new URL(a.url()).pathname}`);
   // Go on the venue with the list open picks the first suggestion, as a tap does, and sends nothing:
   // Dana's own club comes first in her list.
-  const venueBox = a.getByPlaceholder("Court TBD · or pick a club");
   await venueBox.fill("Club Pad");
   await venueBox.press("Enter");
   check("Go on the venue field picks the first suggestion and stays on the form", (await venueBox.inputValue()) === "Club Padel Test" && new URL(a.url()).pathname === "/", `${await venueBox.inputValue()} at ${new URL(a.url()).pathname}`);
