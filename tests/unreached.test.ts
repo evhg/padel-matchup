@@ -193,17 +193,30 @@ describe("TDsv: Erik's match, a seat open, the offer's past partners", () => {
     expect(await pastPartners(db, ev, NOW)).toEqual([pat.id]);
   });
 
-  it("a partner of another seated player is the offer's partner too, and the organiser, seated or not, never names themself", async () => {
+  it("names only the organiser's own partners: another seated player's partner is the offer's, not the line's", async () => {
     const erik = await makePlayer(db, "Erik");
     const bo = await makePlayer(db, "Bo");
     const xena = await makePlayer(db, "Xena");
-    // Bo played with Xena, and with Erik, in matches that ended.
+    const pat = await makePlayer(db, "Pat");
+    // Bo played with Xena, Erik with Pat, in matches that ended.
+    await playedBy(bo, [bo, xena], 5 * DAYS);
+    await playedBy(erik, [erik, pat], 6 * DAYS);
+    // Erik's next match seats Erik and Bo: the offer tells Xena and Pat, the line names Erik's own, Pat.
+    const ev = await nextMatch(erik, [erik, bo]);
+    expect((await pastPartners(db, ev, NOW)).sort()).toEqual([pat.id, xena.id].sort());
+    expect(await unreachedPartners(db, ev, here([erik.id, bo.id]), NONE, NOW)).toEqual(["Pat"]);
+  });
+
+  it("an organiser without a seat in the match sees no line, and never names themself", async () => {
+    const erik = await makePlayer(db, "Erik");
+    const bo = await makePlayer(db, "Bo");
+    const xena = await makePlayer(db, "Xena");
     await playedBy(bo, [bo, xena], 5 * DAYS);
     await playedBy(erik, [erik, bo], 7 * DAYS);
     // Erik's next match seats Bo and not Erik himself.
     const ev = await nextMatch(erik, [bo]);
     expect((await pastPartners(db, ev, NOW)).sort()).toEqual([erik.id, xena.id].sort());
-    expect(await unreachedPartners(db, ev, here([bo.id]), NONE, NOW)).toEqual(["Xena"]);
+    expect(await unreachedPartners(db, ev, here([bo.id]), NONE, NOW)).toEqual([]);
   });
 
   it("two partners called Tim, with different last names: the line names neither", async () => {

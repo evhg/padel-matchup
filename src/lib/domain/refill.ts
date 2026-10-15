@@ -108,8 +108,9 @@ const SEATED = ["joined", "confirmed"] as const;
  * The query itself, unawaited, so the organiser's "Kicksmash can't reach Tim" line (`unreached.ts`)
  * reads the same partners in its one read, as a subquery, and the two never drift: `playerId`, and
  * `last`, the start of the freshest match together. The caller asks the type (`pastPartners`).
+ * `of`: only the partners of that one seated player (the organiser's line names the organiser's own).
  */
-export function partnersQuery(db: Db, ev: Pick<Event, "id" | "capacity">, now: Date) {
+export function partnersQuery(db: Db, ev: Pick<Event, "id" | "capacity">, now: Date, o: { of?: string } = {}) {
   const here = alias(slots, "here");
   const mine = alias(slots, "mine");
   const theirs = alias(slots, "theirs");
@@ -122,7 +123,7 @@ export function partnersQuery(db: Db, ev: Pick<Event, "id" | "capacity">, now: D
       // Finished means that match's own length has run out (`endedBy`): a 60-minute match makes partners an hour after it starts.
       .innerJoin(events, and(eq(events.id, mine.eventId), eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), ...endedBy(now), lte(mine.position, events.capacity)))
       .innerJoin(theirs, and(eq(theirs.eventId, events.id), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity), isNotNull(theirs.playerId), ne(theirs.playerId, mine.playerId)))
-      .where(and(eq(here.eventId, ev.id), inArray(here.status, [...SEATED]), lte(here.position, ev.capacity), isNotNull(here.playerId)))
+      .where(and(eq(here.eventId, ev.id), inArray(here.status, [...SEATED]), lte(here.position, ev.capacity), isNotNull(here.playerId), o.of ? eq(here.playerId, o.of) : undefined))
       .groupBy(theirs.playerId)
       .orderBy(desc(max(events.startsAt)))
       .limit(PARTNER_MAX)

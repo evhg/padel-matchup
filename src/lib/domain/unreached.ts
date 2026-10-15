@@ -19,7 +19,8 @@ import { DELETED_PLAYER_NAME } from "./result";
  * with Erik. The organiser can message them; Kicksmash cannot.
  *
  *   - Who: the offer's own past partners (`partnersQuery` in `refill.ts`, the query `pastPartners`
- *     runs): the people that a player seated in this match played with in a match (an americano makes
+ *     runs), narrowed to the organiser's own (`of`): the people the organiser, seated in this match,
+ *     played with in a match (an americano makes
  *     no partners) that ended in the last 60 days, both seated in it. Then the offer's own exclusions:
  *     no row in this match, not its organiser, not gone from it (a leave or a removal, from the
  *     activity the page read). Then the rules of a name: not a deleted account, no name of the line-up,
@@ -103,7 +104,7 @@ export async function unreachedPartners(
   now: Date,
 ): Promise<string[]> {
   if (ev.type !== "match") return [];
-  const partners = partnersQuery(db, ev, now).as("partners");
+  const partners = partnersQuery(db, ev, now, { of: ev.creatorPlayerId }).as("partners");
   const rows = await db
     .select({
       id: players.id,
