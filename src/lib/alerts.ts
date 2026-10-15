@@ -25,35 +25,30 @@ export async function reportError(kind: ErrorKind, e?: unknown, ctx: ErrorContex
 }
 
 /**
- * A counter or an error report that must not delay the response, and must not be lost after it.
- *
- * A bumpMetric or reportError call with `void` in front started the write and let the response go;
- * on a serverless function nothing waits for a promise nobody holds, so the instance can be frozen
- * mid-write and the row never lands. `after()` holds the function open until the work is done, and
- * it is handed the work before this returns, so even a caller that cannot wait leaves nothing loose.
- * Outside a request scope (a test, a script) `after()` throws, and the work runs here instead, for
- * the caller to await. Errors are swallowed either way: this is bookkeeping.
- * `tests/rules.test.ts` fails on the old `void` form anywhere in `src`.
+ * `later()` lives in its own leaf (`src/lib/later.ts`), so a chat client or the push sender can hand
+ * it a counter without bringing this module, and the owner alert's imports behind it, into every
+ * route that sends something.
  */
-export function later(fn: () => Promise<unknown>): Promise<void> {
-  const run = async () => {
-    try {
-      await fn();
-    } catch {
-      /* bookkeeping never fails the thing it counts */
-    }
-  };
-  try {
-    after(run);
-    return Promise.resolve();
-  } catch {
-    return run();
-  }
+export { later } from "@/lib/later";
+
+/**
+ * A failed query's message ends with its values ("params: …"), and a value can be a personal token,
+ * a manage code or an address. A render error on `/p/<token>` reaches the store since 15 October 2026,
+ * so the store keeps the database's own reason and the query, never the values, in the message and
+ * in the stack's first line alike. The reason was not in the message at all: it is the error's cause.
+ */
+function withoutParams(e: Error): { message: string; stack: string | null } | null {
+  const m = /^Failed query: ([\s\S]*?)\nparams: [\s\S]*$/.exec(e.message ?? "");
+  if (!m) return null;
+  const cause = e.cause instanceof Error ? e.cause.message : typeof e.cause === "string" ? e.cause : "";
+  const message = `${cause ? `${cause} · ` : ""}failed query: ${m[1]}`;
+  const stack = e.stack ? (e.stack.includes(e.message) ? e.stack.replace(e.message, message) : e.stack.replace(/\nparams: [^\n]*/, "")) : null;
+  return { message, stack };
 }
 
 /** Message and stack of anything thrown: Error, string, plain object. */
 export function describeError(e: unknown): { message: string; stack: string | null } {
-  if (e instanceof Error) return { message: e.message || e.name || "Error", stack: e.stack ?? null };
+  if (e instanceof Error) return withoutParams(e) ?? { message: e.message || e.name || "Error", stack: e.stack ?? null };
   if (typeof e === "string") return { message: e, stack: null };
   if (e && typeof e === "object" && typeof (e as { message?: unknown }).message === "string") {
     const o = e as { message: string; stack?: unknown };
@@ -120,7 +115,9 @@ export async function recordAndAlert(db: Db, kind: ErrorKind, e: unknown, ctx: E
 }
 
 export async function alertNewError(db: Db, row: ErrorEvent, now = new Date(), cameBack: Date | null = null): Promise<boolean> {
-  const [{ ownerTelegramId }, { esc, sendMessage, telegramEnabled }, { baseUrl }] = await Promise.all([import("@/lib/listen/tick"), import("@/lib/telegram/api"), import("@/lib/config")]);
+  // The owner's id from config, not through the listening desk: that import traced the whole desk
+  // into every route that can report an error.
+  const [{ esc, sendMessage, telegramEnabled }, { baseUrl, ownerTelegramId }] = await Promise.all([import("@/lib/telegram/api"), import("@/lib/config")]);
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return false;
   // The hour's budget counts the fingerprints that could have alerted (never the client rows), before this one.
@@ -133,11 +130,35 @@ export async function alertNewError(db: Db, row: ErrorEvent, now = new Date(), c
   return res.ok;
 }
 
+/** The path segment after one of these is a credential or a person's id: `/p/<token>`, a manage link, an invite link, a coach's join code, a student's owed page. */
+const SECRET_AFTER = new Set(["p", "manage", "i", "join", "owed"]);
+
+/**
+ * The path an error row keeps and the owner's alert names: no host and no query string, and a
+ * credential in the path blanked. A server error carries the request's own path, so a crash on
+ * `/p/<token>` must never put the token in the store or in a Telegram message (AGENTS.md rule 5).
+ * Every kind goes through it, the browser's reports too. A job's own label ("listen/digest",
+ * "/api/cron/push#scrape") passes as it is: a request never sends a fragment.
+ */
+export function errorPath(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let path = String(raw);
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      path = new URL(path).pathname;
+    } catch {
+      return null;
+    }
+  }
+  const parts = path.split("?")[0].split("/");
+  return parts.map((seg, i) => (i > 0 && seg && SECRET_AFTER.has(parts[i - 1]) ? ":secret" : seg)).join("/").slice(0, 200) || null;
+}
+
 /** One row per fingerprint; a repeat bumps the count and refreshes the sample. */
 export async function recordError(db: Db, kind: ErrorKind, e: unknown, ctx: ErrorContext = {}, now = new Date()): Promise<ErrorEvent> {
   const { message, stack } = describeError(e);
   const fingerprint = fingerprintOf(kind, message, stack);
-  const path = ctx.path ? String(ctx.path).slice(0, 200) : null;
+  const path = errorPath(ctx.path);
   const sample = { message: (ctx.digest ? `${message} [digest ${String(ctx.digest).slice(0, 32)}]` : message).slice(0, 500), stack: stack ? stack.slice(0, 4000) : null };
   const [row] = await db
     .insert(errorEvents)

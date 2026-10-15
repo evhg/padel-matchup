@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { LOCALE_COOKIE } from "@/i18n/config";
+import { indexNowPath } from "@/lib/indexnowKey";
 
 /**
  * Language paths for search engines: /ru/... and /es/... serve the same pages in
@@ -10,11 +11,12 @@ import { LOCALE_COOKIE } from "@/i18n/config";
  * in that language.
  */
 export function middleware(req: NextRequest) {
-  // IndexNow key file at the root (/<key>.txt), served by the route under /indexnow.
-  const keyFile = req.nextUrl.pathname.match(/^\/([A-Za-z0-9-]{8,128})\.txt$/);
+  // IndexNow key file at the root (/<key>.txt), served by the route under /indexnow. Only the key itself
+  // goes there: every other root .txt (/llms-full.txt) falls through to its own route.
+  const keyFile = indexNowPath(req.nextUrl.pathname, process.env.INDEXNOW_KEY);
   if (keyFile) {
     const url = req.nextUrl.clone();
-    url.pathname = `/indexnow/${keyFile[1]}.txt`;
+    url.pathname = keyFile;
     return NextResponse.rewrite(url);
   }
   const m = req.nextUrl.pathname.match(/^\/(ru|es)(\/.*)?$/);

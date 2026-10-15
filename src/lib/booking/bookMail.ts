@@ -108,6 +108,8 @@ export async function answerBookMail(db: Db, mail: InboundMail, o: { fetchImpl?:
     );
     if (!res.ok) {
       await giveBack();
+      // A refused answer is a failed email, as in `sendEmail`: the Resend lines say "N failed today".
+      if (res.error !== "email_disabled") await bumpMetric(db, "emails_failed", 1, dayKey(now)).catch(() => undefined);
       return skip("send");
     }
     // A sent answer is a sent email: the service board's Resend lines and the bounce rate count it.

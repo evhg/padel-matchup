@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/db";
 import { indexNowKey, pingIndexNow, submitIndexNowDaily } from "@/lib/indexnow";
+import { indexNowPath } from "@/lib/indexnowKey";
 import { GET as keyFile } from "@/app/indexnow/[key]/route";
 import { createTestDb } from "./helpers/db";
 
@@ -31,6 +32,34 @@ describe("IndexNow", () => {
     const ok = await keyFile(new Request("https://kicksma.sh/indexnow/a1b2c3d4e5f6a7b8c9d0.txt"), { params: Promise.resolve({ key: "a1b2c3d4e5f6a7b8c9d0.txt" }) });
     expect(ok.status).toBe(200);
     expect(await ok.text()).toBe("a1b2c3d4e5f6a7b8c9d0");
+  });
+
+  /**
+   * The middleware sent every root `.txt` name of 8 to 128 letters, digits and dashes to the key route,
+   * which answers 404 for anything but the key. So `/llms-full.txt` (nine characters) answered 404 in
+   * production while `/llms.txt` (four) worked, until 15 October 2026.
+   */
+  it("sends only the key's own file to the key route; /llms-full.txt reaches its own route", async () => {
+    const key = "a1b2c3d4e5f6a7b8c9d0";
+    expect(indexNowPath("/llms-full.txt", key)).toBeNull();
+    expect(indexNowPath(`/${key}.txt`, key)).toBe(`/indexnow/${key}.txt`);
+    expect(indexNowPath(`/${key}.txt`, `  ${key}\n`)).toBe(`/indexnow/${key}.txt`);
+    expect(indexNowPath("/b1b2c3d4e5f6a7b8c9d0.txt", key)).toBeNull();
+    expect(indexNowPath(`/${key}.txt`, undefined)).toBeNull();
+    expect(indexNowPath(`/${key}.txt`, "")).toBeNull();
+    expect(indexNowPath("/short.txt", "short")).toBeNull();
+    expect(indexNowPath(`/${key}`, key)).toBeNull();
+
+    // The middleware itself, as Next.js calls it: a rewrite carries x-middleware-rewrite, a pass does not.
+    const { middleware } = await import("@/middleware");
+    const { NextRequest } = await import("next/server");
+    const rewriteOf = (path: string) => middleware(new NextRequest(`https://kicksma.sh${path}`)).headers.get("x-middleware-rewrite");
+    process.env.INDEXNOW_KEY = key;
+    expect(rewriteOf("/llms-full.txt")).toBeNull();
+    expect(rewriteOf(`/${key}.txt`)).toBe(`https://kicksma.sh/indexnow/${key}.txt`);
+    delete process.env.INDEXNOW_KEY;
+    expect(rewriteOf(`/${key}.txt`)).toBeNull();
+    expect(rewriteOf("/llms-full.txt")).toBeNull();
   });
 
   it("posts our own URLs once each, with the key location, and never throws", async () => {

@@ -26,7 +26,17 @@ note without the owner's word.
 ## When an error appears
 
 A production error the store has never seen is one line to the owner at once (`recordAndAlert` in
-`src/lib/alerts.ts`); repeats, client errors and storms stay quiet. The owner says "fix errors" in a
+`src/lib/alerts.ts`); repeats, client errors and storms stay quiet: one line for each new error, and three
+lines an hour at most (`ERROR_ALERTS`), so a crash loop is one line. An error that no code caught on the
+server (a page that fails to render, a route, an action outside `run()`) reaches the store through
+`onRequestError` in `src/instrumentation.ts` since 15 October 2026, as a `server` row with its own
+message and stack. Before that it came only as the browser's report, with the message Next.js shows a
+browser, and a client row never alerts. Next.js's redirect and `notFound()` write nothing, and nor
+does the copy of a server component's error that the HTML pass meets with Next.js's "The specific
+message is omitted" sentence (the real error came under the same digest). Every row keeps its path
+without the query string, and with the segment after `/p/`, `/manage/`, `/i/`, `/join/` and `/owed/`
+written as `:secret` (`errorPath`). A failed query keeps the database's reason and the query, never
+its values (`params`). So a token never reaches the store or the owner's Telegram. The owner says "fix errors" in a
 session; the session reads `GET /api/admin/errors`, fixes through the pipeline, and records
 `POST /api/admin/errors { fingerprint, note }`. Outages reach the owner from the uptime probe
 directly. There is no daily loop and no three-hourly wake-up since 11 September.
@@ -36,6 +46,11 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
 1. `GET /api/admin/services`: any row with `state: "alert"` is work now, in this order: `pg_cron`
    (jobs not running), `uptime` (site down), `backup` (nightly export missing), `anthropic` (near
    the cap), `resend_*`, `vercel_analytics`, `supabase_db`. A row at `warn` is a line in a report.
+   The two Resend rows, Web Push and Telegram say "N failed today" and turn `warn` for any failed
+   send that day (`emails_failed`, `push_failed`, `telegram_failed`; since 15 October 2026). A
+   Telegram call Telegram refused still counts in `telegram_sent` too, as every answered call does.
+   The `uptime` row's probe runs when GitHub runs it: the workflow asks for every ten minutes, and the
+   100 scheduled runs to 15 October 2026 came a median of 301 minutes apart, once 585.
 2. The owner is told once per service per month by the hourly job when a row crosses 85% or
    turns red; a session does not repeat the message. It fixes what it can and says so in the
    pull request.
@@ -279,13 +294,17 @@ the whole path. No step needs a migration, and no counter holds a name, an addre
    browser too old to send `Sec-Fetch-Dest` (Safari before 16.4) is read by its `Accept` header: a
    page load asks for `text/html`, and the refresh asks for `*/*`. A reload by hand counts again,
    so read it as views, not people.
+   While the organiser holds the only seat, the same view also counts `view_lone` (`viewCounters`,
+   `organiserAlone`; since 15 October 2026). A new organiser's match that never fills has no seat to
+   count, so `view_lone` is what says whether anybody opened its link at all. It costs one more counter
+   upsert after the response, on such views only.
 3. **The seat.** `join_src_<tag>`: a join from a browser that came through that tag in the last day
    (the `ks_src` cookie).
 4. **The new record.** `newid_src_<tag>`: of those, a record made from a name alone.
 
 Read it for the last four weeks: `select key, sum(value) from metrics_daily where day >=
-current_date - 28 and (key like 'view_src_%' or key like 'join_src_%' or key like 'newid_src_%')
-group by 1 order by 1`. Then compare the steps for one tag. `join_src_wa` divided by
+current_date - 28 and (key like 'view_src_%' or key = 'view_lone' or key like 'join_src_%' or key like
+'newid_src_%') group by 1 order by 1`. Then compare the steps for one tag. `join_src_wa` divided by
 `view_src_wa` is how many WhatsApp visitors take a seat. A high `newid_src_wa` against
 `join_src_wa` says those visitors are mostly new records (the jar above). `view_src_none` is
 everybody who came without a tag: a link typed by hand, an old untagged link, or a search.
@@ -535,7 +554,7 @@ line or a counter. Three limits hold it, all in `metrics_daily` with no address 
 The cap is thirty, not a hundred, because Resend's free plan sends 100 emails a day for the whole
 app. Thirty answers leave seventy for the match notices and the codes. Thirty a day is up to 900 a
 month, which is 30% of Resend's 3,000. Each answer counts in `emails_sent`, so the service board's two
-Resend lines and the bounce rate include book@. A sender's address can be faked, so one address gets
+Resend lines and the bounce rate include book@; an answer Resend refuses counts in `emails_failed`. A sender's address can be faked, so one address gets
 three answers a day, and the cap counts every sender together. A refused mail, or a send that Resend
 refuses, gives its places back. A mail delivered twice is answered once (`rl:bookmail_id:<Resend id>`).
 A mail that quotes book@'s own answer (the form's address is in it) gets no answer, so a reply or a

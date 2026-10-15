@@ -79,11 +79,30 @@ export type TgChatMember = { status: string; user?: TgUser; can_pin_messages?: b
 /** One article in the inline results: what the picker shows, and the message it sends when chosen. */
 export type InlineArticle = { id: string; title: string; description: string; text: string; keyboard: InlineKeyboard };
 
-/** One counter per call, for the service board; never blocks a send and never throws. */
-async function count(key: "telegram_sent" | "telegram_429"): Promise<void> {
+export type TgCounter = "telegram_sent" | "telegram_429" | "telegram_failed";
+
+/**
+ * The service board's counters for one call. `telegram_sent` counts every call Telegram answered,
+ * except a rate limit (`telegram_429`), as it always has. Beside it, `telegram_failed` counts a call
+ * Telegram refused (`ok: false`, a 400 "chat not found" or a 403 "bot was blocked") or answered with
+ * no JSON: until 15 October 2026 those counted as sent and nothing else. An edit that changed nothing
+ * is a success (`editOk`), so it is not a failure here either.
+ */
+export function tgCounters(status: number, json: TgResult<unknown> | null): TgCounter[] {
+  const limited = status === 429 || Boolean(json && !json.ok && json.error_code === 429);
+  if (limited) return ["telegram_429"];
+  const failed = !json || (!json.ok && !editOk(json));
+  return failed ? ["telegram_sent", "telegram_failed"] : ["telegram_sent"];
+}
+
+/** Written after the answer through `later()` (never a floating `void`), so a send never waits on it and the row is not lost; never throws. */
+async function count(keys: TgCounter[]): Promise<void> {
   try {
-    const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
-    await bumpMetric(await getDb(), key);
+    const [{ later }, { getDb }, { bumpMetric }] = await Promise.all([import("@/lib/later"), import("@/db"), import("@/lib/domain/metrics")]);
+    await later(async () => {
+      const db = await getDb();
+      for (const key of keys) await bumpMetric(db, key);
+    });
   } catch {
     /* metrics are optional */
   }
@@ -100,10 +119,12 @@ export async function tg<T = unknown>(method: string, body: Record<string, unkno
       signal: AbortSignal.timeout(timeoutMs),
     });
     const json = (await res.json().catch(() => null)) as TgResult<T> | null;
-    void count(res.status === 429 || (json && !json.ok && json.error_code === 429) ? "telegram_429" : "telegram_sent");
+    await count(tgCounters(res.status, json));
     if (!json) return { ok: false, error_code: res.status, description: `telegram ${method}: bad response` };
     return json;
   } catch (e) {
+    // No answer at all (a timeout, a network fault): a failed call, never a sent one.
+    await count(["telegram_failed"]);
     return { ok: false, error_code: 0, description: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -192,16 +192,26 @@ describe("no Date reaches a raw sql template", () => {
  *
  * `void bumpMetric(…)` and `void reportError(…)` let the response go with the write still in flight,
  * and Vercel may freeze the instance the moment the response is sent: the page view, the API call or
- * the production error is simply not counted. `later()` in `src/lib/alerts.ts` hands the work to
+ * the production error is simply not counted. `later()` in `src/lib/later.ts` hands the work to
  * `after()`, and a cron route, which is its own request, awaits it.
+ *
+ * The first form of this check knew two names only, and seven floating counters stood beside it under
+ * other names until 15 October 2026: `void count(…)` in the Telegram, WhatsApp and LINE clients and
+ * `void countDiscord()`. Any name with count, bump, record or report in it is held to the rule now.
  */
+const FLOATING = /\bvoid\s+\w*(count|bump|record|report)\w*\s*\(/i;
 describe("work that must outlive the response is handed to after()", () => {
-  it("no bumpMetric or reportError call in src is left floating with void", () => {
+  it("knows the floating forms by any name, and lets later() and a plain void pass", () => {
+    for (const line of ["    void count(\"telegram_sent\");", "void countDiscord();", "void bumpMetric(db, k)", "void reportError(\"server\", e)", "void recordFact(db, f)", "  void doBump()"]) expect(FLOATING.test(line), line).toBe(true);
+    for (const line of ["void later(() => reportError(\"server\", e));", "await count(\"telegram_sent\");", "void router.refresh();", "void navigator.serviceWorker.register(url);"]) expect(FLOATING.test(line), line).toBe(false);
+  });
+
+  it("no counter or error report in src is left floating with void", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(root("src"))) {
       const lines = readFileSync(file, "utf8").split("\n");
       lines.forEach((line, i) => {
-        if (/\bvoid\s+(bumpMetric|reportError)\s*\(/.test(line)) offenders.push(`${path.relative(root("."), file)}:${i + 1}`);
+        if (FLOATING.test(line)) offenders.push(`${path.relative(root("."), file)}:${i + 1}`);
       });
     }
     expect(offenders).toEqual([]);

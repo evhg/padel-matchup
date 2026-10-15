@@ -78,19 +78,29 @@ export async function sendEmail(msg: OutgoingEmail): Promise<boolean> {
     });
     if (error) {
       console.error("[email] send failed", error);
+      await count("emails_failed");
       return false;
     }
-    // Usage counter for /admin (best effort).
-    try {
-      const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
-      await bumpMetric(await getDb(), "emails_sent");
-    } catch {
-      /* metrics are optional */
-    }
+    await count("emails_sent");
     return true;
   } catch (e) {
     console.error("[email] send threw", e);
+    await count("emails_failed");
     return false;
+  }
+}
+
+/**
+ * Usage counters for /admin and the service board (best effort). A failure is counted too: on 23
+ * September a player asked why nobody got the match's email, and the log line was the only trace, so
+ * the board said "30 sent" and nothing else. Resend's rows now say "N failed today".
+ */
+async function count(key: "emails_sent" | "emails_failed"): Promise<void> {
+  try {
+    const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
+    await bumpMetric(await getDb(), key);
+  } catch {
+    /* metrics are optional */
   }
 }
 

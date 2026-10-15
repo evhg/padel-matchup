@@ -31,6 +31,17 @@ export async function sendPush(sub: { endpoint: string; p256dh: string; auth: st
     const code = (e as { statusCode?: number }).statusCode;
     if (code === 404 || code === 410) return "gone";
     console.warn("[push] send failed", code, (e as Error).message);
+    // Counted for the service board's Web Push row ("N failed today"); a dropped subscription above is not a failure.
+    await countFailed();
     return "failed";
+  }
+}
+
+async function countFailed(): Promise<void> {
+  try {
+    const [{ later }, { getDb }, { bumpMetric }] = await Promise.all([import("@/lib/later"), import("@/db"), import("@/lib/domain/metrics")]);
+    await later(async () => bumpMetric(await getDb(), "push_failed"));
+  } catch {
+    /* metrics are optional */
   }
 }

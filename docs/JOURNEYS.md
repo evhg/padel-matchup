@@ -31,7 +31,7 @@ matches → the Phuket page → the club's board → the Telegram door.
   **Fixed:** the organiser's match page carries one tap, "Show on the Rawai Padel Club board", beside
   the status chips while the match is not listed; the switch stays for taking it off again.
 - The level range, the one thing that would have made "looking for a 4th" mean something, is under
-  More options. *Next.*
+  More options. **Built:** a level chip above More options on the create form (item 3 at the end).
 - My matches showed an empty white card between the feedback line and his personal link: the push
   reminder's card, drawn even where the phone cannot do push. **Fixed:** the toggle draws its own card,
   so a phone that cannot do push sees nothing there.
@@ -56,7 +56,9 @@ her public page as a student sees it → the students screen.
 
 - The channel step would not let her finish: Done wants Telegram or an email, and she has neither
   open on her phone — she has LINE. She typed an email to get past it. LINE for a coach waits on the
-  Official Account (ROADMAP, Next 2); until then the step should say what it is waiting for. *Next.*
+  Official Account (ROADMAP, Next 2); until then the step should say what it is waiting for.
+  **Built:** one line under the question names LINE and WhatsApp as built and waiting on their
+  accounts (item 4 at the end).
 - Her page said "Founding coach · Phuket". She coaches in Bangkok. The badge took the city from the
   time zone, and Asia/Bangkok is Bangkok's zone as much as Phuket's. **Fixed:** the city comes from
   her clubs — a slug the city knows, or the city on the club's own row — and when nothing says, the
@@ -117,7 +119,8 @@ screen.
   token.
 - The desk is the right tools in the right order, but nothing says the order: entries, then the
   draw, then courts and times, then live. He found it by trying. *Next:* a "how a weekend runs"
-  strip at the top of the desk, each stage a link, the done ones ticked.
+  strip at the top of the desk, each stage a link, the done ones ticked. **Built:** `WeekendStrip`
+  (item 1 at the end).
 
 **Moments.** The draw in one tap from the entrants. The order of play with courts and times, the
 thing his spreadsheet was for. The club's screen: big type, no header, refreshing on its own.

@@ -549,6 +549,35 @@ learning can be a test, a gate step or a script, make it one and put the story i
   Prove it at every call site that passes the words, not at two of six: a review dropped the message
   from four desks one at a time, and the suite stayed green each time. A rule kept twice, once in SQL
   and once in a helper nothing calls, is proven only where it runs, so test the SQL.
+- **A rewrite keyed on a shape takes every name of that shape.** The middleware sent every root `.txt`
+  name of 8 to 128 characters to the IndexNow key route, so `/llms-full.txt` (nine) answered 404 in
+  production while `/llms.txt` (four) worked, and the agents suite asked only for the short one (found
+  15 October 2026). A rewrite matches the one value it is for (`indexNowPath`), and a test calls
+  `middleware()` itself for a route that sits beside a matcher (`tests/indexnow.test.ts`).
+- **A guard that knows two names misses the third.** The rule against a floating `void` write knew
+  `bumpMetric` and `reportError`, and seven counters floated beside it as `void count(…)` and
+  `void countDiscord()` in four chat clients. A guard names the shape (`FLOATING` in
+  `tests/rules.test.ts`), with a table of the forms it must catch and the forms it must pass.
+- **A count of what was sent is not a count of what arrived.** Erik asked twice why the players got no
+  email, and the board said "30 sent": a failed email or push was a log line, and a Telegram call that
+  Telegram refused counted as sent. Count the failure beside the success, in the same function, and
+  let the board's row say it (`emails_failed`, `push_failed`, `telegram_failed`).
+- **A new kind of entry needs its own tracing key.** `src/instrumentation.ts` is traced as an entry
+  named `instrumentation`, which neither `"/"` nor `"/**/*"` matches, and it reaches the database
+  through the error store. Its first build carried the 18 MB of PGlite, in a hook that loads in every
+  server function; `scripts/check-bundle.mjs` stopped the gate (15 October 2026). Its key in
+  `outputFileTracingExcludes` is the entry's name. Ask `next/dist/compiled/picomatch` whether a key
+  matches an entry before trusting it.
+- **A report that carries the request's path carries whatever the path holds.** The server error hook
+  (`src/instrumentation.ts`) gets the request's own path, query string included, and `/p/<token>` is a
+  sign-in. Every error row's path goes through `errorPath` (no query, the segment after `p`, `manage`,
+  `i`, `join` and `owed` blanked) before the store or the owner's Telegram sees it. A failed query's
+  message ends with its values ("params: …"), in the stack's first line too, and its real reason sits
+  in `cause`: `describeError` keeps the reason and the query and drops the values.
+- **A production build reports one render error twice.** A crash of `/m/<36 dashes>` on `next start`
+  gave two server rows: the real message, and the HTML pass's copy that reads "The specific message is
+  omitted in production builds". No unit test could show it, because a test calls the hook once. Run
+  the build and break a page before trusting a hook that Next.js calls.
 
 ### Wall clock
 

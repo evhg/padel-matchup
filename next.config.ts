@@ -29,6 +29,10 @@ const nextConfig: NextConfig = {
     // rather than the config after a change like this.
     "/": ["**/@electric-sql/pglite/**"],
     "/**/*": ["**/@electric-sql/pglite/**"],
+    // src/instrumentation.ts is traced as an entry of its own, named "instrumentation", which neither
+    // key above matches, and it reaches the database through the error store. Its first build carried
+    // all 18 MB, and the hook loads in every server function (15 October 2026, scripts/check-bundle.mjs).
+    instrumentation: ["**/@electric-sql/pglite/**"],
   },
   experimental: {
     serverActions: {

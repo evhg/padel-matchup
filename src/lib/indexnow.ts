@@ -3,18 +3,18 @@ import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
 import { baseUrl } from "@/lib/config";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
+import { cleanIndexNowKey } from "@/lib/indexnowKey";
 
 /**
  * IndexNow: one POST tells Bing, Yandex, Seznam, Naver and the rest that a page
  * changed. Google is not in the protocol; it reads the sitemap. Enabled by
  * INDEXNOW_KEY (8–128 letters, digits, dashes); the key file is served at
- * /<key>.txt (rewritten by the middleware to /indexnow/<key>.txt). Never throws.
+ * /<key>.txt (rewritten by the middleware to /indexnow/<key>.txt, `indexNowPath`). Never throws.
  */
 export const INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow";
 
 export function indexNowKey(): string | null {
-  const k = (process.env.INDEXNOW_KEY ?? "").trim();
-  return /^[A-Za-z0-9-]{8,128}$/.test(k) ? k : null;
+  return cleanIndexNowKey(process.env.INDEXNOW_KEY);
 }
 export const indexNowEnabled = () => indexNowKey() !== null;
 /** The key file must sit at the root: IndexNow trusts only URLs under the key file's directory. The middleware rewrites /<key>.txt to the route below. */
