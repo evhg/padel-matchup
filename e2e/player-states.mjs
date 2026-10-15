@@ -78,6 +78,17 @@ async function readsInOrder(p, locale, where, { hasFeedback = true } = {}) {
 }
 
 try {
+  // Rosalind's last match, for "Kicksmash can't reach Tomasz" further down (the owner's decision of 15
+  // October 2026, D1). The line names the free-seat offer's own past partners, and a match makes partners
+  // only once it has ended (`partnersQuery`, `endedBy`). A match can be joined only until it ends, so this
+  // one is booked for the shortest length, 60 minutes, starts 58 minutes ago, takes its two players now,
+  // and has ended by the time the walk below reads the line (it waits out the rest, if any is left).
+  const playedEnds = Date.now() + 2 * 60 * 1000;
+  const playedNow = await keyed("/api/v1/matches", { startsAt: new Date(playedEnds - 60 * 60 * 1000).toISOString(), durationMinutes: 60, tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind" } });
+  const rosaToken = playedNow.organizer?.personalToken ?? "";
+  const tomaszIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Tomasz" });
+  const milenaIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Milena", email: "milena-e2e@example.com" });
+
   // ------------------------------------------------- a match that started an hour ago
   // An hour, not two: a match can still be joined until its length (90 minutes unless the organiser
   // picked another) has run out, and score entry
@@ -292,22 +303,29 @@ try {
   await dana.close();
 
   // ------------------------------------------------- "Kicksmash can't reach Tomasz" (the owner's decision of 15 October 2026, D1)
-  // Rosalind played half an hour ago with Tomasz, who gave Kicksmash no contact, and with Milena, who
-  // gave an email. On her next match, with seats open, her own page names Tomasz and not Milena, whom
-  // the free-seat offer reaches. Nobody else's page carries his name at all, and a full match names nobody.
-  const playedNow = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind" } });
-  const rosaToken = playedNow.organizer?.personalToken ?? "";
-  const tomaszIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Tomasz" });
-  const milenaIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Milena", email: "milena-e2e@example.com" });
+  // Rosalind's last match (made at the top of this walk, and over now) had Tomasz, who gave Kicksmash no
+  // contact, and Milena, who gave an email. On her next match, with seats open, her own page names Tomasz
+  // and not Milena, whom the free-seat offer reaches. Ivo, in a match with her that is still being played,
+  // is no partner of the offer's yet, so the line does not name him either. Nobody else's page carries
+  // Tomasz's name at all, and a full match names nobody.
   check("Rosalind's last match has Tomasz and Milena in it", tomaszIn.outcome === "joined" && milenaIn.outcome === "joined", JSON.stringify([tomaszIn.outcome, milenaIn.outcome]));
+  const playing = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind", token: rosaToken } });
+  const ivoIn = await keyed(`/api/v1/matches/${playing.match?.code}/join`, { name: "Ivo" });
+  check("Rosalind is playing a match with Ivo, which has not ended", ivoIn.outcome === "joined", JSON.stringify(ivoIn.outcome));
   const nextUp = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind", token: rosaToken } });
   const nextCode = nextUp.match?.code;
+  // The last match must have ended: wait out what is left of its hour, if anything is.
+  if (Date.now() < playedEnds + 2000) await new Promise((r) => setTimeout(r, playedEnds + 2000 - Date.now()));
   const rosa = await page(iphone);
   await rosa.goto(`${BASE}/p/${rosaToken}/go?next=/${nextCode}`);
   const unreached = rosa.getByTestId("unreached");
   await unreached.waitFor({ timeout: 20000 });
   const unreachedText = (await unreached.innerText()).replace(/\s+/g, " ");
-  check("the organiser's page names the past partner Kicksmash cannot reach, and not the one it reaches", unreachedText.includes("Kicksmash can't reach Tomasz. Send them the link.") && !unreachedText.includes("Milena"), unreachedText);
+  check(
+    "the organiser's page names the past partner Kicksmash cannot reach, and not the one it reaches, nor a player of a match not yet over",
+    unreachedText.includes("Kicksmash can't reach Tomasz. Send them the link.") && !unreachedText.includes("Milena") && !unreachedText.includes("Ivo"),
+    unreachedText,
+  );
   const sendHref = (await unreached.getByTestId("unreached-send").getAttribute("href")) ?? "";
   check("its one action is the match's own WhatsApp share, the link tagged as WhatsApp's", sendHref.startsWith("https://wa.me/?text=") && decodeURIComponent(sendHref).includes(`/${nextCode}?s=wa`), sendHref.slice(0, 120));
   await unreached.scrollIntoViewIfNeeded();

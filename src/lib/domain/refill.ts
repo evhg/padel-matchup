@@ -104,24 +104,35 @@ const SEATED = ["joined", "confirmed"] as const;
  * walks an index: this match's seats, each of its players' seats (`slots_player_idx`), that match by
  * its key, that match's seats. Only a match makes partners, and only a match looks for them: thirty
  * people in one americano are not thirty partners.
+ *
+ * The query itself, unawaited, so the organiser's "Kicksmash can't reach Tim" line (`unreached.ts`)
+ * reads the same partners in its one read, as a subquery, and the two never drift: `playerId`, and
+ * `last`, the start of the freshest match together. The caller asks the type (`pastPartners`).
  */
-export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capacity">, now: Date): Promise<string[]> {
-  if (ev.type !== "match") return [];
+export function partnersQuery(db: Db, ev: Pick<Event, "id" | "capacity">, now: Date) {
   const here = alias(slots, "here");
   const mine = alias(slots, "mine");
   const theirs = alias(slots, "theirs");
   const since = new Date(now.getTime() - PARTNER_WINDOW_MS);
-  const rows = await db
-    .select({ playerId: theirs.playerId })
-    .from(here)
-    .innerJoin(mine, and(eq(mine.playerId, here.playerId), ne(mine.eventId, here.eventId), inArray(mine.status, [...SEATED])))
-    // Finished means that match's own length has run out (`endedBy`): a 60-minute match makes partners an hour after it starts.
-    .innerJoin(events, and(eq(events.id, mine.eventId), eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), ...endedBy(now), lte(mine.position, events.capacity)))
-    .innerJoin(theirs, and(eq(theirs.eventId, events.id), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity), isNotNull(theirs.playerId), ne(theirs.playerId, mine.playerId)))
-    .where(and(eq(here.eventId, ev.id), inArray(here.status, [...SEATED]), lte(here.position, ev.capacity), isNotNull(here.playerId)))
-    .groupBy(theirs.playerId)
-    .orderBy(desc(max(events.startsAt)))
-    .limit(PARTNER_MAX);
+  return (
+    db
+      .select({ playerId: theirs.playerId, last: max(events.startsAt).as("last") })
+      .from(here)
+      .innerJoin(mine, and(eq(mine.playerId, here.playerId), ne(mine.eventId, here.eventId), inArray(mine.status, [...SEATED])))
+      // Finished means that match's own length has run out (`endedBy`): a 60-minute match makes partners an hour after it starts.
+      .innerJoin(events, and(eq(events.id, mine.eventId), eq(events.type, "match"), ne(events.status, "cancelled"), gte(events.startsAt, since), ...endedBy(now), lte(mine.position, events.capacity)))
+      .innerJoin(theirs, and(eq(theirs.eventId, events.id), inArray(theirs.status, [...SEATED]), lte(theirs.position, events.capacity), isNotNull(theirs.playerId), ne(theirs.playerId, mine.playerId)))
+      .where(and(eq(here.eventId, ev.id), inArray(here.status, [...SEATED]), lte(here.position, ev.capacity), isNotNull(here.playerId)))
+      .groupBy(theirs.playerId)
+      .orderBy(desc(max(events.startsAt)))
+      .limit(PARTNER_MAX)
+  );
+}
+
+/** The partners' ids, the freshest first (`partnersQuery`). A tournament has none, and reads nothing. */
+export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capacity">, now: Date): Promise<string[]> {
+  if (ev.type !== "match") return [];
+  const rows = await partnersQuery(db, ev, now);
   return rows.map((r) => r.playerId).filter((id): id is string => Boolean(id));
 }
 
@@ -130,7 +141,8 @@ export async function pastPartners(db: Db, ev: Pick<Event, "id" | "type" | "capa
  * `src/lib/coach/notify.ts` tries them: the bot, then the WhatsApp number that wrote to us, then an
  * address they did not mute, then a device. The two must agree, or the cap is spent on somebody the
  * sender then cannot reach. The organiser's "Kicksmash can't reach Tim" line asks the same function
- * (`unreached.ts`), so the names it shows are exactly the past partners this offer cannot reach.
+ * and `admits` of the offer's own past partners (`partnersQuery`, in `unreached.ts`), so the names it
+ * shows are past partners this offer would want and cannot reach.
  */
 export function channelOf(p: Pick<Player, "id" | "telegramId" | "phone" | "email" | "emailNotifications">, reach: RefillReach, devices: ReadonlySet<string>): "telegram" | "whatsapp" | "email" | "push" | null {
   if (reach.telegram && p.telegramId) return "telegram";

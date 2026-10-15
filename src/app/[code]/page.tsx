@@ -434,12 +434,12 @@ async function EventPage({ params, searchParams }: Props) {
   // A held row whose record is one of those past players: it keeps their matches (the line under it).
   const pastIds = new Set(pastPlayers.map((p) => p.id));
   // "Kicksmash can't reach Tim and Adrian. Send them the link." (the owner's decision of 15 October 2026,
-  // DECIDING rule 7): the past partners from the last 60 days that the free-seat offer would want and
-  // cannot reach, first names only. For the organiser's own view of a match with a seat open, before it
-  // starts; from the past players above, the activity this page read (who left or was taken out) and
-  // one bounded read of what the offer decides on (`unreachedPartners`). Nobody else ever gets it.
+  // DECIDING rule 7): the free-seat offer's own past partners of this match (a match that ended in the
+  // last 60 days, `partnersQuery`) that it would want and cannot reach, first names only. For the
+  // organiser's own view of a match with a seat open, before it starts; from the rows and the activity
+  // this page read (who left or was taken out) and one bounded read (`unreachedPartners`). Nobody else ever gets it.
   const gone = new Set(detail.activity.flatMap((a) => (a.verb === "left" && a.actorPlayerId ? [a.actorPlayerId] : a.verb === "removed" && typeof a.meta?.targetPlayerId === "string" ? [a.meta.targetPlayerId] : [])));
-  const unreachedNames = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedPartners(db, ev, pastPlayers, { ids: idsHere, names: namesHere, gone }, channelsOffered(), now) : [];
+  const unreachedNames = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedPartners(db, ev, { ids: idsHere, names: namesHere, gone }, channelsOffered(), now) : [];
   const unreachedParts = unreachedLine(unreachedNames);
   const unreached =
     unreachedNames.length > 0
