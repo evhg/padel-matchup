@@ -1111,6 +1111,11 @@ Everything in this list is live. The README describes each in detail.
   `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in
   `tests/passkey-ceremony.test.ts` and with Chromium's virtual authenticator in `e2e/passkeys.mjs`.
 - **The AI key may name its workspace (15 October 2026).** `ANTHROPIC_WORKSPACE_ID` goes with every Messages API call as `anthropic-workspace-id`, and an answer that says the key has no workspace counts as a refused key, so its listening items stay new or come back (`anthropicHeaders`, `keyRefused`, `restoreRefusedItems` in `src/lib/ops/anthropic.ts`; `tests/anthropic-workspace.test.ts`).
+- **pg_cron's run log stops growing (15 October 2026, migration 0101).** The owner's decision: "Yes,
+  weekly cleanup (Recommended)". pg_cron kept one row for each run of each job, 456 a day, and nothing
+  deleted them: 18,071 rows and 7.27 MB, the largest relation in the database. The job
+  `kicksmash-cron-log-cleanup` now deletes the rows that ended more than 14 days ago, each Sunday at
+  03:17 UTC (docs/OPERATING.md, "Cron jobs").
 
 ## The finish line
 

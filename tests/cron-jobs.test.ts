@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { CRON_JOBS, CRON_SECRET_NAME, jobCommand, listCronJobs, scheduleCronJobs, storeCronSecret, cronAvailable } from "@/lib/ops/cronJobs";
+import { CRON_JOBS, CRON_LOG_CLEANUP, CRON_SECRET_NAME, jobCommand, listCronJobs, scheduleCronJobs, storeCronSecret, cronAvailable } from "@/lib/ops/cronJobs";
 
 /**
  * The scheduled jobs, in the repository (migration 0069).
@@ -129,5 +129,75 @@ describe("the scheduled jobs live in the repository", () => {
     expect(() => jobCommand("http://kicksma.sh", "/api/cron/push")).toThrow();
     expect(() => jobCommand("https://kicksma.sh'; drop table x; --", "/api/cron/push")).toThrow();
     expect(jobCommand("https://kicksma.sh/", "/api/cron/push")).toContain("url := 'https://kicksma.sh/api/cron/push'");
+  });
+});
+
+/**
+ * pg_cron's run log, cleared once a week (migration 0101, the owner's decision of 15 October 2026).
+ * The stand-ins above are the same; this runs 0101 after 0069, as production will, and then runs the
+ * job's own stored command, which is what pg_cron runs each Sunday.
+ */
+const CLEANUP = readFileSync("drizzle/0101_cron_log_cleanup.sql", "utf8");
+
+describe("a weekly job clears pg_cron's run log", () => {
+  it("schedules one cleanup job beside the three, as the code defines it, however often it runs", async () => {
+    const { pg, db } = await database();
+    await pg.exec(MIGRATION);
+    const three = await jobs(pg);
+    await pg.exec(CLEANUP);
+
+    const after = await jobs(pg);
+    expect(after.map((j) => j.jobname)).toEqual(["kicksmash-cron-log-cleanup", "kicksmash-hourly", "kicksmash-push", "kicksmash-sync"]);
+    const job = after.find((j) => j.jobname === CRON_LOG_CLEANUP.name)!;
+    expect(job.schedule).toBe(CRON_LOG_CLEANUP.schedule);
+    expect(job.command).toBe(CRON_LOG_CLEANUP.command);
+    expect(after.filter((j) => j.jobname !== CRON_LOG_CLEANUP.name), "the three jobs that call the app changed").toEqual(three);
+
+    // Run twice, still one job (the Migrate workflow can be re-run by hand).
+    await pg.exec(CLEANUP);
+    expect(await jobs(pg)).toEqual(after);
+
+    // The operator's list shows it, and a later POST /api/admin/cron leaves it where it is.
+    expect((await listCronJobs(db)).map((j) => j.jobname)).toEqual(after.map((j) => j.jobname));
+    await scheduleCronJobs(db, "https://kicksma.sh");
+    expect(await jobs(pg)).toEqual(after);
+  });
+
+  it("deletes only the run log's rows that ended more than 14 days ago", async () => {
+    const { pg } = await database();
+    await pg.exec(MIGRATION);
+    await pg.exec(CLEANUP);
+    // The job reads the database's clock, so the rows are placed against that clock, not the calendar.
+    await pg.exec(`
+      insert into cron.job_run_details (jobid, status, start_time, end_time, return_message) values
+        (1, 'succeeded', now() - interval '30 days', now() - interval '30 days', 'a month ago'),
+        (2, 'failed', now() - interval '14 days 1 hour', now() - interval '14 days 1 hour', 'just past 14 days'),
+        (2, 'succeeded', now() - interval '13 days 23 hours', now() - interval '13 days 23 hours', 'just inside 14 days'),
+        (3, 'succeeded', now() - interval '1 day', now() - interval '1 day', 'yesterday'),
+        (3, 'running', now() - interval '20 days', null, 'still running');
+    `);
+    const jobsBefore = await jobs(pg);
+    const stored = (await pg.query<{ command: string }>(`select command from cron.job where jobname = '${CRON_LOG_CLEANUP.name}'`)).rows[0].command;
+    await pg.exec(stored);
+
+    const left = (await pg.query<{ return_message: string }>("select return_message from cron.job_run_details order by runid")).rows.map((r) => r.return_message);
+    expect(left).toEqual(["just inside 14 days", "yesterday", "still running"]);
+    expect(await jobs(pg), "the cleanup touched cron.job").toEqual(jobsBefore);
+  });
+
+  it("deletes nothing itself and drops nothing: its one delete is the job's command", () => {
+    const code = CLEANUP.split("\n")
+      .filter((line) => !line.trimStart().startsWith("--"))
+      .join("\n");
+    expect(code.match(/\bdelete\b/gi)).toHaveLength(1);
+    expect(code).toContain(CRON_LOG_CLEANUP.command);
+    expect(code).not.toMatch(/\b(drop|truncate|alter|vacuum)\b/i);
+  });
+
+  it("does nothing on a database without pg_cron, which is every local and test database", async () => {
+    const { pg, db } = await database(false);
+    await pg.exec(CLEANUP);
+    expect(await cronAvailable(db)).toBe(false);
+    expect((await pg.query<{ c: string | null }>("select to_regclass('cron.job')::text as c")).rows[0].c).toBeNull();
   });
 });
