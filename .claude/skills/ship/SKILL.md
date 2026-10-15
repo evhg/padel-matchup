@@ -540,6 +540,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   at "about 1.5 MB" (11 October 2026); the browser now shrinks the picture to 900 KB, and
   `tests/booking-shot.test.ts` fails when the picture and the text together could pass the limit.
   Raising the limit raises it for every action, so a bigger upload gets a route of its own.
+- **A refusal is not always a 401.** On 14 October 2026 the owner's new Anthropic key had no
+  workspace, and every call answered a 400 that said so in words. `keyRefused` read the status alone,
+  so three listening items failed for good and the board stayed as it was. It reads the answer's
+  `error.message` now, and `ANTHROPIC_WORKSPACE_ID` names the workspace (`anthropicHeaders`). When
+  a check decides "is this our setting or this item?", read the words of the answer as well as its
+  status, and write the answer's whole text into the test (`tests/anthropic-workspace.test.ts`).
 
 ### Wall clock
 

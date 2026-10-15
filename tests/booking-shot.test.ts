@@ -137,19 +137,20 @@ describe("a screenshot, read on the server", () => {
   afterAll(async () => close());
   beforeEach(async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test-only";
+    delete process.env.ANTHROPIC_WORKSPACE_ID;
     // Every test starts with no reads spent and no key state: the day's rows go.
     await db.delete(metricsDaily).where(eq(metricsDaily.day, DAY_KEY));
   });
 
-  type Call = { url: string; body: { model: string; max_tokens: number; system: string; messages: { content: { type: string; text?: string; source?: { type: string; media_type: string; data: string } }[] }[] } };
-  function model(answer: { status?: number; text?: string; stop?: string } = {}) {
+  type Call = { url: string; headers: Record<string, string>; body: { model: string; max_tokens: number; system: string; messages: { content: { type: string; text?: string; source?: { type: string; media_type: string; data: string } }[] }[] } };
+  function model(answer: { status?: number; text?: string; stop?: string; message?: string } = {}) {
     const calls: Call[] = [];
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (!url.startsWith("https://api.anthropic.com/")) throw new Error(`no other read in these tests: ${url}`);
-      calls.push({ url, body: JSON.parse(String(init?.body)) });
+      calls.push({ url, headers: { ...(init?.headers as Record<string, string>) }, body: JSON.parse(String(init?.body)) });
       const status = answer.status ?? 200;
-      const body = status === 200 ? { content: [{ type: "text", text: answer.text ?? JSON.stringify(GOOD) }], stop_reason: answer.stop ?? "end_turn", usage: { input_tokens: 1650, output_tokens: 120 } } : { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } };
+      const body = status === 200 ? { content: [{ type: "text", text: answer.text ?? JSON.stringify(GOOD) }], stop_reason: answer.stop ?? "end_turn", usage: { input_tokens: 1650, output_tokens: 120 } } : { type: "error", error: { type: status === 400 ? "invalid_request_error" : "authentication_error", message: answer.message ?? "invalid x-api-key" } };
       return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
     }) as typeof fetch;
     return { calls, fetchImpl };
@@ -167,6 +168,8 @@ describe("a screenshot, read on the server", () => {
     expect(r).toEqual({ ok: true, read: expect.objectContaining({ club: expect.objectContaining({ slug: "warehaus" }), clubFrom: "shot", date: "2026-10-12", time: "18:00", names: ["Danny", "Alberto"] }), href: expect.stringContaining("venue=WAREHAUS.club&date=2026-10-12&time=18%3A00"), previewed: false });
     expect(r.ok && r.href).toContain("&booked=1");
     expect(m.calls).toHaveLength(1);
+    // No ANTHROPIC_WORKSPACE_ID here: the three headers every call always carried, and no workspace.
+    expect(m.calls[0].headers).toEqual({ "content-type": "application/json", "x-api-key": "sk-ant-test-only", "anthropic-version": "2023-06-01" });
     const [content] = m.calls[0].body.messages;
     expect(content.content[0]).toEqual({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: Buffer.from(jpeg()).toString("base64") } });
     expect(JSON.stringify(m.calls[0].body)).not.toContain("see the picture");
@@ -208,6 +211,28 @@ describe("a screenshot, read on the server", () => {
     // A desk's accepted call clears it, and screenshots read again.
     await setMetric(db, "anthropic_ok_at", Math.floor(NOW.getTime() / 1000) + 60, DAY_KEY);
     expect((await shot({ rateKey: "k-401c" }, next.fetchImpl)).ok).toBe(true);
+  });
+
+  // On 14 October 2026 the owner's new key had no workspace: a 400 with these words, which the code
+  // took for an ordinary failure. It is a refused key now, and ANTHROPIC_WORKSPACE_ID names the workspace.
+  it("names the workspace once ANTHROPIC_WORKSPACE_ID is set, and stops at the answer to a key with none", async () => {
+    const NO_WORKSPACE = "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use. Add the header, or use an API key that is scoped to a workspace.";
+    const none = model({ status: 400, message: NO_WORKSPACE });
+    expect(await shot({ rateKey: "k-ws" }, none.fetchImpl)).toEqual({ ok: false, reason: "shot", why: "call" });
+    expect(none.calls).toHaveLength(1);
+    expect(none.calls[0].headers).not.toHaveProperty("anthropic-workspace-id");
+    expect((await counters("anthropic_refused_at")).anthropic_refused_at).toBe(Math.floor(NOW.getTime() / 1000));
+    // A refused key, as a 401 is: the next screenshot makes no call.
+    const next = model();
+    expect(await shot({ rateKey: "k-ws2" }, next.fetchImpl)).toEqual({ ok: false, reason: "shot", why: "refused" });
+    expect(next.calls).toHaveLength(0);
+    // The owner sets the workspace, a desk's call is accepted, and the read names the workspace, trimmed.
+    process.env.ANTHROPIC_WORKSPACE_ID = " wrkspc_01TestOnlyNotReal\n";
+    await setMetric(db, "anthropic_ok_at", Math.floor(NOW.getTime() / 1000) + 60, DAY_KEY);
+    expect((await shot({ rateKey: "k-ws3" }, next.fetchImpl)).ok).toBe(true);
+    expect(next.calls).toHaveLength(1);
+    expect(next.calls[0].headers).toEqual({ "content-type": "application/json", "x-api-key": "sk-ant-test-only", "anthropic-version": "2023-06-01", "anthropic-workspace-id": "wrkspc_01TestOnlyNotReal" });
+    delete process.env.ANTHROPIC_WORKSPACE_ID;
   });
 
   it("takes no paste and no screenshot of anybody's allowance while the key is refused or the month is spent", async () => {

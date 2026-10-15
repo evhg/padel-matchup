@@ -1110,6 +1110,7 @@ Everything in this list is live. The README describes each in detail.
   download of a player's data lists each phone by its label and dates. `src/lib/domain/passkeys.ts`,
   `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in
   `tests/passkey-ceremony.test.ts` and with Chromium's virtual authenticator in `e2e/passkeys.mjs`.
+- **The AI key may name its workspace (15 October 2026).** `ANTHROPIC_WORKSPACE_ID` goes with every Messages API call as `anthropic-workspace-id`, and an answer that says the key has no workspace counts as a refused key, so its listening items stay new or come back (`anthropicHeaders`, `keyRefused`, `isKeyRefusalError` in `src/lib/ops/anthropic.ts`; `tests/anthropic-workspace.test.ts`).
 
 ## The finish line
 
@@ -1272,7 +1273,8 @@ the player, and invite them to try it.
 6. **The paste doors wait on two outside facts.** No mail has reached book@ (`book_mail_answered`
    and `book_mail_skipped` are empty on 11 October 2026): one test mail from the owner shows whether
    Resend routes it. The screenshot read and the other AI features wait on a working
-   `ANTHROPIC_API_KEY`.
+   `ANTHROPIC_API_KEY`. The key of 14 October 2026 has no workspace, so they also wait on
+   `ANTHROPIC_WORKSPACE_ID` in Vercel and a deploy.
 7. **Decision B: a second organiser in Phuket.** The owner chose "A now + B this week" on 11 October
    2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
    October 2026 one organiser had made matches since 10 October. The next session counts the
