@@ -5,7 +5,7 @@ import { startTransition, useEffect, useRef, useState, useTransition } from "rea
 import { joinAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { BackInHelp, type BackInDoors } from "./BackInHelp";
-import { registerJoinHandler } from "./joinBus";
+import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { heldNameOf, NameHereLine } from "./TakeHeld";
 
@@ -54,16 +54,17 @@ export function JoinInline({
   // the form. The DOM holds the state the handler needs, so it registers once and keeps its place.
   useEffect(
     () =>
-      registerJoinHandler(() => {
-        const form = box.current;
-        // While the form's own Join is busy (disabled), a second tap sends nothing more.
-        if (form && (!input.current || input.current.value.trim())) return void (form.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled || form.requestSubmit());
-        setOpen(true);
-        requestAnimationFrame(() => {
-          box.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-          input.current?.focus({ preventScroll: true });
-        });
-      }),
+      registerJoinHandler(
+        () => {
+          if (formState(box.current, input.current) === "filled" && sendForm(box.current)) return;
+          setOpen(true);
+          requestAnimationFrame(() => {
+            box.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+            input.current?.focus({ preventScroll: true });
+          });
+        },
+        () => formState(box.current, input.current),
+      ),
     [],
   );
 

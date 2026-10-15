@@ -6,7 +6,7 @@ import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { answerKey, askFor, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
 import { BackInHelp, type BackInDoors } from "./BackInHelp";
-import { registerJoinHandler } from "./joinBus";
+import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { PastAsk } from "./PastAsk";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
@@ -115,21 +115,20 @@ export function OpenSpot({
 
   const needsLevel = Boolean(levelRange) && myLevel == null;
 
-  // The fixed Join button hands its no-identity (or no-level) case to the first open row. A second tap,
-  // with the form open and a name in it, sends the form: the same submit as the form's own Join, so every
-  // check it makes runs (the name, the held place, the level). The DOM holds what the handler reads, so
-  // it registers once per state and keeps its place in front of the other open rows.
+  // The fixed Join button hands its no-identity (or no-level) case to an open row: the row whose form
+  // the player opened, else the first one (`requestJoin`). A second tap, with the form open and a name in
+  // it, sends the form: the same submit as the form's own Join, so every check it makes runs (the name,
+  // the held place, the level). The DOM holds what the handler reads, so it registers once per state.
   const form = useRef<HTMLFormElement>(null);
+  const spotState = useCallback(() => formState(form.current, input.current), []);
   const onFixedJoin = useCallback(() => {
-    const f = form.current;
-    // While the form's own Join is busy (disabled), a second tap sends nothing more.
-    if (f && (!input.current || input.current.value.trim())) return void (f.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled || f.requestSubmit());
+    if (spotState() === "filled" && sendForm(form.current)) return;
     expand();
-  }, [expand]);
+  }, [expand, spotState]);
   useEffect(() => {
     if (mode !== "join" || (hasIdentity && !needsLevel)) return;
-    return registerJoinHandler(onFixedJoin);
-  }, [mode, hasIdentity, needsLevel, onFixedJoin]);
+    return registerJoinHandler(onFixedJoin, spotState);
+  }, [mode, hasIdentity, needsLevel, onFixedJoin, spotState]);
 
   const join = (withName?: string) =>
     start(async () => {

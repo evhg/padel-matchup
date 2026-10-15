@@ -191,10 +191,15 @@ const CURRENCY_BEFORE = "US\\$|S\\$|A\\$|HK\\$|RM|Rp|฿|€|\\$|£|₽|THB|SGD|
 const CURRENCY_AFTER = `${CURRENCY_BEFORE}|baht|бат(?:ов|а)?|евро|руб(?:лей|ля|\\.)?|р\\.|euros?|dirhams?|дирхам(?:ов|а)?`;
 // A plain space never groups thousands: "Court 3 600 THB" is court 3 and 600 baht.
 const AMOUNT = "\\d{1,3}(?:[,.\\u00a0\\u202f]\\d{3})+(?:[.,]\\d{1,2})?|\\d{1,6}(?:[.,]\\d{1,2})?";
-// What makes a price a price for each player: "400 THB/person", "฿400 pp", "400 each", "400 por persona",
-// "400 с человека". The one capturing group of `COST_RE`: a price without it is the court's total.
-const PER = "(\\s?\\/\\s?(?:person|pax|player|pp|чел|persona)|\\s(?:pp|each|per person|per player|с человека|с игрока|por persona|por jugador))?";
-const COST_RE = new RegExp(`(?<![\\p{L}\\d])(?:(?:${CURRENCY_BEFORE})\\s?(?:${AMOUNT})|(?:${AMOUNT})\\s?(?:${CURRENCY_AFTER}))(?![\\p{L}\\d])${PER}`, "iu");
+// What makes a price a price for each player, after the amount: "400 THB/person", "10 €/jugador",
+// "฿400 pp", "400 each", "400 por persona", "400 с человека". The longer word first, so "/persona" is
+// read whole. Group 3 of `COST_RE`.
+const PER = "(\\s?\\/\\s?(?:persona|person|pax|player|jugador|pp|человека|человек|чел|игрока|игрок)|\\s(?:pp|each|per person|per player|с человека|с игрока|por persona|por jugador))?";
+// Or a label in front of the amount: "Price per person: 400 THB", "Precio por persona: 10 €", "Цена с
+// человека: 400 бат" (review, 15 October 2026: these read as the court's total). Group 1 of `COST_RE`.
+const PER_BEFORE = "(?:(per person|per player|pp|por persona|por jugador|с человека|с игрока)\\s*:?\\s*)?";
+// Group 2 is the price as written, with neither label: a price with neither group 1 nor group 3 is the court's total.
+const COST_RE = new RegExp(`(?<![\\p{L}\\d])${PER_BEFORE}((?:${CURRENCY_BEFORE})\\s?(?:${AMOUNT})|(?:${AMOUNT})\\s?(?:${CURRENCY_AFTER}))(?![\\p{L}\\d])${PER}`, "iu");
 
 /** Words that are never a player's name in a booking: what the booking says about itself, in three languages. */
 const BOOKING_WORDS = [
@@ -359,12 +364,15 @@ function scan(input: string, o: { clubWords: ReadonlySet<string>; selfName: stri
   };
 
   // The price first: its digits are no day and no time. "฿1,600", "1600 THB", "S$60". It is the cost
-  // per player only when it says so ("/person", "pp", "each"); else it is the court's total.
+  // per player only when it says so, after the amount ("/person", "pp", "each") or in a label before it
+  // ("Price per person: 400 THB"); else it is the court's total. A label before it goes after the
+  // amount, in the paste's own words ("400 THB per person"), as every other price per player reads, so
+  // the bot's answer and the match's card say per player too.
   take(
     COST_RE,
     once((m) => {
-      const price = m[0].replace(/\s+/g, " ").trim().slice(0, FIELD_MAX);
-      if (m[1]) out.cost = price;
+      const price = `${m[2]}${m[3] ?? (m[1] ? ` ${m[1].toLowerCase()}` : "")}`.replace(/\s+/g, " ").trim().slice(0, FIELD_MAX);
+      if (m[1] || m[3]) out.cost = price;
       else out.courtTotal = price;
     }),
   );

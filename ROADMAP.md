@@ -1123,7 +1123,8 @@ Everything in this list is live. The README describes each in detail.
   saved as a real result. "Book this court" goes at the start, and the club is not read for it then;
   "I booked it", the booked line and "Undo" stay until the end. After a join, "Your level?" waits while
   "Stay updated" still asks for a channel. For the organiser: a pasted price fills "Cost per player"
-  only when it says it is per player ("/person", "pp", "each"); a bare price is the court's total, one
+  only when it says it is per player ("/person", "pp", "each", or "Price per person:" before it); a
+  bare price is the court's total, one
   line under the form and in the bot's and the thread's answer, and never the match's cost (it once read
   "1,600 THB per player"). Opening a match page marks the viewer's notices about that match as read
   (`markMatchNoticesRead`, one indexed update after the response), so the bell counts only what is

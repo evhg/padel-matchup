@@ -213,7 +213,9 @@ describe("notices: the switch for each kind, quiet hours and the inbox", () => {
     const bo = await person("BoRead", {}, false);
     const seen = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 2 * DAY), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
     const other = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 3 * DAY), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
-    const row = (playerId: string, eventId: string | null) => ({ playerId, eventId, kind: "changes" as const, key: "noticeItem.lineupOpen", params: {} });
+    // Made before the page began (`createdAt` set: the database's own clock is not the frozen one).
+    const before = new Date(NOW.getTime() - 10 * 60 * 1000);
+    const row = (playerId: string, eventId: string | null) => ({ playerId, eventId, kind: "changes" as const, key: "noticeItem.lineupOpen", params: {}, createdAt: before });
     const earlier = new Date(NOW.getTime() - HOUR);
     await db.insert(notices).values([row(ana.id, seen.id), row(ana.id, seen.id), row(ana.id, other.id), row(ana.id, null), row(bo.id, seen.id), { ...row(ana.id, seen.id), readAt: earlier }]);
     expect((await rolesFor(db, ana.id)).unread).toBe(4);
@@ -228,6 +230,22 @@ describe("notices: the switch for each kind, quiet hours and the inbox", () => {
     expect((await rowsOf(bo.id)).map((r) => r.readAt)).toEqual([null]);
     // A second visit marks nothing more.
     expect(await markMatchNoticesRead(db, ana.id, seen.id, NOW)).toBe(0);
+  });
+
+  it("leaves new a notice made after the page began: a join while the page was reading is not on its screen", async () => {
+    const org = await person("Org9", {}, false);
+    const ana = await person("AnaLate", {}, false);
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 2 * DAY), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    const row = (createdAt: Date) => ({ playerId: ana.id, eventId: ev.id, kind: "changes" as const, key: "noticeItem.lineupOpen", params: {}, createdAt });
+    // `NOW` is when the page began. One notice a minute before, one at that instant, one a second after it.
+    const late = new Date(NOW.getTime() + 1000);
+    await db.insert(notices).values([row(new Date(NOW.getTime() - 60 * 1000)), row(NOW), row(late)]);
+    expect(await markMatchNoticesRead(db, ana.id, ev.id, NOW)).toBe(2);
+    const anas = await rowsOf(ana.id);
+    expect(anas.filter((r) => r.readAt === null).map((r) => r.createdAt.getTime())).toEqual([late.getTime()]);
+    expect((await rolesFor(db, ana.id)).unread).toBe(1);
+    // The next visit, which began after it, reads it.
+    expect(await markMatchNoticesRead(db, ana.id, ev.id, new Date(NOW.getTime() + 5000))).toBe(1);
   });
 
   it("prunes notices older than ninety days, a bounded batch at a time", async () => {

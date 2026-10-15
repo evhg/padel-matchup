@@ -139,13 +139,15 @@ async function EventPage({ params, searchParams }: Props) {
   const openJoin = query?.join === "1";
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
+  // Taken before the first read: the notices this page marks read are the ones made before it read the
+  // match (`markMatchNoticesRead`), never one a join made while the page was still reading.
+  const now = new Date();
   const db = await getDb();
   const detail = await getEventByCode(db, code);
   if (!detail) notFound();
   const [t, locale, viewer] = await Promise.all([getTranslations(), getLocale(), getViewer(db, detail)]);
 
   const { event: ev, roster, waitlist, creator } = detail;
-  const now = new Date();
   const base = baseUrl();
   const url = eventUrl(base, code);
   const occupied = roster.filter(isOccupied).length;
@@ -176,7 +178,9 @@ async function EventPage({ params, searchParams }: Props) {
   if (viewKey) await later(() => bumpMetric(db, viewKey));
   // Opening the match reads its notices, so the bell counts only what this person has not seen (the
   // owner's question, 12 October 2026). One indexed update after the response, for a signed-in viewer,
-  // a tap from My matches included; the header of this response may still show the old count.
+  // a tap from My matches included; the header of this response may still show the old count. Only the
+  // notices made by `now`, before the page read the match: a join recorded while the page was reading
+  // and streaming is not on this screen, so it stays new.
   if (me) await later(() => markMatchNoticesRead(db, me.id, ev.id, now));
 
   // Level range: players outside it ask to join; the organizer decides.
@@ -813,7 +817,9 @@ async function EventPage({ params, searchParams }: Props) {
             />
           )}
           {/* One ask at a time after a join: while "Stay updated" still asks for a channel, the level waits
-              for the next visit. Eight buttons at once left the channel ask, the one that reaches the player, competing. */}
+              until the player saves one, on this visit or a later one. A player who never saves a channel is
+              not asked the level here (My matches still has it). Eight buttons at once left the channel ask,
+              the one that reaches the player, competing. */}
           {me && askLevel && !(stay && stay.kind === "ask") && <LevelAfterJoin playerId={me.id} />}
           {rememberSession && <RememberPhone offer={rememberOffer} />}
         </section>

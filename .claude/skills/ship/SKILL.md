@@ -1119,6 +1119,24 @@ Wall clock first, credits second. What actually moved it, measured:
 - **A check that pins a heading's whole text breaks when the heading gains a part.** The venue
   picker's heading became "Thailand · Phuket" once a claim carried a country, and a check on
   `"Phuket"` exact went red. Match the part the check is about (`/(^|· )Phuket$/`), not the line.
+- **A check on `.first()` proves the first row only.** The fixed "Join this match" sent the form of the
+  first open row, and the suite typed in the first row, so it passed while a name typed in the second
+  row opened a second, empty form in the first and joined nobody (review, 15 October 2026). A control
+  that hands off to one of several rows hands off to the one the person opened (`requestJoin` asks each
+  spot's state), and the suite types in the second row.
+- **A browser API newer than the oldest phone we serve is a dead tap there.** `requestSubmit` arrived in
+  Safari 16; an iPhone 6s, 7 or first SE stops at iOS 15, and the tap threw before it did anything.
+  Headless Chromium cannot show it. Send a form by a click on its own submit button (`sendForm`), and
+  `tests/rules.test.ts` fails on a `requestSubmit` call in `src/`.
+- **An inline block keeps its longest word whole and is one line to a clamp.** "Keep 'Court 3' whole"
+  made every part an `inline-block`, so a club name of one long word was cut with no ellipsis and the
+  share page scrolled sideways, while the comment said a wide part "still wraps inside itself"
+  (review, 15 October 2026). Only a short part is a block, capped with `max-w-full`; a long one stays
+  words (`KeepTogether`). Test a layout rule with the longest value the field takes, not the usual one.
+- **"The person saw it" is bounded by the moment the page read.** Opening a match page marks its notices
+  read in `after()`, seconds after the reads, and the first version marked a notice of a join made in
+  between, which the screen never showed (review, 15 October 2026). The page takes `now` before its
+  first read, and the update takes only rows made by then (`lte(notices.createdAt, now)`).
 
 ### The bot as buttons
 

@@ -523,6 +523,38 @@ try {
   check("a second tap on the fixed Join with a name typed joins: You're in, and Lena on the line-up", (await lena.locator("main li", { hasText: "Lena" }).getByText("you", { exact: true }).count()) === 1);
   await shot(lena, "13c-fixed-join-joined");
   await lena.close();
+  // The fixed Join reaches the row the player opened: Mia opens the second open row, types her name and
+  // taps the fixed button. It used to send the first row instead, which opened a second, empty name form
+  // there and took the focus, and joined nobody (review, 15 October 2026).
+  const mia = await newPage();
+  await mia.goto(`${BASE}/${lcode}`);
+  const openRows = mia.getByText("Tap to join", { exact: true });
+  await openRows.first().waitFor({ timeout: 15000 });
+  const rowsOpen = await openRows.count();
+  await openRows.nth(1).click();
+  await mia.getByTestId("open-spot-name").fill("Mia");
+  await mia.getByRole("button", { name: "Join this match" }).click();
+  const miaIn = await mia.getByText("You're in").waitFor({ timeout: 20000 }).then(() => true, () => false);
+  const miaForms = await mia.getByTestId("open-spot-name").evaluateAll((es) => es.map((e) => e.value));
+  check("a name typed in the second open row, then the fixed Join: Mia is in, and no second name form opened", rowsOpen >= 2 && miaIn && (await mia.locator("main li", { hasText: "Mia" }).getByText("you", { exact: true }).count()) === 1 && miaForms.length === 0, JSON.stringify({ rowsOpen, miaIn, miaForms }));
+  await shot(mia, "13d-fixed-join-second-row");
+  await mia.close();
+  // A club name of one long word: kept whole as one block, it was cut with no ellipsis on the match page,
+  // and the share page scrolled sideways at 390 px (review, 15 October 2026). It breaks inside the line now.
+  const word = "PadelhausSukhumvit39BangkokThonglorEkkamai";
+  const wordMade = await a.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: word, venueMapUrl: "https://maps.example.com/padelhaus", court: "2", organizer: { name: "Wen" } } }).then((r) => r.json());
+  const wcode = wordMade.match?.code;
+  const wen = await newPage();
+  await wen.goto(`${wordMade.organizer?.personalUrl}?next=/${wcode}`);
+  await wen.waitForURL(new RegExp(`/${wcode}$`), { timeout: 15000 });
+  const wordLine = await wen.getByTestId("venue-line").evaluate((e) => ({ text: e.textContent.trim(), sw: e.scrollWidth, cw: e.clientWidth, page: document.documentElement.scrollWidth }));
+  check("a club name of one long word breaks inside the venue line: nothing runs past it, and the page is no wider than 390 px", wordLine.text === `${word} · Court 2` && wordLine.sw <= wordLine.cw + 1 && wordLine.page <= 390, JSON.stringify(wordLine));
+  await shot(wen, "13e-venue-long-word");
+  await wen.goto(`${BASE}/${wcode}/share`);
+  const wordShare = await wen.getByTestId("share-summary").evaluate((e) => ({ text: e.textContent.trim(), sw: e.scrollWidth, cw: e.clientWidth, page: document.documentElement.scrollWidth }));
+  check("the share page names that club whole and does not scroll sideways at 390 px", wordShare.text.endsWith(`${word} · Court 2`) && wordShare.sw <= wordShare.cw + 1 && wordShare.page <= 390, JSON.stringify(wordShare));
+  await shot(wen, "13f-share-long-word");
+  await wen.close();
 
   // ---- The same on a full match (the audit of 11 October 2026: TDsv was full, and Alberto could not take his place) ----
   // The organiser holds one more name, Eve, in the seat Bo left: every place is taken now. A browser that

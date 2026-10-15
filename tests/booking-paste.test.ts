@@ -208,6 +208,23 @@ describe("the court and the price", () => {
     expect(read("Warehaus mañana 18:00 10 € por persona").cost).toBe("10 € por persona");
     expect(read("Warehaus завтра 18:00 400 бат с человека").cost).toBe("400 бат с человека");
     expect(read("Warehaus tomorrow 18:00 400 THB/pax").courtTotal).toBeNull();
+    expect(read("Warehaus mañana 18:00 10 €/jugador")).toMatchObject({ cost: "10 €/jugador", courtTotal: null });
+    expect(read("Warehaus mañana 18:00 10 €/persona")).toMatchObject({ cost: "10 €/persona", courtTotal: null });
+    expect(read("Warehaus завтра 18:00 400 бат/человек")).toMatchObject({ cost: "400 бат/человек", courtTotal: null });
+    expect(read("Warehaus завтра 18:00 400 бат/игрок")).toMatchObject({ cost: "400 бат/игрок", courtTotal: null });
+    // A label in front of the amount says it too (review, 15 October 2026: these read as the court's
+    // total, and the bot then said "400 THB for the court"). The label goes after the amount, in the
+    // paste's own words, as every other price per player reads.
+    expect(read("Warehaus tomorrow 18:00\nPrice per person: 400 THB")).toMatchObject({ cost: "400 THB per person", courtTotal: null, time: "18:00" });
+    expect(read("Warehaus tomorrow 18:00 Per player 400 THB")).toMatchObject({ cost: "400 THB per player", courtTotal: null });
+    expect(read("Warehaus tomorrow 18:00 pp: ฿400")).toMatchObject({ cost: "฿400 pp", courtTotal: null });
+    expect(read("Warehaus mañana 18:00\nPrecio por persona: 10 €")).toMatchObject({ cost: "10 € por persona", courtTotal: null });
+    expect(read("Warehaus mañana 18:00 Por jugador: 10 €")).toMatchObject({ cost: "10 € por jugador", courtTotal: null });
+    expect(read("Warehaus завтра 18:00\nЦена с человека: 400 бат")).toMatchObject({ cost: "400 бат с человека", courtTotal: null });
+    expect(read("Warehaus завтра 18:00 С игрока 400 бат")).toMatchObject({ cost: "400 бат с игрока", courtTotal: null });
+    // A label that says nothing about players leaves the price the court's.
+    expect(read("Warehaus tomorrow 18:00\nPrice: 1,600 THB")).toMatchObject({ cost: null, courtTotal: "1,600 THB" });
+    expect(read("Warehaus mañana 18:00 Precio: 40 €")).toMatchObject({ cost: null, courtTotal: "40 €" });
     // A price is no time and no day.
     expect(read("Warehaus tomorrow 18:00 ฿1,600")).toMatchObject({ time: "18:00", date: "2026-10-12" });
   });
