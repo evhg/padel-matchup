@@ -186,12 +186,10 @@ export async function modelGate(db: Db, now = new Date()): Promise<{ refused: bo
  * What a listening item's `last_error` says when the key itself was refused: the Messages API's own
  * words for a 401, and the line `draftReply` writes when the answer carries none. These match whole;
  * the answer to a key with no workspace matches by its phrases (`NO_WORKSPACE_PHRASES`), case aside,
- * so a small change in its wording still brings the items back.
+ * so a small change in its wording still brings the items back. The rule lives in one place, the SQL
+ * of `restoreRefusedItems`, and its tests run that SQL (`tests/anthropic-workspace.test.ts`).
  */
 export const KEY_REFUSAL_ERRORS = ["API key is invalid.", "invalid x-api-key", "HTTP 401", "HTTP 403"] as const;
-
-/** Is this `last_error` a refused key's, so that `restoreRefusedItems` puts the item back? The same rule as its SQL. */
-export const isKeyRefusalError = (lastError: string | null | undefined) => (KEY_REFUSAL_ERRORS as readonly string[]).includes(lastError ?? "") || saysNoWorkspace(lastError);
 
 /**
  * The `last_error` of an item that a working key put back in the queue (`restoreRefusedItems`): the
@@ -213,14 +211,14 @@ export const REQUEUED_ERROR = "put back after a refused key";
  * refusal. When it is false Postgres checks it once and reads no item. On 14 October 2026 a key with no
  * workspace failed listening items with a 400 the code then took for an ordinary failure, and the
  * dead key's last refusal (12:00:01 UTC that day) stayed newer than any accepted call; so the first
- * call `ANTHROPIC_WORKSPACE_ID` lets through puts those items back too (`isKeyRefusalError`).
+ * call `ANTHROPIC_WORKSPACE_ID` lets through puts those items back too (`NO_WORKSPACE_PHRASES`).
  */
 export async function restoreRefusedItems(db: Db, now: Date): Promise<number> {
   const cutoff = new Date(now.getTime() - WINDOW_MS);
   // A day as text ("2026-10-04"), never a Date: the metrics are read from the window's first day.
   const firstDay = dayKey(cutoff);
   const newest = (key: string) => sql`(select coalesce(max(m.value), 0) from ${metricsDaily} m where m.day >= ${firstDay} and m.key = ${key})`;
-  // `isKeyRefusalError` in SQL: a whole line of the list, or a phrase of the answer to a key with no
+  // A refused key's `last_error`: a whole line of the list, or a phrase of the answer to a key with no
   // workspace anywhere in it (ILIKE; neither phrase holds a % or an _). A filter on the rows the
   // status and the post time already found, so the read stays on `listen_items_status_idx`.
   const refusedKeyError = or(inArray(listenItems.lastError, [...KEY_REFUSAL_ERRORS]), ...NO_WORKSPACE_PHRASES.map((p) => ilike(listenItems.lastError, `%${p}%`)));

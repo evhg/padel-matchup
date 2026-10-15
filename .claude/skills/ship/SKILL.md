@@ -546,6 +546,9 @@ learning can be a test, a gate step or a script, make it one and put the story i
   `error.message` now, and `ANTHROPIC_WORKSPACE_ID` names the workspace (`anthropicHeaders`). When
   a check decides "is this our setting or this item?", read the words of the answer as well as its
   status, and write the answer's whole text into the test (`tests/anthropic-workspace.test.ts`).
+  Prove it at every call site that passes the words, not at two of six: a review dropped the message
+  from four desks one at a time, and the suite stayed green each time. A rule kept twice, once in SQL
+  and once in a helper nothing calls, is proven only where it runs, so test the SQL.
 
 ### Wall clock
 

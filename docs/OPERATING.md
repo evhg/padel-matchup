@@ -83,9 +83,9 @@ directly. There is no daily loop and no three-hourly wake-up since 11 September.
   as the `anthropic-workspace-id` header (`anthropicHeaders` in `src/lib/ops/anthropic.ts`). With the
   variable unset, the calls send the three headers they always sent. The cost report reads the Admin
   API with the admin key and sends no workspace. On 14 October 2026 the code still read the status
-  alone, so this answer failed listening items as ordinary failures. `restoreRefusedItems` matches
-  the answer's words too, in any case (`isKeyRefusalError`). So the first accepted call puts those
-  items back, as it does for a dead key's items. The dead key's last refusal (12:00:01 UTC on 14
+  alone, so this answer failed listening items as ordinary failures. The SQL of `restoreRefusedItems`
+  matches the answer's words too, in any case (`NO_WORKSPACE_PHRASES`). So the first accepted call
+  puts those items back, as it does for a dead key's items. The dead key's last refusal (12:00:01 UTC on 14
   October) is newer than any accepted call, so that first call meets the condition.
 - Anything else the owner pastes in chat goes to Vercel's environment through the API, then
   the session redeploys by merging or, when nothing changed in code, leaves it for the next deploy.

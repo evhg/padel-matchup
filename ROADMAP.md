@@ -1110,7 +1110,7 @@ Everything in this list is live. The README describes each in detail.
   download of a player's data lists each phone by its label and dates. `src/lib/domain/passkeys.ts`,
   `src/lib/passkeys/webauthn.ts`, `src/actions/passkeys.ts`; proven with real signatures in
   `tests/passkey-ceremony.test.ts` and with Chromium's virtual authenticator in `e2e/passkeys.mjs`.
-- **The AI key may name its workspace (15 October 2026).** `ANTHROPIC_WORKSPACE_ID` goes with every Messages API call as `anthropic-workspace-id`, and an answer that says the key has no workspace counts as a refused key, so its listening items stay new or come back (`anthropicHeaders`, `keyRefused`, `isKeyRefusalError` in `src/lib/ops/anthropic.ts`; `tests/anthropic-workspace.test.ts`).
+- **The AI key may name its workspace (15 October 2026).** `ANTHROPIC_WORKSPACE_ID` goes with every Messages API call as `anthropic-workspace-id`, and an answer that says the key has no workspace counts as a refused key, so its listening items stay new or come back (`anthropicHeaders`, `keyRefused`, `restoreRefusedItems` in `src/lib/ops/anthropic.ts`; `tests/anthropic-workspace.test.ts`).
 
 ## The finish line
 

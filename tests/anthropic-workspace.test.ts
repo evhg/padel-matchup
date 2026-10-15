@@ -10,7 +10,7 @@ import { proposeToOwner } from "@/lib/feedback/propose";
 import { generateAnswer } from "@/lib/listen/answers";
 import { draftReply } from "@/lib/listen/draft";
 import { draftPending } from "@/lib/listen/tick";
-import { anthropicHeaders, isKeyRefusalError, KEY_REFUSED_LINE, keyRefused, modelGate, recordModelCall, REQUEUED_ERROR, restoreRefusedItems } from "@/lib/ops/anthropic";
+import { anthropicHeaders, KEY_REFUSED_LINE, keyRefused, modelGate, recordModelCall, REQUEUED_ERROR, restoreRefusedItems } from "@/lib/ops/anthropic";
 import { serviceBoard } from "@/lib/ops/services";
 import { draftReplyTo, recordInbound } from "@/lib/outreach/desk";
 import { freezeClock } from "./helpers/clock";
@@ -79,13 +79,6 @@ describe("a key with no workspace is a refused key", () => {
     expect(keyRefused(403, "no")).toBe(true);
     expect(keyRefused(500, "Internal server error")).toBe(false);
     expect(keyRefused(529, "Overloaded")).toBe(false);
-  });
-
-  it("puts back an item that a key with no workspace failed, and never one another error failed", () => {
-    expect(isKeyRefusalError(NO_WORKSPACE)).toBe(true);
-    expect(isKeyRefusalError("invalid x-api-key")).toBe(true);
-    expect(isKeyRefusalError("HTTP 401")).toBe(true);
-    for (const other of ["Overloaded", "unparseable answer", "messages: text content blocks must be non-empty", "The operation was aborted due to timeout", "drafting disabled", "", null]) expect(isKeyRefusalError(other), String(other)).toBe(false);
   });
 });
 
@@ -202,20 +195,19 @@ describe("a key with no workspace, through the listening desk (db, stubbed netwo
     expect(Object.fromEntries(Object.entries(await byId()).map(([k, v]) => [k, v.status]))).toMatchObject({ t3_ws1: "drafted", t3_ws2: "drafted", t3_ws3: "drafted", t3_other1: "failed", t3_other2: "failed" });
   });
 
-  it("restoreRefusedItems matches the answer whole, in any case, and nothing unrelated", async () => {
+  // The rule is the restore's own SQL, so these cases run it: no copy of it in code to drift apart.
+  it("restoreRefusedItems matches the answer whole, in any case, a dead key's words, and nothing unrelated", async () => {
     await recordModelCall(db, { status: 400, ok: false, error: NO_WORKSPACE, now: at(1) });
+    const back = { t3_full: NO_WORKSPACE, t3_upper: NO_WORKSPACE.toUpperCase(), t3_dead: "invalid x-api-key", t3_http401: "HTTP 401" };
+    const stays = ["messages: text content blocks must be non-empty", "unparseable answer", "Overloaded", "The operation was aborted due to timeout", "drafting disabled", "", null];
     await db.insert(listenItems).values([
-      post("t3_full", 5, { status: "failed", lastError: NO_WORKSPACE }),
-      post("t3_upper", 6, { status: "failed", lastError: NO_WORKSPACE.toUpperCase() }),
-      post("t3_unrelated", 7, { status: "failed", lastError: "messages: text content blocks must be non-empty" }),
-      post("t3_parse", 8, { status: "failed", lastError: "unparseable answer" }),
+      ...Object.entries(back).map(([id, lastError], i) => post(id, 5 + i, { status: "failed", lastError })),
+      ...stays.map((lastError, i) => post(`t3_other${i}`, 10 + i, { status: "failed", lastError })),
     ]);
-    expect(await restoreRefusedItems(db, NOW)).toBe(2);
+    expect(await restoreRefusedItems(db, NOW)).toBe(Object.keys(back).length);
     const after = await byId();
-    expect(after.t3_full.status).toBe("new");
-    expect(after.t3_upper.status).toBe("new");
-    expect(after.t3_unrelated.status).toBe("failed");
-    expect(after.t3_parse.status).toBe("failed");
+    for (const id of Object.keys(back)) expect(after[id], id).toEqual({ status: "new", lastError: REQUEUED_ERROR });
+    stays.forEach((lastError, i) => expect(after[`t3_other${i}`], String(lastError)).toEqual({ status: "failed", lastError }));
   });
 });
 
@@ -226,6 +218,8 @@ describe("every desk's call names the workspace (db, stubbed network)", () => {
   let db: Db;
   let close: () => Promise<void>;
   let seen: { url: string; headers: Record<string, string> }[] = [];
+  /** True: the API answers as it did on 14 October 2026, the 400 of a key with no workspace. */
+  let noWorkspace = false;
   beforeAll(async () => {
     ({ db, close } = await createTestDb());
   });
@@ -235,12 +229,14 @@ describe("every desk's call names the workspace (db, stubbed network)", () => {
     process.env.TELEGRAM_BOT_TOKEN = "1:test";
     process.env.TELEGRAM_OWNER_ID = "777";
     seen = [];
+    noWorkspace = false;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         if (url.startsWith("https://api.anthropic.com/v1/messages")) {
           seen.push({ url, headers: { ...(init?.headers as Record<string, string>) } });
+          if (noWorkspace) return new Response(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: NO_WORKSPACE } }), { status: 400, headers: { "content-type": "application/json" } });
           return new Response(JSON.stringify({ content: [{ type: "text", text: "{}" }], usage: { input_tokens: 10, output_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
         }
         if (url.includes("api.telegram.org")) return new Response(JSON.stringify({ ok: true, result: { message_id: 900 + seen.length, chat: { id: 777 } } }), { status: 200 });
@@ -297,6 +293,23 @@ describe("every desk's call names the workspace (db, stubbed network)", () => {
       await run();
       expect(seen.length - before, `${name} made its call`).toBe(1);
       expect(seen[before].headers, name).toEqual(BASE_HEADERS);
+    }
+  });
+
+  // None of these desks asks modelGate first, so one of them can be the only AI traffic of a day
+  // (the listening budget spent, no new item): its refusal alone must turn the board red. Each desk
+  // passes the answer's message to recordModelCall; without it, the 400 is an ordinary failure.
+  it("the workspace 400 on any desk records a refused key", async () => {
+    noWorkspace = true;
+    const metric = async (key: string) => Number((await db.select().from(metricsDaily).where(eq(metricsDaily.key, key)))[0]?.value ?? 0);
+    for (const [name, run] of desks) {
+      await db.delete(metricsDaily);
+      const before = seen.length;
+      await run();
+      expect(seen.length - before, `${name} made its call`).toBe(1);
+      expect(await metric("anthropic_refused_at"), name).toBe(Math.floor(NOW.getTime() / 1000));
+      expect(await metric("anthropic_failed"), name).toBe(1);
+      expect((await modelGate(db, NOW)).refused, name).toBe(true);
     }
   });
 });
