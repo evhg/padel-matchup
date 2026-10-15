@@ -4,7 +4,7 @@ import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
 import { estimateCostUsd, fetchCostReport } from "@/lib/ops/anthropic";
-import { boardHighlights, serviceBoard, stateForPct } from "@/lib/ops/services";
+import { boardHighlights, highlightWords, serviceBoard, stateForPct } from "@/lib/ops/services";
 import { createTestDb } from "./helpers/db";
 
 let db: Db;
@@ -138,6 +138,50 @@ describe("the service board", () => {
     await db.delete(metricsDaily).where(like(metricsDaily.key, "backup_%"));
     await setMetric(db, "backup_done", 1, "2026-12-10");
     expect((await serviceBoard(db, new Date("2026-12-10T12:00:00Z"))).rows.find((r) => r.key === "backup")).toMatchObject({ state: "warn", usage: "last on 2026-12-10 · history never rebuilt" });
+  });
+
+  it("says how many emails, pushes and Telegram calls failed today, and turns those rows yellow", async () => {
+    // Until 15 October 2026 a failed email or push was a log line only, and a refused Telegram call
+    // counted as sent, so every one of these rows stayed green. Dates after every other test's.
+    const prev = { resend: process.env.RESEND_API_KEY, pub: process.env.VAPID_PUBLIC_KEY, priv: process.env.VAPID_PRIVATE_KEY, tg: process.env.TELEGRAM_BOT_TOKEN };
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.VAPID_PUBLIC_KEY = "pub";
+    process.env.VAPID_PRIVATE_KEY = "priv";
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    try {
+      const now = new Date("2027-01-12T12:00:00Z");
+      const row = async (k: string) => (await serviceBoard(db, now)).rows.find((r) => r.key === k)!;
+      await setMetric(db, "emails_sent", 12, "2027-01-12");
+      await setMetric(db, "push_sent", 4, "2027-01-12");
+      await setMetric(db, "telegram_sent", 40, "2027-01-12");
+      for (const k of ["resend_month", "resend_day", "web_push", "telegram"]) expect((await row(k)).state, k).toBe("ok");
+      expect((await row("resend_day")).usage).toBe("12 sent");
+
+      await setMetric(db, "emails_failed", 2, "2027-01-12");
+      await setMetric(db, "push_failed", 1, "2027-01-12");
+      await setMetric(db, "telegram_failed", 3, "2027-01-12");
+      expect(await row("resend_day")).toMatchObject({ state: "warn", usage: "12 sent · 2 failed today" });
+      expect(await row("resend_month")).toMatchObject({ state: "warn", usage: "12 sent · 2 failed today" });
+      expect(await row("web_push")).toMatchObject({ state: "warn" });
+      expect((await row("web_push")).usage).toMatch(/4 sent today · 1 failed today$/);
+      expect(await row("telegram")).toMatchObject({ state: "warn", usage: "40 calls today · 40 this month · 3 failed today" });
+      expect(boardHighlights(await serviceBoard(db, now)).map((r) => r.key)).toEqual(expect.arrayContaining(["resend_day", "web_push", "telegram"]));
+      // The Sunday digest's "Services to watch" names the reason: a Resend row is yellow for its two
+      // failed emails, not for 12% of the ceiling, and said only "Resend, today 12%" until the review.
+      const said = boardHighlights(await serviceBoard(db, now)).map(highlightWords);
+      expect(said).toEqual(expect.arrayContaining(["Resend, this month 0% · 2 failed today", "Resend, today 12% · 2 failed today", "Telegram Bot API 40 calls today · 40 this month · 3 failed today"]));
+      expect(said.find((w) => w.startsWith("Web Push"))).toMatch(/4 sent today · 1 failed today$/);
+
+      // Yesterday's failures do not colour today.
+      const tomorrow = new Date("2027-01-13T12:00:00Z");
+      const board = await serviceBoard(db, tomorrow);
+      for (const k of ["resend_day", "web_push", "telegram"]) expect(board.rows.find((r) => r.key === k)!.state, k).toBe("ok");
+    } finally {
+      for (const [k, v] of [["RESEND_API_KEY", prev.resend], ["VAPID_PUBLIC_KEY", prev.pub], ["VAPID_PRIVATE_KEY", prev.priv], ["TELEGRAM_BOT_TOKEN", prev.tg]] as const) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
 
   it("reads a month of real traffic as the few percent of Vercel's allowance it is", async () => {

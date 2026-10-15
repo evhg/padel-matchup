@@ -11,7 +11,7 @@ import { localePath } from "@/lib/seo";
 import { baseUrl } from "@/lib/config";
 import { countClubsClaimedSince, unlistedVenues } from "@/lib/domain/clubs";
 import { bumpMetric, dayKey } from "@/lib/domain/metrics";
-import { boardHighlights, serviceBoard } from "@/lib/ops/services";
+import { boardHighlights, highlightWords, serviceBoard } from "@/lib/ops/services";
 import { metricsDaily } from "@/db/schema";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { draftingEnabled, withinBudget } from "./draft";
@@ -224,7 +224,7 @@ export async function sendWeeklyDigest(db: Db, now = new Date()): Promise<boolea
   const unlisted = await unlistedVenues(db, since);
   const board = await serviceBoard(db, now);
   const hot = boardHighlights(board);
-  const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(`${r.name} ${r.pct !== null && r.key !== "tavily" ? `${r.pct.toFixed(0)}%` : r.usage}`)).join(" · ")}` : "Services: everything under 60% of its ceiling.";
+  const ceilingsLine = hot.length ? `Services to watch: ${hot.map((r) => esc(highlightWords(r))).join(" · ")}` : "Services: everything under 60% of its ceiling.";
   const lines = [
     "<b>Kicksmash, this week</b>",
     `New players: ${Number(newPlayers.n)} · joins: ${Number(joins.n)} · matches with a result: ${Number(results.n)}`,

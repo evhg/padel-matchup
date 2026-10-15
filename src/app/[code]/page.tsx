@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer, manageUrlFor, nameOnly } from "@/actions/shared";
-import { cleanSource, isFullPageLoad, taggedUrl, viewCounter } from "@/lib/source";
+import { cleanSource, isFullPageLoad, taggedUrl, viewCounters } from "@/lib/source";
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
 import { bumpMetric } from "@/lib/domain/metrics";
@@ -58,7 +58,7 @@ import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
 import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
-import { canEditMatchDetails, isClaimable, isOccupied, isSeated, mayMoveStart } from "@/lib/domain/events";
+import { canEditMatchDetails, isClaimable, isOccupied, isSeated, mayMoveStart, organiserAlone } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { crewTelegramInvite, getGroupById, getGroupMember } from "@/lib/domain/groups";
@@ -173,9 +173,14 @@ async function EventPage({ params, searchParams }: Props) {
   // The step between a shared link and a seat: a view by somebody with no seat here, under the link's
   // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
   // a full page load only: never the 20-second refresh of a live night, a server action or a prefetch.
+  // While the organiser holds the only seat, `view_lone` too: one more upsert, on such views only.
   const h = await headers();
-  const viewKey = viewCounter({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", fullLoad: isFullPageLoad(h) });
-  if (viewKey) await later(() => bumpMetric(db, viewKey));
+  const viewKeys = viewCounters({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", fullLoad: isFullPageLoad(h), lone: organiserAlone(roster, ev.creatorPlayerId) });
+  if (viewKeys.length) {
+    await later(async () => {
+      for (const key of viewKeys) await bumpMetric(db, key);
+    });
+  }
   // Opening the match reads its notices, so the bell counts only what this person has not seen (the
   // owner's question, 12 October 2026). One indexed update after the response, for a signed-in viewer,
   // a tap from My matches included; the header of this response may still show the old count. Only the

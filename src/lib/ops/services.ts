@@ -61,6 +61,9 @@ const pctOf = (used: number, limit: number) => Math.min(999, Math.round((used / 
 const fmt = (n: number) => new Intl.NumberFormat("en").format(Math.round(n));
 const mb = (b: number) => `${(b / 1024 / 1024).toFixed(b > 50 * 1024 * 1024 ? 0 : 1)} MB`;
 const monthStart = (now: Date) => `${now.toISOString().slice(0, 7)}-01`;
+/** A delivery row's words and state for the sends that failed today: said only when there are some, and never greener than yellow then. */
+const failedToday = (n: number) => (n > 0 ? ` · ${fmt(n)} failed today` : "");
+const warnIfFailed = (state: ServiceState, failed: number): ServiceState => (failed > 0 && (state === "ok" || state === "info") ? "warn" : state);
 
 type Sums = Record<string, number>;
 
@@ -107,8 +110,8 @@ export type ServiceBoard = { month: string; at: string; rows: ServiceRow[] };
 export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoard> {
   const today = dayKey(now);
   const since = monthStart(now);
-  const month = await sumSince(db, ["pageviews", "emails_sent", "telegram_sent", "telegram_429", "discord_sent", "push_sent", "anthropic_in", "anthropic_out", "anthropic_cost_cents", "tavily_calls", "indexnow_daily", "api_calls", "mcp_calls", "feedback_received", "feedback_shipped", "errors_server", "errors_cron"], since);
-  const day = await sumSince(db, ["emails_sent", "telegram_sent", "telegram_429", "discord_sent", "push_sent", "pageviews", "anthropic_failed"], today);
+  const month = await sumSince(db, ["pageviews", "emails_sent", "emails_failed", "telegram_sent", "telegram_429", "telegram_failed", "discord_sent", "push_sent", "push_failed", "anthropic_in", "anthropic_out", "anthropic_cost_cents", "tavily_calls", "indexnow_daily", "api_calls", "mcp_calls", "feedback_received", "feedback_shipped", "errors_server", "errors_cron"], since);
+  const day = await sumSince(db, ["emails_sent", "emails_failed", "telegram_sent", "telegram_429", "telegram_failed", "discord_sent", "push_sent", "push_failed", "pageviews", "anthropic_failed"], today);
   const dbBytes = (await latest(db, "db_bytes"))?.value ?? 0;
   const hourlyAt = (await latest(db, "cron_hourly_at"))?.value ?? 0;
   const pushAt = (await latest(db, "cron_push_at"))?.value ?? 0;
@@ -168,9 +171,11 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
     push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}${unread}${checkout}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Today read every 15 minutes, the next two days about hourly, by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" || l.checkout === "lost" ? "warn" : "ok" });
   }
 
-  // Mail
-  push({ key: "resend_month", name: "Resend, this month", role: "outbound email", used: emailEnabled() ? (month.emails_sent ?? 0) : null, limit: CEILINGS.resendPerMonth, usage: emailEnabled() ? `${fmt(month.emails_sent ?? 0)} sent` : "off", ceiling: `${fmt(CEILINGS.resendPerMonth)} / month`, note: "Free plan. Paid tiers only past fifty emails a day, by decision.", state: emailEnabled() ? undefined : "off" });
-  push({ key: "resend_day", name: "Resend, today", role: "outbound email", used: emailEnabled() ? (day.emails_sent ?? 0) : null, limit: CEILINGS.resendPerDay, usage: emailEnabled() ? `${fmt(day.emails_sent ?? 0)} sent` : "off", ceiling: `${CEILINGS.resendPerDay} / day`, note: "Inbound mail (claude@, feedback@) arrives through the Resend webhook and has no ceiling.", state: emailEnabled() ? undefined : "off" });
+  // Mail. A send that failed today turns the row yellow and says how many: until 15 October 2026 a
+  // failure was a log line only, and "the emails weren't sent out?" (23 September) had no answer here.
+  const mailFailed = day.emails_failed ?? 0;
+  push({ key: "resend_month", name: "Resend, this month", role: "outbound email", used: emailEnabled() ? (month.emails_sent ?? 0) : null, limit: CEILINGS.resendPerMonth, usage: emailEnabled() ? `${fmt(month.emails_sent ?? 0)} sent${failedToday(mailFailed)}` : "off", ceiling: `${fmt(CEILINGS.resendPerMonth)} / month`, note: "Free plan. Paid tiers only past fifty emails a day, by decision.", state: emailEnabled() ? warnIfFailed(stateForPct(pctOf(month.emails_sent ?? 0, CEILINGS.resendPerMonth)), mailFailed) : "off" });
+  push({ key: "resend_day", name: "Resend, today", role: "outbound email", used: emailEnabled() ? (day.emails_sent ?? 0) : null, limit: CEILINGS.resendPerDay, usage: emailEnabled() ? `${fmt(day.emails_sent ?? 0)} sent${failedToday(mailFailed)}` : "off", ceiling: `${CEILINGS.resendPerDay} / day`, note: "Inbound mail (claude@, feedback@) arrives through the Resend webhook and has no ceiling. A failed send is Resend's refusal or no answer; the function log says why.", state: emailEnabled() ? warnIfFailed(stateForPct(pctOf(day.emails_sent ?? 0, CEILINGS.resendPerDay)), mailFailed) : "off" });
   // Bounces and complaints this month against what was sent: the two rates a mail provider judges a
   // sender by. A marked address is not written to again (src/lib/domain/emailMarks.ts).
   const marks = await marksSince(db, new Date(`${since}T00:00:00Z`));
@@ -182,10 +187,12 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   // Chat platforms
   const tgOn = Boolean(process.env.TELEGRAM_BOT_TOKEN);
   const tg429 = day.telegram_429 ?? 0;
-  push({ key: "telegram", name: "Telegram Bot API", role: "cards, the coach's assistant, alerts to you", used: null, limit: null, usage: tgOn ? `${fmt(day.telegram_sent ?? 0)} calls today · ${fmt(month.telegram_sent ?? 0)} this month${tg429 ? ` · ${tg429} rate-limited today` : ""}` : "off", ceiling: `${CEILINGS.telegramPerSecond} messages / second · 20 / minute per group`, note: "No monthly ceiling. A rate-limited reply is retried by Telegram's own timing; a day with many is the signal.", state: !tgOn ? "off" : tg429 > 0 ? "warn" : "ok" });
+  const tgFailed = day.telegram_failed ?? 0;
+  push({ key: "telegram", name: "Telegram Bot API", role: "cards, the coach's assistant, alerts to you", used: null, limit: null, usage: tgOn ? `${fmt(day.telegram_sent ?? 0)} calls today · ${fmt(month.telegram_sent ?? 0)} this month${tg429 ? ` · ${tg429} rate-limited today` : ""}${failedToday(tgFailed)}` : "off", ceiling: `${CEILINGS.telegramPerSecond} messages / second · 20 / minute per group`, note: "No monthly ceiling. A rate-limited reply is retried by Telegram's own timing; a day with many is the signal. A failed call is one Telegram refused (a blocked bot, a chat that is gone) or never answered.", state: !tgOn ? "off" : tg429 > 0 || tgFailed > 0 ? "warn" : "ok" });
   const dcOn = Boolean(process.env.DISCORD_BOT_TOKEN);
   push({ key: "discord", name: "Discord API", role: "cards and /feedback in servers", used: null, limit: null, usage: dcOn ? `${fmt(day.discord_sent ?? 0)} calls today · ${fmt(month.discord_sent ?? 0)} this month` : "off", ceiling: "50 requests / second", note: "No monthly ceiling.", state: dcOn ? "ok" : "off" });
-  push({ key: "web_push", name: "Web Push (VAPID)", role: "reminders on phones", used: null, limit: null, usage: pushEnabled() ? `${fmt(pushSubs)} devices · ${fmt(day.push_sent ?? 0)} sent today` : "off", ceiling: "no ceiling", note: "Apple and Google push services, free.", state: pushEnabled() ? "ok" : "off" });
+  const pushFailed = day.push_failed ?? 0;
+  push({ key: "web_push", name: "Web Push (VAPID)", role: "reminders on phones", used: null, limit: null, usage: pushEnabled() ? `${fmt(pushSubs)} devices · ${fmt(day.push_sent ?? 0)} sent today${failedToday(pushFailed)}` : "off", ceiling: "no ceiling", note: "Apple and Google push services, free. A phone that dropped its subscription is removed, not counted as failed.", state: pushEnabled() ? (pushFailed > 0 ? "warn" : "ok") : "off" });
 
   // Models and search
   const cap = anthropicCapUsd();
@@ -248,7 +255,7 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
           ? ` · history rebuilt on ${historyRebuilt.day}`
           : ` · history last rebuilt on ${historyRebuilt.day}`;
   push({ key: "backup", name: "GitHub backup", role: "nightly export to the private repository", used: null, limit: null, usage: backup ? `last on ${backup.day}${cutShort ? ` · ${cutShort} table(s) cut at ${BACKUP_ROW_CAP.toLocaleString("en")} rows` : ""}${historyText}` : "never", ceiling: `under ${CEILINGS.backupMaxAgeHours} h old · history rebuilt within 2 days of it`, note: "About sixty days kept (the cutoff day too, so 61 nights), and each night the history is rebuilt with only those days (docs/OPERATING.md says how to undo one). Token expiry would show here first. Restore one on a laptop with scripts/restore-backup.ts.", state: !backup || backupAgeH === null || backupAgeH > CEILINGS.backupMaxAgeHours ? "alert" : cutShort || historyStale ? "warn" : "ok" });
-  push({ key: "uptime", name: "GitHub Actions uptime probe", role: "outside check every ten minutes", used: null, limit: null, usage: incidents === 0 ? "no open incident" : `${incidents} open incident${incidents > 1 ? "s" : ""}`, ceiling: "public repository: free minutes", note: "Opens an issue and messages you while the site is down.", link: process.env.UPTIME_REPO ? `https://github.com/${process.env.UPTIME_REPO}/issues?q=label%3Auptime` : undefined, state: incidents === 0 ? "ok" : "alert" });
+  push({ key: "uptime", name: "GitHub Actions uptime probe", role: "outside check when GitHub runs it: about every five hours", used: null, limit: null, usage: incidents === 0 ? "no open incident" : `${incidents} open incident${incidents > 1 ? "s" : ""}`, ceiling: "public repository: free minutes", note: "Opens an issue and messages you while the site is down. The workflow asks for every ten minutes; GitHub ran the 100 scheduled runs to 15 October 2026 a median of 301 minutes apart, and once 585, so an outage can last hours before this row knows.", link: process.env.UPTIME_REPO ? `https://github.com/${process.env.UPTIME_REPO}/issues?q=label%3Auptime` : undefined, state: incidents === 0 ? "ok" : "alert" });
 
   // Domain
   const domainDays = domainExp ? Math.floor((domainExp * 1000 - now.getTime()) / 86_400_000) : null;
@@ -264,3 +271,15 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
 
 /** Rows that deserve a line on Sunday: anything past sixty percent, plus anything alerting. */
 export const boardHighlights = (board: ServiceBoard): ServiceRow[] => board.rows.filter((r) => r.state === "alert" || r.state === "warn");
+
+/**
+ * One highlighted row as the Sunday digest says it: its share of the ceiling where it has one, else
+ * its usage, and the sends that failed today beside the share, because a failure turns a row yellow
+ * at any share. The digest said "Resend, today 12%" for a row yellow with two failed emails (review,
+ * 15 October 2026), which named the wrong reason.
+ */
+export const highlightWords = (r: ServiceRow): string => {
+  if (r.pct === null || r.key === "tavily") return `${r.name} ${r.usage}`;
+  const failed = /\d[\d,]* failed today/.exec(r.usage)?.[0];
+  return `${r.name} ${r.pct.toFixed(0)}%${failed ? ` · ${failed}` : ""}`;
+};

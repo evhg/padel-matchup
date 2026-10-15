@@ -658,8 +658,9 @@ Everything in this list is live. The README describes each in detail.
   offered as `webcal:` and through Google on a computer; the Android app cannot subscribe, and the
   card says so. The key is made from the personal token but is not it, so the address can sit in a
   chat or a calendar without being a way to sign in. An organiser's list of past players no longer
-  shows a player's own number, only numbers the organiser typed. What WhatsApp then sends a linked
-  player is the entry below.
+  shows a player's own number, only numbers the organiser typed. The settings on My matches carry the
+  Telegram link and the email (`src/lib/domain/stayUpdated.ts`, `src/lib/calendarFeed.ts`). What
+  WhatsApp then sends a linked player is the entry below.
 - **WhatsApp carries the match (26 September 2026, migration 0082).** The owner's decision (option
   3.A): a player who links WhatsApp on the "Stay updated" card gets what the card promises there.
   Outside the 24-hour window WhatsApp delivers only a template Meta approved, so the four notices are
@@ -1142,16 +1143,16 @@ Proposed to the owner on 24 September 2026: Kicksmash is finished when each stak
 `docs/VISION.md` is won for real, and again after that, by the vision's own test. Code alone does not
 reach it; people using the app do.
 
-| Stakeholder | Won when | On 24 September 2026 | On 11 October 2026 (production) |
-|---|---|---|---|
-| Player | the match is played | 13 past matches: 3 filled, 3 of 3 scored; 10 never filled | 16 past matches: 3 filled, 5 with a score |
-| Coach | a student books, moves or cancels, and the coach typed nothing | 2 lessons | 2 lessons, both from the web; none since |
-| Organiser | a weekend of 200 players runs from a phone | a rehearsal only | a rehearsal only: no serious tournament in production |
-| Club | an off-peak court hour is filled from Kicksmash | 0 live, 66 listed, 1 refused test claim | 0 live, 67 listed, none refused (the test claim was handed back to the directory) |
+| Stakeholder | Won when | On 24 September 2026 | On 11 October 2026 (production) | On 15 October 2026 (production) |
+|---|---|---|---|---|
+| Player | the match is played | 13 past matches: 3 filled, 3 of 3 scored; 10 never filled | 16 past matches: 3 filled, 5 with a score | 16 past matches: 3 filled, 5 with a score |
+| Coach | a student books, moves or cancels, and the coach typed nothing | 2 lessons | 2 lessons, both from the web; none since | 2 lessons, both from the web; none since 14 September |
+| Organiser | a weekend of 200 players runs from a phone | a rehearsal only | a rehearsal only: no serious tournament in production | a rehearsal only: no serious tournament in production |
+| Club | an off-peak court hour is filled from Kicksmash | 0 live, 66 listed, 1 refused test claim | 0 live, 67 listed, none refused (the test claim was handed back to the directory) | 0 live, 67 listed, none refused |
 
 None of the four is won yet. What stands between here and there, in order: real use through each loop (a tournament weekend, a
-coach whose students book themselves, a club, crews that enter scores); reach (6 of 21 player records
-have a channel on 11 October 2026, and WhatsApp one-to-one waits on the owner's Meta account and number); the
+coach whose students book themselves, a club, crews that enter scores); reach (7 of 21 player records
+have a channel on 15 October 2026, and WhatsApp one-to-one waits on the owner's Meta account and number); the
 security steps at 100 real players (`docs/OPERATING.md`). Recommended with it: no new large feature
 until real use asks for one.
 
@@ -1221,11 +1222,12 @@ linked and four have an email address.
    owner's to create, like WhatsApp's. **It ships in English** — decided 15 September. Thai waits
    until somebody is using it, because there is nothing to translate *for* yet.
 
-   The numbers, since they were once given wrongly as one number (counted again on 25 September 2026).
+   The numbers, since they were once given wrongly as one number (counted again on 25 September 2026,
+   and the website's again on 15 October 2026: the leaves of `messages/en.json`).
    The card in a chat is its own set of **153 strings** in `src/lib/telegram/card.ts`, in three
    languages since 19 September 2026 (Spanish came with the inside of the bot, above); the coach's
-   assistant has its own set, also in three. The **2,062** strings are the website, which has three.
-   So Thai in a LINE chat is 153 strings and Thai on the website is 2,062, and neither of them is what
+   assistant has its own set, also in three. The **2,502** strings are the website, which has three.
+   So Thai in a LINE chat is 153 strings and Thai on the website is 2,502, and neither of them is what
    stops LINE going live: the Official
    Account is.
 3. **The serious tournament: run one for real.** All five steps are under Built. What is left is
@@ -1266,15 +1268,11 @@ the player, and invite them to try it.
    by `tests/security.test.ts`: every operator route checks the token first, and `kicksmash` can use
    every table. Still open on 11 October 2026: production has 21 player records, and the app still
    connects as `postgres` (`pg_stat_activity`).
-2. **Built: match times for a player with no channel.** The match page's "Stay updated" card meets a
-   player the moment they join and offers WhatsApp, Telegram and email while they have none
-   (`src/lib/domain/stayUpdated.ts`), with a calendar feed for a chat player
-   (`src/lib/calendarFeed.ts`); the settings on My matches carry the Telegram link and the email.
-3. **The desk's order after entries close.** Still open on 11 October 2026: the manage page shows the
+2. **The desk's order after entries close.** Still open on 11 October 2026: the manage page shows the
    entries, then the courts, then each category's draw settings, whatever the entries' status. The
    strip at the top (`WeekendStrip`) links to each part, but once entries close the draw's settings
    still belong above the pairs.
-4. **React error 418 on My matches.** Open on 11 October 2026. When hydration starts before the page's
+3. **React error 418 on My matches.** Open on 11 October 2026. When hydration starts before the page's
    rows arrive, React replays the suspended `<main>`, meets the "My matches" `<h1>`, throws 418 and
    renders the page again in the browser. The screen comes out right, so nobody sees it, but the page
    renders twice. Each page now gives the browser only its own messages (`withClientMessages`), which
@@ -1283,23 +1281,28 @@ the player, and invite them to try it.
    1.5 s and then trickles the rest still gives 418 on both builds (main 3 in 20 loads, the lean build
    1 in 15). Start the root cause there, at the `<h1>` under `<main>` on `/me`. Do not relax a browser
    check that already reads order from the elements (`headingOrder` in `e2e/core.mjs`).
-5. **Four more ways to bring in a booked court: not built.** The owner asked "Some other ideas?" on
+4. **Four more ways to bring in a booked court: not built.** The owner asked "Some other ideas?" on
    11 October 2026, and a session named four. None is built, and none is decided. To build one is
    the owner's decision.
    - **Web Share Target**: "Share" in a platform's app lists Kicksmash, and the share opens the
      filled form. The web manifest has no `share_target` today.
    - **An `.ics` file**: a booking's calendar file, read into the form. Kicksmash writes `.ics`
-     files and reads none.
+     files, and reads iCal feeds for two things only: a coach's own calendar
+     (`src/lib/coach/ical.ts`) and a club's bookings feed for its free times
+     (`src/lib/booking/availability.ts`). It reads no booking's `.ics` into the form.
    - **A slot check**: the paste compares its day and time with the club's free court times, and
      says when the court shows free. The paste does not read the free-times cache.
    - **`/booked` in a group**: a command in a crew's Telegram group that pastes a booking there. The
      paste works in a private chat only.
-6. **The paste doors wait on two outside facts.** No mail has reached book@ (`book_mail_answered`
+5. **The paste doors wait on two outside facts.** No mail has reached book@ (`book_mail_answered`
    and `book_mail_skipped` are empty on 11 October 2026): one test mail from the owner shows whether
    Resend routes it. The screenshot read and the other AI features wait on a working
-   `ANTHROPIC_API_KEY`. The key of 14 October 2026 has no workspace, so they also wait on
-   `ANTHROPIC_WORKSPACE_ID` in Vercel and a deploy.
-7. **Decision B: a second organiser in Phuket.** The owner chose "A now + B this week" on 11 October
+   `ANTHROPIC_API_KEY`. Since 14 October 2026 every model call answers "This API key is not scoped
+   to a workspace, so this request must include the anthropic-workspace-id header with the ID of the
+   workspace to use. Add the header, or use an API key that is scoped to a workspace." On 15 October
+   2026 production held 41 listening items failed with that text. The key of 14 October 2026 has no
+   workspace, so they also wait on `ANTHROPIC_WORKSPACE_ID` in Vercel and a deploy.
+6. **Decision B: a second organiser in Phuket.** The owner chose "A now + B this week" on 11 October
    2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
    October 2026 one organiser had made matches since 10 October. The next session counts the
    organisers with a match since 11 October and reports it to the owner (DECIDING rule 37).

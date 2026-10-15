@@ -74,7 +74,7 @@ describe("sending", () => {
       req.on("data", (c: Buffer) => (n += c.length));
       req.on("end", () => {
         received.push({ path: req.url ?? "", headers: req.headers, bytes: n });
-        res.statusCode = req.url?.endsWith("/gone") ? 410 : 201;
+        res.statusCode = req.url?.endsWith("/gone") ? 410 : req.url?.endsWith("/fail") ? 500 : 201;
         res.end();
       });
     });
@@ -106,6 +106,23 @@ describe("sending", () => {
     expect(String(first.headers["content-encoding"])).toBe("aes128gcm");
     expect(String(first.headers.authorization)).toMatch(/^vapid t=.+k=.+/);
     expect(first.bytes).toBeGreaterThan(JSON.stringify(payload).length);
+  });
+
+  // A failure was a log line only until 15 October 2026; the service board's Web Push row reads this
+  // counter. A dropped subscription (404, 410) is removed, never counted as a failure.
+  it("counts push_failed for a push service's 500, and not for a dropped subscription", async () => {
+    const { sendPush } = await import("@/lib/push");
+    const { metricsDaily } = await import("@/db/schema");
+    const app = await (await import("@/db")).getDb();
+    const failed = async () => (await app.select().from(metricsDaily).where(eq(metricsDaily.key, "push_failed"))).reduce((n, r) => n + Number(r.value), 0);
+    const before = await failed();
+    const payload = { title: "🎾 Padel in 1 hour · 18:00", body: "Club · Court 3", url: "https://kicksma.sh/PLAY" };
+    const fail = fakeSubscription(`http://127.0.0.1:${port}/push/fail`);
+    expect(await sendPush({ endpoint: fail.endpoint, p256dh: fail.keys.p256dh, auth: fail.keys.auth }, payload)).toBe("failed");
+    expect(await failed()).toBe(before + 1);
+    const gone = fakeSubscription(`http://127.0.0.1:${port}/push/gone`);
+    expect(await sendPush({ endpoint: gone.endpoint, p256dh: gone.keys.p256dh, auth: gone.keys.auth }, payload)).toBe("gone");
+    expect(await failed()).toBe(before + 1);
   });
 });
 

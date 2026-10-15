@@ -32,10 +32,11 @@ export type LineMessage =
   | { type: "flex"; altText: string; contents: FlexBubble }
   | { type: "image"; originalContentUrl: string; previewImageUrl: string };
 
+/** One counter per call, for the service board, written after the answer through `later()` (never a floating `void`); never blocks a send and never throws. */
 async function count(key: "line_sent" | "line_failed"): Promise<void> {
   try {
-    const [{ getDb }, { bumpMetric }] = await Promise.all([import("@/db"), import("@/lib/domain/metrics")]);
-    await bumpMetric(await getDb(), key);
+    const [{ later }, { getDb }, { bumpMetric }] = await Promise.all([import("@/lib/later"), import("@/db"), import("@/lib/domain/metrics")]);
+    await later(async () => bumpMetric(await getDb(), key));
   } catch {
     /* metrics are optional */
   }
@@ -52,13 +53,13 @@ async function call<T = unknown>(path: string, body: Record<string, unknown>): P
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      void count("line_failed");
+      await count("line_failed");
       return { ok: false, status: res.status, error: text.slice(0, 300) || `line ${res.status}` };
     }
-    void count("line_sent");
+    await count("line_sent");
     return { ok: true, result: (await res.json().catch(() => ({}))) as T };
   } catch (e) {
-    void count("line_failed");
+    await count("line_failed");
     return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
   }
 }
