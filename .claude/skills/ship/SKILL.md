@@ -1206,6 +1206,17 @@ Wall clock first, credits second. What actually moved it, measured:
   read in `after()`, seconds after the reads, and the first version marked a notice of a join made in
   between, which the screen never showed (review, 15 October 2026). The page takes `now` before its
   first read, and the update takes only rows made by then (`lte(notices.createdAt, now)`).
+- **A `<form>` sends itself when Go (Enter) is pressed in any one-line field.** The create form had no
+  key handling, so Go on the name or the venue made a match on the default day and time, which nobody
+  had looked at: 14 of the 27 matches of the 60 days to 15 October 2026 started exactly at it. A form
+  whose defaults are guesses moves on to the next field on Enter (`enterMovesOn`), and a field that
+  answers Enter itself calls `preventDefault` first. `e2e/core.mjs` presses Enter and counts the server
+  actions sent.
+- **A closed `<details>` keeps its fields laid out in Chrome, and `focus()` on one does nothing.**
+  Chrome hides a closed fold's content with `content-visibility`, so `getClientRects()` still gave the
+  email field of "Played before?" a box, Go "moved" to it, and the focus stayed on the name (15 October
+  2026). The probe that broke another guard showed it: the name check failed with "focus on INPUT".
+  Ask `checkVisibility()` where the browser has it, and check `document.activeElement` after `focus()`.
 
 ### The bot as buttons
 

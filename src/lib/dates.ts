@@ -159,14 +159,29 @@ export function tzLabel(date: Date, tz: string, locale: string): string {
   }
 }
 
-/** "2 days ago" style relative time (past only), localized. */
-export function relativeTime(from: Date, locale: string, now = new Date()): string {
+/** The calendar day of `date` in `tz`, counted in days from 1 January 1970. */
+function dayNumber(date: Date, tz: string): number {
+  const w = wallClock(date, tz);
+  return Date.UTC(w.year, w.month - 1, w.day) / 86_400_000;
+}
+
+/**
+ * "in 2 days" or "2 days ago", localized. With `tz` (a match's own zone), a span of a day or more counts
+ * calendar days in that zone, the way a person reads a calendar: from Thursday 21:44 to Saturday 11:00
+ * is "in 2 days". The elapsed hours over 24 said "tomorrow", one day short whenever the hour now was
+ * later than the start's (TDsv, 15 October 2026). Under a day it stays hours ("in 23 hours"), and so
+ * does a span of 24 hours or more inside one date (a day of 25 hours, when the clocks go back).
+ * Without `tz` it is elapsed time, as before.
+ */
+export function relativeTime(from: Date, locale: string, now = new Date(), tz?: string): string {
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const diffSec = Math.round((from.getTime() - now.getTime()) / 1000);
   const abs = Math.abs(diffSec);
   if (abs < 60) return rtf.format(Math.trunc(diffSec), "second");
   if (abs < 3600) return rtf.format(Math.trunc(diffSec / 60), "minute");
-  if (abs < 86400) return rtf.format(Math.trunc(diffSec / 3600), "hour");
+  const days = tz && abs >= 86400 && abs < 86400 * 30 ? dayNumber(from, tz) - dayNumber(now, tz) : null;
+  if (abs < 86400 || days === 0) return rtf.format(Math.trunc(diffSec / 3600), "hour");
+  if (days !== null) return rtf.format(days, "day");
   if (abs < 86400 * 30) return rtf.format(Math.trunc(diffSec / 86400), "day");
   return rtf.format(Math.trunc(diffSec / (86400 * 30)), "month");
 }

@@ -10,6 +10,43 @@ import { EventFields, type EventFormValues, type TimePatternInput } from "./Even
 import type { PastNamesState } from "./PastNames";
 import type { VenueOption } from "./VenueCombobox";
 
+/** Inputs that press themselves on Enter: a browser clicks them, and that is theirs to keep. */
+const PRESSED = new Set(["submit", "button", "image", "reset"]);
+/** What Go moves on to: a field that takes typing or a pick, never a box to tick or a hidden value. */
+const SKIPPED = new Set([...PRESSED, "hidden", "checkbox", "radio"]);
+function takesGo(el: Element): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement {
+  const field = el instanceof HTMLInputElement ? (SKIPPED.has(el.type) ? null : el) : el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement ? el : null;
+  if (!field || field.disabled) return false;
+  // On the screen. A closed <details> ("Played before?") keeps its fields laid out in Chrome and hides
+  // them with content-visibility, so a count of boxes passes them; `checkVisibility` does not. It is
+  // newer than the oldest iPhone we serve (iOS 15), where the count of boxes stands in.
+  return typeof field.checkVisibility === "function" ? field.checkVisibility() : field.getClientRects().length > 0;
+}
+
+/**
+ * The keyboard's Go key (Enter on a computer) in a field of the create form moves on to the next field
+ * and never sends the form. The form sent itself on Go from the name or the venue, so a match was made
+ * on the default day and time that nobody had looked at: 14 of the 27 matches of the 60 days to 15
+ * October 2026 started exactly at the default time. A textarea keeps Enter for a new line, a button for
+ * its press, and a field that answers Enter itself (the email of "Played before?", a pick from the
+ * venue list) calls `preventDefault` first and keeps it. The create button is the one way to create.
+ */
+function enterMovesOn(e: React.KeyboardEvent<HTMLFormElement>) {
+  if (e.key !== "Enter" || e.nativeEvent.isComposing || e.defaultPrevented) return;
+  const from = e.target;
+  if (!(from instanceof HTMLInputElement) || PRESSED.has(from.type)) return;
+  e.preventDefault();
+  const all = Array.from(e.currentTarget.elements);
+  for (const next of all.slice(all.indexOf(from) + 1)) {
+    if (!takesGo(next)) continue;
+    next.focus();
+    // A field the browser would not focus after all: the one after it.
+    if (document.activeElement === next) return;
+  }
+  // The last field closes the keyboard: Go still sends nothing.
+  from.blur();
+}
+
 export function CreateEventForm({
   defaultTz,
   tzFromHeader,
@@ -221,11 +258,11 @@ export function CreateEventForm({
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-5">
+    <form onSubmit={submit} onKeyDown={enterMovesOn} className="flex flex-col gap-5">
       {!hasIdentity && (
         <div className="card bg-accent-soft border-accent">
           <label className="label text-ink">{t("identity.whatsYourName")}</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} />
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" enterKeyHint="next" maxLength={40} />
           <p className="mt-1.5 text-sm text-muted">{t("identity.nameHelp")}</p>
           {returning}
         </div>
@@ -241,6 +278,7 @@ export function CreateEventForm({
           check={booking?.check}
           courtTotal={booking?.total ?? null}
           past={hasIdentity ? { state: past, answers, onLoad: loadPast, onAdd: addPast, onAnswer: answer, reveal } : undefined}
+          enterNext
         />
       </div>
       {booking && (

@@ -15,11 +15,14 @@ export function VenueCombobox({
   value,
   mapUrl,
   onChange,
+  enterKeyHint,
 }: {
   venues: VenueOption[];
   value: string;
   mapUrl: string;
   onChange: (v: { name: string; mapUrl: string }) => void;
+  /** "next" on the create form, where Go moves on to the next field. */
+  enterKeyHint?: "next";
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -50,6 +53,12 @@ export function VenueCombobox({
     });
   }, [venues, value, locale, t]);
   const exact = venues.some((v) => v.name.toLowerCase() === value.trim().toLowerCase());
+  const listShown = open && (rows.length > 0 || Boolean(value.trim() && !exact));
+  const choose = (v: VenueOption) => {
+    onChange({ name: v.name, mapUrl: v.mapUrl ?? "" });
+    setShowMap(Boolean(v.mapUrl));
+    setOpen(false);
+  };
 
   return (
     <div className="relative">
@@ -68,9 +77,22 @@ export function VenueCombobox({
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
+        // Go (Enter) with the list open and a name typed picks the first suggestion, as a tap does: the
+        // club typed in full, else the first row; with only "Use … as a new court" it closes the list. It
+        // calls preventDefault, so it sends no form, and the create form keeps the field for the next Go
+        // (`enterMovesOn`). An empty field is not a pick: Go there moves on.
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || e.nativeEvent.isComposing || !listShown || !value.trim()) return;
+          e.preventDefault();
+          const typed = value.trim().toLowerCase();
+          const pick = venues.find((v) => v.name.toLowerCase() === typed) ?? rows[0]?.venue;
+          if (pick) choose(pick);
+          else setOpen(false);
+        }}
+        enterKeyHint={enterKeyHint}
         maxLength={80}
       />
-      {open && (rows.length > 0 || (value.trim() && !exact)) && (
+      {listShown && (
         <ul className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-line bg-card shadow-card">
           {rows.map(({ venue: v, heading }) => (
             <li key={v.name}>
@@ -79,11 +101,7 @@ export function VenueCombobox({
                 type="button"
                 className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-bg"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onChange({ name: v.name, mapUrl: v.mapUrl ?? "" });
-                  setShowMap(Boolean(v.mapUrl));
-                  setOpen(false);
-                }}
+                onClick={() => choose(v)}
               >
                 <span className="font-semibold">{v.name}</span>
                 {v.mapUrl && <span className="text-xs text-muted">📍</span>}

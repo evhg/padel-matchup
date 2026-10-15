@@ -580,8 +580,8 @@ async function EventPage({ params, searchParams }: Props) {
                     : s.invitedEmail && emailEnabled()
                     ? viewer.isCreator && s.invitedAt
                       ? s.lastRemindedAt
-                        ? t("creator.remindedAgo", { ago: relativeTime(s.lastRemindedAt, locale, now) })
-                        : t("creator.inviteEmailedAgo", { ago: relativeTime(s.invitedAt, locale, now) })
+                        ? t("creator.remindedAgo", { ago: relativeTime(s.lastRemindedAt, locale, now, ev.tz) })
+                        : t("creator.inviteEmailedAgo", { ago: relativeTime(s.invitedAt, locale, now, ev.tz) })
                       : t("event.inviteSent")
                     : t("event.inviteNotAccepted")}
                 </div>
@@ -770,7 +770,7 @@ async function EventPage({ params, searchParams }: Props) {
               </div>
               <div className="text-xs font-semibold text-faint">
                 {/* "Started 1 hour ago" while it is on: "Starts 1 hour ago" read as a start still to come. */}
-                {tzLabel(ev.startsAt, ev.tz, locale)} · {over || cancelled ? relativeTime(ev.startsAt, locale, now) : t(started ? "event.startedAgo" : "event.startsIn", { when: relativeTime(ev.startsAt, locale, now) })}
+                {tzLabel(ev.startsAt, ev.tz, locale)} · {over || cancelled ? relativeTime(ev.startsAt, locale, now, ev.tz) : t(started ? "event.startedAgo" : "event.startsIn", { when: relativeTime(ev.startsAt, locale, now, ev.tz) })}
               </div>
             </div>
           </div>
@@ -933,7 +933,7 @@ async function EventPage({ params, searchParams }: Props) {
           </div>
           <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {pendingRequests.length > 0 && (
-            <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now) }))} />
+            <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now, ev.tz) }))} />
           )}
           {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && (
             <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} namesHere={namesHere} claimable={offer.names} held={heldNames} backIn={backIn} />

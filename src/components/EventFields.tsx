@@ -113,6 +113,7 @@ export function EventFields({
   courtTotal = null,
   startLocked = false,
   past,
+  enterNext = false,
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
@@ -134,6 +135,8 @@ export function EventFields({
   startLocked?: boolean;
   /** The create form's past players under the names: "Played with you" and "Is this Danny…?" (`PastNames`). */
   past?: Omit<ComponentProps<typeof PastNames>, "text">;
+  /** The create form, where Go moves on to the next field (`enterMovesOn`): the keyboard says "next" on the venue and the court. The edit form has no such step, so its keys stay as they were. */
+  enterNext?: boolean;
 }) {
   const t = useTranslations();
   // A day or a time the booking did not give shows the form's own (the usual slot, else tomorrow at
@@ -391,7 +394,7 @@ export function EventFields({
       </div>
 
       <div>
-        <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} />
+        <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} enterKeyHint={enterNext ? "next" : undefined} />
         {lacks.venue && (
           <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-missing-club">
             ✏️ {t("create.pasteNoClub")}
@@ -426,7 +429,7 @@ export function EventFields({
             <option value={COURT_OTHER}>{t("create.courtOther")}</option>
           </select>
         ) : (
-          <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
+          <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" enterKeyHint={enterNext ? "next" : undefined} onChange={(e) => onChange({ court: e.target.value })} />
         )}
       </div>
       {courtTotal && (

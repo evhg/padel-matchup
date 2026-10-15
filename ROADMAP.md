@@ -1146,6 +1146,16 @@ Everything in this list is live. The README describes each in detail.
   "Danny is in this match. Sign in as Danny?" with "That's me", or for a record with an email or a
   passkey its own doors, and "I'm a different Danny" joins as typed; `join_match` with a name and no
   token answers 409 `name_seated` (DECIDING rule 34).
+- **The right day and the right time (15 October 2026, no migration).** The match page counts calendar
+  days in the match's own zone: TDsv, on Saturday at 11:00 in Phuket, read "Starts tomorrow" from
+  Thursday 11:00 to midnight, and now reads "Starts in 2 days" (`relativeTime` with `tz` in
+  `src/lib/dates.ts`). Under one day it still counts hours. The create form opens on the organiser's
+  usual time from the matches that people played, with two or more taken seats
+  (`getPlayerTimePatterns`, one read of those matches' seats); before, Erik's form opened on Fri 18:00
+  from three try-outs that nobody joined. An organiser with no such match keeps the chips of the whole
+  history. The keyboard's Go key on the name, the venue or the court moves to the next field and never
+  creates a match (`enterMovesOn` in `CreateEventForm.tsx`): 14 of the 27 matches of the 60 days before
+  started exactly at the default time. Go with the venue list open picks the first suggestion.
 
 ## The finish line
 
