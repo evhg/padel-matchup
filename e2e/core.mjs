@@ -149,6 +149,9 @@ try {
   await noRawKeys(a, "the share page");
   check("share page renders QR", (await a.locator("svg path").count()) > 0, code);
   check("share page says match is live + Go to match", (await a.getByText("Your match is live").count()) > 0 && (await a.getByRole("link", { name: /Go to match/ }).count()) > 0);
+  // Under "Your match is live", the match itself, so the organiser checks the time before the link goes out.
+  const shareSummary = ((await a.getByTestId("share-summary").innerText().catch(() => "")) ?? "").trim();
+  check("the share page names the match under its title: the day, the time, the club and the court", shareSummary.split(" · ").length === 4 && shareSummary.includes(` · ${g("hour")}:${g("minute")} · `) && shareSummary.endsWith("Club Padel Test · Court 3"), shareSummary);
   check("share text includes court", (await a.locator('a[href^="https://wa.me"]').first().getAttribute("href")).includes(encodeURIComponent("Court 3")));
   // Each share button tags the match link it sends, so the step from a shared link to a seat is counted (docs/OPERATING.md).
   check("the Telegram share tags its link ?s=tg", new URL(await a.locator('a[href^="https://t.me/share"]').first().getAttribute("href")).searchParams.get("url").endsWith(`/${code}?s=tg`), code);
@@ -232,6 +235,8 @@ try {
   await noRawKeys(a, "the match page, as its organiser");
   check("creator sees organizer tools", (await a.getByText("Organizer tools").count()) > 0);
   check("event page shows venue with court", (await a.getByText("Club Padel Test · Court 3").count()) > 0);
+  // A match under way says when it started: "Starts 1 hour ago" read as a start still to come.
+  check("a match under way says \"Started 1 hour ago\", never \"Starts … ago\"", (await a.getByText(/ · Started 1 hour ago$/).count()) === 1 && (await a.getByText(/Starts .* ago/).count()) === 0);
   check("no Play again before a score", (await a.getByRole("button", { name: /Play again/ }).count()) === 0);
   // The moment somebody is in, the card asks where they will hear about it. This run has a bot and email and no WhatsApp number.
   const stay = a.getByTestId("stay-updated");
@@ -489,6 +494,13 @@ try {
   await cyp.getByTestId("open-spot-name").first().press("Enter");
   await cyp.waitForTimeout(1000);
   check("the Go key sends no Join while \"Take Cy's held place\" is on screen, and says why", heldSends === 0 && (await cyp.getByText("This name has a held place.", { exact: false }).count()) === 1, `sends=${heldSends}`);
+  // The fixed "Join this match" with the name typed sends the same form, so it meets the same check:
+  // no Join, and the held place still offered.
+  heldSends = 0;
+  await cyp.getByRole("button", { name: "Join this match" }).click();
+  await cyp.waitForTimeout(1000);
+  check("the fixed Join with a held name typed sends no Join either, and the held place is still offered", heldSends === 0 && (await takeCy.count()) === 1 && (await cyp.getByText("This name has a held place.", { exact: false }).count()) === 1, `sends=${heldSends}`);
+  await shot(cyp, "12d0b-held-offer-fixed-join");
   heldSends = 0;
   await takeCy.click();
   await sureCy.waitFor({ timeout: 10000 });
@@ -511,6 +523,60 @@ try {
   check("the organiser hears \"Cy confirmed\", as from the personal link", Boolean(cyNote), cyNote ? cyNote.subject : "no mail to the organiser");
   await shot(cyp, "12d-held-by-name");
   await cyp.close();
+
+  // ---- The fixed Join joins, and the court shows (all 11 joins in production came through the plain link) ----
+  // A first-time player on a fresh phone taps "Join this match", types her name, and taps the same button
+  // again: it used to open the form and then do nothing. The match is at a club with a long name, a court
+  // and a map button beside it, as every Warehaus match is: the venue line once read "WAREHAUS.club · Co…".
+  const longMade = await a.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "WAREHAUS.club", venueMapUrl: "https://maps.example.com/warehaus", court: "2", organizer: { name: "Ola" } } }).then((r) => r.json());
+  const lcode = longMade.match?.code;
+  const lena = await newPage();
+  await lena.goto(`${BASE}/${lcode}`);
+  const venueLine = lena.getByTestId("venue-line");
+  await venueLine.waitFor({ timeout: 15000 });
+  const venueFits = await venueLine.evaluate((e) => ({ text: e.textContent.trim(), across: e.scrollWidth <= e.clientWidth + 1, down: e.scrollHeight <= e.clientHeight + 1, lines: Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight)) }));
+  check("at 390 px the venue line shows the court whole, on a second line when it must, cut neither across nor down", venueFits.text === "WAREHAUS.club · Court 2" && venueFits.across && venueFits.down, JSON.stringify(venueFits));
+  await shot(lena, "13-venue-court");
+  await lena.getByRole("button", { name: "Join this match" }).click();
+  await lena.getByTestId("open-spot-name").first().fill("Lena");
+  await shot(lena, "13b-fixed-join-name-typed");
+  await lena.getByRole("button", { name: "Join this match" }).click();
+  await lena.getByText("You're in").waitFor({ timeout: 20000 });
+  check("a second tap on the fixed Join with a name typed joins: You're in, and Lena on the line-up", (await lena.locator("main li", { hasText: "Lena" }).getByText("you", { exact: true }).count()) === 1);
+  await shot(lena, "13c-fixed-join-joined");
+  await lena.close();
+  // The fixed Join reaches the row the player opened: Mia opens the second open row, types her name and
+  // taps the fixed button. It used to send the first row instead, which opened a second, empty name form
+  // there and took the focus, and joined nobody (review, 15 October 2026).
+  const mia = await newPage();
+  await mia.goto(`${BASE}/${lcode}`);
+  const openRows = mia.getByText("Tap to join", { exact: true });
+  await openRows.first().waitFor({ timeout: 15000 });
+  const rowsOpen = await openRows.count();
+  await openRows.nth(1).click();
+  await mia.getByTestId("open-spot-name").fill("Mia");
+  await mia.getByRole("button", { name: "Join this match" }).click();
+  const miaIn = await mia.getByText("You're in").waitFor({ timeout: 20000 }).then(() => true, () => false);
+  const miaForms = await mia.getByTestId("open-spot-name").evaluateAll((es) => es.map((e) => e.value));
+  check("a name typed in the second open row, then the fixed Join: Mia is in, and no second name form opened", rowsOpen >= 2 && miaIn && (await mia.locator("main li", { hasText: "Mia" }).getByText("you", { exact: true }).count()) === 1 && miaForms.length === 0, JSON.stringify({ rowsOpen, miaIn, miaForms }));
+  await shot(mia, "13d-fixed-join-second-row");
+  await mia.close();
+  // A club name of one long word: kept whole as one block, it was cut with no ellipsis on the match page,
+  // and the share page scrolled sideways at 390 px (review, 15 October 2026). It breaks inside the line now.
+  const word = "PadelhausSukhumvit39BangkokThonglorEkkamai";
+  const wordMade = await a.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: word, venueMapUrl: "https://maps.example.com/padelhaus", court: "2", organizer: { name: "Wen" } } }).then((r) => r.json());
+  const wcode = wordMade.match?.code;
+  const wen = await newPage();
+  await wen.goto(`${wordMade.organizer?.personalUrl}?next=/${wcode}`);
+  await wen.waitForURL(new RegExp(`/${wcode}$`), { timeout: 15000 });
+  const wordLine = await wen.getByTestId("venue-line").evaluate((e) => ({ text: e.textContent.trim(), sw: e.scrollWidth, cw: e.clientWidth, page: document.documentElement.scrollWidth }));
+  check("a club name of one long word breaks inside the venue line: nothing runs past it, and the page is no wider than 390 px", wordLine.text === `${word} · Court 2` && wordLine.sw <= wordLine.cw + 1 && wordLine.page <= 390, JSON.stringify(wordLine));
+  await shot(wen, "13e-venue-long-word");
+  await wen.goto(`${BASE}/${wcode}/share`);
+  const wordShare = await wen.getByTestId("share-summary").evaluate((e) => ({ text: e.textContent.trim(), sw: e.scrollWidth, cw: e.clientWidth, page: document.documentElement.scrollWidth }));
+  check("the share page names that club whole and does not scroll sideways at 390 px", wordShare.text.endsWith(`${word} · Court 2`) && wordShare.sw <= wordShare.cw + 1 && wordShare.page <= 390, JSON.stringify(wordShare));
+  await shot(wen, "13f-share-long-word");
+  await wen.close();
 
   // ---- The same on a full match (the audit of 11 October 2026: TDsv was full, and Alberto could not take his place) ----
   // The organiser holds one more name, Eve, in the seat Bo left: every place is taken now. A browser that
@@ -613,11 +679,18 @@ try {
 
   // ---- Score entry as creator ----
   await a.getByRole("button", { name: "Enter score" }).click();
+  // A new score starts empty, 6 and 4 as placeholders only: an untouched 6-4 once saved as a real result.
+  const emptyScore = a.locator("#score input[type=number]");
+  const scoreSays = { values: await emptyScore.evaluateAll((es) => es.map((e) => e.value)), hints: await emptyScore.evaluateAll((es) => es.map((e) => e.placeholder)), saveOff: await a.getByTestId("score-save").isDisabled() };
+  check("after Enter score the boxes are empty, 6 and 4 only as placeholders, and Save score waits", JSON.stringify(scoreSays) === JSON.stringify({ values: ["", ""], hints: ["6", "4"], saveOff: true }), JSON.stringify(scoreSays));
+  await shot(a, "10b-score-empty");
   await a.getByText("Dana").first().click(); // team A pick
   const inputs = a.locator("input[type=number]");
   await inputs.nth(0).fill("6");
+  check("one box typed is not a score: Save score still waits", await a.getByTestId("score-save").isDisabled());
   await inputs.nth(1).fill("3");
   await a.getByRole("button", { name: /Add set/ }).click();
+  check("an added set starts empty too, and Save score waits for it", (await inputs.nth(2).inputValue()) === "" && (await a.getByTestId("score-save").isDisabled()));
   await inputs.nth(2).fill("7");
   await inputs.nth(3).fill("5");
   await a.getByRole("button", { name: "Save score" }).click();

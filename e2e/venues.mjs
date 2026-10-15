@@ -87,6 +87,9 @@ try {
   await ana.getByRole("button", { name: "Enter score" }).click();
   await ana.getByRole("button", { name: /^Ana/ }).click();
   await ana.getByRole("button", { name: /^Bo/ }).click();
+  // The form starts empty (an untouched 6-4 once saved as a real result): the score is typed.
+  await ana.locator("#score input[type=number]").nth(0).fill("6");
+  await ana.locator("#score input[type=number]").nth(1).fill("4");
   await ana.getByRole("button", { name: "Save score" }).click();
   await ana.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   await ana.getByRole("button", { name: "Edit match" }).click();

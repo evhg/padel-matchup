@@ -496,12 +496,14 @@ try {
   // phone), written as a booking app writes it, from the moment the suite runs (rule 11). The paste
   // ends with The Padel Society's invitation and a tracking query: the words give the club, the day and
   // the time, so the link is never opened, and the match page shows it as "Join this booking" without
-  // the query (the owner, 11 October 2026: "Only made-to-share links").
+  // the query (the owner, 11 October 2026: "Only made-to-share links"). Its price says nothing per player
+  // ("Total: 1,600 THB"), so it is the court's: the form names it in one line and never as the cost per
+  // player, which would ask each of the four for the whole court (15 October 2026).
   const clubZone = String(feedNow.freeCourts?.tz || "Europe/Madrid");
   const pasteAt = new Date(Date.now() + 3 * 86400 * 1000);
   const pasteDay = new Intl.DateTimeFormat("en-CA", { timeZone: clubZone }).format(pasteAt);
   const INVITE = "https://thepadelsociety.app.link/AbCdEf12345";
-  const pasteText = `${CLUB} ${new Intl.DateTimeFormat("en-GB", { timeZone: clubZone, weekday: "short", day: "numeric", month: "short" }).format(pasteAt)} 18:00-19:30 court 3 with Danny, Alberto ${INVITE}?_p=c21`;
+  const pasteText = `${CLUB} ${new Intl.DateTimeFormat("en-GB", { timeZone: clubZone, weekday: "short", day: "numeric", month: "short" }).format(pasteAt)} 18:00-19:30 court 3 Total: 1,600 THB with Danny, Alberto ${INVITE}?_p=c21`;
   await page.goto(`${BASE}/`);
   await page.getByTestId("paste-door").click();
   await page.getByLabel("Paste the booking link and the text from your booking app.").fill(pasteText);
@@ -524,6 +526,18 @@ try {
   check("a pasted booking fills the form: the club, the day, 18:00 in the club's zone, 90 minutes, court 3", JSON.stringify(pasted) === JSON.stringify({ venue: CLUB, date: pasteDay, time: "18:00", zone: 1, length: "true", court: "3" }), JSON.stringify(pasted));
   check("the players come 'from your booking', and nothing is marked missing", (await page.getByTestId("carried-players").innerText()).includes("2 players from your booking") && (await page.getByTestId("carried-players").innerText()).includes("Danny · Alberto") && (await page.getByTestId("paste-missing-when").count()) === 0 && (await page.getByTestId("paste-missing-club").count()) === 0);
   check("'Court booked by me' stands ticked, and the match stays off the venue board", (await page.getByTestId("booked-by-me").isChecked()) && (await page.getByRole("checkbox", { name: /Show on the venue board/ }).isChecked()) === false);
+  const moreButton = page.locator("main button[aria-expanded]", { hasText: "More options" });
+  const totalSays = { line: (await page.getByTestId("paste-total").innerText().catch(() => "")).trim(), more: await moreButton.getAttribute("aria-expanded"), summary: (await moreButton.innerText()).replace(/\s+/g, " ").trim() };
+  // More options stands open here for the two names the booking carried (a closed one is checked below, on a paste with no names).
+  check(
+    "the court's total is one line under the court, and More options' summary names no cost per player",
+    totalSays.line === "💸 The booking says 1,600 THB for the court. Add the cost per player under More options." && !totalSays.summary.includes("per player"),
+    JSON.stringify(totalSays),
+  );
+  await shot(page, "clubs-paste-total");
+  if (totalSays.more !== "true") await moreButton.click();
+  const costField = page.getByPlaceholder("400 ฿");
+  check("under More options, Cost per player is empty", (await costField.count()) === 1 && (await costField.inputValue()) === "", await costField.inputValue().catch(() => "no cost field"));
   check("the form says the match page will show the booking's invitation", (await page.getByTestId("paste-invite").innerText().catch(() => "")).includes("join the booking on The Padel Society"), await page.getByTestId("paste-invite").innerText().catch(() => "no paste-invite"));
   check("and the form shows that link itself, without its query string, so the organiser sees what the match will show", (await page.getByTestId("paste-invite-link").innerText().catch(() => "")) === "thepadelsociety.app.link/AbCdEf12345", await page.getByTestId("paste-invite-link").innerText().catch(() => "no paste-invite-link"));
   await page.getByRole("button", { name: "Create & get the link" }).click();
@@ -539,6 +553,7 @@ try {
   const pastedCount = (await page.getByTestId("count-line").innerText().catch(() => "")).trim();
   check("one tap made the match with Danny and Alberto held, and the count line says so", ["Danny", "Alberto"].every((x) => pastedRows.some((r) => r.includes(`Reserved for ${x}`))) && pastedCount === "1 spot left · 2 places held for Danny, Alberto", JSON.stringify({ count: pastedCount, rows: pastedRows.slice(0, 4) }).slice(0, 260));
   check("and the court shows booked by the organiser", (await page.getByTestId("court-booked").innerText().catch(() => "")).includes("Court booked ✓ (by Nok)"), await page.getByTestId("court-booked").innerText().catch(() => "no court-booked"));
+  check("and the match page asks nobody for the court's total: no line says per player", (await page.locator("main").getByText(/per player/).count()) === 0);
   const join = page.getByTestId("join-booking");
   const joinLine = { n: await painted(join), text: await join.innerText().catch(() => ""), href: await join.getAttribute("href").catch(() => null), target: await join.getAttribute("target").catch(() => null) };
   check("the match page shows 'Join this booking on The Padel Society' as a plain link, its query string removed", joinLine.n === 1 && joinLine.text.includes("Join this booking on The Padel Society") && joinLine.href === INVITE && joinLine.target === "_blank", JSON.stringify(joinLine));
@@ -548,8 +563,12 @@ try {
   // A create link anybody can write carries a made-to-share link too (another booking's Playtomic match).
   // The form shows the link itself, not only the platform's name, and one tap keeps it off the match.
   const CRAFTED = "https://playtomic.io/matches/0b0e3c1a-1234-4abc-9def-0123456789ab";
-  await page.goto(`${BASE}/?src=paste&venue=${encodeURIComponent(CLUB)}&date=${pasteDay}&time=20:00&tz=${encodeURIComponent(clubZone)}&invite=${encodeURIComponent(CRAFTED)}`);
+  // It carries a court's total and no names too: the total opens nothing, so More options stays closed.
+  await page.goto(`${BASE}/?src=paste&venue=${encodeURIComponent(CLUB)}&date=${pasteDay}&time=20:00&tz=${encodeURIComponent(clubZone)}&total=${encodeURIComponent("1,600 THB")}&invite=${encodeURIComponent(CRAFTED)}`);
   await page.getByTestId("paste-invite").waitFor({ timeout: 20000 });
+  const closedMore = page.locator("main button[aria-expanded]", { hasText: "More options" });
+  check("a booking's total with no names leaves More options closed, and the line still names it", (await closedMore.getAttribute("aria-expanded")) === "false" && (await page.getByTestId("paste-total").innerText().catch(() => "")).includes("1,600 THB"), await closedMore.getAttribute("aria-expanded"));
+  await shot(page, "clubs-paste-total-closed");
   const craftedShown = await page.getByTestId("paste-invite-link").innerText().catch(() => "");
   check("a crafted create link's invitation shows on the form in full", craftedShown === "playtomic.io/matches/0b0e3c1a-1234-4abc-9def-0123456789ab", craftedShown || "no paste-invite-link");
   // The click lands once React has hydrated the form: tap again until the line goes, for five seconds at most.
@@ -569,6 +588,23 @@ try {
   await page.goto(`${BASE}/${craftedCode}`);
   await page.locator("main h1").first().waitFor({ timeout: 15000 });
   check("and the match it makes shows no invitation", (await page.getByTestId("join-booking").count()) === 0 && craftedCode !== pastedCode, craftedCode);
+
+  // ---- After the start nobody books the court: "Book this court" goes, "I booked it" stays ----
+  // A match at this club that started thirty minutes ago, opened by its organiser. Before the start the
+  // same club gives "Book this court" (above); once it is played on, the link is gone, the club is not
+  // read for it, and the booked line or "I booked it" stays until the end.
+  const startedMade = await page.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), durationMinutes: 90, tz: "Asia/Bangkok", venue: CLUB, court: "2", organizer: { name: "Ola" } } }).then((r) => r.json());
+  const startedCode = startedMade.match?.code;
+  const ola = await (await browser.newContext(iphone)).newPage();
+  await ola.goto(`${startedMade.organizer?.personalUrl}?next=/${startedCode}`);
+  await ola.waitForURL((u) => u.pathname === `/${startedCode}`, { timeout: 20000 });
+  await ola.getByTestId("court-booked-mark").waitFor({ timeout: 15000 });
+  const startedSays = { book: await ola.getByTestId("book-court").count(), mark: await ola.getByTestId("court-booked-mark").count(), started: (await ola.getByText(/^.* · Started \d+ minutes ago$/).count()) };
+  check("thirty minutes after the start: no 'Book this court', 'I booked it' still there, and the time line says 'Started 30 minutes ago'", startedSays.book === 0 && startedSays.mark === 1 && startedSays.started === 1, JSON.stringify(startedSays));
+  await shot(ola, "clubs-started-no-book-link");
+  await ola.getByTestId("court-booked-mark").click();
+  await ola.getByTestId("court-booked").waitFor({ timeout: 15000 });
+  check("and a tap on it still marks the court booked, with Undo beside it", (await ola.getByTestId("court-booked-undo").count()) === 1 && (await ola.getByTestId("book-court").count()) === 0);
 
 } finally {
   await browser.close();

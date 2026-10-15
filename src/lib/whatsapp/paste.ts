@@ -38,6 +38,7 @@ const S = {
   en: {
     with: (names: string) => `with ${names}`,
     court: (court: string) => `court ${court}`,
+    total: (total: string) => `${total} for the court`,
     and: " and ",
     or: " or ",
     linkOf: (platform: string) => `A booking on ${platform}`,
@@ -52,6 +53,7 @@ const S = {
   ru: {
     with: (names: string) => `игроки: ${names}`,
     court: (court: string) => `корт ${court}`,
+    total: (total: string) => `${total} за корт`,
     and: " и ",
     or: " и ",
     linkOf: (platform: string) => `Бронь в ${platform}`,
@@ -66,6 +68,7 @@ const S = {
   es: {
     with: (names: string) => `con ${names}`,
     court: (court: string) => `pista ${court}`,
+    total: (total: string) => `${total} por la pista`,
     and: " y ",
     or: " ni ",
     linkOf: (platform: string) => `Una reserva en ${platform}`,
@@ -101,6 +104,8 @@ export function waPasteAnswer(read: BookingRead, formUrl: string, locale: Locale
   if (read.time) parts.push(len ? `${read.time}–${plusMinutes(read.time, len)}` : read.time);
   if (read.court) parts.push(/^\d/.test(read.court) ? s.court(read.court) : read.court);
   if (read.cost) parts.push(read.cost);
+  // The court's total says so, and the form's link carries it as `total`, never as the cost per player.
+  if (read.courtTotal) parts.push(s.total(read.courtTotal));
   if (read.names.length) parts.push(s.with(listOf(read.names, s.and)));
   const what = parts.length ? parts.join(", ") : s.linkOf(read.platform?.name ?? "");
   const next = read.missing.length

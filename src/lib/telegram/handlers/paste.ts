@@ -126,6 +126,8 @@ export function pasteSummary(read: BookingRead, locale: BotLocale, o: { now?: Da
   if (read.time) parts.push(len ? `${read.time}–${plusMinutes(read.time, len)}` : read.time);
   if (read.court) parts.push(/^\d/.test(read.court) ? s.pasteCourt(read.court) : read.court);
   if (read.cost) parts.push(read.cost);
+  // The court's total says so: the match the bot makes takes only a price per player (`read.cost`).
+  if (read.courtTotal) parts.push(s.pasteTotal(read.courtTotal));
   if (read.names.length) parts.push(s.pasteWith(listOf(read.names, s.pasteAnd)));
   const what = parts.length ? parts.join(", ") : s.pasteLinkOf(read.platform?.name ?? "");
   const next = read.missing.length

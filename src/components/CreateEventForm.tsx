@@ -61,6 +61,8 @@ export function CreateEventForm({
     check?: readonly ("venue" | "date")[];
     /** The link the booking's platform made for strangers to join it: the match page shows it, once the server checked it again. */
     invite?: { url: string; platform: string } | null;
+    /** The price the booking gave for the whole court: one line under the time and the place, never "Cost per player". */
+    total?: string | null;
   };
 }) {
   const t = useTranslations();
@@ -237,6 +239,7 @@ export function CreateEventForm({
           hasLevel={hasLevel}
           missing={booking?.missing}
           check={booking?.check}
+          courtTotal={booking?.total ?? null}
           past={hasIdentity ? { state: past, answers, onLoad: loadPast, onAdd: addPast, onAnswer: answer, reveal } : undefined}
         />
       </div>

@@ -110,6 +110,7 @@ export function EventFields({
   hasLevel = true,
   missing = [],
   check = [],
+  courtTotal = null,
   startLocked = false,
   past,
 }: {
@@ -124,6 +125,11 @@ export function EventFields({
   missing?: readonly ("venue" | "date" | "time")[];
   /** A pasted booking's guesses: the organiser's last venue, a date its weekday disagrees with. Each is marked until the organiser changes it. */
   check?: readonly ("venue" | "date")[];
+  /**
+   * A pasted booking's price for the whole court ("Total: 1,600 THB"): said in one line under the time
+   * and the place, and never put in "Cost per player", which would ask each player for the whole court.
+   */
+  courtTotal?: string | null;
   /** The match has started and this viewer is not the organiser (`mayMoveStart`): the day, the time and the zone show, and do not change. */
   startLocked?: boolean;
   /** The create form's past players under the names: "Played with you" and "Is this Danny…?" (`PastNames`). */
@@ -423,6 +429,11 @@ export function EventFields({
           <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" onChange={(e) => onChange({ court: e.target.value })} />
         )}
       </div>
+      {courtTotal && (
+        <p className="-mt-2 text-sm text-muted" data-testid="paste-total">
+          💸 {t("create.pasteTotal", { total: courtTotal })}
+        </p>
+      )}
 
 
       {values.type === "tournament" && (

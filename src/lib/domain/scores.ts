@@ -98,6 +98,28 @@ export function checkSets(sets: { sideA: number; sideB: number }[]): { refuse: "
   return { ask: unusualSets(sets) };
 }
 
+/** A set as the score form holds it while it is typed: a box nobody filled is null. */
+export type DraftSet = { setNumber: number; sideA: number | null; sideB: number | null };
+
+/**
+ * What the score form may save: every box of every set holds a number somebody typed, one to
+ * `MAX_SETS` sets. The form once started at 6-4, so an untouched 6-4 could be saved as a real result,
+ * and a result moves levels and earns moments; now it starts empty, with 6 and 4 as placeholders only.
+ * The range and the 0-0 set stay the server's and `checkSets`' to answer. Pure.
+ */
+export function typedSets(sets: readonly DraftSet[]): SetScore[] | null {
+  if (sets.length < 1 || sets.length > MAX_SETS) return null;
+  const out: SetScore[] = [];
+  for (const s of sets) {
+    if (typeof s.sideA !== "number" || !Number.isFinite(s.sideA) || typeof s.sideB !== "number" || !Number.isFinite(s.sideB)) return null;
+    out.push({ setNumber: s.setNumber, sideA: s.sideA, sideB: s.sideB });
+  }
+  return out;
+}
+
+/** `typedSets` as a yes or no: whether "Save score" may be tapped. */
+export const setsComplete = (sets: readonly DraftSet[]): boolean => typedSets(sets) !== null;
+
 export function validateSets(raw: SetScore[]): SetScore[] {
   const sets = raw
     .map((s, i) => ({ setNumber: i + 1, sideA: Math.round(Number(s.sideA)), sideB: Math.round(Number(s.sideB)) }))

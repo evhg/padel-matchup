@@ -316,8 +316,22 @@ describe("a booking pasted in the private chat", () => {
     await db.delete(metricsDaily).where(eq(metricsDaily.key, `rl:create:${me.id}`));
   });
 
+  it("names a price the booking does not give per player as the court's, and the match it makes asks nobody for it", async () => {
+    // Before 15 October 2026 the bot made this match with "1,600 THB" as the cost per player: four times each share.
+    const pasted = await say(dm(cath), cath, "Warehaus Tue 13 Oct 18:00-19:30 court 3 Total: 1,600 THB");
+    expect(pasted.outcome).toBe("paste_read");
+    const answer = lastAnswer();
+    expect(answer.call.body.text).toBe(`📋 WAREHAUS.club, Tue, Oct 13, 18:00–19:30, court 3, ${en.pasteTotal("1,600 THB")}\n${en.pasteReady}`);
+    expect(en.pasteTotal("1,600 THB")).toBe("1,600 THB for the court");
+    const form = new URL(buttonsOf(answer.call).find((b) => b.url)!.url!);
+    expect([form.searchParams.get("total"), form.searchParams.has("cost")]).toEqual(["1,600 THB", false]);
+    expect(await tap(cath, answer.id, pasted.message)).toMatch(/^paste_created:/);
+    const [ev] = await cathsMatches();
+    expect(ev.cost).toBeNull();
+  });
+
   it("shows the year of a day in another year", () => {
-    const read = { platform: null, club: null, clubFrom: null, date: "2027-01-03", time: "18:00", tz: TZ, minutes: null, court: null, cost: null, names: [], missing: ["club" as const], dayClash: false };
+    const read = { platform: null, club: null, clubFrom: null, date: "2027-01-03", time: "18:00", tz: TZ, minutes: null, court: null, cost: null, courtTotal: null, names: [], missing: ["club" as const], dayClash: false };
     expect(pasteSummary(read, "en", { now: NOW })).toContain("Sun, Jan 3, 2027");
     expect(pasteSummary({ ...read, date: "2026-12-03" }, "en", { now: NOW })).toContain("Thu, Dec 3,");
     expect(pasteSummary({ ...read, date: "2026-12-03" }, "en", { now: NOW })).not.toContain("2026");

@@ -276,7 +276,8 @@
     "askPastChange": "Изменить",
     "askPastFirst": "Сначала ответьте на вопрос про {name}.",
     "playedWithYou": "Играли с вами",
-    "keepsRecord": "Матчи {name} сохраняются"
+    "keepsRecord": "Матчи {name} сохраняются",
+    "pasteTotal": "В брони указано {total} за корт. Цену для каждого игрока можно добавить в разделе «Ещё настройки»."
   },
   "share": {
     "title": "Матч создан",
@@ -403,7 +404,9 @@
     "heldFor": "{count, plural, one {# место забронировано для {names}} few {# места забронированы для {names}} many {# мест забронировано для {names}} other {# места забронированы для {names}}}",
     "heldCount": "{count, plural, one {# место забронировано} few {# места забронированы} many {# мест забронировано} other {# места забронированы}}",
     "courtBookedUndoMark": "Снять отметку",
-    "courtBookedUndoName": "Снять отметку о брони корта"
+    "courtBookedUndoName": "Снять отметку о брони корта",
+    "startedAgo": "Начался {when}",
+    "leaveWaitlistConfirm": "Уйти из листа ожидания?"
   },
   "creator": {
     "tools": "Инструменты организатора",
