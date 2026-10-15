@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
+import { Resend } from "resend";
 import { sendEmail } from "@/lib/email/send";
 import { tg, tgCounters } from "@/lib/telegram/api";
 
@@ -39,7 +40,7 @@ describe("a failed email", () => {
     expect(await counts(["emails_failed", "emails_sent"])).toEqual({ emails_failed: before.emails_failed + 1, emails_sent: before.emails_sent + 1 });
   });
 
-  it("counts emails_failed when the network gives no answer at all", async () => {
+  it("counts emails_failed when the network gives no answer at all, which Resend's client turns into an error answer", async () => {
     process.env.RESEND_API_KEY = "re_test";
     vi.stubGlobal("fetch", async () => {
       throw new TypeError("fetch failed");
@@ -47,6 +48,22 @@ describe("a failed email", () => {
     const before = await counted("emails_failed");
     expect(await sendEmail(mail)).toBe(false);
     expect(await counted("emails_failed")).toBe(before + 1);
+  });
+
+  it("counts emails_failed when the send itself throws", async () => {
+    // Resend's client catches a failed fetch and answers `{ error }` (the test above), so only a throw
+    // reaches sendEmail's catch: here the client's own request call rejects (review, 15 October 2026).
+    process.env.RESEND_API_KEY = "re_test";
+    vi.stubGlobal("fetch", async () => json({ id: "re_never" }));
+    const post = vi.spyOn(Resend.prototype, "post").mockRejectedValueOnce(new Error("socket hang up"));
+    try {
+      const before = await counts(["emails_failed", "emails_sent"]);
+      expect(await sendEmail(mail)).toBe(false);
+      expect(post).toHaveBeenCalledTimes(1);
+      expect(await counts(["emails_failed", "emails_sent"])).toEqual({ emails_failed: before.emails_failed + 1, emails_sent: before.emails_sent });
+    } finally {
+      post.mockRestore();
+    }
   });
 });
 

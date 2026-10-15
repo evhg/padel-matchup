@@ -4,7 +4,7 @@ import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
 import { estimateCostUsd, fetchCostReport } from "@/lib/ops/anthropic";
-import { boardHighlights, serviceBoard, stateForPct } from "@/lib/ops/services";
+import { boardHighlights, highlightWords, serviceBoard, stateForPct } from "@/lib/ops/services";
 import { createTestDb } from "./helpers/db";
 
 let db: Db;
@@ -166,6 +166,11 @@ describe("the service board", () => {
       expect((await row("web_push")).usage).toMatch(/4 sent today · 1 failed today$/);
       expect(await row("telegram")).toMatchObject({ state: "warn", usage: "40 calls today · 40 this month · 3 failed today" });
       expect(boardHighlights(await serviceBoard(db, now)).map((r) => r.key)).toEqual(expect.arrayContaining(["resend_day", "web_push", "telegram"]));
+      // The Sunday digest's "Services to watch" names the reason: a Resend row is yellow for its two
+      // failed emails, not for 12% of the ceiling, and said only "Resend, today 12%" until the review.
+      const said = boardHighlights(await serviceBoard(db, now)).map(highlightWords);
+      expect(said).toEqual(expect.arrayContaining(["Resend, this month 0% · 2 failed today", "Resend, today 12% · 2 failed today", "Telegram Bot API 40 calls today · 40 this month · 3 failed today"]));
+      expect(said.find((w) => w.startsWith("Web Push"))).toMatch(/4 sent today · 1 failed today$/);
 
       // Yesterday's failures do not colour today.
       const tomorrow = new Date("2027-01-13T12:00:00Z");

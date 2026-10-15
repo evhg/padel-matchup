@@ -271,3 +271,15 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
 
 /** Rows that deserve a line on Sunday: anything past sixty percent, plus anything alerting. */
 export const boardHighlights = (board: ServiceBoard): ServiceRow[] => board.rows.filter((r) => r.state === "alert" || r.state === "warn");
+
+/**
+ * One highlighted row as the Sunday digest says it: its share of the ceiling where it has one, else
+ * its usage, and the sends that failed today beside the share, because a failure turns a row yellow
+ * at any share. The digest said "Resend, today 12%" for a row yellow with two failed emails (review,
+ * 15 October 2026), which named the wrong reason.
+ */
+export const highlightWords = (r: ServiceRow): string => {
+  if (r.pct === null || r.key === "tavily") return `${r.name} ${r.usage}`;
+  const failed = /\d[\d,]* failed today/.exec(r.usage)?.[0];
+  return `${r.name} ${r.pct.toFixed(0)}%${failed ? ` · ${failed}` : ""}`;
+};

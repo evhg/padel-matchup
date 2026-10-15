@@ -8,9 +8,10 @@ import type { Instrumentation } from "next";
  * row, which never alerts the owner (`recordAndAlert` in `src/lib/alerts.ts`).
  *
  * Now the error goes to the store as a `server` row with its own message and stack, and the owner's
- * Telegram hears about it the way every server error is heard about: once for an error the store has
- * never seen or that came back after a fix, never for a repeat, and at most `ERROR_ALERTS.perHour`
- * lines an hour whatever happens. A crash loop is one fingerprint, so it is one line.
+ * Telegram hears about it the way every server error is heard about (`alertNewError`): one line for an
+ * error the store has never seen or that came back after a fix, never for a repeat, also when two
+ * requests meet it at once, and at most `ERROR_ALERTS.perHour` lines in one clock hour, every kind of
+ * line counted. A crash loop is one fingerprint, so it is one line.
  *
  * The hook loads in every server function (AGENTS.md rule 12), so it imports nothing at the top: the
  * alerts module comes in only when an error happens, and only on Node.js, where the store is.
@@ -38,9 +39,16 @@ export const onRequestError: Instrumentation.onRequestError = async (err, reques
     if (digest && CONTROL_FLOW.some((c) => digest.startsWith(c))) return;
     if (err instanceof Error && err.message.includes(OBFUSCATED)) return;
     try {
-      const { later, reportError } = await import("@/lib/alerts");
-      // Held open after the answer, as every report is: React does not wait for this hook.
-      await later(() => reportError("server", err, { path: request.path, digest }));
+      // Never in the path the person waits on. A page's error comes while its request scope is open,
+      // and after() holds the report past the answer. A route handler's error (an API route, an
+      // opengraph image, a QR) comes after that scope closed, and Next.js sends the 500 only when this
+      // returns, so later() hands the report to the platform's waitUntil (Vercel's). Only a test, a
+      // script or a self-hosted `next start` has neither, and waits for it here.
+      const { later } = await import("@/lib/later");
+      await later(async () => {
+        const { reportError } = await import("@/lib/alerts");
+        await reportError("server", err, { path: request.path, digest });
+      });
     } catch {
       /* the report never becomes a second error */
     }

@@ -573,7 +573,21 @@ learning can be a test, a gate step or a script, make it one and put the story i
   sign-in. Every error row's path goes through `errorPath` (no query, the segment after `p`, `manage`,
   `i`, `join` and `owed` blanked) before the store or the owner's Telegram sees it. A failed query's
   message ends with its values ("params: …"), in the stack's first line too, and its real reason sits
-  in `cause`: `describeError` keeps the reason and the query and drops the values.
+  in `cause`: `describeError` keeps the reason and the query and drops the values. The reason quotes
+  the value it refused too (`invalid input syntax for type uuid: "<value>"`), and the first fix kept it,
+  under a test named "keeps no value" that asserted the value (review, 15 October 2026). `blankValues`
+  blanks every quoted word the query does not name. A test of "no value" searches the row for the value.
+- **A hook Next.js calls after the request is not inside the request.** For a route handler (an API
+  route, an opengraph image, a QR), Next.js 15.5 calls `onRequestError` from the route template's catch,
+  after the request scope closed, and sends the 500 only when the hook returns. `after()` throws there,
+  so the report and its Telegram line ran in line, and a 500 waited 3 s for a slow Telegram while a
+  page's crash answered in 0.08 s (review, 15 October 2026). `later()` now hands such work to the
+  platform's `waitUntil` (`Symbol.for("@next/request-context")`, which Vercel sets and `next start` does
+  not), and `tests/instrumentation.test.ts` calls the hook with a Telegram that never answers.
+- **A budget counts what it limits.** "Three lines an hour" counted the new rows of the hour, so an error
+  back after its fix (an old `first_at`) never counted, and two requests that met one new error at once
+  both read "never seen" and both sent (review, 15 October 2026). The budget is a rate row taken before
+  each send, and each line is claimed once by the moment that made it due (`alertNewError`).
 - **A production build reports one render error twice.** A crash of `/m/<36 dashes>` on `next start`
   gave two server rows: the real message, and the HTML pass's copy that reads "The specific message is
   omitted in production builds". No unit test could show it, because a test calls the hook once. Run

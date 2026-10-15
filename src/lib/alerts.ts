@@ -32,15 +32,28 @@ export async function reportError(kind: ErrorKind, e?: unknown, ctx: ErrorContex
 export { later } from "@/lib/later";
 
 /**
+ * The database's reason quotes the value it refused: `invalid input syntax for type uuid: "<value>"`,
+ * `time zone "<value>" not recognized`. The value at the end, after a colon, goes whatever it holds
+ * (a quote inside it too); any other quoted word goes unless the query itself names it, as drizzle
+ * quotes every table and column, or it is a constraint's name. A value never sits in the query: it is
+ * a `$1` there. So the reason keeps the schema's names and none of the values, and one refusal of
+ * many values is one fingerprint (review, 15 October 2026: `/m/<36 dashes>` stored the dashes).
+ */
+export function blankValues(reason: string, query: string): string {
+  return reason.replace(/: "[\s\S]*"$/, ': "…"').replace(/(constraint )?"[^"]*"/g, (q, constraint?: string) => (constraint || q === '"…"' || query.includes(q) ? q : '"…"'));
+}
+
+/**
  * A failed query's message ends with its values ("params: …"), and a value can be a personal token,
  * a manage code or an address. A render error on `/p/<token>` reaches the store since 15 October 2026,
  * so the store keeps the database's own reason and the query, never the values, in the message and
- * in the stack's first line alike. The reason was not in the message at all: it is the error's cause.
+ * in the stack's first line alike. The reason was not in the message at all: it is the error's cause,
+ * and it quotes the value it refused, so that value is blanked too (`blankValues`).
  */
 function withoutParams(e: Error): { message: string; stack: string | null } | null {
   const m = /^Failed query: ([\s\S]*?)\nparams: [\s\S]*$/.exec(e.message ?? "");
   if (!m) return null;
-  const cause = e.cause instanceof Error ? e.cause.message : typeof e.cause === "string" ? e.cause : "";
+  const cause = blankValues(e.cause instanceof Error ? e.cause.message : typeof e.cause === "string" ? e.cause : "", m[1]);
   const message = `${cause ? `${cause} · ` : ""}failed query: ${m[1]}`;
   const stack = e.stack ? (e.stack.includes(e.message) ? e.stack.replace(e.message, message) : e.stack.replace(/\nparams: [^\n]*/, "")) : null;
   return { message, stack };
@@ -92,8 +105,9 @@ export const ERROR_ALERTS = { perHour: 3 } as const;
  * A production error the store has never seen, or one that comes back after it was marked
  * fixed, is worth one line to the owner at once: the error is the trigger, not a morning loop.
  * Repeats stay quiet (the row counts them), client errors stay quiet (browser noise), and never
- * more than a few lines an hour. With `defer` the line is sent after the response where a
- * request scope exists, so the send never delays or outlives the request unnoticed.
+ * more than `ERROR_ALERTS.perHour` lines in one clock hour (`alertNewError`). With `defer` the line is
+ * sent after the response where a request scope exists, so the send never delays or outlives the
+ * request unnoticed.
  */
 export async function recordAndAlert(db: Db, kind: ErrorKind, e: unknown, ctx: ErrorContext = {}, now = new Date(), defer = false): Promise<ErrorEvent> {
   const { message, stack } = describeError(e);
@@ -117,13 +131,18 @@ export async function recordAndAlert(db: Db, kind: ErrorKind, e: unknown, ctx: E
 export async function alertNewError(db: Db, row: ErrorEvent, now = new Date(), cameBack: Date | null = null): Promise<boolean> {
   // The owner's id from config, not through the listening desk: that import traced the whole desk
   // into every route that can report an error.
-  const [{ esc, sendMessage, telegramEnabled }, { baseUrl, ownerTelegramId }] = await Promise.all([import("@/lib/telegram/api"), import("@/lib/config")]);
+  const [{ esc, sendMessage, telegramEnabled }, { baseUrl, ownerTelegramId }, { takeRate }] = await Promise.all([import("@/lib/telegram/api"), import("@/lib/config"), import("@/lib/domain/ratelimit")]);
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return false;
-  // The hour's budget counts the fingerprints that could have alerted (never the client rows), before this one.
-  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  const [{ n }] = await db.select({ n: sql<number>`count(*)` }).from(errorEvents).where(and(gt(errorEvents.firstAt, hourAgo), lt(errorEvents.firstAt, now), sql`${errorEvents.kind} <> 'client'`));
-  if (Number(n) >= ERROR_ALERTS.perHour) return false;
+  // One line for each time an error is new or comes back, also when two requests meet it at once: both
+  // read "never seen" before either wrote the row (review, 15 October 2026). The claim is keyed by the
+  // moment that made the line due, the row's first_at or the fix it came back after, which both share,
+  // and dated by it too, so the key is the same on both sides of midnight.
+  const due = cameBack ?? row.firstAt;
+  if (!(await takeRate(db, "error_alert", `${row.fingerprint}:${due.getTime()}`, 1, "day", due))) return false;
+  // The hour's budget counts the lines themselves, taken before the send. It counted new rows until 15
+  // October 2026, so an error back after its fix was never counted, and two at once both passed.
+  if (!(await takeRate(db, "error_alerts", "owner", ERROR_ALERTS.perHour, "hour", now))) return false;
   const what = `${row.message.slice(0, 200)}${row.path ? ` on ${row.path}` : ""}`;
   const text = cameBack ? `A production error came back after the fix of ${cameBack.toISOString().slice(0, 10)} (${row.kind}): ${what}. Say 'fix errors' in your Claude session.` : `New production error (${row.kind}): ${what}. Say 'fix errors' in your Claude session.`;
   const res = await sendMessage(owner, esc(text), { keyboard: { inline_keyboard: [[{ text: "Errors", url: `${baseUrl()}/admin` }]] } });

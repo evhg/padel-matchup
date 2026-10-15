@@ -26,17 +26,23 @@ note without the owner's word.
 ## When an error appears
 
 A production error the store has never seen is one line to the owner at once (`recordAndAlert` in
-`src/lib/alerts.ts`); repeats, client errors and storms stay quiet: one line for each new error, and three
-lines an hour at most (`ERROR_ALERTS`), so a crash loop is one line. An error that no code caught on the
+`src/lib/alerts.ts`), and so is one that comes back after it was marked fixed; repeats, client errors
+and storms stay quiet. Each new error or return is one line, also when two requests meet it at once,
+and three lines in one clock hour (UTC) at most, every kind counted (`ERROR_ALERTS`, a rate row
+`rl:error_alerts` taken before the send; since 15 October 2026). So a crash loop is one line. An error that no code caught on the
 server (a page that fails to render, a route, an action outside `run()`) reaches the store through
 `onRequestError` in `src/instrumentation.ts` since 15 October 2026, as a `server` row with its own
 message and stack. Before that it came only as the browser's report, with the message Next.js shows a
-browser, and a client row never alerts. Next.js's redirect and `notFound()` write nothing, and nor
+browser, and a client row never alerts. The report and its line never hold the answer: a page's go
+through `after()`, and a route handler's, which Next.js reports after its request scope closed, through
+the platform's `waitUntil` (`later` in `src/lib/later.ts`). A self-hosted `next start` has no such
+context, so there a route handler's 500 still waits for its report. Next.js's redirect and `notFound()` write nothing, and nor
 does the copy of a server component's error that the HTML pass meets with Next.js's "The specific
 message is omitted" sentence (the real error came under the same digest). Every row keeps its path
 without the query string, and with the segment after `/p/`, `/manage/`, `/i/`, `/join/` and `/owed/`
 written as `:secret` (`errorPath`). A failed query keeps the database's reason and the query, never
-its values (`params`). So a token never reaches the store or the owner's Telegram. The owner says "fix errors" in a
+its values: not the `params`, and not the value the reason quotes either (`blankValues`: `invalid input
+syntax for type uuid: "…"`), so many refused values are one row. So a token never reaches the store or the owner's Telegram. The owner says "fix errors" in a
 session; the session reads `GET /api/admin/errors`, fixes through the pipeline, and records
 `POST /api/admin/errors { fingerprint, note }`. Outages reach the owner from the uptime probe
 directly. There is no daily loop and no three-hourly wake-up since 11 September.

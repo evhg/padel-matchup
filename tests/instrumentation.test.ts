@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import type { Db } from "@/db";
 import { errorEvents, metricsDaily, players } from "@/db/schema";
-import { ERROR_ALERTS, errorPath } from "@/lib/alerts";
+import { blankValues, describeError, ERROR_ALERTS, errorPath } from "@/lib/alerts";
 import { onRequestError } from "@/instrumentation";
 
 /**
@@ -58,7 +58,7 @@ describe("a server error nobody caught", () => {
     expect(await serverErrorsCounted()).toBe(counted);
   });
 
-  it("keeps no value of a failed query, and names the database's own reason", async () => {
+  it("keeps no value of a failed query, the one the database's reason quotes included, and names that reason", async () => {
     // A real failed query: the token sits in its params, the id is not a uuid, and the database says so.
     let thrown: unknown;
     try {
@@ -69,9 +69,34 @@ describe("a server error nobody caught", () => {
     expect(String((thrown as Error).message)).toContain("SeCrEtToKeN12");
     await onRequestError(thrown, request("/p/SeCrEtToKeN12"), { ...render, routePath: "/p/[token]" });
     const row = (await rows()).find((r) => r.message.includes("failed query: select"));
-    expect(row?.message).toMatch(/^invalid input syntax for type uuid: "not-a-uuid" · failed query: select "id" from "players" where/);
+    // The reason quoted the refused value until the review of 15 October 2026: `/m/<36 dashes>` stored the dashes.
+    expect(row?.message).toMatch(/^invalid input syntax for type uuid: "…" · failed query: select "id" from "players" where/);
     expect(row?.path).toBe("/p/:secret");
     expect(JSON.stringify(await rows())).not.toContain("SeCrEtToKeN12");
+    expect(JSON.stringify(await rows())).not.toContain("not-a-uuid");
+  });
+
+  it("blanks every value a database's reason quotes, keeps the names of the schema, and makes many refused values one fingerprint", () => {
+    const query = 'select "id" from "players" where "players"."id" = $1';
+    for (const [reason, kept] of [
+      ['invalid input syntax for type uuid: "not-a-uuid"', 'invalid input syntax for type uuid: "…"'],
+      // A quote inside the value does not end it early.
+      ['invalid input syntax for type uuid: "a"b-SeCrEt"', 'invalid input syntax for type uuid: "…"'],
+      ['invalid input value for enum slot_status: "SeCrEt"', 'invalid input value for enum slot_status: "…"'],
+      ['time zone "SeCrEt/Zone" not recognized', 'time zone "…" not recognized'],
+      ['value "12345678901234" is out of range for type integer', 'value "…" is out of range for type integer'],
+      // The schema's names stay: the query names the table, a constraint is named as one.
+      ['relation "players" does not exist', 'relation "players" does not exist'],
+      ['duplicate key value violates unique constraint "players_personal_token_idx"', 'duplicate key value violates unique constraint "players_personal_token_idx"'],
+      ["canceling statement due to statement timeout", "canceling statement due to statement timeout"],
+    ] as const)
+      expect(blankValues(reason, query), reason).toBe(kept);
+
+    const failed = (value: string) => Object.assign(new Error(`Failed query: ${query}\nparams: ${value}`), { cause: new Error(`invalid input syntax for type uuid: "${value}"`) });
+    const [a, b] = [describeError(failed("------------------------------------")), describeError(failed("-----------------------------------b"))];
+    expect(a.message).toBe(`invalid input syntax for type uuid: "…" · failed query: ${query}`);
+    expect(b.message).toBe(a.message);
+    expect(`${a.stack}${b.stack}`).not.toMatch(/---|params/);
   });
 
   it("writes nothing for the HTML pass's copy of a server component's error, which arrives with Next.js's sentence in place of the message", async () => {
@@ -107,9 +132,52 @@ describe("a server error nobody caught", () => {
     expect(JSON.stringify(await rows())).not.toContain("AbCdEfGhJkLm");
   });
 
-  it("tells the owner once per new error, and a crash loop never floods the owner's Telegram", async () => {
-    // The hour's alert budget counts this file's own rows above, so this test starts from an empty store.
+  it("returns before the report is done when a route handler's error comes after its request scope, and hands the report to the platform's waitUntil", async () => {
+    // Next.js 15.5 calls the hook for a route handler (an API route, an opengraph image, a QR) from the
+    // route template's catch, after the request scope closed, and sends the 500 only when the hook
+    // returns. after() throws there, and the report with its Telegram line ran in line until the review
+    // of 15 October 2026: a 500 waited 3 s for a slow Telegram. Here Telegram does not answer until the
+    // test says so, and the platform's request context (Vercel's) takes the work.
     await db.delete(errorEvents);
+    await db.delete(metricsDaily).where(like(metricsDaily.key, "rl:error_alert%"));
+    process.env.TELEGRAM_BOT_TOKEN = "123:test";
+    process.env.TELEGRAM_OWNER_ID = "777";
+    const owner: string[] = [];
+    let answer = () => {};
+    const telegramAnswers = new Promise<void>((r) => (answer = r));
+    vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { chat_id?: number; text?: string };
+      if (String(url).includes("api.telegram.org") && body.chat_id === 777) owner.push(String(body.text));
+      await telegramAnswers;
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { headers: { "content-type": "application/json" } });
+    });
+    const REQUEST_CONTEXT = Symbol.for("@next/request-context");
+    const g = globalThis as unknown as Record<symbol, unknown>;
+    const handed: Promise<unknown>[] = [];
+    g[REQUEST_CONTEXT] = { get: () => ({ waitUntil: (p: Promise<unknown>) => handed.push(p) }) };
+    try {
+      const route = { routerKind: "App Router", routePath: "/m/[id]/opengraph-image", routeType: "route", revalidateReason: undefined } as const;
+      const hook = Promise.resolve(onRequestError(new Error("opengraph image fell over"), request("/m/x/opengraph-image"), route)).then(() => "returned");
+      expect(await Promise.race([hook, new Promise((r) => setTimeout(() => r("still waiting"), 2000))])).toBe("returned");
+      expect(handed).toHaveLength(1);
+      answer();
+      await Promise.all(handed);
+      expect((await rows()).filter((r) => r.message === "opengraph image fell over")).toHaveLength(1);
+      expect(owner).toHaveLength(1);
+      expect(owner[0]).toContain("New production error (server): opengraph image fell over on /m/x/opengraph-image");
+    } finally {
+      delete g[REQUEST_CONTEXT];
+      answer();
+    }
+  });
+
+  it("tells the owner once per new error, and a crash loop never floods the owner's Telegram", async () => {
+    // The hour's alert budget is a rate row of one clock hour, so this test starts with no line spent,
+    // at a fixed instant: a real clock could cross the hour in the middle of it.
+    await db.delete(errorEvents);
+    await db.delete(metricsDaily).where(like(metricsDaily.key, "rl:error_alert%"));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-15T09:20:00Z"));
     process.env.TELEGRAM_BOT_TOKEN = "123:test";
     process.env.TELEGRAM_OWNER_ID = "777";
     const owner: string[] = [];
@@ -118,26 +186,28 @@ describe("a server error nobody caught", () => {
       if (String(url).includes("api.telegram.org") && body.chat_id === 777) owner.push(String(body.text));
       return new Response(JSON.stringify({ ok: true, result: { message_id: owner.length } }), { headers: { "content-type": "application/json" } });
     });
+    try {
+      // The token stays out of the owner's line as it stays out of the row.
+      await onRequestError(new Error("personal page crashed"), request("/p/ZyXwVuTsRqPn"), { ...render, routePath: "/p/[token]" });
+      expect(owner).toHaveLength(1);
+      expect(owner[0]).toContain("New production error (server): personal page crashed on /p/:secret");
+      expect(owner.join("\n")).not.toContain("ZyXwVuTsRqPn");
 
-    // The token stays out of the owner's line as it stays out of the row.
-    await onRequestError(new Error("personal page crashed"), request("/p/ZyXwVuTsRqPn"), { ...render, routePath: "/p/[token]" });
-    expect(owner).toHaveLength(1);
-    expect(owner[0]).toContain("New production error (server): personal page crashed on /p/:secret");
-    expect(owner.join("\n")).not.toContain("ZyXwVuTsRqPn");
+      // A crash loop: the match page fails the same way on every load, each with its own id in the message.
+      for (let i = 0; i < 20; i++) {
+        const id = `7f3a9c2e-1d4b-4a2f-9c1e-${String(i).padStart(12, "0")}`;
+        await onRequestError(new Error(`event ${id} has no creator`), request("/X9nQ"), render);
+      }
+      expect(owner).toHaveLength(2);
+      expect(owner[1]).toContain("on /X9nQ");
+      const loop = (await rows()).find((r) => r.message.endsWith("has no creator"));
+      expect(loop?.count).toBe(20);
 
-    // A crash loop: the match page fails the same way on every load, each with its own id in the message.
-    for (let i = 0; i < 20; i++) {
-      const id = `7f3a9c2e-1d4b-4a2f-9c1e-${String(i).padStart(12, "0")}`;
-      await onRequestError(new Error(`event ${id} has no creator`), request("/X9nQ"), render);
+      // A storm of different errors: never more than the hour's budget, the two above included.
+      for (const w of ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) await onRequestError(new Error(`storm ${w} failed`), request(`/S${w}`), render);
+      expect(owner.length).toBe(ERROR_ALERTS.perHour);
+    } finally {
+      vi.useRealTimers();
     }
-    expect(owner).toHaveLength(2);
-    expect(owner[1]).toContain("on /X9nQ");
-    const loop = (await rows()).find((r) => r.message.endsWith("has no creator"));
-    expect(loop?.count).toBe(20);
-
-    // A storm of different errors: never more than the hour's budget, the two above included.
-    for (const w of ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) await onRequestError(new Error(`storm ${w} failed`), request(`/S${w}`), render);
-    expect(owner.length).toBeLessThanOrEqual(ERROR_ALERTS.perHour);
-    expect(owner.length).toBe(ERROR_ALERTS.perHour);
   });
 });
