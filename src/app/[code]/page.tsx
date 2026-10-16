@@ -79,7 +79,7 @@ import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
 import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
 import { keepRecordFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
-import { unreachedDue, unreachedLine, unreachedPartners } from "@/lib/domain/unreached";
+import { unreachedDue, unreachedHereOf, unreachedLine, unreachedPartners } from "@/lib/domain/unreached";
 import { channelsOffered } from "@/lib/coach/reach";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
@@ -443,8 +443,8 @@ async function EventPage({ params, searchParams }: Props) {
   // last 60 days, `partnersQuery`) that it would want and cannot reach, first names only. For the
   // organiser's own view of a match with a seat open, before it starts; from the rows and the activity
   // this page read (who left or was taken out) and one bounded read (`unreachedPartners`). Nobody else ever gets it.
-  const gone = new Set(detail.activity.flatMap((a) => (a.verb === "left" && a.actorPlayerId ? [a.actorPlayerId] : a.verb === "removed" && typeof a.meta?.targetPlayerId === "string" ? [a.meta.targetPlayerId] : [])));
-  const unreachedNames = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedPartners(db, ev, { ids: idsHere, names: namesHere, gone }, channelsOffered(), now) : [];
+  // Whom the line leaves out is `unreachedHereOf`, the same answer "That's me" for an unreached partner asks (D6).
+  const unreachedNames = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedPartners(db, ev, unreachedHereOf(detail), channelsOffered(), now) : [];
   const unreachedParts = unreachedLine(unreachedNames);
   const unreached =
     unreachedNames.length > 0
@@ -487,10 +487,14 @@ async function EventPage({ params, searchParams }: Props) {
   const rememberSession = offerable ? mayRegister({ playerId: offerable.id, byName: await signedInByName(offerable.id) }, offerable) : false;
   const rememberOffer = rememberSession && offerable ? !(await hasPasskey(db, offerable.id)) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
-  const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
+  // A player who asked to join and waits for the answer too (the owner's decision of 16 October 2026, D5:
+  // "Show the card to them"): the answer reaches them on the channel they give here.
+  const requested = joinState === "requested";
+  const stay = me && (isMember || isWaitlisted || requested) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
   // A session by name that proved nothing gets no invitation, because it carries the personal link (DECIDING
-  // rule 34), so the card neither says one went nor offers "Send it again". A cookie read, only for a seat the card shows to.
-  const byNameOnly = stay && stay.kind !== "hidden" && isMember && emailEnabled() ? await nameOnly(me) : false;
+  // rule 34), so the card neither says one went nor offers "Send it again"; an address it types waits for a
+  // 6-digit code (the owner's decision of 16 October 2026, D3). A cookie read, only for a viewer the card shows to.
+  const byNameOnly = stay && stay.kind !== "hidden" && emailEnabled() ? await nameOnly(me) : false;
   // Right under it, while they have no level: "Your level?" in one tap. A ranged match asked at the join already.
   const askLevel = Boolean(me) && askLevelAfterJoin({ seated: isMember || isWaitlisted, level: me?.level ?? null, ranged, organiser: viewer.isCreator, open: !cancelled && !over });
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
@@ -838,6 +842,8 @@ async function EventPage({ params, searchParams }: Props) {
               code={code}
               member={isMember}
               invited={isMember && emailEnabled() && !byNameOnly}
+              byName={byNameOnly}
+              request={requested}
               email={emailEnabled() ? me.email : null}
               state={stay}
               links={{
@@ -1088,6 +1094,7 @@ async function EventPage({ params, searchParams }: Props) {
         claimable={offer.names}
         held={heldNames}
         heldForMe={heldForMe}
+        backIn={backIn}
       />
     </>
   );

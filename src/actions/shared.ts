@@ -21,8 +21,9 @@ import { manageUrl } from "@/lib/share";
 /**
  * `name_held`: the name has a held place this browser may take (DECIDING rule 34); a plain join would leave it behind for good.
  * `name_seated`: a record of the typed name holds a seat or a waiting place here, so the join asks "Sign in as Danny?" first (the owner, 15 October 2026).
+ * `name_unreached`: the typed name is a past partner on the organiser's unreached list that "That's me" signs in, so the join asks first (the owner, 16 October 2026, D6).
  */
-export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held" | "name_seated";
+export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held" | "name_seated" | "name_unreached";
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError; detail?: string };
 
 export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
@@ -45,8 +46,12 @@ export async function assertRate(db: Db, scope: string, id: string, limit: numbe
   if (!(await takeRate(db, scope, id, limit, window, new Date(), by))) throw new ActionFailure("too_many");
 }
 
+/** `detail`: words for the screen beside the code, never a secret (the doors of "Sign in as Danny?", `doorsDetail`). */
 export class ActionFailure extends Error {
-  constructor(public readonly code: ActionError) {
+  constructor(
+    public readonly code: ActionError,
+    public readonly detail?: string,
+  ) {
     super(code);
   }
 }
@@ -55,7 +60,7 @@ export async function runA<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await fn() };
   } catch (e) {
-    if (e instanceof ActionFailure) return { ok: false, error: e.code };
+    if (e instanceof ActionFailure) return e.detail === undefined ? { ok: false, error: e.code } : { ok: false, error: e.code, detail: e.detail };
     if (isDomainError(e)) return { ok: false, error: e.code, detail: e.message !== e.code ? e.message : undefined };
     await later(() => reportError("server", e));
     return { ok: false, error: "generic" };

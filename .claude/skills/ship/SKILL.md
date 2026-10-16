@@ -805,6 +805,12 @@ Wall clock first, credits second. What actually moved it, measured:
   page gives it, with the shipped catalogue. Use it for a label, a name or an `aria-label`
   (`tests/court-booked.test.ts`, `tests/roles.test.ts`); a tap still needs the browser.
 
+- **`asAction`'s cookies are the browser's after the answer, the ones it sent included.** A test of "the
+  session is untouched" asserted that the answer set no session cookie, and it failed with the code right:
+  the request store's mutable cookies start as a copy of the jar (16 October 2026). "Untouched" is the
+  cookie equal to the seal the jar sent (`sealPlayerId(p.id, { byName: true })`), "signed in" a different
+  seal. And break each half of a compound `if` on its own: removing the "I'm a different Tim" half of the
+  unreached question's condition left every test green until a test named that flag.
 - **`vi.mock` does not belong in this suite.** Files share a worker and its module cache (`isolate:
   false`), so a mock reaches only the modules that file loads first: when an earlier file already
   loaded `src/actions/shared.ts`, a later `vi.mock("next-intl/server")` changes nothing there, and when

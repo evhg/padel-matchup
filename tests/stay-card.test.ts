@@ -21,12 +21,14 @@ const RESEND = "Not in your calendar? Send it again";
 
 describe("the Stay updated card says only what went", () => {
   const reached = { kind: "reached" as const, via: ["email" as const], calendar: "invite" as const };
-  const card = (o: { member: boolean; invited: boolean; email: string | null; ask?: boolean }) =>
+  const card = (o: { member: boolean; invited: boolean; email: string | null; ask?: boolean; byName?: boolean; request?: boolean }) =>
     inApp(
       createElement(StayUpdated, {
         code: "TDSV",
         member: o.member,
         invited: o.invited,
+        byName: o.byName,
+        request: o.request,
         email: o.email,
         state: o.ask ? { kind: "ask", choices: ["email"] } : reached,
         links: { whatsapp: null, telegram: null },
@@ -61,10 +63,29 @@ describe("the Stay updated card says only what went", () => {
     expect(button(card({ member: false, invited: false, email: null, ask: true }))).toBe("Save");
     expect(button(card({ member: true, invited: false, email: null, ask: true }))).toBe("Save");
   });
+
+  // The owner's decision of 16 October 2026 (D3): an address from a session by name waits for its code.
+  it("the ask in a session by name says a code goes first, and its button sends the code", () => {
+    const button = (html: string) => html.match(/<button type="submit"[^>]*>([^<]*)<\/button>/)?.[1];
+    const html = card({ member: true, invited: false, email: null, ask: true, byName: true });
+    expect(button(html)).toBe("Send code");
+    expect(html).toContain("We send a 6-digit code to this address first. The address is saved once the code comes back.");
+    expect(card({ member: true, invited: false, email: null, ask: true })).not.toContain("6-digit code");
+  });
+
+  // The owner's decision of 16 October 2026 (D5): the card shows to a player whose join request waits, and
+  // promises no calendar invitation there.
+  it("a join request that waits: the organiser's answer is what reaches the player, and no word of the calendar", () => {
+    const html = card({ member: false, invited: false, email: null, ask: true, request: true });
+    expect(html).toContain("Pick what you already use. The organiser&#x27;s answer reaches you there.");
+    expect(html).not.toMatch(/calendar/i);
+    expect(html).toMatch(/<button type="submit"[^>]*>Save<\/button>/);
+  });
 });
 
 describe("the invitation page's form says only what went", () => {
-  const form = (o: { member: boolean; invited: boolean; email: string | null }) => renderIn("en", createElement(CalendarEmail, { code: "TDSV", emailEnabled: true, ...o }));
+  // The form needs the app router too since 16 October 2026: the code a session by name proves its address with refreshes the page (D3).
+  const form = (o: { member: boolean; invited: boolean; email: string | null; byName?: boolean }) => inApp(createElement(CalendarEmail, { code: "TDSV", emailEnabled: true, ...o }));
 
   it("a seat whose address brought the invitation: as before, the invitation line and \"Send it again\"", () => {
     const html = form({ member: true, invited: true, email: "jordi@example.com" });
@@ -93,5 +114,11 @@ describe("the invitation page's form says only what went", () => {
       expect(not).not.toContain("calendar invite");
       expect(not).toMatch(/<button type="submit"[^>]*>Save<\/button>/);
     }
+  });
+
+  it("the form in a session by name says a code goes first, and its button sends the code (D3)", () => {
+    const html = form({ member: true, invited: false, email: null, byName: true });
+    expect(html).toContain("We send a 6-digit code to this address first.");
+    expect(html).toMatch(/<button type="submit"[^>]*>Send code<\/button>/);
   });
 });

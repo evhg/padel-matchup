@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { resendCalendarInviteAction } from "@/actions/calendar";
-import { updateMyEmail } from "@/actions/identity";
+import { proveMyEmail, updateMyEmail } from "@/actions/identity";
 import { mailLine, type StayChannel, type StayState, type WelcomeKind } from "@/lib/domain/stayUpdated";
 import { CalendarSubscribe } from "./CalendarSubscribe";
+import { EmailCodeStep } from "./EmailCodeStep";
 import { placeholderWidth } from "@/lib/fieldWidth";
 
 type Props = {
@@ -19,6 +20,16 @@ type Props = {
    * it again, before anything is typed here.
    */
   invited: boolean;
+  /**
+   * A session by name that proved nothing (DECIDING rule 34): an address typed here is not saved until a
+   * 6-digit code proves it (the owner's decision of 16 October 2026, D3), so the card says a code goes first.
+   */
+  byName?: boolean;
+  /**
+   * The player asked to join and waits for the organiser's answer (the owner's decision of 16 October 2026,
+   * D5): the card asks for a channel for that answer, and promises no calendar invitation.
+   */
+  request?: boolean;
   email: string | null;
   state: Extract<StayState, { kind: "ask" | "reached" }>;
   /** One tap each into a chat the player already has; null where the deployment does not run it. */
@@ -40,7 +51,7 @@ type Props = {
 /** No store to follow: the snapshots alone say whether this render hydrates the page's own HTML (false) or mounts on a page already live (true). */
 const noStore = () => () => undefined;
 
-export function StayUpdated({ code, member, invited, email, state, links, feed }: Props) {
+export function StayUpdated({ code, member, invited, byName = false, request = false, email, state, links, feed }: Props) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -53,6 +64,8 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
   // The card says only what went: after a save here, the save's own answer; before it, the page's (`mailLine`).
   const said = mailLine({ sentTo, invited, welcome });
   const [emailOpen, setEmailOpen] = useState(false);
+  // The address a 6-digit code went to, while the card waits for the code (a session by name, D3).
+  const [codeTo, setCodeTo] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<"whatsapp" | "telegram" | null>(null);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +133,7 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
         )}
       </>
     ) : said === "link" ? (
-      <div className="mt-1 text-muted">✉️ {t("calendar.linkSent")}</div>
+      <div className="mt-1 text-muted">✉️ {t(request ? "calendar.linkSentRequest" : "calendar.linkSent")}</div>
     ) : null;
     return (
       <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
@@ -138,7 +151,7 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
   return (
     <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-4" data-testid="stay-updated">
       <div className="font-bold">🔔 {t("calendar.stayTitle")}</div>
-      <p className="mt-0.5 text-sm text-muted">{t("calendar.stayHelp")}</p>
+      <p className="mt-0.5 text-sm text-muted">{t(request ? "calendar.stayHelpRequest" : "calendar.stayHelp")}</p>
       {chats.length > 0 && (
         <div className={`mt-3 grid gap-2 ${chats.length + (emailChoice ? 1 : 0) === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
           {chats.map((c) => (
@@ -155,7 +168,29 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
         </div>
       )}
       {waiting && !showForm && <p className="mt-2 text-sm font-semibold">{t(waiting === "telegram" ? "calendar.stayTelegramNext" : "calendar.stayWhatsappNext")}</p>}
-      {showForm && (
+      {showForm && codeTo && (
+        // The code that proves the address (D3): saved, and the session a full one, only once it comes back.
+        <div className="mt-3">
+          <EmailCodeStep
+            email={codeTo}
+            verifyLabel={t("identity.confirmCode")}
+            onVerify={async (c) => {
+              const r = await proveMyEmail(codeTo, c, code, { from: "stay" });
+              if (r.ok) {
+                setTyped(r.data.email ?? codeTo);
+                setWelcome(r.data.welcome);
+              }
+              return r;
+            }}
+            onDone={() => {
+              setCodeTo(null);
+              router.refresh();
+            }}
+            onChangeEmail={() => setCodeTo(null)}
+          />
+        </div>
+      )}
+      {showForm && !codeTo && (
         <form
           className="mt-3 flex flex-wrap gap-2"
           onSubmit={(e) => {
@@ -165,8 +200,9 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
               setError(null);
               // The card's own save: the one that answers "Stay updated" (`stay_linked_email`).
               const r = await updateMyEmail(value, code, { from: "stay" });
+              if (r.ok && r.data.code === "sent") return setCodeTo(value.trim());
               if (!r.ok || !r.data.email) {
-                setError(t("common.somethingWrong"));
+                setError(r.ok ? t("common.somethingWrong") : r.error === "too_many" ? t("identity.tooMany") : t("common.somethingWrong"));
                 return;
               }
               setTyped(r.data.email);
@@ -176,9 +212,10 @@ export function StayUpdated({ code, member, invited, email, state, links, feed }
         >
           <input type="email" inputMode="email" autoComplete="email" className="input flex-1" style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }} placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
           <button type="submit" className="btn-primary shrink-0" disabled={pending || !value.trim()}>
-            {/* "Send invite" only where an invitation goes: a seat, never a session by name. Anybody else saves the address. */}
-            {pending ? t("common.working") : t(invited ? "calendar.send" : "common.save")}
+            {/* "Send invite" only where an invitation goes: a seat, never a session by name, which gets a code first. Anybody else saves the address. */}
+            {pending ? t("common.working") : t(byName ? "identity.sendCode" : invited ? "calendar.send" : "common.save")}
           </button>
+          {byName && <p className="w-full text-xs text-muted" data-testid="stay-code-first">{t("calendar.codeFirst")}</p>}
         </form>
       )}
       {error && <p className="mt-1 text-sm font-semibold text-danger">{error}</p>}

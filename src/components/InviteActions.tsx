@@ -14,6 +14,7 @@ export function InviteActions({
   reconfirm,
   knownEmail = null,
   asRecord = false,
+  askEmail = true,
 }: {
   code: string;
   inviteCode: string;
@@ -29,6 +30,11 @@ export function InviteActions({
    * record (the owner, 11 October 2026). No name to type, and no email asked: the session is by name.
    */
   asRecord?: boolean;
+  /**
+   * False for a session by name that proved nothing (the owner's decision of 16 October 2026, D3): the tap
+   * keeps no address it would type, so none is asked; the confirmed page asks for one with a code first.
+   */
+  askEmail?: boolean;
 }) {
   const t = useTranslations();
   const [name, setName] = useState(invitedName);
@@ -65,7 +71,7 @@ export function InviteActions({
         </div>
       )}
       {emailEnabled && knownEmail && <p className="text-sm text-muted">✉️ {knownEmail}</p>}
-      {emailEnabled && !knownEmail && !asRecord && (
+      {emailEnabled && !knownEmail && !asRecord && askEmail && (
         <div>
           <div className="flex items-start gap-2">
             <span aria-hidden className="mt-0.5 inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-court-soft text-court text-[0.625rem] font-black">

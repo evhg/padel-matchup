@@ -1156,9 +1156,19 @@ Everything in this list is live. The README describes each in detail.
   invite sent" for a seat, "Your link is in your email" on the waiting list (the invitation follows a
   place), and no mail line for a session by name. "Send it again" refuses a session by name, because
   every invitation carries the personal link (DECIDING rule 34 already said so; this door did not ask).
-  Two other doors still mail the link to an address that such a session typed ("Open, small", item 7).
-  `stay_asked` and `stay_linked_email` (a save on the card itself) count the card beside
-  `stay_linked_telegram` and `stay_linked_whatsapp` (docs/OPERATING.md).
+  Two other doors still mailed the link to an address that such a session typed; the owner's decision of
+  16 October 2026 closed them (below). `stay_asked` and `stay_linked_email` (a save on the card itself)
+  count the card beside `stay_linked_telegram` and `stay_linked_whatsapp` (docs/OPERATING.md).
+- **The owner's four decisions of 16 October 2026 (no migration).** An address that a session by name
+  types is kept only once the 6-digit code it was sent comes back, and the session is then a full one,
+  so no personal link reaches an address nobody proved (D3, DECIDING rule 34; "Open, small", item 7).
+  "Danny is in this match. Sign in as Danny?" shows only Danny's own doors: the email code if he has an
+  address, Telegram if he linked it, Face ID if he saved a passkey, and none for a record with no proof
+  (D4). A player whose join request waits gets the "Stay updated" card, and the organiser's answer and
+  the move up from the waiting list reach a player with no working address on Telegram, WhatsApp or
+  push, once (D5, DECIDING rule 33). On the plain link, a name on the organiser's "Kicksmash can't reach
+  Tim" list asks "Played before as Tim? Sign in as Tim." and "That's me" signs that record in, so Tim
+  makes no second Tim; the line now says "they sign in as themselves" (D6, DECIDING rules 7 and 34).
 
 ## The finish line
 
@@ -1329,25 +1339,14 @@ the player, and invite them to try it.
    2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
    October 2026 one organiser had made matches since 10 October. The next session counts the
    organisers with a match since 11 October and reports it to the owner (DECIDING rule 37).
-7. **A session by name still gets the personal link by email, through two doors.** A review found this
-   on 15 October 2026. It is the owner's decision, because it changes messages that go out and touches
-   identity. DECIDING rule 34 says that the link "cannot be ... mailed from" a session by name. "Send it
-   again" now refuses such a session. But such a session can save an address on the card and then tap
-   Leave and Join. The join sends the match's invitation, with the personal link, to that address
-   (`afterJoin` in `src/lib/aftermath.ts`). Every later email to that address carries the link too,
-   for example a line-up change (`ctx` in `src/lib/notify.ts`). Nobody proved the address. The options:
-   - **A, an email code first (recommended).** A session by name gets a code at the address it types,
-     and the record keeps the address only after the code. Pro: the address is proved before any link
-     goes, so rule 34 holds at every door, and the session is then no longer by name. No migration:
-     `verifyRestoreCode` and `restoreByEmail` already put a proved new address on the current record;
-     only the step that sends the code (`requestRestoreCode`) needs a variant for an address that no
-     record has yet. Con: one more step for these players.
-   - **B, the public link in such mail.** Mail to such an address carries the match's public link, as
-     the `.ics` download does. Pro: no extra step. Con: the session's mark is in the cookie, and a
-     notice goes out with no session, so the record needs a mark of its own (a migration), and every
-     sender must read it.
-   - **C, keep it as it is.** Pro: nothing to build. Con: a stranger who signed in by name gets a full
-     sign-in link in two taps, against rule 34.
+7. **A session by name got the personal link by email: closed on 16 October 2026.** A review found on
+   15 October 2026 that a session by name could save an address on the card, then tap Leave and Join, and
+   the join's invitation carried the personal link to an address nobody had proved; every later match
+   email to it carried the link too. The owner chose option A, "Code first (Recommended)" (DECIDING rule
+   34, "An address from a session by name"). Every door that saves an address for the session's own
+   record now sends the existing 6-digit code and keeps nothing; the right code saves the address as
+   proved and makes the session a full one (`askForProof` in `src/actions/emailProof.ts`, `proveMyEmail`).
+   An address saved by such a session before that day keeps no proof; production held none.
 
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).

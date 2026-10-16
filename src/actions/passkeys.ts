@@ -11,6 +11,7 @@ import { completePasskeySignIn, mayRegister, passkeyById, passkeyLabel, passkeys
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { countSignIn } from "@/lib/domain/signins";
 import { mergesLater } from "@/lib/mergeCount";
+import { promotedOf } from "@/lib/domain/slots";
 import { notifyLineupChange, notifyPromotion, notifyRefill } from "@/lib/notify";
 import { isDomainError } from "@/lib/domain/errors";
 import { answerCredentialId, authenticationOptions, CHALLENGE_COOKIE, challengeCookie, openChallenge, quietPasskeyError, registrationOptions, sealChallenge, spendChallenge, verifyAssertion, verifyRegistration } from "@/lib/passkeys/webauthn";
@@ -137,7 +138,8 @@ export async function passkeySignInAction(answer: unknown): Promise<ActionResult
     for (const seats of res.seats) {
       after(async () => {
         const { emitMatchEvent } = await import("@/lib/api/webhooks");
-        const fresh = await notifyLineupChange(db, seats.event, seats.wasComplete, seats.promotion?.playerId);
+        // Everybody it moved up is told by `notifyPromotion` alone: a fixed-pairs night moves a pair.
+        const fresh = await notifyLineupChange(db, seats.event, seats.wasComplete, promotedOf(seats.promotion).map((p) => p.playerId));
         await notifyPromotion(db, fresh ?? seats.event, seats.promotion);
         if (!seats.promotion) await notifyRefill(db, seats.event.id);
         await emitMatchEvent(db, "match.updated", seats.event.code, { calendarChanged: false });

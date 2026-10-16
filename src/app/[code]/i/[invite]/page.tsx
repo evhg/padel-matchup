@@ -98,7 +98,10 @@ async function InvitePage({ params, searchParams }: Props) {
   // The confirmed view's address brings the match's invitation only to a seat, on a deployment that sends
   // mail, and never to a session by name (DECIDING rule 34: the invitation carries the personal link), so the
   // form promises it, and says it went, only then (`CalendarEmail`). A cookie read, only for that view.
-  const invited = view === "confirmed" && me && !waitingAt && emailEnabled() ? !(await nameOnly(me)) : false;
+  // A session by name that proved nothing keeps no address it types (the owner's decision of 16 October 2026,
+  // D3): "I'm in" asks for none, and `CalendarEmail` sends a 6-digit code first. A cookie read, only where an address can be typed.
+  const byName = me && emailEnabled() && (view === "confirmed" || view === "actions" || view === "declined") ? await nameOnly(me) : false;
+  const invited = view === "confirmed" && me && !waitingAt && emailEnabled() ? !byName : false;
   // The organizer typed an email we already know from another identity: offer to restore it (with a code) before confirming.
   const knownOwner =
     (state === "invited" || state === "declined") && emailEnabled() && slot.invitedEmail && !me?.email
@@ -179,19 +182,19 @@ async function InvitePage({ params, searchParams }: Props) {
               </Link>
             </div>
           )}
-          {view === "actions" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} asRecord={asRecord} />}
+          {view === "actions" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} asRecord={asRecord} askEmail={!byName} />}
           {view === "declined" && (
             <>
               <h2 className="text-xl font-extrabold">{t("invitePage.declined")}</h2>
               <p className="mt-1 mb-4 text-sm text-muted">{t("invitePage.declinedHelp")}</p>
-              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={false} reconfirm asRecord={asRecord} />
+              <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={false} reconfirm asRecord={asRecord} askEmail={!byName} />
             </>
           )}
           {view === "confirmed" && (
             <>
               <h2 className={`text-xl font-extrabold ${waitingAt ? "" : "text-ok"}`}>{waitingAt ? t("event.youAreOnWaitlist", { position: waitingAt }) : `✓ ${t("invitePage.confirmed")}`}</h2>
               <p className="mt-1 text-sm text-muted">{waitingAt ? t("pairs.inviteWaiting") : t("invitePage.confirmedHelp")}</p>
-              {me && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} member={!waitingAt} invited={invited} className="mt-4" />}
+              {me && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} member={!waitingAt} invited={invited} byName={byName} className="mt-4" />}
               <Link href={eventHref} className="btn-primary mt-2 w-full">
                 {t("invitePage.goToEvent")}
               </Link>

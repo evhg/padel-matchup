@@ -247,9 +247,15 @@ const keyOf = (expr: SQL) => sql`lower(regexp_replace(btrim(regexp_replace(norma
  *
  * Names are compared in the database on both sides, composed and with invisible characters taken
  * out, so "José" typed two ways and "Аня" against "аня" meet.
+ *
+ * `extra`: one more record that is in this match's context, beside its places and its crew: a past
+ * partner on the organiser's unreached list, which the server found for the name typed (the owner's
+ * decision of 16 October 2026, D6; `unreachedNamed`). It counts as in context and in the namesake count,
+ * and every other limit reads it as it reads any record.
  */
-export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | null; viewerId?: string | null; now?: Date } = {}): Promise<ThatsMeRow[]> {
+export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | null; viewerId?: string | null; now?: Date; extra?: string | null } = {}): Promise<ThatsMeRow[]> {
   const name = o.name?.trim() ? o.name : null;
+  const extra = o.extra && /^[0-9a-f-]{36}$/i.test(o.extra) ? o.extra : null;
   // "Organises" means a match still to come or under way (the owner, 11 October 2026), as `endedBy` reads an end: as text (rule 1).
   const nowIso = (o.now ?? new Date()).toISOString();
   const viewerId = o.viewerId && /^[0-9a-f-]{36}$/i.test(o.viewerId) ? o.viewerId : null;
@@ -262,7 +268,7 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
       select gm.player_id as id from group_members gm where gm.group_id = ${m.groupId}
     ),
     ctx as (
-      select id from seats union select id from crew
+      select id from seats union select id from crew union select p.id from players p where p.id = ${extra}
     ),
     keys as (
       select p.id, ${keyOf(sql`p.display_name`)} as key
@@ -375,7 +381,7 @@ export async function settleFoldSeats(db: Db, eventId: string, keepId: string, d
   });
 }
 
-export type ThatsMeResult = { ok: true; player: Player; folded: boolean; seats: SeatChange | null } | { ok: false; reason: ThatsMeRefusal | "not_found" };
+export type ThatsMeResult = { ok: true; player: Player; folded: boolean; seats: SeatChange | null; via?: "unreached" } | { ok: false; reason: ThatsMeRefusal | "not_found" };
 
 /** A record that gained a way to be reached or proved since the rule read it: asked just before a sign-in by name writes (`commitThatsMe`, `takeHeldLink`). */
 export const reachedSince = (p: Player) => Boolean(p.email || p.recoveryEmail || p.phone || p.telegramId || p.discordId || p.lineId || p.publicProfile);
@@ -386,27 +392,56 @@ export async function savedPasskey(db: Db, playerId: string): Promise<boolean> {
   return Boolean(row);
 }
 
-/** A tap that passed the rule, before anything is changed: the match, the record named, and whether the browser's own record folds into it. */
-export type ThatsMeDecision = { ok: true; event: { id: string; code: string }; id: string; fold: boolean };
+/**
+ * A tap that passed the rule, before anything is changed: the match, the record named, and whether the
+ * browser's own record folds into it. `via: "unreached"`: the record is a past partner on the
+ * organiser's unreached list, not a record of this match or its crew (D6).
+ */
+export type ThatsMeDecision = { ok: true; event: { id: string; code: string }; id: string; fold: boolean; via?: "unreached" };
+
+/** The record of the organiser's unreached list that a typed name names (`unreachedNamed` in src/lib/domain/unreached.ts), asked only when nothing in this match or its crew carries the name. */
+export type UnreachedLookup = (name: string) => Promise<{ id: string; name: string } | null>;
+
+/**
+ * Whether "That's me" signs in this past partner on the organiser's unreached list (D6): the rows read
+ * for the record's own name with the record in context (`extra`), and the one verdict every tap gets,
+ * for a browser that knows nobody. One bounded read. The join's offer (`joinAction`) and the tap both
+ * ask it, so what the question offers is what the tap does.
+ */
+export async function unreachedVerdict(db: Db, m: ThatsMeMatch, u: { id: string; name: string }, now?: Date): Promise<ThatsMeVerdict> {
+  const rows = await thatsMeRows(db, m, { name: u.name, extra: u.id, now });
+  const v = thatsMeVerdict(rows, null);
+  return v.ok && v.id !== u.id ? { ok: false, reason: "namesake" } : v;
+}
 
 /**
  * The tap's first half. Takes the rate of the address first, so a refusal costs an attempt too and
  * names cannot be tried one after another; reads the rows for that one name; decides; then takes the
  * rate of the record named (a few sign-ins a day into one record, from anywhere). Changes nothing else.
  */
-export async function decideThatsMe(db: Db, input: { code: string; name: string; viewerId: string | null; rateKey: string; now?: Date }): Promise<ThatsMeDecision | { ok: false; reason: ThatsMeRefusal | "not_found" }> {
+export async function decideThatsMe(db: Db, input: { code: string; name: string; viewerId: string | null; rateKey: string; now?: Date; unreached?: UnreachedLookup }): Promise<ThatsMeDecision | { ok: false; reason: ThatsMeRefusal | "not_found" }> {
   if (!(await takeRate(db, "thatsme", input.rateKey, LIMITS.thatsMePerIpPerDay, "day", input.now))) return { ok: false, reason: "too_many" };
   const [ev] = await db.select({ id: events.id, groupId: events.groupId, creatorPlayerId: events.creatorPlayerId, code: events.code, status: events.status }).from(events).where(eq(events.code, input.code)).limit(1);
   // The page offers nothing on a cancelled match, and the tap does no more than the page offers.
   if (!ev || ev.status === "cancelled") return { ok: false, reason: "not_found" };
   const rows = await thatsMeRows(db, ev, { name: input.name, viewerId: input.viewerId, now: input.now });
-  const verdict = thatsMeVerdict(rows, input.viewerId);
+  let verdict = thatsMeVerdict(rows, input.viewerId);
+  let via: "unreached" | undefined;
+  // Nobody of the name in this match or its crew, and a browser that knows nobody: a past partner on the
+  // organiser's unreached list may be the one meant (D6), inside every other limit.
+  if (!verdict.ok && verdict.reason === "nobody" && !input.viewerId && input.unreached) {
+    const u = await input.unreached(input.name);
+    if (u) {
+      verdict = await unreachedVerdict(db, ev, u, input.now);
+      via = "unreached";
+    }
+  }
   if (!verdict.ok) {
     await bumpMetric(db, "thats_me_refused").catch(() => undefined);
     return verdict;
   }
   if (!(await takeRate(db, "thatsme_record", verdict.id, LIMITS.thatsMePerRecordPerDay, "day", input.now))) return { ok: false, reason: "too_many" };
-  return { ok: true, event: { id: ev.id, code: ev.code }, id: verdict.id, fold: verdict.fold };
+  return { ok: true, event: { id: ev.id, code: ev.code }, id: verdict.id, fold: verdict.fold, ...(via ? { via } : {}) };
 }
 
 /**
@@ -428,13 +463,13 @@ export async function commitThatsMe(db: Db, d: ThatsMeDecision, input: { viewerI
     seats = await settleFoldSeats(db, d.event.id, target.id, mine.id);
     await mergePlayers(db, target.id, [mine.id], { door: "thats_me", counter: input.counter });
   }
-  await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: target.id, subject: { type: "player", id: target.id }, code: d.event.code, data: { folded: d.fold }, at: input.now });
+  await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: target.id, subject: { type: "player", id: target.id }, code: d.event.code, data: d.via ? { folded: d.fold, via: d.via } : { folded: d.fold }, at: input.now });
   const [fresh] = await db.select().from(players).where(eq(players.id, target.id)).limit(1);
-  return { ok: true, player: fresh ?? target, folded: d.fold, seats };
+  return { ok: true, player: fresh ?? target, folded: d.fold, seats, ...(d.via ? { via: d.via } : {}) };
 }
 
 /** The tap: `decideThatsMe`, then `commitThatsMe`. */
-export async function thatsMe(db: Db, input: { code: string; name: string; viewerId: string | null; rateKey: string; now?: Date; counter?: MergeCounter }): Promise<ThatsMeResult> {
+export async function thatsMe(db: Db, input: { code: string; name: string; viewerId: string | null; rateKey: string; now?: Date; counter?: MergeCounter; unreached?: UnreachedLookup }): Promise<ThatsMeResult> {
   const d = await decideThatsMe(db, input);
   return d.ok ? commitThatsMe(db, d, input) : d;
 }

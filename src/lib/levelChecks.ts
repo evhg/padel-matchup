@@ -98,7 +98,9 @@ export async function announceAdmission(db: Db, player: Player, admitted: Admitt
     await notifyCreator(db, a.event, a.join.outcome === "joined" ? "joined" : "waitlisted", player.displayName, byPlayerId).catch(() => undefined);
     // Seated: the line-up may have just become complete. Waitlisted: it already was.
     const fresh = await notifyLineupChange(db, a.event, a.join.outcome !== "joined", player.id);
-    if (a.join.outcome === "joined") await notifyRequestDecided(db, fresh ?? a.event, player, true);
+    // The level notice (`notifyLevelCheckDecided`) already told the player on their email and Telegram that the
+    // confirmation let them in: here the seat's calendar invitation alone, as before, never the same news twice.
+    if (a.join.outcome === "joined") await notifyRequestDecided(db, fresh ?? a.event, player, "joined", { told: true });
     await emitMatchEvent(db, "match.joined", a.event.code, { player: { name: player.displayName, level: player.level }, outcome: a.join.outcome, approved: true, confirmedBy });
     if (a.event.status === "full") await emitMatchEvent(db, "match.full", a.event.code);
   }

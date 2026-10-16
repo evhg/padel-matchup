@@ -1,15 +1,21 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
-import { setEmailNotificationsAction, updateMyEmail } from "@/actions/identity";
+import { proveMyEmail, setEmailNotificationsAction, updateMyEmail } from "@/actions/identity";
 import { setCreatorEmailAction, setCreatorEmailNotificationsAction } from "@/actions/events";
+import { EmailCodeStep } from "./EmailCodeStep";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { placeholderWidth } from "@/lib/fieldWidth";
 
 /**
  * Decision 9: email is optional, never required, and always explained with the
  * reward note next to the field.
+ *
+ * A session by name that proved nothing saves no address: the save answers that a 6-digit code went to
+ * it (the owner's decision of 16 October 2026, D3), and the code box stands in the field's place until
+ * the code comes back (`proveMyEmail`).
  */
 export function EmailField({
   initial,
@@ -54,6 +60,9 @@ export function EmailField({
   const [restoring, setRestoring] = useState(false);
   const [editing, setEditing] = useState(!initial);
   const [notify, setNotify] = useState(notifyOn);
+  // The address a 6-digit code went to, while the field waits for the code (a session by name, D3).
+  const [codeTo, setCodeTo] = useState<string | null>(null);
+  const router = useRouter();
   const [pending, start] = useTransition();
   const toggleNotify = () => {
     const next = !notify;
@@ -70,6 +79,7 @@ export function EmailField({
     start(async () => {
       if (mode === "creator") {
         const r = await setCreatorEmailAction(code, email);
+        if (r.ok && r.data.code === "sent") return setCodeTo(email.trim());
         if (r.ok) {
           setSaved(true);
           setEditing(!email);
@@ -77,6 +87,7 @@ export function EmailField({
         return;
       }
       const r = await updateMyEmail(email, code);
+      if (r.ok && r.data.code === "sent") return setCodeTo(email.trim());
       if (r.ok) {
         setSaved(true);
         setEditing(!email);
@@ -100,6 +111,26 @@ export function EmailField({
       )}
     </div>
   );
+
+  if (codeTo)
+    return (
+      <EmailCodeStep
+        email={codeTo}
+        verifyLabel={t("identity.confirmCode")}
+        onVerify={async (c) => {
+          const r = await proveMyEmail(codeTo, c, code || undefined);
+          if (r.ok) setInvited(r.data.welcome === "invite");
+          return r;
+        }}
+        onDone={() => {
+          setCodeTo(null);
+          setSaved(true);
+          setEditing(false);
+          router.refresh();
+        }}
+        onChangeEmail={() => setCodeTo(null)}
+      />
+    );
 
   // Known email: show it, never ask again. Edit on demand.
   if (!editing) {

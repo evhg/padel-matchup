@@ -4,8 +4,8 @@ import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { getDb, type Db } from "@/db";
-import { metricsDaily, type Player } from "@/db/schema";
-import { updateMyEmail } from "@/actions/identity";
+import { metricsDaily, players, type Player } from "@/db/schema";
+import { proveMyEmail, updateMyEmail } from "@/actions/identity";
 import { joinAction } from "@/actions/slots";
 import { createEvent } from "@/lib/domain/events";
 import { dayKey } from "@/lib/domain/metrics";
@@ -100,13 +100,27 @@ describe("the Stay updated card counts its asks and says only what went", () => 
     expect(await metric("stay_linked_email")).toBe(linked + 1);
   });
 
-  it("a session by name gets no welcome and the answer says null; its address still reaches it, so the link counts", async () => {
+  // The owner's decision of 16 October 2026 (D3, "Code first"): an address typed by a session by name is
+  // saved only once the 6-digit code it was sent comes back. Until then the address was kept at once, and
+  // the next match email to it carried the personal link (ROADMAP.md, "Open, small", item 7).
+  it("a session by name's save keeps nothing and sends a code; the code saves the address, ends the mark, sends the invitation, and the link counts once", async () => {
     const ev = await match();
     const bea = await makePlayer(db, "Bea");
     await joinEvent(db, { eventId: ev.id, playerId: bea.id });
     const linked = await metric("stay_linked_email");
-    expect((await asAction(as(bea, { byName: true }), () => updateMyEmail("bea-stay@example.com", ev.code, STAY))).result).toMatchObject({ ok: true, data: { welcome: null } });
-    expect(mails("bea-stay@example.com")).toEqual([]);
+    const saved = (await asAction(as(bea, { byName: true }), () => updateMyEmail("bea-stay@example.com", ev.code, STAY))).result;
+    expect(saved).toMatchObject({ ok: true, data: { email: null, welcome: null, code: "sent" } });
+    const [codeMail] = mails("bea-stay@example.com");
+    expect(mails("bea-stay@example.com")).toHaveLength(1);
+    expect(codeMail.ics).toBeNull();
+    expect((await db.select({ email: players.email }).from(players).where(eq(players.id, bea.id)))[0].email).toBeNull();
+    expect(await metric("stay_linked_email")).toBe(linked);
+    const code = codeMail.subject.match(/^(\d{6}) /)?.[1] ?? "";
+    const proved = await asAction(as(bea, { byName: true }), () => proveMyEmail("bea-stay@example.com", code, ev.code, STAY));
+    expect(proved.result).toMatchObject({ ok: true, data: { email: "bea-stay@example.com", welcome: "invite" } });
+    // A full session now: the cookie no longer carries the mark.
+    expect(proved.cookies[PLAYER_COOKIE]).toBe(sealPlayerId(bea.id));
+    expect(mails("bea-stay@example.com").map((m) => m.ics?.method ?? null)).toEqual([null, "REQUEST"]);
     expect(await metric("stay_linked_email")).toBe(linked + 1);
   });
 

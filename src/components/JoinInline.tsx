@@ -8,7 +8,7 @@ import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { heldNameOf, NameHereLine } from "./TakeHeld";
-import { SeatedAsk } from "./SeatedAsk";
+import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import { normalName } from "@/lib/domain/dupes";
 
 /**
@@ -47,8 +47,8 @@ export function JoinInline({
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
   const [error, setError] = useState<string | null>(null);
-  /** The typed name the server answered with `name_seated` ("Sign in as Danny?"). */
-  const [seated, setSeated] = useState<string | null>(null);
+  /** The server's answer for a typed name: `name_seated` or `name_unreached` ("Sign in as Danny?"). */
+  const [nameAsk, setNameAsk] = useState<NameAsk | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -81,14 +81,15 @@ export function JoinInline({
       const typed = hasIdentity ? undefined : name;
       const r = await joinAction(code, typed, level ?? undefined, undefined, different ? { differentPerson: true } : undefined);
       startTransition(() => {
-        if (r.ok) setSeated(null);
-        else if (r.error === "name_seated" && typed) setSeated(typed);
-        else setError(r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
+        const asked = askOf(r, typed);
+        setNameAsk(asked);
+        if (!r.ok && !asked) setError(r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
       });
     });
   // "Sign in as Danny?" while the field still holds the name the server asked about; with the record's own doors in it when "That's me" cannot sign it in.
-  const asking = !hasIdentity && seated !== null && normalName(seated) === normalName(name);
-  const askHasDoors = asking && !claimable.some((n) => normalName(n) === normalName(name));
+  const asking = hasIdentity ? null : askStanding(nameAsk, name);
+  // While the question stands, the general "Played before?" help steps aside: the question shows the record's own doors only (D4).
+  const askHasDoors = Boolean(asking) && (asking?.kind === "unreached" || !claimable.some((n) => normalName(n) === normalName(name)));
   return (
     <div className="mt-4">
       <form
@@ -113,7 +114,7 @@ export function JoinInline({
             </button>
           </div>
           {asking ? (
-            <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} doors={backIn} pending={pending} onDifferent={() => send(true)} />
+            <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} ask={asking} doors={backIn} pending={pending} onDifferent={() => send(true)} />
           ) : (
             !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />
           )}

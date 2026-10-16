@@ -117,24 +117,29 @@ describe("a session by name gets no personal link from any screen or file", () =
 
   // "Not in your calendar? Send it again" mailed the invitation, and with it the personal link, to the
   // address a session by name had typed: rule 34 says the link "cannot be ... mailed from it" (reach,
-  // 15 October 2026). Ana signs in by "That's me", saves an address on the card (no welcome goes), and
-  // taps "Send it again". Last in the file: the full session's send mints her personal token.
-  it("a session by name that saved an address is refused \"Send it again\", and no email goes; a full session's tap sends the invitation", async () => {
+  // 15 October 2026). Since 16 October 2026 (D3) the card saves no address for such a session until a
+  // code proves it, so Ana's address is one saved before that day, as production may still hold. Ana
+  // signs in by "That's me", her save on the card sends a code and keeps nothing, and she taps "Send it
+  // again". Last in the file: the full session's send mints her personal token.
+  it("a session by name with an unproved address is refused \"Send it again\", and no invitation goes; a full session's tap sends the invitation", async () => {
     const sinkFile = path.join(mkdtempSync(path.join(tmpdir(), "byname-resend-")), "mail.jsonl");
     process.env.RESEND_API_KEY = "re_test_only";
     process.env.EMAIL_SINK_FILE = sinkFile;
     const mails = () => (existsSync(sinkFile) ? readFileSync(sinkFile, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l) as { to: string; ics: { method: string } | null }) : []);
     const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 3 * 86_400_000), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
     await joinEvent(db, { eventId: ev.id, playerId: ana.id });
-    // The card's save, as the by-name session makes it: the address is kept, and nothing is mailed.
+    // The card's save, as the by-name session makes it: nothing is kept, and the one mail is the code (D3).
     const saved = (await asAction(byName(), () => updateMyEmail("ana-byname@example.com", ev.code))).result;
-    expect(saved).toMatchObject({ ok: true, data: { email: "ana-byname@example.com", welcome: null } });
-    expect(mails()).toEqual([]);
-    // The tap: refused, and still no mail.
+    expect(saved).toMatchObject({ ok: true, data: { email: null, welcome: null, code: "sent" } });
+    expect(mails().map((m) => [m.to, m.ics])).toEqual([["ana-byname@example.com", null]]);
+    // An address saved before the code was asked, unproved.
+    await db.update(players).set({ email: "ana-byname@example.com" }).where(eq(players.id, ana.id));
+    const invitations = () => mails().filter((m) => m.ics);
+    // The tap: refused, and still no invitation.
     expect((await asAction(byName(), () => resendCalendarInviteAction(ev.code))).result).toEqual({ ok: false, error: "forbidden" });
-    expect(mails()).toEqual([]);
+    expect(invitations()).toEqual([]);
     // The same seat, address and match from a full session: the invitation goes. So the mark is the one thing that refused it.
     expect((await asAction(full(), () => resendCalendarInviteAction(ev.code))).result).toEqual({ ok: true, data: { email: "ana-byname@example.com" } });
-    expect(mails().map((m) => [m.to, m.ics?.method])).toEqual([["ana-byname@example.com", "REQUEST"]]);
+    expect(invitations().map((m) => [m.to, m.ics?.method])).toEqual([["ana-byname@example.com", "REQUEST"]]);
   });
 });

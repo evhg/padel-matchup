@@ -129,7 +129,10 @@
     "backJoinAsk": "¡Hola de nuevo, {name}! ¿Te apuntas a este partido?",
     "rememberAlso": "Recordar también este teléfono",
     "seatedAsk": "{name} ya está en este partido. ¿Entrar como {name}?",
-    "seatedDifferent": "Soy otra persona llamada {name}"
+    "seatedDifferent": "Soy otra persona llamada {name}",
+    "confirmCode": "Confirmar",
+    "unreachedAsk": "¿Ya jugaste como {name}? Entra como {name}.",
+    "seatedTelegram": "Con el Telegram que vinculaste antes:"
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -463,7 +466,7 @@
     "playedWithYou": "Jugaron contigo",
     "keepRecord": "Mantener los partidos de {name}",
     "keepsRecord": "Mantiene los partidos de {name}",
-    "unreached": "Kicksmash no puede avisar a {names}. Envía tú el enlace.",
+    "unreached": "Kicksmash no puede avisar a {names}. Envía tú el enlace: con él entran con su propio nombre.",
     "unreachedMore": "{count} más",
     "unreachedSend": "Enviar el enlace por WhatsApp"
   },
@@ -699,7 +702,9 @@
       "heading": "Tu código de recuperación",
       "body": "Introduce este código para traer tus partidos al nuevo dispositivo. Caduca en 10 minutos.",
       "codeLabel": "Código",
-      "footer": "Si no lo has pedido tú, ignóralo. Sin el código no pasa nada."
+      "footer": "Si no lo has pedido tú, ignóralo. Sin el código no pasa nada.",
+      "proveHeading": "Confirma tu email",
+      "proveBody": "Escribe este código donde pusiste esta dirección. Así sabemos que la dirección es tuya. Caduca en 10 minutos."
     },
     "invite": {
       "subject": "🎾 {organizer} te ha guardado una plaza · pádel {day} {time}",
@@ -792,7 +797,8 @@
     "pairs_waiting": "Hay parejas con compañeros en la lista de espera. Quítalas primero de la lista y luego desactiva las parejas fijas.",
     "name_held": "Hay un sitio reservado para este nombre. Tómalo arriba, o añade tu apellido para unirte como otra persona.",
     "held_record": "Esta plaza está guardada para otra persona. Abre el partido para apuntarte.",
-    "name_seated": "Este nombre ya está en el partido. Entra como esa persona o di que eres otra persona."
+    "name_seated": "Este nombre ya está en el partido. Entra como esa persona o di que eres otra persona.",
+    "name_unreached": "Este nombre ya jugó con el organizador. Entra como esa persona o di que eres otra persona."
   },
   "homescreen": {
     "title": "Añade Kicksmash a tu pantalla de inicio",
@@ -973,7 +979,10 @@
     "feedName": "{app}: mis partidos",
     "viaWhatsapp": "por WhatsApp",
     "linkSent": "Tu enlace está en tu email. Si se libera una plaza, te llegará la invitación.",
-    "emailHelpUpdates": "Escribe tu email y los cambios de este partido te llegarán allí."
+    "emailHelpUpdates": "Escribe tu email y los cambios de este partido te llegarán allí.",
+    "codeFirst": "Primero enviamos un código de 6 cifras a esta dirección. La dirección se guarda cuando escribes el código.",
+    "stayHelpRequest": "Elige lo que ya usas. La respuesta del organizador te llega ahí.",
+    "linkSentRequest": "Tu enlace está en tu email. Si el organizador dice que sí, te llegará la invitación."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",
@@ -1000,7 +1009,15 @@
     "updatedTitle": "El partido cambió",
     "updatedBody": "Ahora {day} a las {time} · {venue}.",
     "cancelledTitle": "El partido se canceló",
-    "cancelledBody": "{day} a las {time} · {venue} no se jugará."
+    "cancelledBody": "{day} a las {time} · {venue} no se jugará.",
+    "requestApprovedTitle": "✅ Estás dentro · {day} {time}",
+    "requestApprovedBody": "{organizer} dijo que sí. {venue}.",
+    "requestWaitlistedTitle": "En la lista de espera · {day} {time}",
+    "requestWaitlistedBody": "{organizer} dijo que sí. El partido está lleno y entras cuando se libere una plaza. {venue}.",
+    "requestDeclinedTitle": "Esta vez no · {day} {time}",
+    "requestDeclinedBody": "{organizer} no pudo contar contigo esta vez. Siempre hay otro partido.",
+    "movedUpTitle": "✅ Se liberó una plaza: estás dentro · {day} {time}",
+    "movedUpBody": "Pasaste de la lista de espera al partido. {venue}."
   },
   "about": {
     "footerLink": "Privacidad y condiciones",
@@ -1113,7 +1130,8 @@
     "levelCheckAsked": "{name} te pide que confirmes su nivel",
     "coachListed": "Un entrenador ya acepta reservas en {title}: {name}",
     "wantersTold": "Los jugadores que pidieron entrenador en {title} acaban de saber de ti: {count}",
-    "playAgain": "{name} creó el próximo partido: {day} {time} en {venue}. ¿Te apuntas?"
+    "playAgain": "{name} creó el próximo partido: {day} {time} en {venue}. ¿Te apuntas?",
+    "requestWaitlisted": "El organizador dijo que sí. El partido está lleno, así que estás en la lista de espera: {day} {time}, {venue}"
   },
   "privacy": {
     "title": "Privacidad",

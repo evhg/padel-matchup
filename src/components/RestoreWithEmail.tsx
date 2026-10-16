@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { startTransition, useState, useTransition } from "react";
 import { requestRestoreCode, verifyRestoreCode } from "@/actions/identity";
 import { placeholderWidth } from "@/lib/fieldWidth";
+import { EmailCodeStep } from "./EmailCodeStep";
 
 
 /**
@@ -22,7 +23,6 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
   const router = useRouter();
   const [step, setStep] = useState<"email" | "code" | "done">("email");
   const [email, setEmail] = useState(initialEmail);
-  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -48,24 +48,6 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
           return;
         }
         setStep("code");
-      });
-    });
-  };
-
-  const verify = () => {
-    setError(null);
-    if (code.replace(/\D/g, "").length !== 6) return setError(t("identity.codeWrong"));
-    start(async () => {
-      const r = await verifyRestoreCode(email, code.replace(/\D/g, ""));
-      startTransition(() => {
-        if (!r.ok) {
-          setError(r.error === "too_many" ? t("identity.tooMany") : r.error === "invalid" || r.error === "not_found" ? t("identity.codeWrong") : t("common.somethingWrong"));
-          return;
-        }
-        setName(r.data.name);
-        setStep("done");
-        onRestored?.();
-        router.refresh();
       });
     });
   };
@@ -113,45 +95,21 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
           {error && <p className="text-sm font-semibold text-danger">{error}</p>}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted">{t("identity.codeSent", { email })}</p>
-          <div className="flex gap-2">
-            <input
-              className="input tracking-[0.3em] text-center text-xl font-extrabold tabular-nums"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]*"
-              maxLength={6}
-              placeholder="••••••"
-              aria-label={t("identity.codeLabel")}
-              value={code}
-              autoFocus
-              enterKeyHint="go"
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  if (code.length === 6) verify();
-                }
-              }}
-            />
-            <button type="button" onClick={verify} className="btn-primary shrink-0" disabled={pending || code.length !== 6}>
-              {pending ? t("common.working") : t("identity.verify")}
-            </button>
-          </div>
-          {error && <p className="text-sm font-semibold text-danger">{error}</p>}
-          <button
-            type="button"
-            className="self-start text-sm link"
-            onClick={() => {
-              setStep("email");
-              setCode("");
-              setError(null);
-            }}
-          >
-            {t("identity.changeEmail")}
-          </button>
-        </div>
+        <EmailCodeStep
+          email={email}
+          verifyLabel={t("identity.verify")}
+          onVerify={async (code) => {
+            const r = await verifyRestoreCode(email, code);
+            if (r.ok) setName(r.data.name);
+            return r;
+          }}
+          onDone={() => {
+            setStep("done");
+            onRestored?.();
+            router.refresh();
+          }}
+          onChangeEmail={() => setStep("email")}
+        />
       )}
     </div>
   );

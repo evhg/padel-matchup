@@ -129,7 +129,10 @@
     "backJoinAsk": "Welcome back, {name}! Join this match?",
     "rememberAlso": "Also remember this phone",
     "seatedAsk": "{name} is in this match. Sign in as {name}?",
-    "seatedDifferent": "I'm a different {name}"
+    "seatedDifferent": "I'm a different {name}",
+    "confirmCode": "Confirm",
+    "unreachedAsk": "Played before as {name}? Sign in as {name}.",
+    "seatedTelegram": "With the Telegram you linked before:"
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -463,7 +466,7 @@
     "playedWithYou": "Played with you",
     "keepRecord": "Keep {name}'s matches",
     "keepsRecord": "Keeps {name}'s matches",
-    "unreached": "Kicksmash can't reach {names}. Send them the link.",
+    "unreached": "Kicksmash can't reach {names}. Send them the link: they sign in as themselves.",
     "unreachedMore": "{count} more",
     "unreachedSend": "Send the link on WhatsApp"
   },
@@ -699,7 +702,9 @@
       "heading": "Your restore code",
       "body": "Enter this code to bring your matches to the new device. It expires in 10 minutes.",
       "codeLabel": "Code",
-      "footer": "If you didn't request this, ignore it. Nothing happens without the code."
+      "footer": "If you didn't request this, ignore it. Nothing happens without the code.",
+      "proveHeading": "Confirm your email",
+      "proveBody": "Enter this code where you typed this address. It shows the address is yours. It expires in 10 minutes."
     },
     "invite": {
       "subject": "🎾 {organizer} saved you a spot · padel {day} {time}",
@@ -792,7 +797,8 @@
     "pairs_waiting": "Partners are waiting on the list as pairs. Take them off the waiting list first, then switch fixed pairs off.",
     "name_held": "This name has a held place. Take it above, or add your last name to join as somebody else.",
     "held_record": "This place is held for somebody else. Open the match to join it.",
-    "name_seated": "This name is in this match already. Sign in as that player, or say that you are somebody else."
+    "name_seated": "This name is in this match already. Sign in as that player, or say that you are somebody else.",
+    "name_unreached": "This name played with the organiser before. Sign in as that player, or say that you are somebody else."
   },
   "homescreen": {
     "title": "Add Kicksmash to your home screen",
@@ -973,7 +979,10 @@
     "feedName": "{app}: my matches",
     "viaWhatsapp": "on WhatsApp",
     "linkSent": "Your link is in your email. If a place opens, the invitation follows.",
-    "emailHelpUpdates": "Enter your email, and the changes to this match reach you there."
+    "emailHelpUpdates": "Enter your email, and the changes to this match reach you there.",
+    "codeFirst": "We send a 6-digit code to this address first. The address is saved once the code comes back.",
+    "stayHelpRequest": "Pick what you already use. The organiser's answer reaches you there.",
+    "linkSentRequest": "Your link is in your email. If the organiser says yes, the invitation follows."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",
@@ -1000,7 +1009,15 @@
     "updatedTitle": "The match moved",
     "updatedBody": "Now {day} at {time} · {venue}.",
     "cancelledTitle": "The match is off",
-    "cancelledBody": "{day} at {time} · {venue} will not happen."
+    "cancelledBody": "{day} at {time} · {venue} will not happen.",
+    "requestApprovedTitle": "✅ You're in · {day} {time}",
+    "requestApprovedBody": "{organizer} said yes. {venue}.",
+    "requestWaitlistedTitle": "On the waiting list · {day} {time}",
+    "requestWaitlistedBody": "{organizer} said yes. The match is full, and you move up when a place opens. {venue}.",
+    "requestDeclinedTitle": "Not this time · {day} {time}",
+    "requestDeclinedBody": "{organizer} could not take you this time. There is always another match.",
+    "movedUpTitle": "✅ A place opened: you're in · {day} {time}",
+    "movedUpBody": "You moved up from the waiting list. {venue}."
   },
   "about": {
     "footerLink": "Privacy and terms",
@@ -1113,7 +1130,8 @@
     "levelCheckAsked": "{name} asks you to confirm their level",
     "coachListed": "A coach now takes bookings in {title}: {name}",
     "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}",
-    "playAgain": "{name} made the next game: {day} {time} at {venue}. Are you in?"
+    "playAgain": "{name} made the next game: {day} {time} at {venue}. Are you in?",
+    "requestWaitlisted": "The organiser said yes. The match is full, so you are on the waiting list: {day} {time}, {venue}"
   },
   "privacy": {
     "title": "Privacy",
