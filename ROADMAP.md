@@ -1159,6 +1159,18 @@ Everything in this list is live. The README describes each in detail.
   Two other doors still mail the link to an address that such a session typed ("Open, small", item 7).
   `stay_asked` and `stay_linked_email` (a save on the card itself) count the card beside
   `stay_linked_telegram` and `stay_linked_whatsapp` (docs/OPERATING.md).
+- **The right day and the right time (15 October 2026, no migration).** The match page counts calendar
+  days in the match's own zone: TDsv, on Saturday at 11:00 in Phuket, read "Starts tomorrow" from
+  Thursday 11:00 to midnight, and now reads "Starts in 2 days" (`relativeTime` with `tz` in
+  `src/lib/dates.ts`). Under one day it still counts hours. The create form opens on the organiser's
+  usual time from the matches that people played, with two or more taken seats
+  (`getPlayerTimePatterns`, one read of those matches' seats); before, Erik's form opened on Fri 18:00
+  from three try-outs that nobody joined. An organiser with no such match keeps the chips of the whole
+  history. The keyboard's Go key on the name, the venue or the court moves to the next field and never
+  creates a match (`enterMovesOn` in `CreateEventForm.tsx`): 14 of the 27 matches of the 60 days before
+  started exactly at the default time. Go with the venue list open picks the first suggestion, but the
+  club that the field already holds is no pick (`venueGo` in `VenueCombobox.tsx`): a returning
+  organiser's own club is filled in, and one Go there moves on to the court.
 
 ## The finish line
 

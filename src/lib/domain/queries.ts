@@ -240,12 +240,37 @@ export function participantsWithEmail(roster: SlotWithPlayer[]): { playerId: str
 export type TimePattern = { dow: number; time: string; count: number; last: Date };
 
 /**
- * The weekday + time slots this player actually plays (created or joined,
- * not cancelled), most frequent first, then most recent. Feeds the quick
- * picks on the create form: never guessed, always from history.
+ * The weekday + time slots this player actually plays, most frequent first, then most recent. Feeds the
+ * quick picks on the create form and its default time: never guessed, always from history. "Plays"
+ * means a match of their history (made or joined, not cancelled) with two or more taken seats: Erik's
+ * form opened on Fri 18:00 from three Friday matches that nobody joined, while he played at 09:30 to
+ * 11:30 (15 October 2026). A player with no such match yet (a new organiser) keeps the chips of their
+ * whole history.
  */
 export async function getPlayerTimePatterns(db: Db, playerId: string, limit = 4): Promise<TimePattern[]> {
-  return timePatternsOf(await getPlayerHistory(db, playerId), limit);
+  const history = await getPlayerHistory(db, playerId);
+  const played = await playedMatchIds(db, history.map((h) => h.id));
+  const kept = history.filter((h) => played.has(h.id));
+  return timePatternsOf(kept.length > 0 ? kept : history, limit);
+}
+
+/**
+ * Which of these matches have two or more taken seats (joined or confirmed). One read after the history,
+ * bounded by its 200 ids and started from `slots_event_position_idx` (the event's own seats), so its
+ * cost is the player's own matches, never the table. Exported for the test that reads its plan.
+ */
+export function playedMatchRead(db: Db, eventIds: readonly string[]) {
+  return db
+    .select({ id: slots.eventId })
+    .from(slots)
+    .where(and(inArray(slots.eventId, [...eventIds]), inArray(slots.status, ["joined", "confirmed"])))
+    .groupBy(slots.eventId)
+    .having(sql`count(*) >= 2`);
+}
+
+async function playedMatchIds(db: Db, eventIds: readonly string[]): Promise<Set<string>> {
+  if (eventIds.length === 0) return new Set();
+  return new Set((await playedMatchRead(db, eventIds)).map((r) => r.id));
 }
 
 const historyColumns = { id: events.id, startsAt: events.startsAt, tz: events.tz, venueSlug: events.venueSlug, durationMinutes: events.durationMinutes };
@@ -273,18 +298,16 @@ export function playerHistoryReads(db: Db, playerId: string, limit: number) {
 /**
  * The matches a player made or played (not cancelled), newest first: when, in which zone, where and for
  * how long. Two bounded reads, one after the other (`playerHistoryReads`), merged; a match they made
- * and also sat in counts once. The usual times (`timePatternsOf`) and the usual clubs (the best times,
+ * and also sat in counts once. The usual times (`timePatternsOf`, after `getPlayerTimePatterns` keeps
+ * the matches people played, by `id`) and the usual clubs (the best times,
  * `src/lib/domain/freeCourts.ts`) are both read off it.
  */
-export async function getPlayerHistory(db: Db, playerId: string, limit = 200): Promise<{ startsAt: Date; tz: string; venueSlug: string | null; durationMinutes: number }[]> {
+export async function getPlayerHistory(db: Db, playerId: string, limit = 200): Promise<{ id: string; startsAt: Date; tz: string; venueSlug: string | null; durationMinutes: number }[]> {
   const [madeRead, playedRead] = playerHistoryReads(db, playerId, limit);
   const made = await madeRead;
   const played = await playedRead;
   const byId = new Map([...made, ...played].map((r) => [r.id, r]));
-  return [...byId.values()]
-    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
-    .slice(0, limit)
-    .map(({ id: _id, ...r }) => r);
+  return [...byId.values()].sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime()).slice(0, limit);
 }
 
 /** The weekday + time slots in a list of matches, most frequent first, then most recent. Pure. */

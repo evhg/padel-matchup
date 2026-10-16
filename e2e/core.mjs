@@ -40,6 +40,20 @@ try {
   // The first page is the ten-second match and nothing else (the owner, 24 September 2026): the share
   // card belongs after the match, when every player gets it, not between the name and the time.
   check("the first page leads with the form, with no card in the way", (await a.getByTestId("card-preview").count()) === 0);
+  // The keyboard's Go key (Enter) on the name moves on to the next field and never creates a match on a
+  // day and a time nobody looked at: 14 of the 27 matches of the 60 days to 15 October 2026 started at
+  // the default time. A create is a server action, a POST with a Next-Action header; none may leave.
+  const actionsSent = [];
+  const onAction = (r) => void (r.method() === "POST" && r.headers()["next-action"] && actionsSent.push(r.url()));
+  // Before React holds the form, Enter is the browser's own submit; the check is about the form React runs.
+  await a.waitForFunction(() => [...document.querySelectorAll("main form")].some((f) => Object.keys(f).some((k) => k.startsWith("__reactProps"))), null, { timeout: 15000 });
+  a.on("request", onAction);
+  await a.getByPlaceholder("e.g. Alex").fill("Dana");
+  await a.getByPlaceholder("e.g. Alex").press("Enter");
+  await a.waitForTimeout(1500);
+  a.off("request", onAction);
+  const focusedType = await a.evaluate(() => document.activeElement?.getAttribute("type") ?? document.activeElement?.tagName);
+  check("Go on the name field creates no match: no request, the page stays on /, and the day is the next field", actionsSent.length === 0 && new URL(a.url()).pathname === "/" && focusedType === "date", `${actionsSent.length} sent, ${new URL(a.url()).pathname}, focus on ${focusedType}`);
   // A new browser knows nobody. Somebody who has played before needs a door here, not a tour of the
   // app to find My matches, and it stays shut so it takes nothing from the name field above it.
   const backIn = a.getByText("Played before? Get your matches back.");
@@ -274,7 +288,25 @@ try {
   const sg = (t) => sp.find((p) => p.type === t).value;
   await a.locator("input[type=date]").fill(`${sg("year")}-${sg("month")}-${sg("day")}`);
   await a.locator("input[type=time]").fill("11:30");
-  await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  // Dana's own club is filled in. Go there is "next", not a second pick of the club the field already
+  // holds: the list opens on the focus, and one press moves on to the court (review, 15 October 2026).
+  const venueBox = a.getByPlaceholder("Court TBD · or pick a club");
+  const prefilledVenue = await venueBox.inputValue();
+  await venueBox.focus();
+  await a.locator("ul button", { hasText: "Club Padel Test" }).first().waitFor({ timeout: 10000 });
+  actionsSent.length = 0;
+  a.on("request", onAction);
+  await venueBox.press("Enter");
+  await a.waitForTimeout(800);
+  a.off("request", onAction);
+  const afterVenueGo = await a.evaluate(() => document.activeElement?.getAttribute("placeholder") ?? document.activeElement?.tagName);
+  await shot(a, "05a-new-venue-go");
+  check("Go on the organiser's own club, filled in, moves on to the court in one press and sends nothing", prefilledVenue === "Club Padel Test" && afterVenueGo === "e.g. 3 or Centre court" && (await venueBox.inputValue()) === "Club Padel Test" && actionsSent.length === 0 && new URL(a.url()).pathname === "/", `${prefilledVenue}, focus on ${afterVenueGo}, ${actionsSent.length} sent, ${new URL(a.url()).pathname}`);
+  // Go on the venue with the list open picks the first suggestion, as a tap does, and sends nothing:
+  // Dana's own club comes first in her list.
+  await venueBox.fill("Club Pad");
+  await venueBox.press("Enter");
+  check("Go on the venue field picks the first suggestion and stays on the form", (await venueBox.inputValue()) === "Club Padel Test" && new URL(a.url()).pathname === "/", `${await venueBox.inputValue()} at ${new URL(a.url()).pathname}`);
   // Who it is for (the owner's decision of 9 October 2026): behind the level chip, so the form is not
   // one line longer for anybody who skips it. "Men" is inside "Women" and the chip repeats both: exact.
   check("the tag stays folded behind the level chip until asked", (await a.getByRole("button", { name: "Women", exact: true }).count()) === 0);
