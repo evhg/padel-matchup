@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createTranslator } from "next-intl";
@@ -124,19 +124,41 @@ describe("the privacy page tells the truth about the code", () => {
     // The owner's decision of 16 October 2026 ("yes, write the privacy sentence"): the organiser's line
     // "Kicksmash can't reach Tim and Adrian" (DECIDING rule 7, src/lib/domain/unreached.ts) shows a past
     // partner's first name and that no channel reaches them. The days are the ones partnersQuery reads.
+    // An address counts only while its switch is on (`channelOf`: email && emailNotifications), so a
+    // player who gave an email and switched it off is named too, and the line says so.
     const WORDS = {
-      en: ["played a match with an organiser", "first name", "cannot reach you", "send you the link"],
-      ru: ["играли матч с организатором", "ваше имя", "не можем с вами связаться", "отправил вам ссылку"],
-      es: ["jugaste un partido con un organizador", "nombre de pila", "no podemos contactarte", "te envíe el enlace"],
+      en: ["played a match with an organiser", "an email counts only while you let us email you", "first name", "cannot reach you", "send you the link"],
+      ru: ["играли матч с организатором", "только пока вы разрешаете нам писать", "ваше имя", "не можем с вами связаться", "отправил вам ссылку"],
+      es: ["jugaste un partido con un organizador", "un email solo cuenta mientras nos dejes escribirte", "nombre de pila", "no podemos contactarte", "te envíe el enlace"],
     } as const;
     const days = PARTNER_WINDOW_MS / (24 * 60 * 60 * 1000);
     expect(Number.isInteger(days)).toBe(true);
     for (const l of LOCALES) {
-      expect(messagesOf(l).privacy.storeBody, l).toContain("{partnerDays");
+      const raw = (messagesOf(l).privacy.storeBody as string).split("\n").find((x) => x.includes(WORDS[l][0]));
+      expect(raw, l).toContain("{partnerDays");
       const line = render(l, "privacy.storeBody").split("\n").find((x) => x.includes(WORDS[l][0]));
       expect(line, l).toBeDefined();
       for (const words of WORDS[l]) expect(line, `${l}: ${words}`).toContain(words);
       expect(line, l).toMatch(new RegExp(`(^|\\D)${days}\\s`));
+    }
+  });
+
+  it("names every door that signs in by a name alone on the km_by_name line, in every language", () => {
+    // Three calls set the mark (`markSignedInByName`): "That's me" (`thatsMeAction`), "I'm in" on an
+    // invitation to a place kept for a past player's record (`confirmInviteAction`, the owner's decision
+    // of 11 October 2026), and `restoreIdentity`, which brings the same session back and makes no new
+    // door. Until 16 October 2026 the line named only "That's me". A new door is named on the page in
+    // three languages first, then added here.
+    const callers = readdirSync(path.resolve(process.cwd(), "src"), { recursive: true, encoding: "utf8" })
+      .filter((f) => /\.tsx?$/.test(f))
+      .filter((f) => /\bmarkSignedInByName\(/.test(readFileSync(path.resolve(process.cwd(), "src", f), "utf8").replace(/export (async )?function markSignedInByName\(/, "")))
+      .map((f) => f.split(path.sep).join("/"))
+      .sort();
+    expect(callers).toEqual(["actions/identity.ts", "actions/slots.ts"]);
+    for (const l of LOCALES) {
+      const m = messagesOf(l);
+      const line = render(l, "privacy.cookiesBody").split("\n").find((x) => x.includes(BY_NAME_COOKIE));
+      for (const button of [m.identity.thatsMeIn, m.invitePage.confirm]) expect(line, `${l}: ${button}`).toContain(button);
     }
   });
 
