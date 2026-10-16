@@ -1185,6 +1185,17 @@ Everything in this list is live. The README describes each in detail.
   Tim" list asks "Played before as Tim? Sign in as Tim." and "That's me" signs that record in, so Tim
   makes no second Tim; the line says "they sign in as themselves" when that is true of every name on it
   (D6, DECIDING rules 7 and 34).
+- **The privacy page names the unreached line (the owner, 16 October 2026; no migration).** Under
+  "What we keep", `/privacy` now says that an organiser can see the first name of a past partner from
+  the last 60 days whom Kicksmash cannot reach, and that Kicksmash cannot reach them, while their match
+  has a place open (DECIDING rule 7). The 60 comes from `PARTNER_WINDOW_MS` through `legalValues`, and
+  `tests/legal.test.ts` checks the line in three languages. The line says that an email counts only
+  while its switch is on, because `channelOf` names a player who switched it off. The review of the
+  same day found that the `km_by_name` line named only "That's me", while "I'm in" on an invitation to
+  a place kept for a past player's record sets the cookie too: the line now names both, and the test
+  fails when a third caller of `markSignedInByName` appears. The page's date is 16 October 2026. The
+  owner also kept the reading of D5: each answer reaches a player once, by its own email where the
+  address works, else on the first channel they gave.
 
 ## The finish line
 
