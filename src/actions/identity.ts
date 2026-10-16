@@ -12,7 +12,10 @@ import { changePlayerEmail, consumeEmailCode, findPlayerByPersonalToken, issueEm
 import { getPlayer, normalizeEmail, updatePlayer } from "@/lib/domain/players";
 import { sendPersonalLinkEmail } from "@/lib/notify";
 import { getEventByCode } from "@/lib/domain/queries";
-import { notifyLineupChange, notifyPromotion, notifyRefill, sendEmailCode, welcomeEmail } from "@/lib/notify";
+import { notifyLineupChange, notifyPromotion, notifyRefill, sendEmailCode, welcomeEmail, welcomeFor } from "@/lib/notify";
+import { stayUpdated, type WelcomeKind } from "@/lib/domain/stayUpdated";
+import { stayChannels } from "@/lib/calendarFeed";
+import { bumpMetric } from "@/lib/domain/metrics";
 import { personalUrl } from "@/lib/personal";
 import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, markSignedInByName, openRestoreSeal, setSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, clientKey, nameOnly, requirePlayer, runA, type ActionResult } from "./shared";
@@ -57,8 +60,14 @@ export async function updateMyName(name: string): Promise<ActionResult<PublicPla
 /**
  * Self-entered email (decision 9). If `eventCode` is given and the player is
  * in that event, a calendar invite goes out right away.
+ *
+ * `welcome` is what went out because of this save (`welcomeFor`): `invite`, `link`, or null when the
+ * address did not change or nothing goes. The "Stay updated" card says that and nothing else.
+ *
+ * `o.from: "stay"` marks the save on the "Stay updated" card itself, the one save `stay_linked_email`
+ * counts. The invitation page's form, the match page's email row and My matches save without it.
  */
-export async function updateMyEmail(email: string, eventCode?: string): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean; kept: boolean }>> {
+export async function updateMyEmail(email: string, eventCode?: string, o?: { from?: "stay" }): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean; kept: boolean; welcome: WelcomeKind | null }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
@@ -70,6 +79,7 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
     // Typing an address in, new or the same one again, is asking for mail: a complaint or a run of
     // soft bounces on it is lifted (src/lib/domain/emailMarks.ts).
     if (normalized) await liftOnConsent(db, normalized);
+    let welcome: WelcomeKind | null = null;
     if (changed) {
       // Adding your own address is explicit consent: lift any earlier "never email me".
       await removeOptOut(db, p.email);
@@ -77,11 +87,22 @@ export async function updateMyEmail(email: string, eventCode?: string): Promise<
       // Not for a session that came in by "That's me" and proved nothing: a typed address is not proof,
       // and the welcome would carry the personal link it is not shown (DECIDING rule 34).
       const detail = eventCode ? await getEventByCode(db, eventCode) : null;
-      if (!(await nameOnly(me))) after(() => welcomeEmail(db, p, detail?.event ?? null));
+      const byNameOnly = await nameOnly(me);
+      welcome = welcomeFor(p, detail, byNameOnly);
+      if (welcome) after(() => welcomeEmail(db, p, detail?.event ?? null, { byNameOnly, detail }));
+      // "Stay updated" answered by email (docs/OPERATING.md): a save on the card itself, by a player the card
+      // asked (no channel before it), that now reaches them by email. One upsert per save, after the answer.
+      // Until 15 October 2026 any save with a match code counted, the invitation page's too, which never
+      // shows the card (review), so the count ran ahead of the asks.
+      if (eventCode && o?.from === "stay") {
+        const runs = stayChannels();
+        const reached = stayUpdated(p, runs);
+        if (stayUpdated(me, runs).kind === "ask" && reached.kind === "reached" && reached.via.includes("email")) after(() => bumpMetric(db, "stay_linked_email").catch(() => undefined));
+      }
     }
     if (eventCode) revalidatePath(`/${eventCode}`);
     revalidatePath("/me");
-    return { ...pub(p), knownElsewhere: others.length > 0, kept };
+    return { ...pub(p), knownElsewhere: others.length > 0, kept, welcome };
   });
 }
 

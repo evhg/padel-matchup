@@ -866,6 +866,21 @@ try {
     const [s, e] = [at("DTSTART"), at("DTEND")];
     return s && e ? (Date.UTC(e[0], e[1] - 1, e[2], e[3], e[4]) - Date.UTC(s[0], s[1] - 1, s[2], s[3], s[4])) / 60000 : null;
   };
+  // Right after a join, the whole "Stay updated" card is on the screen, above the fixed bar (390x844, headless
+  // Chromium, which anchors scrolling as Android does). The join grew the hero by the card while the line-up
+  // held the anchor, so the page moved 310 px and the card ended above the screen (15 October 2026): the match
+  // page turned anchoring off. That kept only the first joiners' card on the screen: from the third seat on,
+  // and on the waiting list, the form sat lower and the card went into the hero above the screen, as on Safari
+  // (review, 15 October 2026). The card now comes into view when it mounts above the screen.
+  const stayOnScreen = async (p, barText, who) => {
+    const card = p.getByTestId("stay-updated");
+    await card.waitFor({ timeout: 20000 });
+    await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const cardBox = await card.boundingBox();
+    const barBox = await p.getByText(barText).locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' fixed ')][1]").boundingBox();
+    const scrolled = await p.evaluate(() => Math.round(window.scrollY));
+    check(`right after ${who} joins, at 390x844, the whole 'Stay updated' card is on the screen, above the fixed bar`, Boolean(cardBox && barBox) && cardBox.y >= 0 && cardBox.y + cardBox.height <= barBox.y, JSON.stringify({ card: cardBox, barTop: barBox?.y, scrollY: scrolled }));
+  };
   let lastJoiner = null;
   for (const n of ["Bo", "Cy", "Di"]) {
     const p = await newPage();
@@ -874,6 +889,11 @@ try {
     await p.getByPlaceholder("e.g. Alex").fill(n);
     await p.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
     await p.getByText("You're in").waitFor({ timeout: 20000 });
+    // Each stranger as in production: the fixed Join, the name, the form's Join, which scrolls the page.
+    // Bo takes the second seat, Cy the third, Di the fourth, which completes the match: the lower the seat,
+    // the lower the form, and the card goes into the hero above it.
+    await stayOnScreen(p, "You're in", `${n} (seat ${["Bo", "Cy", "Di"].indexOf(n) + 2} of 4)`);
+    if (process.env.SHOTS && n !== "Cy") await p.screenshot({ path: `${process.env.SHOTS}/05d-stay-after-join-${n}-viewport.png` });
     if (n === "Di") lastJoiner = p;
     else await p.context().close();
   }
@@ -944,7 +964,38 @@ try {
   await c.getByPlaceholder("e.g. Alex").fill("Eli");
   await c.locator("main form").getByRole("button", { name: "Join the waitlist" }).click();
   await c.getByText("#1 on the waitlist").waitFor({ timeout: 20000 });
+  // Before the full-page shot, which moves the page: measured after it, the card read y -318 while a probe
+  // without the shot read 15.5.
+  await stayOnScreen(c, "#1 on the waitlist", "Eli (the waiting list of a full match)");
+  if (process.env.SHOTS) await c.screenshot({ path: `${process.env.SHOTS}/13b-waitlisted-stay-viewport.png` });
   await shot(c, "13-waitlisted");
+  // The waiting list gets the personal link at once, and the invitation only with a place; the card says just
+  // that (15 October 2026: it said "Calendar invite sent" and offered "Send it again", which the server refuses).
+  const eliCard = c.getByTestId("stay-updated");
+  await eliCard.getByTestId("stay-email").click();
+  await eliCard.getByPlaceholder("you@example.com").fill("eli@example.com");
+  check(
+    "on the waiting list the card's button saves the address: \"Save\", never \"Send invite\"",
+    (await eliCard.getByRole("button", { name: "Save", exact: true }).count()) === 1 && (await eliCard.getByRole("button", { name: "Send invite" }).count()) === 0,
+  );
+  await eliCard.locator('button[type="submit"]').click();
+  await eliCard.getByText("Updates reach you by email ✓").waitFor({ timeout: 20000 });
+  const eliLinkLine = await eliCard.getByText("Your link is in your email. If a place opens, the invitation follows.").waitFor({ timeout: 5000 }).then(() => true).catch(() => false);
+  const eliMail = await waitUntil(() => mails().find((m) => m.to === "eli@example.com"));
+  check(
+    "after the save the waiting list reads that updates reach it by email and its link went, never \"Calendar invite sent\" or \"Send it again\"; the mail is the link, with no invitation",
+    eliLinkLine && (await c.getByText(/Calendar invite sent/).count()) === 0 && (await c.getByRole("button", { name: /Send it again/ }).count()) === 0 && Boolean(eliMail) && !eliMail.ics,
+    JSON.stringify(eliMail ? { subject: eliMail.subject, ics: Boolean(eliMail.ics) } : null),
+  );
+  if (process.env.SHOTS) await c.screenshot({ path: `${process.env.SHOTS}/13c-waitlisted-link-sent-viewport.png` });
+  // The email row under the line-up says the invitation is on its way only when it went: a new address on the
+  // waiting list brings the link again, so it reads "Saved." (15 October 2026).
+  await c.locator("main").getByRole("button", { name: "Edit", exact: true }).click();
+  const eliRow = c.locator("main form").filter({ has: c.getByPlaceholder("you@example.com") });
+  await eliRow.getByPlaceholder("you@example.com").fill("eli2@example.com");
+  await eliRow.getByRole("button", { name: "Save", exact: true }).click();
+  await c.locator("main").getByRole("button", { name: "Edit", exact: true }).waitFor({ timeout: 20000 });
+  check("the email row on the waiting list says \"Saved.\", never \"calendar invite on its way\"", (await c.getByText("Saved.", { exact: true }).count()) === 1 && (await c.getByText(/calendar invite on its way/).count()) === 0);
 
   await a.goto(`${BASE}/PLAY`);
   await a.getByRole("button", { name: "Leave" }).click();
@@ -1024,6 +1075,25 @@ try {
   await shot(mariaPage, "12h-held-record-link");
   await mariaPage.getByRole("button", { name: /I'm in/ }).click();
   await mariaPage.getByText("You're confirmed").waitFor({ timeout: 20000 });
+  // Signed in by name: an address she types brings no invitation and no link (DECIDING rule 34), so the form
+  // promises neither and says neither went. It said "Calendar invite sent", and its "Send it again" then
+  // failed every time (review, 15 October 2026).
+  const mariaForm = mariaPage.getByTestId("calendar-email");
+  check(
+    "by name, the confirmed page's form promises no invitation: \"Stay updated\" and \"Save\", never \"Send invite\"",
+    (await mariaForm.getByText("Stay updated").count()) === 1 && (await mariaForm.getByRole("button", { name: "Save", exact: true }).count()) === 1 && (await mariaForm.getByRole("button", { name: "Send invite" }).count()) === 0,
+  );
+  if (process.env.SHOTS) await mariaPage.screenshot({ path: `${process.env.SHOTS}/12h2-held-record-by-name-form-viewport.png` });
+  await mariaForm.getByPlaceholder("you@example.com").fill("maria-byname@example.com");
+  await mariaForm.locator('button[type="submit"]').click();
+  const mariaReached = await mariaForm.getByText("Updates reach you by email ✓").waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+  // A welcome would go in the action's after(), within a second or two: none may.
+  await mariaPage.waitForTimeout(2000);
+  check(
+    "after the save it says only that updates reach her by email: no \"Calendar invite sent\", no \"Send it again\", and no mail went",
+    mariaReached && (await mariaPage.getByText(/Calendar invite sent/).count()) === 0 && (await mariaPage.getByRole("button", { name: /Send it again/ }).count()) === 0 && mails().filter((m) => m.to === "maria-byname@example.com").length === 0,
+  );
+  if (process.env.SHOTS) await mariaPage.screenshot({ path: `${process.env.SHOTS}/12i-held-record-by-name-saved-viewport.png` });
   const lineup4 = await mariaPage.request.get(`${BASE}/api/v1/matches/${code4}`).then((r) => r.json());
   const marias = (lineup4.players ?? []).filter((p) => p.name === "Maria");
   check("the place is Maria's, confirmed, and the match holds one Maria", marias.length === 1 && marias[0].status === "confirmed", JSON.stringify(lineup4.players ?? []));

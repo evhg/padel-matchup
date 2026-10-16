@@ -1,15 +1,19 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
 import { events, players, type Player } from "@/db/schema";
 import { manageUrlFor, personalTokenFor } from "@/actions/shared";
+import { resendCalendarInviteAction } from "@/actions/calendar";
+import { updateMyEmail } from "@/actions/identity";
 import { baseUrl } from "@/lib/config";
 import { manageUrl } from "@/lib/share";
 import { GET as calendarFile } from "@/app/[code]/calendar.ics/route";
 import { createEvent } from "@/lib/domain/events";
 import { createPlayer } from "@/lib/domain/players";
+import { joinEvent } from "@/lib/domain/slots";
 import { rolodexForBrowser } from "@/lib/domain/queries";
 import { PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
 import { asAction } from "./helpers/action";
@@ -109,5 +113,28 @@ describe("a session by name gets no personal link from any screen or file", () =
       .map((f) => path.relative(process.cwd(), f))
       .filter((f) => /\bmanageUrl\(/.test(readFileSync(f, "utf8")));
     expect(found, "hand a screen the manage link through manageUrlFor (src/actions/shared.ts)").toEqual([]);
+  });
+
+  // "Not in your calendar? Send it again" mailed the invitation, and with it the personal link, to the
+  // address a session by name had typed: rule 34 says the link "cannot be ... mailed from it" (reach,
+  // 15 October 2026). Ana signs in by "That's me", saves an address on the card (no welcome goes), and
+  // taps "Send it again". Last in the file: the full session's send mints her personal token.
+  it("a session by name that saved an address is refused \"Send it again\", and no email goes; a full session's tap sends the invitation", async () => {
+    const sinkFile = path.join(mkdtempSync(path.join(tmpdir(), "byname-resend-")), "mail.jsonl");
+    process.env.RESEND_API_KEY = "re_test_only";
+    process.env.EMAIL_SINK_FILE = sinkFile;
+    const mails = () => (existsSync(sinkFile) ? readFileSync(sinkFile, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l) as { to: string; ics: { method: string } | null }) : []);
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() + 3 * 86_400_000), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist" });
+    await joinEvent(db, { eventId: ev.id, playerId: ana.id });
+    // The card's save, as the by-name session makes it: the address is kept, and nothing is mailed.
+    const saved = (await asAction(byName(), () => updateMyEmail("ana-byname@example.com", ev.code))).result;
+    expect(saved).toMatchObject({ ok: true, data: { email: "ana-byname@example.com", welcome: null } });
+    expect(mails()).toEqual([]);
+    // The tap: refused, and still no mail.
+    expect((await asAction(byName(), () => resendCalendarInviteAction(ev.code))).result).toEqual({ ok: false, error: "forbidden" });
+    expect(mails()).toEqual([]);
+    // The same seat, address and match from a full session: the invitation goes. So the mark is the one thing that refused it.
+    expect((await asAction(full(), () => resendCalendarInviteAction(ev.code))).result).toEqual({ ok: true, data: { email: "ana-byname@example.com" } });
+    expect(mails().map((m) => [m.to, m.ics?.method])).toEqual([["ana-byname@example.com", "REQUEST"]]);
   });
 });

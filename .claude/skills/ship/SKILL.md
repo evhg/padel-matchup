@@ -1202,6 +1202,29 @@ Wall clock first, credits second. What actually moved it, measured:
   share page scrolled sideways, while the comment said a wide part "still wraps inside itself"
   (review, 15 October 2026). Only a short part is a block, capped with `max-w-full`; a long one stays
   words (`KeepTogether`). Test a layout rule with the longest value the field takes, not the usual one.
+- **Chromium moves the page when something grows above what the reader looks at; Safari does not.**
+  The join put "Stay updated" into the hero while the line-up held Chromium's scroll anchor, so an
+  Android phone scrolled 310 px with it and the card ended above the screen; every check passed,
+  because each one counted the card or read its words, and an iPhone walk could not show it (Safari
+  has no scroll anchoring). The share page already had `[overflow-anchor:none]`; the match page did not
+  (15 October 2026). When an action adds the thing the person must see above where they stand, check
+  its box on the screen after the action (`e2e/core.mjs`, headless Chromium anchors), not its count.
+  And check it where the page has scrolled: at the top Chromium anchors nothing, so the same check after
+  a join from the fixed bar alone passed with the bug in; after the form's own Join, which scrolls, it
+  failed at -232 px, as on the phone. And check it at the worst place, not the first: that fix held for
+  Bo in the second seat, while from the third seat on and on the waiting list the form sat lower, the
+  card went into the hero above the screen on every phone, and from the sixth joiner of a night it was
+  wholly gone (review, 15 October 2026). A card that mounts above the screen now scrolls itself into
+  view (`StayUpdated`), only when it mounts on a live page (`useSyncExternalStore`'s server snapshot is
+  the one a hydrating render reads), so a reload never moves the page; `e2e/core.mjs` checks every seat
+  and the waiting list.
+- **Closing one door is not keeping a rule.** "Send it again" refused a session by name, and the commit
+  title said the card "never mails the link from a session by name". Leave and Join then sent the same
+  invitation to the same typed address, and every later notice carried the link (review, 15 October
+  2026; ROADMAP.md, "Open, small", item 7). Before a title says "never", grep every send that reaches
+  the address (`sendCalendarInvite`, every `ctx` with a recipient) and name which ones the change closes.
+  The same review found the twin of the fixed card on the invitation page (`CalendarEmail`) still saying
+  "Calendar invite sent": grep for the other components that render the same sentence.
 - **"The person saw it" is bounded by the moment the page read.** Opening a match page marks its notices
   read in `after()`, seconds after the reads, and the first version marked a notice of a join made in
   between, which the screen never showed (review, 15 October 2026). The page takes `now` before its

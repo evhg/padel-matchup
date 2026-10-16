@@ -488,6 +488,9 @@ async function EventPage({ params, searchParams }: Props) {
   const rememberOffer = rememberSession && offerable ? !(await hasPasskey(db, offerable.id)) : false;
   // The moment somebody is in: where they hear about this match, asked once (src/lib/domain/stayUpdated.ts).
   const stay = me && (isMember || isWaitlisted) && !cancelled && !over ? stayUpdated(me, stayChannels()) : null;
+  // A session by name that proved nothing gets no invitation, because it carries the personal link (DECIDING
+  // rule 34), so the card neither says one went nor offers "Send it again". A cookie read, only for a seat the card shows to.
+  const byNameOnly = stay && stay.kind !== "hidden" && isMember && emailEnabled() ? await nameOnly(me) : false;
   // Right under it, while they have no level: "Your level?" in one tap. A ranged match asked at the join already.
   const askLevel = Boolean(me) && askLevelAfterJoin({ seated: isMember || isWaitlisted, level: me?.level ?? null, ranged, organiser: viewer.isCreator, open: !cancelled && !over });
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
@@ -722,7 +725,11 @@ async function EventPage({ params, searchParams }: Props) {
     <>
       <SourceTag source={source} />
       <Header />
-      <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
+      {/* No scroll anchoring, as on the share page: on Chromium the join grew the hero by "Stay updated" while the
+          line-up held the anchor, so the page moved 310 px and the card ended above the screen (15 October 2026).
+          Safari has none, so Chromium now does what Safari did. A live night keeps it: AutoRefresh renders it
+          again every 20 seconds, and the reader stays where they were. */}
+      <main className={`mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2${liveNight ? "" : " [overflow-anchor:none]"}`}>
         {/* Hero */}
         <section className={`card overflow-hidden ${cancelled ? "opacity-80" : ""}`}>
           <div className="flex flex-wrap items-center gap-2">
@@ -830,6 +837,7 @@ async function EventPage({ params, searchParams }: Props) {
             <StayUpdated
               code={code}
               member={isMember}
+              invited={isMember && emailEnabled() && !byNameOnly}
               email={emailEnabled() ? me.email : null}
               state={stay}
               links={{

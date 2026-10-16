@@ -971,7 +971,9 @@
     "feedLead": "Suscríbete una vez. Un partido nuevo aparece, una hora cambiada se mueve y un partido cancelado queda marcado.",
     "feedGone": "Este enlace de calendario ya no funciona. Abre uno de tus partidos y añade el calendario de nuevo.",
     "feedName": "{app}: mis partidos",
-    "viaWhatsapp": "por WhatsApp"
+    "viaWhatsapp": "por WhatsApp",
+    "linkSent": "Tu enlace está en tu email. Si se libera una plaza, te llegará la invitación.",
+    "emailHelpUpdates": "Escribe tu email y los cambios de este partido te llegarán allí."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

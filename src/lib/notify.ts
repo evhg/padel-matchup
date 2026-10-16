@@ -39,6 +39,7 @@ import { markHeldDelivered, matchParams, quietSummariesDue, recordNotice, record
 import { kindOn, type Sender } from "@/lib/domain/noticeKinds";
 import { claimPlayAgainRound, playAgainRecipients, toldOfGame } from "@/lib/domain/playAgain";
 import { firstName } from "@/lib/domain/result";
+import { welcomeKind, type WelcomeKind } from "@/lib/domain/stayUpdated";
 
 /**
  * All outbound notifications live here. Every function is safe to call when
@@ -164,19 +165,30 @@ export async function sendPersonalLinkEmail(db: Db, player: Player): Promise<boo
 }
 
 /**
- * New email for a player: calendar invite if they're in this event (it carries
- * the personal link), otherwise the plain personal-link email.
+ * What a new address of this player gets for this match (`welcomeKind`): the one answer `welcomeEmail`
+ * sends by and the "Stay updated" card speaks by, so the card says only what went. Pure over the rows given.
  */
-export async function welcomeEmail(db: Db, player: Player, ev: Event | null): Promise<void> {
+export function welcomeFor(player: Pick<Player, "id" | "email">, detail: EventDetail | null, byNameOnly = false): WelcomeKind | null {
+  return welcomeKind({
+    emailOn: emailEnabled() && Boolean(player.email),
+    seated: detail ? isSeated({ roster: detail.roster }, player.id) : false,
+    cancelled: detail?.event.status === "cancelled",
+    byNameOnly,
+  });
+}
+
+/**
+ * New email for a player: calendar invite if they're in this event (it carries
+ * the personal link), otherwise the plain personal-link email; nothing for a session by name
+ * (`o.byNameOnly`, DECIDING rule 34). `o.detail` is the match as the caller already read it.
+ */
+export async function welcomeEmail(db: Db, player: Player, ev: Event | null, o: { byNameOnly?: boolean; detail?: EventDetail | null } = {}): Promise<void> {
+  // Nothing can go, so nothing is read.
   if (!emailEnabled() || !player.email) return;
-  if (ev) {
-    const detail = await getEventDetail(db, ev);
-    if (isSeated({ roster: detail.roster }, player.id) && ev.status !== "cancelled") {
-      await sendCalendarInvite(db, ev, player, "joined", detail);
-      return;
-    }
-  }
-  await sendPersonalLinkEmail(db, player);
+  const detail = ev ? (o.detail ?? (await getEventDetail(db, ev))) : null;
+  const kind = welcomeFor(player, detail, o.byNameOnly);
+  if (kind === "invite" && ev && detail) await sendCalendarInvite(db, ev, player, "joined", detail);
+  else if (kind === "link") await sendPersonalLinkEmail(db, player);
 }
 
 export type CreatorKind = "joined" | "waitlisted" | "left" | "confirmed" | "declined" | "promoted" | "requested";
