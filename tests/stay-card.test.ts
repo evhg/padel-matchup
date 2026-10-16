@@ -69,7 +69,7 @@ describe("the Stay updated card says only what went", () => {
     const button = (html: string) => html.match(/<button type="submit"[^>]*>([^<]*)<\/button>/)?.[1];
     const html = card({ member: true, invited: false, email: null, ask: true, byName: true });
     expect(button(html)).toBe("Send code");
-    expect(html).toContain("We send a 6-digit code to this address first. The address is saved once the code comes back.");
+    expect(html).toContain("We send a 6-digit code to this address first. The address is saved when you enter the code.");
     expect(card({ member: true, invited: false, email: null, ask: true })).not.toContain("6-digit code");
   });
 

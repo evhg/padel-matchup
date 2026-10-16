@@ -466,9 +466,10 @@
     "playedWithYou": "Играли с вами",
     "keepRecord": "Сохранить матчи {name}",
     "keepsRecord": "Матчи {name} сохраняются",
-    "unreached": "Kicksmash не может написать: {names}. Отправьте ссылку сами: по ней они войдут под своим именем.",
+    "unreached": "Kicksmash не может написать: {names}. Отправьте ссылку сами.",
     "unreachedMore": "ещё {count}",
-    "unreachedSend": "Отправить ссылку в WhatsApp"
+    "unreachedSend": "Отправить ссылку в WhatsApp",
+    "unreachedSignIn": "Kicksmash не может написать: {names}. Отправьте ссылку сами: по ней они войдут под своим именем."
   },
   "score": {
     "title": "Счёт",
@@ -982,7 +983,7 @@
     "emailHelpUpdates": "Укажите email, и изменения по этому матчу придут туда.",
     "codeFirst": "Сначала мы отправим на этот адрес код из 6 цифр. Адрес сохранится, когда вы введёте код.",
     "stayHelpRequest": "Выберите то, чем уже пользуетесь. Ответ организатора придёт туда.",
-    "linkSentRequest": "Ваша ссылка у вас в почте. Если организатор согласится, придёт и приглашение."
+    "linkSentRequest": "Ваша ссылка у вас в почте. Ответ организатора придёт туда же, а с местом в составе придёт и приглашение."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",
@@ -1011,11 +1012,11 @@
     "cancelledTitle": "Матч отменён",
     "cancelledBody": "{day} в {time} · {venue} не состоится.",
     "requestApprovedTitle": "✅ Вы в составе · {day} {time}",
-    "requestApprovedBody": "{organizer} согласился. {venue}.",
+    "requestApprovedBody": "{organizer} одобрил(а) ваш запрос. {venue}.",
     "requestWaitlistedTitle": "В листе ожидания · {day} {time}",
-    "requestWaitlistedBody": "{organizer} согласился. Матч заполнен, вы перейдёте в состав, когда освободится место. {venue}.",
+    "requestWaitlistedBody": "{organizer} одобрил(а) ваш запрос. Матч заполнен, вы перейдёте в состав, когда освободится место. {venue}.",
     "requestDeclinedTitle": "Не в этот раз · {day} {time}",
-    "requestDeclinedBody": "{organizer} не смог взять вас в этот раз. Будут и другие матчи.",
+    "requestDeclinedBody": "{organizer} не смог(ла) взять вас в этот раз. Будут и другие матчи.",
     "movedUpTitle": "✅ Освободилось место: вы в составе · {day} {time}",
     "movedUpBody": "Вы перешли из листа ожидания в состав. {venue}."
   },

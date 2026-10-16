@@ -5,11 +5,14 @@ import { events, metricsDaily, passkeys, players, type Event, type Player } from
 import { thatsMeAction } from "@/actions/identity";
 import { joinAction } from "@/actions/slots";
 import { channelsOffered } from "@/lib/coach/reach";
+import { thatsMeTapOf } from "@/components/SeatedAsk";
 import { createEvent } from "@/lib/domain/events";
+import { createGroup, joinGroup } from "@/lib/domain/groups";
 import { dayKey } from "@/lib/domain/metrics";
 import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
-import { unreachedHereOf, unreachedNamed, unreachedPartners, unreachedSignInDue } from "@/lib/domain/unreached";
+import { unreachedSignsIn } from "@/lib/domain/thatsMe";
+import { unreachedHereOf, unreachedNamed, unreachedPartners, unreachedRecords, unreachedSignInDue } from "@/lib/domain/unreached";
 import { PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
 import { asAction } from "./helpers/action";
 import { freezeClock } from "./helpers/clock";
@@ -170,6 +173,60 @@ describe("\"That's me\" for a name on the organiser's unreached list", () => {
       expect((await asAction({}, () => joinAction(ev.code, name))).result, name).not.toMatchObject({ error: "name_unreached" });
       expect((await asAction({}, () => thatsMeAction(ev.code, name))).result, name).toEqual({ ok: false, error: "invalid" });
     }
+  });
+
+  it("the question and the tap choose the same record: a crew \"Tim\" beside a listed \"Tim Smith\" gets no offer for Tim Smith", async () => {
+    const timSmith = await makePlayer(db, "Tim Smith");
+    const { rosa, ev } = await rosaWith([timSmith]);
+    expect(await listOf(ev)).toEqual(["Tim"]);
+    // Rosa's crew holds a "Tim" with nothing to prove him: the tap for "Tim" finds him first, before it reads the list.
+    const crewTim = await makePlayer(db, "Tim");
+    const crew = await createGroup(db, { name: `Rosa crew ${n}`, creatorPlayerId: rosa.id, tz: "Asia/Bangkok" });
+    await joinGroup(db, crew.id, crewTim.id, "match");
+    await db.update(events).set({ groupId: crew.id }).where(eq(events.id, ev.id));
+    const join = (await asAction({}, () => joinAction(ev.code, "Tim"))).result;
+    expect(join, "the join never offers a record the tap would not sign in").not.toMatchObject({ error: "name_unreached" });
+    // What the tap does for that name: crew Tim, never Tim Smith. So the question for Tim Smith must not stand.
+    const signed = await asAction({}, () => thatsMeAction(ev.code, "Tim"));
+    expect(signed.cookies[PLAYER_COOKIE]).not.toBe(sealPlayerId(timSmith.id, { byName: true }));
+  });
+
+  it("a seated \"Tim\" and a typed \"Tim Smith\": the tap sends the typed name and signs in Tim Smith, never the seated Tim", async () => {
+    const timSmith = await makePlayer(db, "Tim Smith");
+    const { ev } = await rosaWith([timSmith]);
+    const seatedTim = await makePlayer(db, "Tim");
+    await joinEvent(db, { eventId: ev.id, playerId: seatedTim.id, now: NOW });
+    const join = (await asAction({}, () => joinAction(ev.code, "Tim Smith"))).result;
+    expect(join).toEqual({ ok: false, error: "name_unreached", detail: "Tim" });
+    // The question shows the first name the server gave, and the tap carries the name as typed.
+    const tap = thatsMeTapOf({ name: " Tim Smith ", kind: "unreached", first: "Tim" }, " Tim Smith ", ["Tim"]);
+    expect(tap).toEqual({ name: "Tim Smith", label: "Tim" });
+    const signed = await asAction({}, () => thatsMeAction(ev.code, tap!.name));
+    expect(signed.result).toMatchObject({ ok: true, data: { name: "Tim Smith" } });
+    expect(signed.cookies[PLAYER_COOKIE]).toBe(sealPlayerId(timSmith.id, { byName: true }));
+    expect(signed.cookies[PLAYER_COOKIE]).not.toBe(sealPlayerId(seatedTim.id, { byName: true }));
+  });
+
+  it("the organiser's line says \"they sign in as themselves\" only when it is true of every name on it", async () => {
+    const recsOf = async (ev: { code: string }) => {
+      const detail = (await getEventByCode(db, ev.code))!;
+      return { detail, recs: await unreachedRecords(db, detail.event, unreachedHereOf(detail), channelsOffered(), NOW) };
+    };
+    const yan = await makePlayer(db, "Yan Signs");
+    const { ev } = await rosaWith([yan]);
+    const one = await recsOf(ev);
+    expect(one.recs.map((r) => r.name)).toEqual(["Yan Signs"]);
+    expect(await unreachedSignsIn(db, one.detail.event, one.recs, NOW)).toBe(true);
+    // A partner "That's me" refuses (a passkey) beside one it signs in: the plain line for both.
+    const kai = await makePlayer(db, "Kai Keyed");
+    await db.insert(passkeys).values({ id: `cred-line-${kai.id}`, playerId: kai.id, publicKey: "pk", deviceType: "multiDevice" });
+    const zed = await makePlayer(db, "Zed Signs");
+    const { ev: ev2 } = await rosaWith([kai, zed]);
+    const two = await recsOf(ev2);
+    expect(two.recs.map((r) => r.name).sort()).toEqual(["Kai Keyed", "Zed Signs"]);
+    expect(await unreachedSignsIn(db, two.detail.event, two.recs, NOW)).toBe(false);
+    // Nobody on the line: nothing to say.
+    expect(await unreachedSignsIn(db, two.detail.event, [], NOW)).toBe(false);
   });
 
   it("a browser that knows a record joins as that record and is never asked", async () => {

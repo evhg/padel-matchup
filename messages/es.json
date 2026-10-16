@@ -466,9 +466,10 @@
     "playedWithYou": "Jugaron contigo",
     "keepRecord": "Mantener los partidos de {name}",
     "keepsRecord": "Mantiene los partidos de {name}",
-    "unreached": "Kicksmash no puede avisar a {names}. Envía tú el enlace: con él entran con su propio nombre.",
+    "unreached": "Kicksmash no puede avisar a {names}. Envía tú el enlace.",
     "unreachedMore": "{count} más",
-    "unreachedSend": "Enviar el enlace por WhatsApp"
+    "unreachedSend": "Enviar el enlace por WhatsApp",
+    "unreachedSignIn": "Kicksmash no puede avisar a {names}. Envía tú el enlace: con él entran con su propio nombre."
   },
   "score": {
     "title": "Resultado",
@@ -982,7 +983,7 @@
     "emailHelpUpdates": "Escribe tu email y los cambios de este partido te llegarán allí.",
     "codeFirst": "Primero enviamos un código de 6 cifras a esta dirección. La dirección se guarda cuando escribes el código.",
     "stayHelpRequest": "Elige lo que ya usas. La respuesta del organizador te llega ahí.",
-    "linkSentRequest": "Tu enlace está en tu email. Si el organizador dice que sí, te llegará la invitación."
+    "linkSentRequest": "Tu enlace está en tu email. La respuesta del organizador te llega allí, y una plaza en el partido trae la invitación."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

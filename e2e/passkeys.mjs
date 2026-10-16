@@ -230,6 +230,11 @@ try {
       (await h.page.getByTestId("back-in-open").count()) === 0 &&
       (await h.page.getByPlaceholder("you@example.com").count()) === 0,
   );
+  // Nor the closed "Played before? Sign in" under the line-up: the question is the way back in while it stands.
+  check(
+    "no \"Played before? Sign in\" line stands beside the question as a second, dead way in",
+    await h.page.getByTestId("event-back-in-line").waitFor({ state: "detached", timeout: 5000 }).then(() => true).catch(() => false),
+  );
   await shot(h.page, "passkeys-04-seated-ask");
   await seatedAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await view(h.page, "passkeys-04-seated-ask-390");

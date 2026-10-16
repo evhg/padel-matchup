@@ -8,12 +8,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import webpush from "web-push";
 import { eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { notices, players, pushSubscriptions, type Player } from "@/db/schema";
+import { notices, players, pushSubscriptions, type LevelCheck, type Player } from "@/db/schema";
 import { afterLeave } from "@/lib/aftermath";
 import { recordMark } from "@/lib/domain/emailMarks";
 import { createEvent } from "@/lib/domain/events";
 import { createJoinRequest, decideJoinRequest } from "@/lib/domain/requests";
 import { joinEvent, leaveEvent } from "@/lib/domain/slots";
+import { admitConfirmed, confirmLevel } from "@/lib/domain/verify";
+import { announceAdmission, notifyLevelCheckDecided } from "@/lib/levelChecks";
 import { notifyRequestDecided } from "@/lib/notify";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
@@ -196,6 +198,82 @@ describe("the answer to a join request and the move up reach the player on the c
     const { org, ev } = await match();
     await decide(ev, org, bea, false);
     expect(heard(bea)).toEqual({ telegram: 1, whatsapp: 0, push: 0, email: 0 });
+  });
+
+  it("a yes on a full match: a complained-about address with push hears on push; a working address with Telegram hears by email, once", async () => {
+    await recordMark(await getDb(), "wim-news@example.com", "complaint", "test");
+    const wimRow = await makePlayer(db, "Wim", { email: "wim-news@example.com" });
+    const wimAt = `/push-Wim-${n}`;
+    await db.insert(pushSubscriptions).values({ playerId: wimRow.id, ...fakeSubscription(`https://127.0.0.1:${port}${wimAt}`) });
+    const { org, ev } = await match([await makePlayer(db, "D1"), await makePlayer(db, "D2"), await makePlayer(db, "D3")]);
+    expect(await decide(ev, org, wimRow, true)).toBe("waitlisted");
+    expect(heard(wimRow, wimAt)).toEqual({ telegram: 0, whatsapp: 0, push: 1, email: 0 });
+    const dee = await makePlayer(db, "Dee", { email: "dee-news@example.com", telegramId: 7_100_007 });
+    const { org: org2, ev: ev2 } = await match([await makePlayer(db, "E1"), await makePlayer(db, "E2"), await makePlayer(db, "E3")]);
+    expect(await decide(ev2, org2, dee, true)).toBe("waitlisted");
+    expect(heard(dee)).toEqual({ telegram: 0, whatsapp: 0, push: 0, email: 1 });
+    // The waiting list brings no calendar invitation: only a seat does.
+    expect(mails("dee-news@example.com")[0].ics).toBeNull();
+    expect(mails("dee-news@example.com")[0].subject).toContain("On the waiting list");
+  });
+
+  describe("a level confirmation that answers the request", () => {
+    /** A match that admits only a confirmed level, `others` seated beside its organiser, and `p` asking to join it. */
+    const verifiedMatch = async (p: Player, others: Player[] = []) => {
+      const org = await makePlayer(db, `Org lv ${++n}`, { email: `org-lv-${n}@example.com` });
+      const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(NOW.getTime() + 2 * DAY), tz: "Asia/Bangkok", venueName: "Rawai Padel", whenFull: "waitlist", levelMin: 3, levelMax: 4.5, levelVerifiedOnly: true });
+      for (const x of [org, ...others]) await joinEvent(db, { eventId: ev.id, playerId: x.id, now: NOW });
+      await createJoinRequest(db, { eventId: ev.id, playerId: p.id, level: 3.5, now: NOW });
+      return { org, ev };
+    };
+    /** The organiser's own level tick, as `verifyLevelsAction` runs it: no level notice, then the admission's news. */
+    const organiserTick = async (org: Player, p: Player) => {
+      const player = await confirmLevel(db, { playerId: p.id, level: 3.5, byPlayerId: org.id, source: "organizer", now: NOW });
+      const admitted = await admitConfirmed(db, player, org.id, NOW);
+      await announceAdmission(db, player, admitted, "organizer", org.id);
+      return admitted;
+    };
+
+    it("an organiser's level tick admits a Telegram-only requester, who hears it once, on Telegram", async () => {
+      const tia = await makePlayer(db, "Tia", { level: 3.5, telegramId: 7_100_010 });
+      const { org } = await verifiedMatch(tia);
+      expect((await organiserTick(org, tia)).map((a) => a.join.outcome)).toEqual(["joined"]);
+      expect(heard(tia)).toEqual({ telegram: 1, whatsapp: 0, push: 0, email: 0 });
+      expect(telegram.find((m) => m.chat === "7100010")?.text).toContain("You're in");
+    });
+
+    it("a confirmation that puts a push-only requester on the waiting list of a full match tells them, once", async () => {
+      const { p: pax, endpoint } = await pushOnly("Pax");
+      await db.update(players).set({ level: 3.5 }).where(eq(players.id, pax.id));
+      const full = [await makePlayer(db, "F1"), await makePlayer(db, "F2"), await makePlayer(db, "F3")];
+      const { org } = await verifiedMatch(pax, full);
+      expect((await organiserTick(org, pax)).map((a) => a.join.outcome)).toEqual(["waitlisted"]);
+      expect(heard(pax, endpoint)).toEqual({ telegram: 0, whatsapp: 0, push: 1, email: 0 });
+      expect((await db.select().from(notices).where(eq(notices.playerId, pax.id))).map((r) => r.key)).toEqual(["noticeItem.requestWaitlisted"]);
+    });
+
+    it("a coach's confirmation: the level notice that reached a Telegram player names the seat, so the seat is not told twice; a push-only player, whom it cannot reach, hears the seat on push", async () => {
+      // The level notice reads nothing of the check itself: the player, the verifier's name, the answer and the seats.
+      const check = {} as LevelCheck;
+      const tod = await makePlayer(db, "Tod", { level: 3.5, telegramId: 7_100_011 });
+      const { org } = await verifiedMatch(tod);
+      const todNow = await confirmLevel(db, { playerId: tod.id, level: 3.5, byPlayerId: org.id, source: "coach", now: NOW });
+      const todIn = await admitConfirmed(db, todNow, org.id, NOW);
+      const toldTod = await notifyLevelCheckDecided(db, { check, player: todNow, verifierName: "Ana", approve: true, admitted: todIn });
+      expect(toldTod).toBe(true);
+      await announceAdmission(db, todNow, todIn, "coach", org.id, { told: toldTod });
+      expect(heard(tod)).toEqual({ telegram: 1, whatsapp: 0, push: 0, email: 0 });
+
+      const { p: poe, endpoint } = await pushOnly("Poe");
+      await db.update(players).set({ level: 3.5 }).where(eq(players.id, poe.id));
+      const { org: org2 } = await verifiedMatch(poe);
+      const poeNow = await confirmLevel(db, { playerId: poe.id, level: 3.5, byPlayerId: org2.id, source: "coach", now: NOW });
+      const poeIn = await admitConfirmed(db, poeNow, org2.id, NOW);
+      const toldPoe = await notifyLevelCheckDecided(db, { check, player: poeNow, verifierName: "Ana", approve: true, admitted: poeIn });
+      expect(toldPoe).toBe(false);
+      await announceAdmission(db, poeNow, poeIn, "coach", org2.id, { told: toldPoe });
+      expect(heard(poe, endpoint)).toEqual({ telegram: 0, whatsapp: 0, push: 1, email: 0 });
+    });
   });
 
   it("quiet hours hold the news, as they hold every notice: nothing goes now, the inbox keeps it", async () => {

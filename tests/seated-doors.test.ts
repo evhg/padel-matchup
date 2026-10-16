@@ -126,6 +126,15 @@ describe("the question renders the record's own doors, the email code first", ()
     for (const own of [NO_DOORS, { email: true, telegram: false, passkey: true }, { email: true, telegram: false, passkey: false }, { email: false, telegram: false, passkey: true }]) expect(shown(ask(own))).not.toContain("telegram");
   });
 
+  it("the Telegram door is one line and one button, as the email door is: no \"Telegram\" heading and no pitch for a new user", () => {
+    const html = ask({ email: false, telegram: true, passkey: false });
+    const door = html.slice(html.indexOf('data-testid="seated-door-telegram"'));
+    expect(door).toContain("With the Telegram you linked before:");
+    expect(door).toContain("Sign in with Telegram");
+    expect(door).not.toContain("join matches from the bot&#x27;s cards");
+    expect(door).not.toMatch(/uppercase[^>]*>Telegram</);
+  });
+
   it("a passkey: Face ID only", () => {
     expect(shown(ask({ email: false, telegram: false, passkey: true }))).toEqual(["passkey"]);
   });

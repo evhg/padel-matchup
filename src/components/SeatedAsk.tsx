@@ -1,9 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useEffect, useRef } from "react";
 import { normalName } from "@/lib/domain/dupes";
 import { anyDoor, readDoors, type OwnDoors } from "@/lib/domain/seatedDoors";
 import type { BackInDoors } from "./BackInHelp";
+import { registerBackInHandler } from "./backInBus";
 import { PasskeySignIn } from "./PasskeySignIn";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { TelegramLogin } from "./TelegramLogin";
@@ -29,6 +31,18 @@ export function askOf(r: { ok: boolean; error?: string; detail?: string }, typed
   // The first name as the record writes it ("Tomasz" for "tomasz"), from the server; the typed name when it gave none.
   if (r.error === "name_unreached") return { name: typed, kind: "unreached", first: r.detail?.trim() || typed.trim() };
   return null;
+}
+
+/**
+ * What "That's me" sends, and the name its armed face shows ("Sign in as Tim?"). The unreached tap sends
+ * the name as typed, so the server asks the same question the join asked (`unreachedOffer`): the first
+ * name alone could find another record of that name in the match or its crew first. Its face shows the
+ * first name the server gave. A seated tap sends the line-up's name that "That's me" signs in. Pure.
+ */
+export function thatsMeTapOf(ask: NameAsk, typed: string, claimable: readonly string[]): { name: string; label: string } | null {
+  if (ask.kind === "unreached") return { name: ask.name.trim(), label: ask.first };
+  const n = claimable.find((c) => normalName(c) === normalName(typed));
+  return n ? { name: n, label: n } : null;
 }
 
 /** Whether the ask stands for what the field holds now: a changed name takes it back. */
@@ -77,19 +91,32 @@ export function SeatedAsk({
   pending?: boolean;
 }) {
   const t = useTranslations();
+  const box = useRef<HTMLDivElement>(null);
+  // The question is the way back in on the page while it stands: the forms take their "Played before?" help
+  // away under it (`askHasDoors`), and the line under the line-up ("Played before? Sign in", `BackInOpener`)
+  // steps aside while a way back in is registered, so it never stands beside the question as a dead tap. A
+  // request for the way back in (a refused "That's me") brings the question on screen.
+  useEffect(
+    () =>
+      registerBackInHandler(() => {
+        const el = box.current;
+        if (el) requestAnimationFrame(() => el.scrollIntoView({ block: "center", behavior: "smooth" }));
+      }),
+    [],
+  );
   const unreached = ask.kind === "unreached";
   const name = ask.kind === "unreached" ? ask.first : seatedNameOf(typed, namesHere);
-  const thatsMe = ask.kind === "unreached" ? ask.first : claimable.find((n) => normalName(n) === normalName(typed));
+  const thatsMe = thatsMeTapOf(ask, typed, claimable);
   const own = ask.kind === "seated" ? ask.own : null;
   const email = Boolean(own?.email && doors?.email);
   const telegram = own?.telegram && doors?.telegram ? doors.telegram : null;
   const passkey = Boolean(own?.passkey);
   return (
-    <div data-testid="seated-ask" data-ask={ask.kind} className="rounded-2xl border border-court/30 bg-card px-3 py-3 animate-pop">
+    <div ref={box} data-testid="seated-ask" data-ask={ask.kind} className="rounded-2xl border border-court/30 bg-card px-3 py-3 animate-pop">
       <p className="text-sm font-bold">{t(unreached ? "identity.unreachedAsk" : "identity.seatedAsk", { name })}</p>
       {thatsMe ? (
         <div className="mt-2">
-          <ThatsMeButton code={code} name={thatsMe} className="btn-primary btn-sm" armedClassName="btn-primary btn-sm whitespace-normal leading-tight ring-2 ring-ink" />
+          <ThatsMeButton code={code} name={thatsMe.name} label={thatsMe.label} className="btn-primary btn-sm" armedClassName="btn-primary btn-sm whitespace-normal leading-tight ring-2 ring-ink" />
         </div>
       ) : own && anyDoor(own) ? (
         // The record's own doors, the email code first (D4): never the deployment's whole set.
@@ -103,7 +130,7 @@ export function SeatedAsk({
           {telegram && (
             <div data-testid="seated-door-telegram" className={email ? "border-t border-line pt-3" : ""}>
               <p className="mb-2 text-sm text-muted">{t("identity.seatedTelegram")}</p>
-              <TelegramLogin botId={telegram.botId} linked={false} linkedUsername={null} lang={telegram.lang} authUrl={telegram.authUrl} />
+              <TelegramLogin bare botId={telegram.botId} linked={false} linkedUsername={null} lang={telegram.lang} authUrl={telegram.authUrl} />
             </div>
           )}
           {passkey && (

@@ -79,7 +79,7 @@ import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
 import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
 import { keepRecordFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
-import { unreachedDue, unreachedHereOf, unreachedLine, unreachedPartners } from "@/lib/domain/unreached";
+import { firstName, unreachedDue, unreachedHereOf, unreachedLine, unreachedRecords } from "@/lib/domain/unreached";
 import { channelsOffered } from "@/lib/coach/reach";
 import { BePartnerButton, PairTools, PartnerLink } from "@/components/PairRows";
 import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
@@ -90,7 +90,7 @@ import { eventUrl, inviteUrl, whatsappShareUrl } from "@/lib/share";
 import { countParts, heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
-import { NO_OFFER, thatsMeOffer } from "@/lib/domain/thatsMe";
+import { NO_OFFER, thatsMeOffer, unreachedSignsIn } from "@/lib/domain/thatsMe";
 import { heldOffers } from "@/lib/domain/heldByName";
 import { withClientMessages } from "@/i18n/withClientMessages";
 import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
@@ -442,14 +442,18 @@ async function EventPage({ params, searchParams }: Props) {
   // DECIDING rule 7): the free-seat offer's own past partners of this match (a match that ended in the
   // last 60 days, `partnersQuery`) that it would want and cannot reach, first names only. For the
   // organiser's own view of a match with a seat open, before it starts; from the rows and the activity
-  // this page read (who left or was taken out) and one bounded read (`unreachedPartners`). Nobody else ever gets it.
+  // this page read (who left or was taken out) and one bounded read (`unreachedRecords`; the ids stay here, the line gets first names). Nobody else ever gets it.
   // Whom the line leaves out is `unreachedHereOf`, the same answer "That's me" for an unreached partner asks (D6).
-  const unreachedNames = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedPartners(db, ev, unreachedHereOf(detail), channelsOffered(), now) : [];
+  const unreachedRecs = reserving && unreachedDue(ev, spotsLeft, now, viewer.isCreator) ? await unreachedRecords(db, ev, unreachedHereOf(detail), channelsOffered(), now) : [];
+  const unreachedNames = unreachedRecs.map((r) => firstName(r.name));
   const unreachedParts = unreachedLine(unreachedNames);
+  // "They sign in as themselves" only where it is true of every name on the line (D6, `unreachedSignsIn`):
+  // a partner "That's me" refuses keeps the plain "Send them the link.".
+  const unreachedSignIn = unreachedRecs.length > 0 && (await unreachedSignsIn(db, ev, unreachedRecs, now));
   const unreached =
     unreachedNames.length > 0
       ? {
-          text: t("creator.unreached", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format([...unreachedParts.shown, ...(unreachedParts.more ? [t("creator.unreachedMore", { count: unreachedParts.more })] : [])]) }),
+          text: t(unreachedSignIn ? "creator.unreachedSignIn" : "creator.unreached", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format([...unreachedParts.shown, ...(unreachedParts.more ? [t("creator.unreachedMore", { count: unreachedParts.more })] : [])]) }),
           url,
           shareText,
         }

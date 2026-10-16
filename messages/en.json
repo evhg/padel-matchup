@@ -466,9 +466,10 @@
     "playedWithYou": "Played with you",
     "keepRecord": "Keep {name}'s matches",
     "keepsRecord": "Keeps {name}'s matches",
-    "unreached": "Kicksmash can't reach {names}. Send them the link: they sign in as themselves.",
+    "unreached": "Kicksmash can't reach {names}. Send them the link.",
     "unreachedMore": "{count} more",
-    "unreachedSend": "Send the link on WhatsApp"
+    "unreachedSend": "Send the link on WhatsApp",
+    "unreachedSignIn": "Kicksmash can't reach {names}. Send them the link: they sign in as themselves."
   },
   "score": {
     "title": "Score",
@@ -980,9 +981,9 @@
     "viaWhatsapp": "on WhatsApp",
     "linkSent": "Your link is in your email. If a place opens, the invitation follows.",
     "emailHelpUpdates": "Enter your email, and the changes to this match reach you there.",
-    "codeFirst": "We send a 6-digit code to this address first. The address is saved once the code comes back.",
+    "codeFirst": "We send a 6-digit code to this address first. The address is saved when you enter the code.",
     "stayHelpRequest": "Pick what you already use. The organiser's answer reaches you there.",
-    "linkSentRequest": "Your link is in your email. If the organiser says yes, the invitation follows."
+    "linkSentRequest": "Your link is in your email. The organiser's answer reaches you there, and a seat brings the invitation."
   },
   "push": {
     "clubMatchTitle": "{club}: {day} {time}",

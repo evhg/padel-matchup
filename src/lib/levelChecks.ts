@@ -19,15 +19,19 @@ import { recordNotice } from "@/lib/domain/notices";
  * channels they have. Nothing here throws into the request path.
  */
 
-async function reach(p: Pick<Player, "id" | "email" | "telegramId" | "locale" | "emailNotifications">, n: { subject: string; heading: string; body: string; url: string; open: string; footer: string; telegram: string }): Promise<void> {
+/** Whether the line reached the player: an email that went, or a Telegram message that went. Never WhatsApp or push. */
+async function reach(p: Pick<Player, "id" | "email" | "telegramId" | "locale" | "emailNotifications">, n: { subject: string; heading: string; body: string; url: string; open: string; footer: string; telegram: string }): Promise<boolean> {
+  let reached = false;
   // An activity line, so the player's email opt-out applies (Telegram stays: it is the channel they chose for the bot).
   if (emailEnabled() && p.email && p.emailNotifications !== false) {
     const { html, text } = layout({ heading: n.heading, body: n.body, cta: { label: n.open, url: n.url }, footer: n.footer, eventUrl: n.url, openLabel: n.open, telegram: telegramLine(n.telegram, p) });
-    await sendEmail({ to: p.email, subject: n.subject, html, text }).catch(() => undefined);
+    reached = (await sendEmail({ to: p.email, subject: n.subject, html, text }).catch(() => false)) || reached;
   }
   if (telegramEnabled() && p.telegramId) {
-    await sendMessage(p.telegramId, `${esc(n.heading)}\n${esc(n.body)}`, { silent: true, keyboard: { inline_keyboard: [[{ text: n.open, url: n.url }]] } }).catch(() => undefined);
+    const sent = await sendMessage(p.telegramId, `${esc(n.heading)}\n${esc(n.body)}`, { silent: true, keyboard: { inline_keyboard: [[{ text: n.open, url: n.url }]] } }).catch(() => null);
+    reached = Boolean(sent?.ok) || reached;
   }
+  return reached;
 }
 
 /** Who answers this ask, and where they answer it. */
@@ -66,8 +70,13 @@ export async function notifyLevelCheckAsked(db: Db, check: LevelCheck, asker: Pl
   });
 }
 
-export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; player: Player; verifierName: string; approve: boolean; admitted: Admitted[] }): Promise<void> {
-  if ((await recordNotice(db, { playerId: n.player.id, sender: n.approve ? "levelConfirmed" : "levelDeclined", params: { name: n.verifierName } })) !== "now") return;
+/**
+ * The level answer to the player. Returns whether it reached them now (`reach`), with a line for each
+ * match the confirmation seated them in: only then has the player heard of those seats, and only then
+ * does `announceAdmission` leave out the seat's own news (`told`).
+ */
+export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; player: Player; verifierName: string; approve: boolean; admitted: Admitted[] }): Promise<boolean> {
+  if ((await recordNotice(db, { playerId: n.player.id, sender: n.approve ? "levelConfirmed" : "levelDeclined", params: { name: n.verifierName } })) !== "now") return false;
   const { t, locale } = await translatorFor(n.player.locale);
   const base = baseUrl();
   const level = n.player.levelVerifiedLevel ?? n.player.level;
@@ -76,7 +85,7 @@ export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; pl
   const seated = n.admitted.filter((a) => a.join.outcome === "joined");
   const body = n.approve ? [t("levelCheck.notify.confirmedBody", vars), ...(seated.length ? [t("levelCheck.notify.admittedBody", { matches: seated.map((a) => matchLine(a.event)).join("; ") })] : [])].join(" ") : t("levelCheck.notify.declinedBody", vars);
   const url = seated[0] ? `${base}/${seated[0].event.code}` : `${base}/me`;
-  await reach(n.player, {
+  return reach(n.player, {
     subject: n.approve ? t("levelCheck.notify.confirmedSubject", vars) : t("levelCheck.notify.declinedSubject", vars),
     heading: n.approve ? t("levelCheck.notify.confirmedSubject", vars) : t("levelCheck.notify.declinedSubject", vars),
     body,
@@ -92,15 +101,21 @@ export async function notifyLevelCheckDecided(db: Db, n: { check: LevelCheck; pl
  * (unless the tap was theirs: a coach or club who also runs that match, or the
  * organizer confirming after another game), the line-up notice goes round, the
  * player hears they are in, and the webhooks fire, the same as a join by hand.
+ *
+ * The player hears the answer to their request as the organiser's own answer goes (`notifyRequestDecided`,
+ * D5): a seat, or a place on the waiting list of a full match. `o.told`: the level notice reached them now
+ * and named the seats (`notifyLevelCheckDecided` returned true), so a seat brings its calendar invitation
+ * alone, never the same news twice. The organiser's own level tick (`verifyLevelsAction`) sends no level
+ * notice, so there the seat's news goes on the player's own channel. The level notice names no place on
+ * a waiting list, so that news always goes.
  */
-export async function announceAdmission(db: Db, player: Player, admitted: Admitted[], confirmedBy: VerifierSource, byPlayerId: string | null): Promise<void> {
+export async function announceAdmission(db: Db, player: Player, admitted: Admitted[], confirmedBy: VerifierSource, byPlayerId: string | null, o: { told?: boolean } = {}): Promise<void> {
   for (const a of admitted) {
     await notifyCreator(db, a.event, a.join.outcome === "joined" ? "joined" : "waitlisted", player.displayName, byPlayerId).catch(() => undefined);
     // Seated: the line-up may have just become complete. Waitlisted: it already was.
     const fresh = await notifyLineupChange(db, a.event, a.join.outcome !== "joined", player.id);
-    // The level notice (`notifyLevelCheckDecided`) already told the player on their email and Telegram that the
-    // confirmation let them in: here the seat's calendar invitation alone, as before, never the same news twice.
-    if (a.join.outcome === "joined") await notifyRequestDecided(db, fresh ?? a.event, player, "joined", { told: true });
+    if (a.join.outcome === "joined") await notifyRequestDecided(db, fresh ?? a.event, player, "joined", { told: o.told === true });
+    else if (a.join.outcome === "waitlisted") await notifyRequestDecided(db, fresh ?? a.event, player, "waitlisted");
     await emitMatchEvent(db, "match.joined", a.event.code, { player: { name: player.displayName, level: player.level }, outcome: a.join.outcome, approved: true, confirmedBy });
     if (a.event.status === "full") await emitMatchEvent(db, "match.full", a.event.code);
   }

@@ -1168,7 +1168,8 @@ Everything in this list is live. The README describes each in detail.
   the move up from the waiting list reach a player with no working address on Telegram, WhatsApp or
   push, once (D5, DECIDING rule 33). On the plain link, a name on the organiser's "Kicksmash can't reach
   Tim" list asks "Played before as Tim? Sign in as Tim." and "That's me" signs that record in, so Tim
-  makes no second Tim; the line now says "they sign in as themselves" (D6, DECIDING rules 7 and 34).
+  makes no second Tim; the line says "they sign in as themselves" when that is true of every name on it
+  (D6, DECIDING rules 7 and 34).
 
 ## The finish line
 

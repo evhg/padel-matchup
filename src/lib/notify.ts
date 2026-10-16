@@ -261,24 +261,30 @@ async function tellNews(db: Db, ev: Event, player: Player, news: PlaceNews, mail
 }
 
 /**
- * Join request decided (`decideJoinRequestAction`, and a level check that admitted the player): a yes
- * with a seat brings the calendar invitation, a no a short and kind note, both by email as before; a
- * yes on a full match, a place on the waiting list, has no email of its own. A player the email did not
- * reach hears the answer on the channel they gave (`tellNews`, D5). `o.told`: the player heard the news
- * already on their channel (a level check's own notice), so only the invitation goes.
+ * Join request decided (`decideJoinRequestAction`, and a level check that admitted the player): each
+ * answer has an email of its own, where the address works: a yes with a seat brings the calendar
+ * invitation, a yes on a full match the waiting-list note (the words of its push), a no a short and kind
+ * note. A player the email did not reach (no address, or a bounced or complained one, which `sendEmail`
+ * refuses) hears the answer on the channel they gave (`tellNews`, D5), so each player hears it once, by
+ * email first, as a line-up notice goes. `o.told`: the player heard the news already (a level check's own
+ * notice reached them and named the seat), so only the invitation goes.
  */
 export async function notifyRequestDecided(db: Db, ev: Event, player: Player, news: Exclude<PlaceNews, "movedUp">, o: { told?: boolean } = {}): Promise<void> {
   const release = await recordNotice(db, { playerId: player.id, sender: NEWS_SENDER[news], eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz });
   if (release !== "now") return;
   const detail = await getEventDetail(db, ev);
-  const tried = emailEnabled() && Boolean(player.email) && news !== "waitlisted";
+  const tried = emailEnabled() && Boolean(player.email);
   let mailed = false;
   if (tried && news === "joined") mailed = await sendCalendarInvite(db, ev, player, "joined", detail);
-  if (tried && news === "declined" && player.email) {
+  if (tried && news !== "joined" && player.email) {
     const c = await ctx(db, ev, player.locale, player, detail);
     const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
-    const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel, telegram: c.telegram });
-    mailed = await sendEmail({ to: player.email, subject: c.t("email.requestDeclined.subject", vars), html, text });
+    const mail =
+      news === "declined"
+        ? { subject: c.t("email.requestDeclined.subject", vars), heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars) }
+        : { subject: c.t("push.requestWaitlistedTitle", vars), heading: c.t("push.requestWaitlistedTitle", vars), body: c.t("push.requestWaitlistedBody", vars) };
+    const { html, text } = layout({ heading: mail.heading, body: mail.body, meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel, telegram: c.telegram });
+    mailed = await sendEmail({ to: player.email, subject: mail.subject, html, text });
   }
   if (!o.told) await tellNews(db, ev, player, news, { mailed, tried }, detail);
 }

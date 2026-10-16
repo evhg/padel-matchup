@@ -10,6 +10,7 @@ import type { MergeCounter } from "./signins";
 import { bumpMetric } from "./metrics";
 import { LIMITS, takeRate } from "./ratelimit";
 import { lockEvent, vacateAndPromote, type Promotion } from "./slots";
+import { firstName, UNREACHED_SHOWN } from "./unreached";
 
 /**
  * "That's me": a browser that has never seen this person signs in as their record, by name, with no
@@ -405,13 +406,44 @@ export type UnreachedLookup = (name: string) => Promise<{ id: string; name: stri
 /**
  * Whether "That's me" signs in this past partner on the organiser's unreached list (D6): the rows read
  * for the record's own name with the record in context (`extra`), and the one verdict every tap gets,
- * for a browser that knows nobody. One bounded read. The join's offer (`joinAction`) and the tap both
- * ask it, so what the question offers is what the tap does.
+ * for a browser that knows nobody. One bounded read. The join's offer (`unreachedOffer`) and the tap both
+ * ask it after the same first step, for the same typed name, so what the question offers is what the tap does.
  */
 export async function unreachedVerdict(db: Db, m: ThatsMeMatch, u: { id: string; name: string }, now?: Date): Promise<ThatsMeVerdict> {
   const rows = await thatsMeRows(db, m, { name: u.name, extra: u.id, now });
   const v = thatsMeVerdict(rows, null);
   return v.ok && v.id !== u.id ? { ok: false, reason: "namesake" } : v;
+}
+
+/**
+ * Whether the join may ask "Played before as Tim?" for this typed name and this record of the list
+ * (`joinAction`, D6): the tap's own two steps, in its order, for the same typed name. First the rows of
+ * the typed name in this match and its crew, as `decideThatsMe` reads them for a browser that knows
+ * nobody; only when nobody there carries it does the tap read the list, so only then may the join
+ * offer it. Then the list record's own verdict (`unreachedVerdict`). A crew "Tim" beside a listed "Tim
+ * Smith" is the case this keeps apart: the tap would sign in crew Tim, so the join never offers Tim Smith.
+ * One more bounded read, only for a name on the list.
+ */
+export async function unreachedOffer(db: Db, m: ThatsMeMatch, typed: string, u: { id: string; name: string }, now?: Date): Promise<boolean> {
+  const first = thatsMeVerdict(await thatsMeRows(db, m, { name: typed, now }), null);
+  if (first.ok || first.reason !== "nobody") return false;
+  return (await unreachedVerdict(db, m, u, now)).ok;
+}
+
+/**
+ * Whether the organiser's line may say "Send them the link: they sign in as themselves." (D6): only when
+ * it is true of everybody it names. Each partner on the line, typing the first name the line shows, gets
+ * the question and the tap signs in that partner (`unreachedOffer`), so a partner "That's me" refuses (an
+ * address, a passkey, an upcoming match of their own) keeps the plain "Send them the link." for the whole
+ * line. A line with more names than it shows ("and 3 more") keeps it too, so the reads stay at most
+ * `UNREACHED_SHOWN` partners of two bounded reads each, on the organiser's own view of a match with a seat
+ * open (rule 12).
+ */
+export async function unreachedSignsIn(db: Db, m: ThatsMeMatch, partners: readonly { id: string; name: string }[], now?: Date): Promise<boolean> {
+  if (partners.length === 0 || partners.length > UNREACHED_SHOWN) return false;
+  // One partner after another (AGENTS.md rule 8), and none after the first that the tap would not sign in.
+  for (const u of partners) if (!(await unreachedOffer(db, m, firstName(u.name), u, now))) return false;
+  return true;
 }
 
 /**

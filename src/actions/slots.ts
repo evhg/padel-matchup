@@ -33,7 +33,7 @@ import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
 import { decideHeldByName, seatedNamed, seatedRecordsNamed, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
 import { doorsDetail, seatedDoors } from "@/lib/domain/seatedDoors";
-import { savedPasskey, unreachedVerdict } from "@/lib/domain/thatsMe";
+import { savedPasskey, unreachedOffer } from "@/lib/domain/thatsMe";
 import { firstName, unreachedNamed } from "@/lib/domain/unreached";
 import { channelsOffered } from "@/lib/coach/reach";
 import { telegramBotId } from "@/lib/telegram/api";
@@ -85,12 +85,13 @@ export async function joinAction(code: string, name?: string, level?: number | n
     // A name of the organiser's unreached past partners that "That's me" signs in (the owner's decision of 16
     // October 2026, D6): asked when a record is about to be made, so after every rule `whoJoins` keeps and only
     // for a browser that knows nobody, unless the person said they are somebody else. One bounded read
-    // (`unreachedRecords`), and the "That's me" read only for a name on the list.
+    // (`unreachedRecords`), and the "That's me" reads only for a name on the list: the tap's own two steps for
+    // the same typed name (`unreachedOffer`), so the question never offers a record the tap would not sign in.
     const now = new Date();
     const make = async () => {
       if (!different && name?.trim()) {
         const u = await unreachedNamed(db, detail, name, channelsOffered(), now);
-        if (u && (await unreachedVerdict(db, detail.event, u, now)).ok) {
+        if (u && (await unreachedOffer(db, detail.event, name, u, now))) {
           await bumpMetric(db, "join_name_unreached").catch(() => undefined);
           // The question names the first name as the record writes it, what the typed name already said: never the whole name or an id (rule 7).
           throw new ActionFailure("name_unreached", firstName(u.name));
@@ -202,7 +203,7 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
       if (!player) return;
       if (approve) {
         const fresh = await notifyLineupChange(db, res.event, before, player.id);
-        // The answer reaches the player on every channel they gave, a yes on a full match too (the owner's decision of 16 October 2026, D5).
+        // The answer reaches the player once, a yes on a full match too: by email where the address works, else on the first channel they gave (the owner's decision of 16 October 2026, D5).
         if (res.join?.outcome === "joined" || res.join?.outcome === "waitlisted") await notifyRequestDecided(db, fresh ?? res.event, player, res.join.outcome);
         await emitMatchEvent(db, "match.joined", code, { player: { name: player.displayName, level: player.level }, outcome: res.join?.outcome ?? "joined", approved: true });
         if (res.event.status === "full") await emitMatchEvent(db, "match.full", code);
