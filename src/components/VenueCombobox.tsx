@@ -10,16 +10,36 @@ export type VenueOption = { name: string; mapUrl: string | null; where?: "yours"
 const SHOWN_AT_REST = 6;
 const SHOWN_WHEN_SEARCHING = 24;
 
+/**
+ * What Go (Enter) does in the venue field while its list is open: the club typed in full, else the
+ * first row (`first`), picked as a tap picks it; "close" when the list offers only "Use … as a new
+ * court"; null when Go is not the field's own, so the create form moves on (`enterMovesOn`). An empty
+ * field is not a pick. Nor is the club that the field already holds with its map link: a returning
+ * organiser's own club is filled in, and Go there picked it again and kept the focus, so "next" took
+ * two presses (review, 15 October 2026). A name in another case, or with spaces round it, is still
+ * picked, because the pick writes the club's own name.
+ */
+export function venueGo(venues: readonly VenueOption[], first: VenueOption | undefined, value: string, mapUrl: string): VenueOption | "close" | null {
+  const typed = value.trim().toLowerCase();
+  if (!typed) return null;
+  const exact = venues.find((v) => v.name.toLowerCase() === typed);
+  if (exact && exact.name === value && (!exact.mapUrl || exact.mapUrl === mapUrl)) return null;
+  return exact ?? first ?? "close";
+}
+
 export function VenueCombobox({
   venues,
   value,
   mapUrl,
   onChange,
+  enterKeyHint,
 }: {
   venues: VenueOption[];
   value: string;
   mapUrl: string;
   onChange: (v: { name: string; mapUrl: string }) => void;
+  /** "next" on the create form, where Go moves on to the next field. */
+  enterKeyHint?: "next";
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -50,6 +70,12 @@ export function VenueCombobox({
     });
   }, [venues, value, locale, t]);
   const exact = venues.some((v) => v.name.toLowerCase() === value.trim().toLowerCase());
+  const listShown = open && (rows.length > 0 || Boolean(value.trim() && !exact));
+  const choose = (v: VenueOption) => {
+    onChange({ name: v.name, mapUrl: v.mapUrl ?? "" });
+    setShowMap(Boolean(v.mapUrl));
+    setOpen(false);
+  };
 
   return (
     <div className="relative">
@@ -68,9 +94,22 @@ export function VenueCombobox({
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
+        // Go (Enter) with the list open and a name typed picks the first suggestion, as a tap does
+        // (`venueGo`). A pick calls preventDefault, so it sends no form, and the create form keeps the
+        // field for the next Go. An empty field, or the club the field already holds, is no pick: the
+        // list closes and Go moves on (`enterMovesOn`).
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || e.nativeEvent.isComposing || !listShown) return;
+          const pick = venueGo(venues, rows[0]?.venue, value, mapUrl);
+          if (pick === null) return setOpen(false);
+          e.preventDefault();
+          if (pick === "close") setOpen(false);
+          else choose(pick);
+        }}
+        enterKeyHint={enterKeyHint}
         maxLength={80}
       />
-      {open && (rows.length > 0 || (value.trim() && !exact)) && (
+      {listShown && (
         <ul className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-line bg-card shadow-card">
           {rows.map(({ venue: v, heading }) => (
             <li key={v.name}>
@@ -79,11 +118,7 @@ export function VenueCombobox({
                 type="button"
                 className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-bg"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onChange({ name: v.name, mapUrl: v.mapUrl ?? "" });
-                  setShowMap(Boolean(v.mapUrl));
-                  setOpen(false);
-                }}
+                onClick={() => choose(v)}
               >
                 <span className="font-semibold">{v.name}</span>
                 {v.mapUrl && <span className="text-xs text-muted">📍</span>}

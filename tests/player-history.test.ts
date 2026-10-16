@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, slots, type Player } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { getPlayerHistory, playerHistoryReads } from "@/lib/domain/queries";
+import { getPlayerHistory, playedMatchRead, playerHistoryReads } from "@/lib/domain/queries";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, HOUR, makePlayer } from "./helpers/db";
 
@@ -68,26 +68,33 @@ describe("getPlayerHistory", () => {
     expect(await getPlayerHistory(db, someone.id, 5)).toHaveLength(5);
   });
 
+  /** The plan of a read, as `explain analyze` gives it: the index it starts from, and how many rows it touched. */
+  const startsFrom = async (q: { toSQL: () => { sql: string; params: unknown[] } }, index: string) => {
+    const { sql: text0, params } = q.toSQL();
+    const text = params.reduce<string>((t, p, i) => t.replace(new RegExp(`\\$${i + 1}(?!\\d)`, "g"), `'${String(p)}'`), text0);
+    // PGlite answers { rows }, postgres-js (CI's real Postgres) an array of rows; and real Postgres plans
+    // from statistics, so they are gathered first, as autovacuum would on a live table.
+    await db.execute(sql`analyze events`);
+    await db.execute(sql`analyze slots`);
+    const res = (await db.execute(sql.raw(`explain (analyze, costs off, timing off) ${text}`))) as unknown as Record<string, string>[] | { rows: Record<string, string>[] };
+    const plan = (Array.isArray(res) ? res : res.rows).map((r) => Object.values(r)[0]).join("\n");
+    const touched = [...plan.matchAll(/actual rows=(\d+)/g)].map((m) => Number(m[1]));
+    const removed = [...plan.matchAll(/Rows Removed by Filter: (\d+)/g)].map((m) => Number(m[1]));
+    // An index scan, an index-only scan or a bitmap scan of the same index all start from the player's rows.
+    expect(plan).toMatch(new RegExp(`(Index Scan using|Index Only Scan using|Bitmap Index Scan on) ${index}\\b`));
+    expect(Math.max(...touched), plan).toBeLessThan(50);
+    expect(Math.max(0, ...removed), plan).toBeLessThan(50);
+  };
+
   it("each read starts from the player's own rows: the plan never walks the 3,000 matches of somebody else", async () => {
     const [made, played] = playerHistoryReads(db, nok.id, 60);
-    for (const [q, index] of [
-      [made, "events_creator_idx"],
-      [played, "slots_player_idx"],
-    ] as const) {
-      const { sql: text0, params } = q.toSQL();
-      const text = params.reduce<string>((t, p, i) => t.replace(new RegExp(`\\$${i + 1}(?!\\d)`, "g"), `'${String(p)}'`), text0);
-      // PGlite answers { rows }, postgres-js (CI's real Postgres) an array of rows; and real Postgres plans
-      // from statistics, so they are gathered first, as autovacuum would on a live table.
-      await db.execute(sql`analyze events`);
-      await db.execute(sql`analyze slots`);
-      const res = (await db.execute(sql.raw(`explain (analyze, costs off, timing off) ${text}`))) as unknown as Record<string, string>[] | { rows: Record<string, string>[] };
-      const plan = (Array.isArray(res) ? res : res.rows).map((r) => Object.values(r)[0]).join("\n");
-      const touched = [...plan.matchAll(/actual rows=(\d+)/g)].map((m) => Number(m[1]));
-      const removed = [...plan.matchAll(/Rows Removed by Filter: (\d+)/g)].map((m) => Number(m[1]));
-      // An index scan, an index-only scan or a bitmap scan of the same index all start from the player's rows.
-      expect(plan).toMatch(new RegExp(`(Index Scan using|Index Only Scan using|Bitmap Index Scan on) ${index}\\b`));
-      expect(Math.max(...touched), plan).toBeLessThan(50);
-      expect(Math.max(0, ...removed), plan).toBeLessThan(50);
-    }
+    await startsFrom(made, "events_creator_idx");
+    await startsFrom(played, "slots_player_idx");
+  });
+
+  it("the read of which of those matches people played starts from their own seats (the usual times, getPlayerTimePatterns)", async () => {
+    const ids = (await getPlayerHistory(db, nok.id)).map((r) => r.id);
+    expect(ids.length).toBeGreaterThan(0);
+    await startsFrom(playedMatchRead(db, ids), "slots_event_position_idx");
   });
 });
