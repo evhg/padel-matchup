@@ -39,6 +39,7 @@ export const SENDERS = {
   movedUp: "changes", // notifyPromotion: off the waiting list
   removed: "changes", // notifyRemoved: the organiser took them out, or the night went on without them
   requestApproved: "changes", // notifyRequestDecided: the organiser said yes
+  requestWaitlisted: "changes", // notifyRequestDecided: the organiser said yes, and the match is full: a place on the waiting list
   requestDeclined: "changes", // notifyRequestDecided: the organiser said no
   organizerFeed: "changes", // notifyCreator: who joined or left the match you organise
   tournamentEntry: "changes", // tellOrganizerOfEntry

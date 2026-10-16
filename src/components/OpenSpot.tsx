@@ -10,7 +10,7 @@ import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { PastAsk } from "./PastAsk";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
-import { SeatedAsk } from "./SeatedAsk";
+import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import { normalName } from "@/lib/domain/dupes";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
@@ -95,8 +95,8 @@ export function OpenSpot({
   const asked = mode === "reserve" && !keepsPick && !phone.trim() ? askFor(past, name) : [];
   const answered = answer && answer.key === answerKey(name) ? answer.answer : undefined;
   const [error, setError] = useState<string | null>(null);
-  /** The typed name the server answered with `name_seated`: "Danny is in this match. Sign in as Danny?" stands while the field still holds it. */
-  const [seated, setSeated] = useState<string | null>(null);
+  /** The server's answer for a typed name (`name_seated`, `name_unreached`): "Sign in as Danny?" stands while the field still holds it. */
+  const [nameAsk, setNameAsk] = useState<NameAsk | null>(null);
   const [pending, start] = useTransition();
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -140,9 +140,9 @@ export function OpenSpot({
       setError(null);
       const r = await joinAction(code, withName, level ?? undefined, undefined, different ? { differentPerson: true } : undefined);
       startTransition(() => {
-        if (r.ok) setSeated(null);
-        else if (r.error === "name_seated" && withName) setSeated(withName);
-        else setError(errText(r.error));
+        const asked = askOf(r, withName);
+        setNameAsk(asked);
+        if (!r.ok && !asked) setError(errText(r.error));
       });
     });
 
@@ -266,9 +266,9 @@ export function OpenSpot({
 
   const hasNames = name.trim().length > 0;
   // "Sign in as Danny?" while the field still holds the name the server asked about.
-  const asking = mode === "join" && !hasIdentity && seated !== null && normalName(seated) === normalName(name);
-  // The ask shows the record's own doors in place of the help below when "That's me" cannot sign it in: one copy on the page.
-  const askHasDoors = asking && !claimable.some((n) => normalName(n) === normalName(name));
+  const asking = mode === "join" && !hasIdentity ? askStanding(nameAsk, name) : null;
+  // While the question stands, the help below steps aside: the question shows the record's own doors only (D4), or "That's me" (D6).
+  const askHasDoors = Boolean(asking) && (asking?.kind === "unreached" || !claimable.some((n) => normalName(n) === normalName(name)));
   // The held place this typed name may take, under the name the organiser gave it: while it is offered, the form sends no Join.
   const heldName = mode === "join" && !hasIdentity ? heldNameOf(name, held) : undefined;
   return (
@@ -320,7 +320,7 @@ export function OpenSpot({
           crew member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
         {asking ? (
-          <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} doors={backIn} pending={pending} onDifferent={() => join(name, true)} />
+          <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} ask={asking} doors={backIn} pending={pending} onDifferent={() => join(name, true)} />
         ) : (
           mode === "join" && !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />
         )}

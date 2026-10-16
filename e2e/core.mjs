@@ -1077,21 +1077,27 @@ try {
   await mariaPage.getByText("You're confirmed").waitFor({ timeout: 20000 });
   // Signed in by name: an address she types brings no invitation and no link (DECIDING rule 34), so the form
   // promises neither and says neither went. It said "Calendar invite sent", and its "Send it again" then
-  // failed every time (review, 15 October 2026).
+  // failed every time (review, 15 October 2026). Since 16 October 2026 (D3) the address is kept only once a
+  // 6-digit code proves it, so the form says a code goes first and its button sends the code.
   const mariaForm = mariaPage.getByTestId("calendar-email");
   check(
-    "by name, the confirmed page's form promises no invitation: \"Stay updated\" and \"Save\", never \"Send invite\"",
-    (await mariaForm.getByText("Stay updated").count()) === 1 && (await mariaForm.getByRole("button", { name: "Save", exact: true }).count()) === 1 && (await mariaForm.getByRole("button", { name: "Send invite" }).count()) === 0,
+    "by name, the confirmed page's form promises no invitation: \"Stay updated\", a code first and \"Send code\", never \"Send invite\"",
+    (await mariaForm.getByText("Stay updated").count()) === 1 &&
+      (await mariaForm.getByText("We send a 6-digit code to this address first.", { exact: false }).count()) === 1 &&
+      (await mariaForm.getByRole("button", { name: "Send code", exact: true }).count()) === 1 &&
+      (await mariaForm.getByRole("button", { name: "Send invite" }).count()) === 0,
   );
   if (process.env.SHOTS) await mariaPage.screenshot({ path: `${process.env.SHOTS}/12h2-held-record-by-name-form-viewport.png` });
   await mariaForm.getByPlaceholder("you@example.com").fill("maria-byname@example.com");
   await mariaForm.locator('button[type="submit"]').click();
-  const mariaReached = await mariaForm.getByText("Updates reach you by email ✓").waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+  const mariaCode = await mariaForm.getByTestId("email-code").waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
   // A welcome would go in the action's after(), within a second or two: none may.
   await mariaPage.waitForTimeout(2000);
+  const toMaria = mails().filter((m) => m.to === "maria-byname@example.com");
   check(
-    "after the save it says only that updates reach her by email: no \"Calendar invite sent\", no \"Send it again\", and no mail went",
-    mariaReached && (await mariaPage.getByText(/Calendar invite sent/).count()) === 0 && (await mariaPage.getByRole("button", { name: /Send it again/ }).count()) === 0 && mails().filter((m) => m.to === "maria-byname@example.com").length === 0,
+    "after the save the code box stands in its place, and the one mail is the code: no \"Calendar invite sent\", no \"Send it again\", no invitation",
+    mariaCode && (await mariaPage.getByText(/Calendar invite sent/).count()) === 0 && (await mariaPage.getByRole("button", { name: /Send it again/ }).count()) === 0 && toMaria.length === 1 && !toMaria[0].ics && /^\d{6} is your Kicksmash code$/.test(toMaria[0].subject),
+    JSON.stringify(toMaria.map((m) => m.subject)),
   );
   if (process.env.SHOTS) await mariaPage.screenshot({ path: `${process.env.SHOTS}/12i-held-record-by-name-saved-viewport.png` });
   const lineup4 = await mariaPage.request.get(`${BASE}/api/v1/matches/${code4}`).then((r) => r.json());

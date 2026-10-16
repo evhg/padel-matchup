@@ -152,7 +152,8 @@ describe("the web's plain join and join_match, before any record is made", () =>
       const everybody = async () => (await app.select({ id: players.id }).from(players)).length;
       const before = await everybody();
       const { result, cookies } = await asAction({}, () => joinAction(ev.code, " danny "));
-      expect(result).toEqual({ ok: false, error: "name_seated" });
+      // The refusal carries Danny's own doors, and he has none: "That's me" is his way in (D4).
+      expect(result).toEqual({ ok: false, error: "name_seated", detail: "doors:" });
       expect(cookies[PLAYER_COOKIE], "no record was made for the browser").toBeUndefined();
       expect(await everybody()).toBe(before);
       expect(await metric("join_name_seated")).toBe(asked + 1);
@@ -163,14 +164,16 @@ describe("the web's plain join and join_match, before any record is made", () =>
       expect(await dannysIn(app, ev.id)).toBe(1);
     });
 
-    it("a seated record with an email is refused the same way (its page shows the email and passkey doors), and so is a name on the waiting list", async () => {
+    it("a seated record with an email is refused the same way (the question shows its email code, D4), and so is a name on the waiting list", async () => {
       const { ev } = await match({ email: "danny-seated@example.com" }, app);
-      expect((await asAction({}, () => joinAction(ev.code, "Danny"))).result).toEqual({ ok: false, error: "name_seated" });
+      process.env.RESEND_API_KEY = "re_test_only";
+      expect((await asAction({}, () => joinAction(ev.code, "Danny"))).result).toEqual({ ok: false, error: "name_seated", detail: "doors:email" });
+      delete process.env.RESEND_API_KEY;
       // Fill the match, then Bo waits; a fresh browser typing "bo" is asked before it waits beside him.
       for (const name of ["Cy", "Di", "Bo"]) await joinEvent(app, { eventId: ev.id, playerId: (await makePlayer(app, name)).id, now: NOW });
       const detail = (await getEventByCode(app, ev.code))!;
       expect(detail.waitlist.map((s) => s.player?.displayName)).toContain("Bo");
-      expect((await asAction({}, () => joinAction(ev.code, "bo"))).result).toEqual({ ok: false, error: "name_seated" });
+      expect((await asAction({}, () => joinAction(ev.code, "bo"))).result).toEqual({ ok: false, error: "name_seated", detail: "doors:" });
     });
 
     // A new record takes the request's language (`requirePlayer` reads `getLocale`), which next-intl gives
@@ -180,7 +183,7 @@ describe("the web's plain join and join_match, before any record is made", () =>
     it("\"I'm a different Danny\" passes the question: the flag is the only thing that lets the typed name past it, and the tap is counted", async () => {
       const { ev } = await match({}, app);
       const different = await metric("join_name_different");
-      expect((await asAction({}, () => joinAction(ev.code, "Danny"))).result).toEqual({ ok: false, error: "name_seated" });
+      expect((await asAction({}, () => joinAction(ev.code, "Danny"))).result).toMatchObject({ ok: false, error: "name_seated" });
       expect(await metric("join_name_different")).toBe(different);
       const { result } = await asAction({}, () => joinAction(ev.code, "Danny", undefined, undefined, { differentPerson: true }));
       expect(result).not.toMatchObject({ error: "name_seated" });

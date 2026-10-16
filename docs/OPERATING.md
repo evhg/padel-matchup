@@ -223,7 +223,7 @@ Which of these makes the second record is a question for the numbers, so these d
 `metrics_daily` answer it. None holds a name, an address or a token. Read them through
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
 current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'merge_%' or key like
-'join_src_%' or key like 'passkey_%' or key = 'thats_me_refused' or key like 'held_by_name%') group by 1 order by 1`.
+'join_src_%' or key like 'passkey_%' or key like 'thats_me_%' or key like 'join_name_%' or key = 'email_proved_by_name' or key like 'held_by_name%') group by 1 order by 1`.
 
 - **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
@@ -282,11 +282,22 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   in this match. Sign in as Danny?" (DECIDING rule 34, the owner's decision of 15 October 2026).
   `join_name_different`: "I'm a different Danny" beside such a record. The yes is counted where it
   signs in (`signin_thats_me`, `signin_passkey`, `signin_email_code`). Many `join_name_seated` with few
-  sign-ins: the question does not land.
-- **"Stay updated" after a join.** `stay_asked`: a web join (`joinAction`, a seat or a waiting place)
-  by a player with no channel, so the match page shows the card asking for WhatsApp, Telegram or email.
+  sign-ins: the question does not land. Since 16 October 2026 the question shows only the record's own
+  doors (the owner's decision D4), so a sign-in there is that record's own.
+- **A name on the organiser's unreached list.** `join_name_unreached`: a web join from a browser that
+  knew nobody typed a name of the organiser's past partners that Kicksmash cannot reach ("Kicksmash
+  can't reach Tim"), and the page asked "Played before as Tim? Sign in as Tim." before it made a second
+  Tim (DECIDING rule 34, the owner's decision of 16 October 2026, D6). `thats_me_unreached`: "That's me"
+  signed such a browser in as that record; it counts in `signin_thats_me` too.
+- **An address from a session by name.** `email_proved_by_name`: a session that came in by name proved
+  an address with the 6-digit code it was sent, and is a full session from then on (DECIDING rule 34,
+  the owner's decision of 16 October 2026, D3). The address is saved only then; before it, a save sends
+  the code and keeps nothing, so nothing counts.
+- **"Stay updated" after a join.** `stay_asked`: a web join (`joinAction`, a seat, a waiting place, or
+  since 16 October 2026 a join request that waits for the organiser, D5) by a player with no channel, so
+  the match page shows the card asking for WhatsApp, Telegram or email.
   `stay_linked_email`: a player the card asked saved an address on the card itself, and email now
-  reaches them; a save on the invitation page, in the match page's email row or on My matches is not
+  reaches them (for a session by name, once the code proved the address); a save on the invitation page, in the match page's email row or on My matches is not
   counted (since a review of 15 October 2026). `stay_linked_telegram` and `stay_linked_whatsapp`: the
   card's chat tap linked the account or number. Each is one upsert for each join, save or link, after
   the answer, never for a view of the page (since 15 October 2026 for the first two). The three

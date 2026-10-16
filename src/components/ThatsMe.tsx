@@ -42,11 +42,15 @@ export function useTwoTap<T extends HTMLElement>() {
 export function ThatsMeButton({
   code,
   name,
+  label = name,
   className = "btn-ghost btn-xs shrink-0",
   armedClassName = "btn-primary btn-xs shrink-0 max-w-44 whitespace-normal leading-tight",
 }: {
   code: string;
+  /** The name the tap sends: the server decides again for exactly this name. */
   name: string;
+  /** The name the armed button shows ("Sign in as Tim?"), where it differs from what the tap sends: the first name the server gave for a typed whole name (D6). */
+  label?: string;
   className?: string;
   armedClassName?: string;
 }) {
@@ -82,7 +86,7 @@ export function ThatsMeButton({
         onClick={tap}
         onBlur={() => setArmed(false)}
       >
-        {pending ? t("common.working") : armed ? t("identity.thatsMeSure", { name }) : t("identity.thatsMeIn")}
+        {pending ? t("common.working") : armed ? t("identity.thatsMeSure", { name: label }) : t("identity.thatsMeIn")}
       </button>
       {error && (
         <span role="status" className="block text-xs font-semibold text-danger">

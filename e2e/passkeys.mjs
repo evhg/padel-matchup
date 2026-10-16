@@ -220,6 +220,21 @@ try {
       (await recordsNamed(NAME)) === 1,
     ((await seatedAsk.innerText()) ?? "").replace(/\s+/g, " "),
   );
+  // The owner's decision of 16 October 2026 (D4): only the record's own doors. Ana has a passkey and no
+  // address and no Telegram, so the question shows Face ID alone, and the page's general help steps aside.
+  check(
+    "the question shows only the record's own door: Face ID, and no email code and no Telegram, here or beside it",
+    (await seatedAsk.getByTestId("seated-door-passkey").count()) === 1 &&
+      (await seatedAsk.getByTestId("seated-door-email").count()) === 0 &&
+      (await seatedAsk.getByTestId("seated-door-telegram").count()) === 0 &&
+      (await h.page.getByTestId("back-in-open").count()) === 0 &&
+      (await h.page.getByPlaceholder("you@example.com").count()) === 0,
+  );
+  // Nor the closed "Played before? Sign in" under the line-up: the question is the way back in while it stands.
+  check(
+    "no \"Played before? Sign in\" line stands beside the question as a second, dead way in",
+    await h.page.getByTestId("event-back-in-line").waitFor({ state: "detached", timeout: 5000 }).then(() => true).catch(() => false),
+  );
   await shot(h.page, "passkeys-04-seated-ask");
   await seatedAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await view(h.page, "passkeys-04-seated-ask-390");

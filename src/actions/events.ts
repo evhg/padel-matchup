@@ -29,7 +29,8 @@ import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayA
 import { nextGameFor, playAgainStart } from "@/lib/domain/playAgain";
 import { heldRecordsFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
 import { cleanPicks, type PastView } from "@/lib/domain/pastAsk";
-import { ActionFailure, assertRate, getViewer, loadEvent, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, getViewer, loadEvent, nameOnly, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
+import { askForProof } from "./emailProof";
 import { LIMITS } from "@/lib/domain/ratelimit";
 
 const createSchema = z.object({
@@ -382,13 +383,26 @@ export async function setBanterAction(code: string, on: boolean): Promise<Action
   });
 }
 
-export async function setCreatorEmailAction(code: string, email: string): Promise<ActionResult<null>> {
+/**
+ * The organiser's own address, from the share page and the organiser's panel. `code: "sent"`: the
+ * organiser here is the session's own record, signed in by name and proving nothing, so nothing is
+ * saved and a 6-digit code went to the address first (`askForProof`, the owner's decision of 16 October
+ * 2026, D3); `proveMyEmail` saves it. A manage link that is not the session's own record saves the
+ * creator's address as before: the link is the organiser's proof.
+ */
+export async function setCreatorEmailAction(code: string, email: string): Promise<ActionResult<{ code: "sent" | null }>> {
   return runA(async () => {
     const { db, detail, viewer } = await requireCreator(code);
-    const target = viewer.player?.id === detail.event.creatorPlayerId ? viewer.player.id : detail.event.creatorPlayerId;
-    const { player: updated, changed } = await changePlayerEmail(db, target, normalizeEmail(email));
+    const own = viewer.player?.id === detail.event.creatorPlayerId ? viewer.player : null;
+    const target = own ? own.id : detail.event.creatorPlayerId;
+    const normalized = normalizeEmail(email);
+    if (own && normalized && (await nameOnly(own))) {
+      await askForProof(db, own, normalized);
+      return { code: "sent" as const };
+    }
+    const { player: updated, changed } = await changePlayerEmail(db, target, normalized);
     if (changed) after(() => welcomeEmail(db, updated, detail.event));
     revalidatePath(`/${code}`);
-    return null;
+    return { code: null };
   });
 }

@@ -221,19 +221,72 @@ export async function notifyCreator(db: Db, ev: Event, kind: CreatorKind, actorN
   }
 }
 
-/** Join request decided: approved players get their calendar invite, declined ones a short, kind note. */
-export async function notifyRequestDecided(db: Db, ev: Event, player: Player, approved: boolean): Promise<void> {
-  const release = await recordNotice(db, { playerId: player.id, sender: approved ? "requestApproved" : "requestDeclined", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz });
-  if (release !== "now" || !emailEnabled()) return;
-  if (approved) {
-    await sendCalendarInvite(db, ev, player);
-    return;
+/**
+ * The organiser's answer to a join request, and the move up from the waiting list: what the player hears.
+ * `joined` (a yes with a seat), `waitlisted` (a yes on a full match: a place on the waiting list),
+ * `declined` (a no), `movedUp` (a place opened and the waiting list moved them up).
+ */
+export type PlaceNews = "joined" | "waitlisted" | "declined" | "movedUp";
+
+const NEWS_SENDER: Record<PlaceNews, Sender> = { joined: "requestApproved", waitlisted: "requestWaitlisted", declined: "requestDeclined", movedUp: "movedUp" };
+const NEWS_PUSH: Record<PlaceNews, "requestApproved" | "requestWaitlisted" | "requestDeclined" | "movedUp"> = { joined: "requestApproved", waitlisted: "requestWaitlisted", declined: "requestDeclined", movedUp: "movedUp" };
+
+/**
+ * The news on the channel the player gave, when no email of its own reached them (the owner's decision of
+ * 16 October 2026, D5, "Card and all channels": "send the answer and the move-up on every channel they
+ * gave (Telegram, WhatsApp, push, email)"). Until then the answer to a request and the move up from the
+ * waiting list went by email alone, so a player who gave Telegram, WhatsApp or push heard nothing, and a
+ * player who moved up did not know they had a place: the line-up notice leaves the players a promotion
+ * moved up out (`notifyLineupChange`'s `excludePlayerId`), and this was their only notice.
+ *
+ * As `tellTheRest` tells a line-up: the email of its own goes where the address works (the invitation,
+ * the kind no), and everybody it did not reach hears through `tell()`, on the first channel they gave:
+ * Telegram, then WhatsApp (`ks_match_update`, a button to the public match page), then email, then push.
+ * So each player hears the news once. `mailed`: the email went, and nothing more goes. `tried`: an email
+ * was tried and refused (a bounced or complained address, `markedAmong`), so `tell()` gets the player
+ * without the address and does not try it again. The row was written and released by the caller
+ * (`released: "now"`), so the kind switch and quiet hours (DECIDING rule 33) hold here as for the email.
+ * The button opens the public match page, never a personal link: a push goes to whatever device
+ * subscribed, and a session by name may have subscribed one.
+ */
+async function tellNews(db: Db, ev: Event, player: Player, news: PlaceNews, mail: { mailed: boolean; tried: boolean }, detail?: EventDetail): Promise<void> {
+  if (mail.mailed) return;
+  const c = await ctx(db, ev, player.locale, null, detail);
+  const vars = { ...c.vars, organizer: c.detail.creator.displayName };
+  const key = NEWS_PUSH[news];
+  const heading = c.t(`push.${key}Title` as "push.movedUpTitle", vars);
+  const body = c.t(`push.${key}Body` as "push.movedUpBody", vars);
+  const wa = waLocale(player.locale);
+  await tell(db, mail.tried ? { ...player, email: null } : player, `${heading}\n${body}`, { inline_keyboard: [[{ text: c.openLabel, url: c.publicUrl }]] }, { notice: { released: "now" }, whatsapp: { template: "ks_match_update", body: [waMatchLine(c.detail, wa), heading], button: ev.code } }).catch(() => undefined);
+}
+
+/**
+ * Join request decided (`decideJoinRequestAction`, and a level check that admitted the player): each
+ * answer has an email of its own, where the address works: a yes with a seat brings the calendar
+ * invitation, a yes on a full match the waiting-list note (the words of its push), a no a short and kind
+ * note. A player the email did not reach (no address, or a bounced or complained one, which `sendEmail`
+ * refuses) hears the answer on the channel they gave (`tellNews`, D5), so each player hears it once, by
+ * email first, as a line-up notice goes. `o.told`: the player heard the news already (a level check's own
+ * notice reached them and named the seat), so only the invitation goes.
+ */
+export async function notifyRequestDecided(db: Db, ev: Event, player: Player, news: Exclude<PlaceNews, "movedUp">, o: { told?: boolean } = {}): Promise<void> {
+  const release = await recordNotice(db, { playerId: player.id, sender: NEWS_SENDER[news], eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz });
+  if (release !== "now") return;
+  const detail = await getEventDetail(db, ev);
+  const tried = emailEnabled() && Boolean(player.email);
+  let mailed = false;
+  if (tried && news === "joined") mailed = await sendCalendarInvite(db, ev, player, "joined", detail);
+  if (tried && news !== "joined" && player.email) {
+    const c = await ctx(db, ev, player.locale, player, detail);
+    const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
+    const mail =
+      news === "declined"
+        ? { subject: c.t("email.requestDeclined.subject", vars), heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars) }
+        : { subject: c.t("push.requestWaitlistedTitle", vars), heading: c.t("push.requestWaitlistedTitle", vars), body: c.t("push.requestWaitlistedBody", vars) };
+    const { html, text } = layout({ heading: mail.heading, body: mail.body, meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel, telegram: c.telegram });
+    mailed = await sendEmail({ to: player.email, subject: mail.subject, html, text });
   }
-  if (!player.email) return;
-  const c = await ctx(db, ev, player.locale, player);
-  const vars = { ...c.vars, title: c.title, organizer: c.detail.creator.displayName };
-  const { html, text } = layout({ heading: c.t("email.requestDeclined.heading"), body: c.t("email.requestDeclined.body", vars), meta: c.meta, footer: c.footer, eventUrl: c.publicUrl, openLabel: c.openLabel, telegram: c.telegram });
-  await sendEmail({ to: player.email, subject: c.t("email.requestDeclined.subject", vars), html, text });
+  if (!o.told) await tellNews(db, ev, player, news, { mailed, tried }, detail);
 }
 
 /**
@@ -586,19 +639,29 @@ export async function notifyRefill(db: Db, eventId: string, now = new Date()): P
 }
 
 /**
- * Handles the fallout of a promotion: promoted player invite + creator notice. Every player it moved
- * up, one after another: a fixed-pairs night moves a pair, or a single and a single, in one write.
+ * The waiting list moved somebody up. Every player it moved up, in one insert (rule 12); each hears it
+ * once: by the calendar invitation where their address works, else on the channel they gave (`tellNews`,
+ * the owner's decision of 16 October 2026, D5), and the organiser's feed as before. Every caller leaves
+ * these players out of the line-up notice it sends (`notifyLineupChange`'s `excludePlayerId`, with
+ * `promotedOf`), so this is the one notice that tells them they have a place.
  */
 export async function notifyPromotion(db: Db, ev: Event, promotion: Promotion | null): Promise<void> {
-  // Every player it moved up, in one insert (rule 12); each hears it once, and the organiser's feed as before.
   const moved: Player[] = [];
   for (const p of promotedOf(promotion)) {
     const promoted = await getPlayer(db, p.playerId);
     if (promoted) moved.push(promoted);
   }
   const released = await recordNotices(db, moved.map((p) => ({ playerId: p.id, sender: "movedUp", eventId: ev.id, params: matchParams(ev), startsAt: ev.startsAt, tz: ev.tz })));
+  // One read of the match for everybody told, only when somebody is.
+  const detail = moved.some((p) => released.get(p.id) === "now") ? await getEventDetail(db, ev) : undefined;
   for (const promoted of moved) {
-    await Promise.all([released.get(promoted.id) === "now" ? sendCalendarInvite(db, ev, promoted, "promoted") : null, notifyCreator(db, ev, "promoted", promoted.displayName, promoted.id)]);
+    const tellNow = async () => {
+      if (released.get(promoted.id) !== "now") return;
+      const tried = emailEnabled() && Boolean(promoted.email);
+      const mailed = await sendCalendarInvite(db, ev, promoted, "promoted", detail);
+      await tellNews(db, ev, promoted, "movedUp", { mailed, tried }, detail);
+    };
+    await Promise.all([tellNow(), notifyCreator(db, ev, "promoted", promoted.displayName, promoted.id)]);
   }
 }
 
@@ -789,14 +852,18 @@ export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator:
   return sendEmail({ to: slot.invitedEmail, subject: c.t("email.inviteReminder.subject", c.vars), html, text });
 }
 
-/** One-time code for restoring history on a new device. */
-export async function sendEmailCode(email: string, code: string, localeLike: string | null | undefined): Promise<boolean> {
+/**
+ * The 6-digit code, for restoring history on a new device. `o.prove`: the code that proves an address a session by name typed (the owner's
+ * decision of 16 October 2026, D3), so it says it confirms the address rather than bringing matches
+ * back; the subject is the same, with the code first.
+ */
+export async function sendEmailCode(email: string, code: string, localeLike: string | null | undefined, o: { prove?: boolean } = {}): Promise<boolean> {
   if (!emailEnabled()) return false;
   const { t } = await translatorFor(localeLike);
   const base = baseUrl();
   const { html, text } = layout({
-    heading: t("email.code.heading"),
-    body: t("email.code.body", { code }),
+    heading: t(o.prove ? "email.code.proveHeading" : "email.code.heading"),
+    body: t(o.prove ? "email.code.proveBody" : "email.code.body", { code }),
     meta: [{ label: t("email.code.codeLabel"), value: code }],
     footer: t("email.code.footer"),
     eventUrl: `${base}/me`,

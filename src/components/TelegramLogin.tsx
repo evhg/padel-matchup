@@ -45,7 +45,8 @@ export function TelegramReturn({ authUrl }: { authUrl: string }) {
   return null;
 }
 
-export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: { botId: string; linkedUsername: string | null; linked: boolean; lang: string; authUrl: string }) {
+/** `bare`: the button alone, with no heading and no pitch, under a line of the caller's own ("With the Telegram you linked before:", `SeatedAsk`). */
+export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl, bare = false }: { botId: string; linkedUsername: string | null; linked: boolean; lang: string; authUrl: string; bare?: boolean }) {
   const t = useTranslations();
   const [busy, setBusy] = useState(false);
   useTelegramReturn(authUrl, () => setBusy(true));
@@ -55,13 +56,13 @@ export function TelegramLogin({ botId, linkedUsername, linked, lang, authUrl }: 
   };
   return (
     <div>
-      <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("telegram.title")}</div>
+      {!bare && <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("telegram.title")}</div>}
       {linked && !busy ? (
         <div className="mt-1 text-sm font-semibold">✓ {linkedUsername ? t("telegram.linked", { username: linkedUsername }) : t("telegram.linkedNoName")}</div>
       ) : (
         <>
-          <p className="mt-1 text-xs text-faint">{t("telegram.help")}</p>
-          <button type="button" onClick={go} disabled={busy} className="btn-ghost btn-sm mt-2">
+          {!bare && <p className="mt-1 text-xs text-faint">{t("telegram.help")}</p>}
+          <button type="button" onClick={go} disabled={busy} className={bare ? "btn-ghost btn-sm" : "btn-ghost btn-sm mt-2"}>
             <TelegramMark />
             {busy ? t("telegram.signingIn") : t("telegram.signIn")}
           </button>

@@ -74,15 +74,17 @@ export function unreachedCandidates<R extends Pick<PartnerRow, "id" | "name">>(r
 }
 
 /**
- * The first names of the candidates the offer would want and cannot reach, in the candidates' order:
- * the match's level range admits them (`admits`) and no channel reaches them on this deployment
- * (`channelOf`). Pure.
+ * The candidates the offer would want and cannot reach, in the candidates' order: the match's level
+ * range admits them (`admits`) and no channel reaches them on this deployment (`channelOf`). Pure.
  */
-export function unreachedNames(rows: readonly PartnerRow[], here: UnreachedHere, reach: RefillReach, range: Pick<Event, "levelMin" | "levelMax">): string[] {
+export function unreachedRows<R extends PartnerRow>(rows: readonly R[], here: UnreachedHere, reach: RefillReach, range: Pick<Event, "levelMin" | "levelMax">): R[] {
   const devices = new Set(rows.filter((r) => r.push).map((r) => r.id));
-  return unreachedCandidates(rows, here)
-    .filter((r) => admits(range, r) && channelOf(r, reach, devices) === null)
-    .map((r) => firstName(r.name));
+  return unreachedCandidates(rows, here).filter((r) => admits(range, r) && channelOf(r, reach, devices) === null);
+}
+
+/** Their first names, as the organiser's line shows them. Pure. */
+export function unreachedNames(rows: readonly PartnerRow[], here: UnreachedHere, reach: RefillReach, range: Pick<Event, "levelMin" | "levelMax">): string[] {
+  return unreachedRows(rows, here, reach, range).map((r) => firstName(r.name));
 }
 
 /** The line's names: at most `UNREACHED_SHOWN`, and how many more. Pure. */
@@ -90,19 +92,21 @@ export function unreachedLine(names: readonly string[]): { shown: string[]; more
   return { shown: names.slice(0, UNREACHED_SHOWN), more: Math.max(0, names.length - UNREACHED_SHOWN) };
 }
 
+/** The match as the line reads it. */
+type UnreachedMatch = Pick<Event, "id" | "type" | "capacity" | "creatorPlayerId" | "levelMin" | "levelMax">;
+
 /**
  * The names for the organiser's line: the offer's past partners of this match in one read (the offer's
  * own query as a subquery, joined to the players' key, push as an `exists` down
  * `push_subscriptions_player_idx`), then the rules above. A match's organiser never names themself. A
  * tournament has no partners, and reads nothing.
  */
-export async function unreachedPartners(
-  db: Db,
-  ev: Pick<Event, "id" | "type" | "capacity" | "creatorPlayerId" | "levelMin" | "levelMax">,
-  here: UnreachedHere,
-  reach: RefillReach,
-  now: Date,
-): Promise<string[]> {
+export async function unreachedPartners(db: Db, ev: UnreachedMatch, here: UnreachedHere, reach: RefillReach, now: Date): Promise<string[]> {
+  return (await unreachedRecords(db, ev, here, reach, now)).map((r) => firstName(r.name));
+}
+
+/** The same read as `unreachedPartners`, each partner with its record, for the server's own use (`unreachedNamed`): never sent to a browser. */
+export async function unreachedRecords(db: Db, ev: UnreachedMatch, here: UnreachedHere, reach: RefillReach, now: Date): Promise<{ id: string; name: string }[]> {
   if (ev.type !== "match") return [];
   const partners = partnersQuery(db, ev, now, { of: ev.creatorPlayerId }).as("partners");
   const rows = await db
@@ -119,10 +123,67 @@ export async function unreachedPartners(
     .from(partners)
     .innerJoin(players, eq(players.id, partners.playerId))
     .orderBy(desc(partners.last), players.id);
-  return unreachedNames(
+  return unreachedRows(
     rows.map((r) => ({ ...r, push: Boolean(r.push) })),
     { ...here, ids: new Set([...here.ids, ev.creatorPlayerId]) },
     reach,
     ev,
-  );
+  ).map((r) => ({ id: r.id, name: r.name }));
+}
+
+/**
+ * Whom the line leaves out, from the rows a match page or an action already read: every record with a
+ * row in the match, every name on it (a held place's too), and whoever left it or was taken out (the
+ * activity). The page and `unreachedNamed` both ask this, so they name the same partners. Pure.
+ */
+export function unreachedHereOf(detail: {
+  roster: readonly { status: string; playerId: string | null; invitedName: string | null; player: { displayName: string } | null }[];
+  waitlist: readonly { status: string; playerId: string | null; invitedName: string | null; player: { displayName: string } | null }[];
+  activity: readonly { verb: string; actorPlayerId: string | null; meta: unknown }[];
+}): UnreachedHere {
+  const all = [...detail.roster, ...detail.waitlist];
+  const targetOf = (meta: unknown) => (meta && typeof meta === "object" && typeof (meta as { targetPlayerId?: unknown }).targetPlayerId === "string" ? [(meta as { targetPlayerId: string }).targetPlayerId] : []);
+  return {
+    ids: new Set(all.flatMap((s) => (s.playerId ? [s.playerId] : []))),
+    names: all.filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean),
+    gone: new Set(detail.activity.flatMap((a) => (a.verb === "left" && a.actorPlayerId ? [a.actorPlayerId] : a.verb === "removed" ? targetOf(a.meta) : []))),
+  };
+}
+
+/**
+ * "That's me" for a name on the organiser's unreached list (the owner's decision of 16 October 2026, D6,
+ * DECIDING rule 34). The question was: "Tim has no email or Telegram. When you send him the plain link
+ * from "Kicksmash can't reach Tim", he types "Tim" and Kicksmash makes a second Tim. What should the line
+ * offer?" The owner chose "Let That's me sign him in": ""That's me" accepts a name from your unreached
+ * list on the plain link. Pro: no place held. Con: widens sign-in by name beyond your rule 34." (The
+ * owner chose this over the recommended "Hold a place for Tim".)
+ *
+ * When: a match, not called off, not over, not started (`unreachedSignInDue`): the time the organiser
+ * sends the link. Not only while a seat is open: Tim may open the link once the match is full and want
+ * the waiting list.
+ */
+export function unreachedSignInDue(ev: Pick<Event, "type" | "status" | "startsAt">, now: Date): boolean {
+  if (ev.type !== "match") return false;
+  if (ev.status === "cancelled" || ev.status === "past") return false;
+  return now.getTime() < ev.startsAt.getTime();
+}
+
+/**
+ * The record of the organiser's unreached list that a typed name names, or null: the same list the
+ * organiser's line shows (`unreachedRecords`, one bounded read), the typed name against each partner's
+ * first name or whole name by the held-name rule's normalisation (`normalName`). The list gives one
+ * partner of each first name, so a first name finds one record at most. The server keeps the answer:
+ * the browser gets only the offer for the name it typed, never the list or an id.
+ */
+export async function unreachedNamed(
+  db: Db,
+  detail: { event: UnreachedMatch & Pick<Event, "status" | "startsAt">; roster: Parameters<typeof unreachedHereOf>[0]["roster"]; waitlist: Parameters<typeof unreachedHereOf>[0]["waitlist"]; activity: Parameters<typeof unreachedHereOf>[0]["activity"] },
+  typed: string | null | undefined,
+  reach: RefillReach,
+  now: Date,
+): Promise<{ id: string; name: string } | null> {
+  const key = normalName(typed);
+  if (key.length < 2 || !unreachedSignInDue(detail.event, now)) return null;
+  const rows = await unreachedRecords(db, detail.event, unreachedHereOf(detail), reach, now);
+  return rows.find((r) => normalName(firstName(r.name)) === key || normalName(r.name) === key) ?? null;
 }

@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { after } from "next/server";
 import { eq } from "drizzle-orm";
-import { getDb } from "@/db";
-import { players } from "@/db/schema";
+import { getDb, type Db } from "@/db";
+import { players, type Player } from "@/db/schema";
 import { LOCALE_COOKIE, toLocale } from "@/i18n/config";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { changePlayerEmail, consumeEmailCode, findPlayerByPersonalToken, issueEmailCode, playersWithEmail, restoreByEmail, rotatePersonalToken } from "@/lib/domain/identity";
@@ -26,8 +26,12 @@ import { claimSameNameRow } from "@/lib/domain/sameName";
 import { later } from "@/lib/alerts";
 import { countSignIn } from "@/lib/domain/signins";
 import { thatsMe } from "@/lib/domain/thatsMe";
+import { unreachedNamed } from "@/lib/domain/unreached";
+import { channelsOffered } from "@/lib/coach/reach";
 import { isDeletedPlayer } from "@/lib/domain/result";
 import { mergesLater } from "@/lib/mergeCount";
+import { promotedOf } from "@/lib/domain/slots";
+import { askForProof } from "./emailProof";
 
 /** What an identity action tells the browser about its own player. Never the player id: an id once signed anybody in (`restoreIdentity` until 11 October 2026), and nothing on a screen needs it. */
 export type PublicPlayer = { name: string; email: string | null; locale: string };
@@ -58,21 +62,34 @@ export async function updateMyName(name: string): Promise<ActionResult<PublicPla
 }
 
 /**
+ * What a save of an address answers. `welcome` is what went out because of the save (`welcomeFor`):
+ * `invite`, `link`, or null when the address did not change or nothing goes; the "Stay updated" card
+ * says that and nothing else. `code` is "sent" when nothing was saved and a 6-digit code went to the
+ * address instead (a session by name, `askForProof`): the screen then shows the code box, and
+ * `proveMyEmail` saves the address once the code comes back.
+ */
+export type EmailSave = PublicPlayer & { knownElsewhere: boolean; kept: boolean; welcome: WelcomeKind | null; code: "sent" | null };
+
+/**
  * Self-entered email (decision 9). If `eventCode` is given and the player is
  * in that event, a calendar invite goes out right away.
  *
- * `welcome` is what went out because of this save (`welcomeFor`): `invite`, `link`, or null when the
- * address did not change or nothing goes. The "Stay updated" card says that and nothing else.
+ * A session by name that proved nothing saves nothing here: the address gets a 6-digit code first
+ * (`askForProof`, the owner's decision of 16 October 2026), and the answer says `code: "sent"`.
  *
  * `o.from: "stay"` marks the save on the "Stay updated" card itself, the one save `stay_linked_email`
  * counts. The invitation page's form, the match page's email row and My matches save without it.
  */
-export async function updateMyEmail(email: string, eventCode?: string, o?: { from?: "stay" }): Promise<ActionResult<PublicPlayer & { knownElsewhere: boolean; kept: boolean; welcome: WelcomeKind | null }>> {
+export async function updateMyEmail(email: string, eventCode?: string, o?: { from?: "stay" }): Promise<ActionResult<EmailSave>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new Error("no identity");
     const normalized = normalizeEmail(email);
+    if (normalized && (await nameOnly(me))) {
+      await askForProof(db, me, normalized);
+      return { ...pub(me), knownElsewhere: false, kept: false, welcome: null, code: "sent" as const };
+    }
     const others = normalized ? (await playersWithEmail(db, normalized)).filter((o) => o.id !== me.id) : [];
     if (normalized && normalized !== me.email) await assertRate(db, "email", me.id, LIMITS.emailChangesPerPlayerPerDay);
     const { player: p, changed, kept } = await changePlayerEmail(db, me.id, normalized);
@@ -84,25 +101,63 @@ export async function updateMyEmail(email: string, eventCode?: string, o?: { fro
       // Adding your own address is explicit consent: lift any earlier "never email me".
       await removeOptOut(db, p.email);
       // New address: calendar invite when in this match (carries the personal link), else the personal-link email.
-      // Not for a session that came in by "That's me" and proved nothing: a typed address is not proof,
-      // and the welcome would carry the personal link it is not shown (DECIDING rule 34).
+      // A session by name never reaches this line with an address: it proves the address first (above).
       const detail = eventCode ? await getEventByCode(db, eventCode) : null;
-      const byNameOnly = await nameOnly(me);
-      welcome = welcomeFor(p, detail, byNameOnly);
-      if (welcome) after(() => welcomeEmail(db, p, detail?.event ?? null, { byNameOnly, detail }));
+      welcome = welcomeFor(p, detail);
+      if (welcome) after(() => welcomeEmail(db, p, detail?.event ?? null, { detail }));
       // "Stay updated" answered by email (docs/OPERATING.md): a save on the card itself, by a player the card
       // asked (no channel before it), that now reaches them by email. One upsert per save, after the answer.
       // Until 15 October 2026 any save with a match code counted, the invitation page's too, which never
       // shows the card (review), so the count ran ahead of the asks.
-      if (eventCode && o?.from === "stay") {
-        const runs = stayChannels();
-        const reached = stayUpdated(p, runs);
-        if (stayUpdated(me, runs).kind === "ask" && reached.kind === "reached" && reached.via.includes("email")) after(() => bumpMetric(db, "stay_linked_email").catch(() => undefined));
-      }
+      if (eventCode && o?.from === "stay") countStayEmail(db, me, p);
     }
     if (eventCode) revalidatePath(`/${eventCode}`);
     revalidatePath("/me");
-    return { ...pub(p), knownElsewhere: others.length > 0, kept, welcome };
+    return { ...pub(p), knownElsewhere: others.length > 0, kept, welcome, code: null };
+  });
+}
+
+/** `stay_linked_email`: the card asked this player (no channel before the save), and email reaches them now. One upsert, after the answer. */
+function countStayEmail(db: Db, before: Player, now: Player): void {
+  const runs = stayChannels();
+  const reached = stayUpdated(now, runs);
+  if (stayUpdated(before, runs).kind === "ask" && reached.kind === "reached" && reached.via.includes("email")) after(() => bumpMetric(db, "stay_linked_email").catch(() => undefined));
+}
+
+/**
+ * The second half of a save by a session by name (`updateMyEmail`, `setCreatorEmailAction`): the code
+ * that went to the address comes back. The restore's own verify path runs (`verifyRestoreCode`): the
+ * code is spent, `restoreByEmail` puts the proved address on this browser's record (or folds the record
+ * into the one that already holds the address, as every restore does), and `setSessionPlayer` ends the
+ * by-name mark, so the session is a full one. Then what a full session's save sends goes out: the
+ * match's invitation for a seat, else the personal link (`welcomeFor`), unless the record that stays
+ * held the address already. A wrong or spent code saves nothing (`invalid`).
+ */
+export async function proveMyEmail(email: string, code: string, eventCode?: string, o?: { from?: "stay" }): Promise<ActionResult<PublicPlayer & { welcome: WelcomeKind | null }>> {
+  return runA(async () => {
+    if (typeof email !== "string" || typeof code !== "string") throw new ActionFailure("invalid");
+    const db = await getDb();
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const byName = await nameOnly(me);
+    const verified = await consumeEmailCode(db, email, code);
+    // Whether a record held this address as its own before: the record that stays then has it already, so nothing is new and no welcome goes.
+    const held = (await playersWithEmail(db, verified)).some((p) => p.email === verified);
+    const player = await restoreByEmail(db, verified, me.id, undefined, mergesLater(db));
+    await setSessionPlayer(player.id);
+    if (player.id !== me.id) await later(() => countSignIn(db, "email_code"));
+    // A session by name that proved its address: how often a real player who came in by "That's me" typed the one code (the decision's con).
+    if (byName) await later(() => bumpMetric(db, "email_proved_by_name"));
+    await removeOptOut(db, verified);
+    let welcome: WelcomeKind | null = null;
+    if (!held) {
+      const detail = eventCode ? await getEventByCode(db, eventCode) : null;
+      welcome = welcomeFor(player, detail);
+      if (welcome) after(() => welcomeEmail(db, player, detail?.event ?? null, { detail }));
+      if (eventCode && o?.from === "stay") countStayEmail(db, me, player);
+    }
+    revalidatePath("/", "layout");
+    return { ...pub(player), welcome };
   });
 }
 
@@ -178,19 +233,28 @@ export async function thatsMeAction(code: string, name: string): Promise<ActionR
   return runA(async () => {
     if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
     const db = await getDb();
-    const res = await thatsMe(db, { code, name, viewerId: await getSessionPlayerId(), rateKey: await clientKey(), counter: mergesLater(db) });
+    // A name nobody in the match or its crew carries may be a past partner on the organiser's unreached list
+    // (the owner's decision of 16 October 2026, D6): the server looks it up, only then, and keeps the answer.
+    const unreached = async (typed: string) => {
+      const detail = await getEventByCode(db, code);
+      return detail ? unreachedNamed(db, detail, typed, channelsOffered(), new Date()) : null;
+    };
+    const res = await thatsMe(db, { code, name, viewerId: await getSessionPlayerId(), rateKey: await clientKey(), counter: mergesLater(db), unreached });
     if (!res.ok) throw new ActionFailure(res.reason === "too_many" ? "too_many" : "invalid");
     await setSessionPlayer(res.player.id);
     // Marked until the record proves something: no personal link for a sign-in by name.
     await markSignedInByName(res.player.id);
     await later(() => countSignIn(db, "thats_me"));
+    // Counted beside `signin_thats_me`: how often the organiser's unreached list brought a player back (D6).
+    if (res.via === "unreached") await later(() => bumpMetric(db, "thats_me_unreached"));
     if (res.folded) await later(() => countSignIn(db, "thats_me_fold"));
     // A fold that gave up a place in the match: the line-up changed, and whoever moved up hears it, as after a leave.
     const seats = res.seats;
     if (seats) {
       after(async () => {
         const { emitMatchEvent } = await import("@/lib/api/webhooks");
-        const fresh = await notifyLineupChange(db, seats.event, seats.wasComplete, seats.promotion?.playerId);
+        // Everybody it moved up is told by `notifyPromotion` alone: a fixed-pairs night moves a pair.
+        const fresh = await notifyLineupChange(db, seats.event, seats.wasComplete, promotedOf(seats.promotion).map((p) => p.playerId));
         await notifyPromotion(db, fresh ?? seats.event, seats.promotion);
         if (!seats.promotion) await notifyRefill(db, seats.event.id);
         await emitMatchEvent(db, "match.updated", code, { calendarChanged: false });

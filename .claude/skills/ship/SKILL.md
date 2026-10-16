@@ -805,6 +805,19 @@ Wall clock first, credits second. What actually moved it, measured:
   page gives it, with the shipped catalogue. Use it for a label, a name or an `aria-label`
   (`tests/court-booked.test.ts`, `tests/roles.test.ts`); a tap still needs the browser.
 
+- **`asAction`'s cookies are the browser's after the answer, the ones it sent included.** A test of "the
+  session is untouched" asserted that the answer set no session cookie, and it failed with the code right:
+  the request store's mutable cookies start as a copy of the jar (16 October 2026). "Untouched" is the
+  cookie equal to the seal the jar sent (`sealPlayerId(p.id, { byName: true })`), "signed in" a different
+  seal. And break each half of a compound `if` on its own: removing the "I'm a different Tim" half of the
+  unreached question's condition left every test green until a test named that flag.
+- **A question and the tap that answers it send the same input through the same steps.** The unreached
+  question was worked out for the typed name, and its "That's me" sent the server's first name, which the
+  tap looked up in the match and its crew before the list: a crew "Tim" was signed in under a question
+  about "Tim Smith" (review, 16 October 2026). One function holds the shared steps (`unreachedOffer`), the
+  button carries what was typed and shows the label apart (`thatsMeTapOf`), and a test types the case where
+  the two could part. The same holds for a word that promises what a tap does: "they sign in as themselves"
+  now asks the tap's own rule for every name it covers (`unreachedSignsIn`).
 - **`vi.mock` does not belong in this suite.** Files share a worker and its module cache (`isolate:
   false`), so a mock reaches only the modules that file loads first: when an earlier file already
   loaded `src/actions/shared.ts`, a later `vi.mock("next-intl/server")` changes nothing there, and when

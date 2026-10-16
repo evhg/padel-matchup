@@ -8,6 +8,7 @@
 // coach-states.mjs does this for the coach. This is the same treatment for the player: seed the
 // awkward states, assert the shapes a machine can judge, and photograph the rest for a person —
 // `SHOTS=./shots pnpm e2e` is how you get them.
+import { existsSync, readFileSync } from "node:fs";
 import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
@@ -39,6 +40,23 @@ const ask = async (q) => {
   return r.rows;
 };
 const recordsNamed = async (name) => Number((await ask(`select count(*)::int as n from players where display_name = '${name}'`))[0]?.n ?? -1);
+/** "Played before? Sign in" under the line-up is gone: the question that stands is the way back in (`SeatedAsk` registers it). */
+const noBackInLine = (p) => p.getByTestId("event-back-in-line").waitFor({ state: "detached", timeout: 5000 }).then(() => true).catch(() => false);
+
+/** Every email the test server wrote instead of sending (`EMAIL_SINK_FILE`, set by e2e/run.mjs). */
+const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
+/** The newest 6-digit code mailed to an address, waiting a little for the write after the answer. */
+const codeFor = async (to) => {
+  for (let i = 0; i < 40; i++) {
+    const code = mails().filter((m) => m.to === to).map((m) => m.subject.match(/^(\d{6}) is your Kicksmash code$/)?.[1]).filter(Boolean).at(-1);
+    if (code) return code;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return "";
+};
+/** A Telegram update, as the bot's webhook gets it (the fake bot of e2e/run.mjs). */
+const telegramHook = (update) =>
+  fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": process.env.TELEGRAM_WEBHOOK_SECRET || "e2e-tg-secret" }, body: JSON.stringify(update) }).then((r) => r.json());
 
 const page = async (opts) => {
   const ctx = await browser.newContext(opts);
@@ -88,6 +106,8 @@ try {
   const rosaToken = playedNow.organizer?.personalToken ?? "";
   const tomaszIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Tomasz" });
   const milenaIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Milena", email: "milena-e2e@example.com" });
+  // Olek, like Tomasz, gave no contact. Later he organises a match of his own, which "That's me" refuses.
+  const olekIn = await keyed(`/api/v1/matches/${playedNow.match?.code}/join`, { name: "Olek" });
 
   // ------------------------------------------------- a match that started an hour ago
   // An hour, not two: a match can still be joined until its length (90 minutes unless the organiser
@@ -308,7 +328,7 @@ try {
   // and not Milena, whom the free-seat offer reaches. Ivo, in a match with her that is still being played,
   // is no partner of the offer's yet, so the line does not name him either. Nobody else's page carries
   // Tomasz's name at all, and a full match names nobody.
-  check("Rosalind's last match has Tomasz and Milena in it", tomaszIn.outcome === "joined" && milenaIn.outcome === "joined", JSON.stringify([tomaszIn.outcome, milenaIn.outcome]));
+  check("Rosalind's last match has Tomasz, Milena and Olek in it", tomaszIn.outcome === "joined" && milenaIn.outcome === "joined" && olekIn.outcome === "joined", JSON.stringify([tomaszIn.outcome, milenaIn.outcome, olekIn.outcome]));
   const playing = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Rosalind", token: rosaToken } });
   const ivoIn = await keyed(`/api/v1/matches/${playing.match?.code}/join`, { name: "Ivo" });
   check("Rosalind is playing a match with Ivo, which has not ended", ivoIn.outcome === "joined", JSON.stringify(ivoIn.outcome));
@@ -322,8 +342,8 @@ try {
   await unreached.waitFor({ timeout: 20000 });
   const unreachedText = (await unreached.innerText()).replace(/\s+/g, " ");
   check(
-    "the organiser's page names the past partner Kicksmash cannot reach, and not the one it reaches, nor a player of a match not yet over",
-    unreachedText.includes("Kicksmash can't reach Tomasz. Send them the link.") && !unreachedText.includes("Milena") && !unreachedText.includes("Ivo"),
+    "the organiser's page names the past partners Kicksmash cannot reach, and not the one it reaches, nor a player of a match not yet over; both sign in as themselves",
+    unreachedText.includes("Kicksmash can't reach ") && unreachedText.includes("Tomasz") && unreachedText.includes("Olek") && unreachedText.includes("Send them the link: they sign in as themselves.") && !unreachedText.includes("Milena") && !unreachedText.includes("Ivo"),
     unreachedText,
   );
   const sendHref = (await unreached.getByTestId("unreached-send").getAttribute("href")) ?? "";
@@ -332,6 +352,20 @@ try {
   await shot(rosa, "player-unreached-line");
   await unreached.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await view(rosa, "player-unreached-line-390");
+  // Olek now organises a match of his own, so "That's me" refuses him (DECIDING rule 34). His name stays on
+  // the line, which no longer promises that everybody on it signs in as themselves.
+  const olekMatch = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() + 50 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Olek", token: olekIn.player?.personalToken } });
+  check("Olek organises a match of his own", Boolean(olekMatch.match?.code) && olekMatch.organizer?.name === "Olek", JSON.stringify(olekMatch).slice(0, 160));
+  await rosa.reload();
+  await unreached.waitFor({ timeout: 20000 });
+  const plainText = (await unreached.innerText()).replace(/\s+/g, " ");
+  check(
+    "a partner \"That's me\" refuses keeps the plain line: \"Send them the link.\", with no promise that they sign in as themselves",
+    plainText.includes("Tomasz") && plainText.includes("Olek") && plainText.includes("Send them the link.") && !plainText.includes("they sign in as themselves"),
+    plainText,
+  );
+  await unreached.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(rosa, "player-unreached-line-plain-390");
   // Nobody else: a stranger's page carries Tomasz nowhere, not even in the data the browser is given.
   const stranger = await page(iphone);
   await stranger.goto(`${BASE}/${nextCode}`);
@@ -340,6 +374,44 @@ try {
   const publicMatch = await fetch(`${BASE}/api/v1/matches/${nextCode}`).then((r) => r.text());
   check("nor does the public API", !publicMatch.includes("Tomasz") && publicMatch.includes(nextCode));
   await stranger.close();
+
+  // ------------------------------------------------- "Played before as Tomasz? Sign in as Tomasz." (the owner's decision of 16 October 2026, D6)
+  // Rosalind sends Tomasz the plain link. It opens a browser that knows nobody, and he types his name. The
+  // server finds him on her unreached list and asks first, instead of making a second Tomasz; "That's me"
+  // signs that browser in as his record, in two taps. The browser never gets the list.
+  const t1 = await page(iphone);
+  let t1Sends = 0;
+  t1.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) t1Sends += 1;
+  });
+  await t1.goto(`${BASE}/${nextCode}`);
+  check("the plain link carries no word of Tomasz before he types his name", !(await t1.content()).includes("Tomasz"));
+  await t1.getByRole("button", { name: "Join this match" }).click();
+  await t1.getByTestId("open-spot-name").first().fill("tomasz");
+  await t1.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  const tAsk = t1.getByTestId("seated-ask");
+  await tAsk.waitFor({ timeout: 20000 });
+  check(
+    "a browser that knows nobody types a name on the organiser's unreached list: it is asked \"Played before as Tomasz? Sign in as Tomasz.\", with \"That's me\", and no second Tomasz is made",
+    (await tAsk.getAttribute("data-ask")) === "unreached" && ((await tAsk.innerText()) ?? "").includes("Played before as Tomasz? Sign in as Tomasz.") && (await tAsk.getByRole("button", { name: "That's me", exact: true }).count()) === 1 && (await recordsNamed("Tomasz")) === 1,
+    ((await tAsk.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  check("no \"Played before? Sign in\" line stands beside the question as a second, dead way in", await noBackInLine(t1));
+  t1Sends = 0;
+  await tAsk.getByRole("button", { name: "That's me", exact: true }).click();
+  const tSure = tAsk.getByRole("button", { name: "Sign in as Tomasz?", exact: true });
+  await tSure.waitFor({ timeout: 10000 });
+  check("the first tap asks again and sends nothing", t1Sends === 0, `sends=${t1Sends}`);
+  await shot(t1, "player-unreached-sign-in");
+  await tAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(t1, "player-unreached-sign-in-390");
+  await tSure.click();
+  await t1.getByTestId("open-spot-welcome").waitFor({ timeout: 20000 });
+  check(
+    "the second tap signs that browser in as Tomasz's own record: the page welcomes him with one Join, and the database holds one Tomasz",
+    ((await t1.getByTestId("open-spot-welcome").innerText()) ?? "").includes("Welcome back, Tomasz! Join this match?") && (await recordsNamed("Tomasz")) === 1,
+  );
+  await t1.close();
   // Every seat taken: the line goes.
   for (const name of ["Pia", "Quim", "Remy"]) await keyed(`/api/v1/matches/${nextCode}/join`, { name });
   await rosa.goto(`${BASE}/${nextCode}`);
@@ -388,27 +460,70 @@ try {
   await sure.click();
   await z1.locator("main li", { hasText: "Zeno" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
   check("the second tap signs that browser in as Zeno, and the database holds one Zeno", (await recordsNamed("Zeno")) === 1);
+
+  // ------------------------------------------------- an address from a session by name proves itself first (the owner's decision of 16 October 2026, D3)
+  // Zeno came in by name. The "Stay updated" card asks him for a channel, and an address he types is not
+  // kept until the 6-digit code it was sent comes back: before, the next match email carried his personal
+  // link, a permanent sign-in, to an address nobody had proved.
+  const zCard = z1.getByTestId("stay-updated");
+  await zCard.waitFor({ timeout: 20000 });
+  if ((await zCard.getByTestId("stay-email").count()) > 0) await zCard.getByTestId("stay-email").click();
+  check(
+    "the card in a session by name says a code goes first, and its button sends the code",
+    (await zCard.getByTestId("stay-code-first").count()) === 1 && (await zCard.getByRole("button", { name: "Send code", exact: true }).count()) === 1,
+    ((await zCard.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  await zCard.getByPlaceholder("you@example.com").fill("zeno-e2e@example.com");
+  await zCard.getByRole("button", { name: "Send code", exact: true }).click();
+  const zCode = zCard.getByTestId("email-code");
+  await zCode.waitFor({ timeout: 20000 });
+  const zenoRow = async () => (await ask(`select email, email_verified_at is not null as proved from players where display_name = 'Zeno'`))[0] ?? {};
+  check(
+    "the address waits for its code: the box says where the code went, and the record holds no address yet",
+    ((await zCode.innerText()) ?? "").includes("Code sent to zeno-e2e@example.com") && (await zenoRow()).email === null,
+    JSON.stringify(await zenoRow()),
+  );
+  await shot(z1, "player-byname-code");
+  await zCode.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(z1, "player-byname-code-390");
+  const sentCode = await codeFor("zeno-e2e@example.com");
+  check("the code went to the address, and nothing else did: no invitation before the code", /^\d{6}$/.test(sentCode) && mails().filter((m) => m.to === "zeno-e2e@example.com" && m.ics).length === 0, sentCode);
+  await zCode.getByLabel("6-digit code").fill(sentCode);
+  await zCode.getByRole("button", { name: "Confirm", exact: true }).click();
+  await zCard.getByText("Calendar invite sent to zeno-e2e@example.com", { exact: false }).waitFor({ timeout: 20000 });
+  check(
+    "the right code keeps the address as proved, and the session is a full one: the invitation goes, and \"Send it again\" stands",
+    (await zenoRow()).email === "zeno-e2e@example.com" && (await zenoRow()).proved === true && (await zCard.getByRole("button", { name: /Send it again/ }).count()) === 1,
+    JSON.stringify(await zenoRow()),
+  );
   await z1.close();
 
   // A record with an email: "That's me" refuses it, so the question carries its own doors.
   const m1 = await page(iphone);
   await m1.goto(`${BASE}/${gCode}`);
+  // The closed line under the line-up stands before the form opens, so its absence below means something.
+  const lineBefore = await m1.getByTestId("event-back-in-line").waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
   await m1.getByRole("button", { name: "Join this match" }).click();
   await m1.getByTestId("open-spot-name").first().fill("Mirta");
   // The fixed "Join this match" sends the open form, so it meets the same question.
   await m1.getByRole("button", { name: "Join this match" }).click();
   const mirtaAsk = m1.getByTestId("seated-ask");
   await mirtaAsk.waitFor({ timeout: 20000 });
+  // The owner's decision of 16 October 2026 (D4): only the record's own doors. Mirta has an address and no
+  // passkey and no Telegram, so the email code alone, and no Face ID.
   check(
-    "a seated record with an email gets its own doors under the question, Face ID or fingerprint and the email code, and no \"That's me\"",
+    "a seated record with an email gets its own door under the question, the email code alone: no Face ID, no Telegram, no \"That's me\"",
     ((await mirtaAsk.innerText()) ?? "").includes("Mirta is in this match. Sign in as Mirta?") &&
-      (await mirtaAsk.getByTestId("passkey-signin").count()) === 1 &&
+      (await mirtaAsk.getByTestId("seated-door-email").count()) === 1 &&
       (await mirtaAsk.getByPlaceholder("you@example.com").isVisible()) &&
+      (await mirtaAsk.getByTestId("passkey-signin").count()) === 0 &&
+      (await mirtaAsk.getByTestId("seated-door-telegram").count()) === 0 &&
       (await mirtaAsk.getByRole("button", { name: "That's me", exact: true }).count()) === 0 &&
       (await recordsNamed("Mirta")) === 1,
     ((await mirtaAsk.innerText()) ?? "").replace(/\s+/g, " "),
   );
-  check("the doors stand once on the page, inside the question", (await m1.getByTestId("back-in-open").count()) === 1);
+  check("the page's general \"Played before?\" steps aside while the question stands: the doors stand once, inside it", (await m1.getByTestId("back-in-open").count()) === 0 && (await m1.getByPlaceholder("you@example.com").count()) === 1);
+  check("the closed \"Played before? Sign in\" line under the line-up stood before, and steps aside while the question stands", lineBefore && (await noBackInLine(m1)), `before=${lineBefore}`);
   await shot(m1, "player-seated-ask-email");
   await mirtaAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await view(m1, "player-seated-ask-email-390");
@@ -427,6 +542,69 @@ try {
   const lineupZ = await fetch(`${BASE}/api/v1/matches/${gCode}`).then((r) => r.json());
   check("\"I'm a different Zeno\" joins a second Zeno, the name as typed", (await recordsNamed("Zeno")) === 2 && (lineupZ.players ?? []).filter((p) => p.name === "Zeno").length === 2, JSON.stringify((lineupZ.players ?? []).map((p) => p.name)));
   await z2.close();
+
+  // ------------------------------------------------- a seated record with a linked Telegram: the Telegram door alone (D4)
+  // Tola took her seat from the match's card in Telegram, so her record has a linked Telegram and no
+  // address. A browser that knows nobody types "Tola": the question shows Telegram, and no email code
+  // and no Face ID, which would open nothing of hers.
+  const ivy = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() + 29 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Ivy" } });
+  const iCode = ivy.match?.code;
+  // An id no other suite uses: the suites share one server, and telegram.mjs signs its Mini App user in by id.
+  const tola = { id: 7_303_101, first_name: "Tola", language_code: "en" };
+  const tolaIn = await telegramHook({ update_id: 91_001, callback_query: { id: "cb-tola", from: tola, message: { message_id: 991, date: 0, chat: { id: -1007303101, type: "supergroup", title: "e2e doors" } }, data: `j:${iCode}` } });
+  check("Tola takes a seat from the match's card in Telegram", tolaIn.outcome === "join:joined", JSON.stringify(tolaIn));
+  const tg = await page(iphone);
+  await tg.goto(`${BASE}/${iCode}`);
+  await tg.getByRole("button", { name: "Join this match" }).click();
+  await tg.getByTestId("open-spot-name").first().fill("Tola");
+  await tg.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  const tolaAsk = tg.getByTestId("seated-ask");
+  await tolaAsk.waitFor({ timeout: 20000 });
+  check(
+    "a seated record with a linked Telegram gets the Telegram door alone: no email code, no Face ID, no \"That's me\", and no general help beside it",
+    ((await tolaAsk.innerText()) ?? "").includes("Tola is in this match. Sign in as Tola?") &&
+      (await tolaAsk.getByTestId("seated-door-telegram").count()) === 1 &&
+      (await tolaAsk.getByTestId("seated-door-email").count()) === 0 &&
+      (await tolaAsk.getByTestId("passkey-signin").count()) === 0 &&
+      (await tolaAsk.getByRole("button", { name: "That's me", exact: true }).count()) === 0 &&
+      (await tg.getByTestId("back-in-open").count()) === 0 &&
+      (await noBackInLine(tg)) &&
+      (await recordsNamed("Tola")) === 1,
+    ((await tolaAsk.innerText()) ?? "").replace(/\s+/g, " "),
+  );
+  await shot(tg, "player-seated-ask-telegram");
+  await tolaAsk.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(tg, "player-seated-ask-telegram-390");
+  await tg.close();
+
+  // ------------------------------------------------- a join request that waits gets the "Stay updated" card (D5)
+  // Hana's match is for levels 4 to 5. Rafa, a 2.0, asks to join, and waits for her answer. The card now
+  // asks him where the answer should reach him, and promises no calendar invitation, which only a seat brings.
+  const hana = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() + 32 * 60 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Hana" }, levelMin: 4, levelMax: 5 });
+  const rafaAsk = await keyed(`/api/v1/matches/${hana.match?.code}/join`, { name: "Rafa", level: 2 });
+  check("Rafa's join waits for the organiser", rafaAsk.outcome === "requested", JSON.stringify(rafaAsk).slice(0, 200));
+  const rafa = await page(iphone);
+  await rafa.goto(`${BASE}/p/${rafaAsk.player?.personalToken}/go?next=/${hana.match?.code}`);
+  const rafaCard = rafa.getByTestId("stay-updated");
+  await rafaCard.waitFor({ timeout: 20000 });
+  const rafaText = ((await rafaCard.innerText()) ?? "").replace(/\s+/g, " ");
+  check(
+    "a player whose join request waits gets the card: the organiser's answer reaches them where they pick, and no word of a calendar",
+    rafaText.includes("Stay updated") && rafaText.includes("The organiser's answer reaches you there.") && !/calendar/i.test(rafaText),
+    rafaText,
+  );
+  await shot(rafa, "player-request-stay");
+  await rafaCard.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(rafa, "player-request-stay-390");
+  // He gives an address. The line after it promises only what a yes brings: the answer, and an invitation only with a seat.
+  if (await rafaCard.getByTestId("stay-email").count()) await rafaCard.getByTestId("stay-email").click();
+  await rafaCard.getByPlaceholder("you@example.com").fill("rafa-e2e@example.com");
+  await rafaCard.getByRole("button", { name: "Save", exact: true }).click();
+  const rafaSaved = await rafaCard.getByText("The organiser's answer reaches you there, and a seat brings the invitation.").waitFor({ timeout: 20000 }).then(() => true).catch(() => false);
+  check("after his address, the request's card says the answer reaches him there, and that only a seat brings the invitation", rafaSaved, ((await rafaCard.innerText()) ?? "").replace(/\s+/g, " "));
+  await rafaCard.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(rafa, "player-request-stay-saved-390");
+  await rafa.close();
 } catch (e) {
   await crashed(browser, results, e, "player-states");
 }

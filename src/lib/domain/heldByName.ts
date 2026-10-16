@@ -171,6 +171,17 @@ export function seatedNamed<S extends Pick<JoinSeat, "status" | "playerId" | "pl
 }
 
 /**
+ * Every record of the typed name with a seat or a waiting place here, as `seatedNamed` finds the first:
+ * the records "Sign in as Danny?" asks about, whose own doors it shows (`seatedDoors`, the owner's
+ * decision of 16 October 2026, D4). Pure.
+ */
+export function seatedRecordsNamed<S extends Pick<JoinSeat, "status" | "playerId" | "player">>(seats: readonly S[], typed: string | null | undefined): S[] {
+  const key = normalName(typed);
+  if (key.length < 2) return [];
+  return seats.filter((s) => placeOf(s) && normalName(s.player?.displayName) === key);
+}
+
+/**
  * Who a plain join on the web seats, decided before anything is made or seated: the browser's own
  * record, else a new record from the typed name (`make`, called only then). A join that would put a
  * second record of a held place's name beside it, in a seat or on the waiting list (`heldNameFor`),

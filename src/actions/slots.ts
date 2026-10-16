@@ -31,7 +31,12 @@ import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
-import { decideHeldByName, seatedNamed, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
+import { decideHeldByName, seatedNamed, seatedRecordsNamed, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
+import { doorsDetail, seatedDoors } from "@/lib/domain/seatedDoors";
+import { savedPasskey, unreachedOffer } from "@/lib/domain/thatsMe";
+import { firstName, unreachedNamed } from "@/lib/domain/unreached";
+import { channelsOffered } from "@/lib/coach/reach";
+import { telegramBotId } from "@/lib/telegram/api";
 import { later } from "@/lib/alerts";
 import { setPlayerLevel } from "@/lib/domain/rating";
 import { decideJoinRequest, withdrawJoinRequest } from "@/lib/domain/requests";
@@ -44,7 +49,7 @@ import { answerOfPick, cleanPicks } from "@/lib/domain/pastAsk";
 import { countSignIn } from "@/lib/domain/signins";
 import { getPlayer } from "@/lib/domain/players";
 import { DomainError } from "@/lib/domain/errors";
-import { ActionFailure, assertRate, clientKey, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, clientKey, loadEvent, nameOnly, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { mergesLater } from "@/lib/mergeCount";
 import { stayUpdated } from "@/lib/domain/stayUpdated";
@@ -77,12 +82,36 @@ export async function joinAction(code: string, name?: string, level?: number | n
     const known = await getSessionPlayer(db);
     // "I'm a different Danny" beside a seated Danny: counted before the record is made, so the owner sees how often the question meets a real namesake.
     if (different && !known && seatedNamed([...detail.roster, ...detail.waitlist], null, name)) await bumpMetric(db, "join_name_different").catch(() => undefined);
-    const who = await whoJoins(detail, known, name, new Date(), () => requirePlayer(db, name, { namesHere }), { keepsRecord: (id) => hasLifeOutside(db, id, detail.event.id), different });
+    // A name of the organiser's unreached past partners that "That's me" signs in (the owner's decision of 16
+    // October 2026, D6): asked when a record is about to be made, so after every rule `whoJoins` keeps and only
+    // for a browser that knows nobody, unless the person said they are somebody else. One bounded read
+    // (`unreachedRecords`), and the "That's me" reads only for a name on the list: the tap's own two steps for
+    // the same typed name (`unreachedOffer`), so the question never offers a record the tap would not sign in.
+    const now = new Date();
+    const make = async () => {
+      if (!different && name?.trim()) {
+        const u = await unreachedNamed(db, detail, name, channelsOffered(), now);
+        if (u && (await unreachedOffer(db, detail.event, name, u, now))) {
+          await bumpMetric(db, "join_name_unreached").catch(() => undefined);
+          // The question names the first name as the record writes it, what the typed name already said: never the whole name or an id (rule 7).
+          throw new ActionFailure("name_unreached", firstName(u.name));
+        }
+      }
+      return requirePlayer(db, name, { namesHere });
+    };
+    const who = await whoJoins(detail, known, name, now, make, { keepsRecord: (id) => hasLifeOutside(db, id, detail.event.id), different });
     if ("held" in who) throw new ActionFailure("name_held");
     if ("seated" in who) {
       await bumpMetric(db, "join_name_seated").catch(() => undefined);
-      throw new ActionFailure("name_seated");
+      // The question shows the seated record's own doors and nothing else (the owner's decision of 16 October
+      // 2026, D4): three booleans for the name typed, from the rows the join read, and one lookup per record
+      // down `passkeys_player_idx`. Never an address or an id.
+      const named = seatedRecordsNamed([...detail.roster, ...detail.waitlist], name);
+      const records = [];
+      for (const s of named) if (s.player) records.push({ email: s.player.email, recoveryEmail: s.player.recoveryEmail, telegramId: s.player.telegramId, passkey: await savedPasskey(db, s.player.id) });
+      throw new ActionFailure("name_seated", doorsDetail(seatedDoors(records, { email: emailEnabled(), telegram: Boolean(telegramBotId()) })));
     }
+
     const me = who.player;
     await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     // A level given while joining is the player's declaration (ranged events ask for it once).
@@ -95,6 +124,8 @@ export async function joinAction(code: string, name?: string, level?: number | n
     if (decision.kind === "level_required") throw new ActionFailure("level_required");
     if (decision.kind === "requested") {
       after(async () => {
+        // The page now shows "Stay updated" to the player who asked too (the owner's decision of 16 October 2026, D5): counted as an ask, as after a join.
+        if (stayUpdated(me, stayChannels()).kind === "ask") await bumpMetric(db, "stay_asked").catch(() => undefined);
         await notifyCreator(db, ev, "requested", myLevel != null ? `${me.displayName} (${formatLevel(myLevel)})` : me.displayName, me.id);
       });
       revalidatePath(`/${code}`);
@@ -172,11 +203,12 @@ export async function decideJoinRequestAction(code: string, requestId: string, a
       if (!player) return;
       if (approve) {
         const fresh = await notifyLineupChange(db, res.event, before, player.id);
-        if (res.join?.outcome === "joined") await notifyRequestDecided(db, fresh ?? res.event, player, true);
+        // The answer reaches the player once, a yes on a full match too: by email where the address works, else on the first channel they gave (the owner's decision of 16 October 2026, D5).
+        if (res.join?.outcome === "joined" || res.join?.outcome === "waitlisted") await notifyRequestDecided(db, fresh ?? res.event, player, res.join.outcome);
         await emitMatchEvent(db, "match.joined", code, { player: { name: player.displayName, level: player.level }, outcome: res.join?.outcome ?? "joined", approved: true });
         if (res.event.status === "full") await emitMatchEvent(db, "match.full", code);
       } else {
-        await notifyRequestDecided(db, res.event, player, false);
+        await notifyRequestDecided(db, res.event, player, "declined");
       }
     });
     revalidatePath(`/${code}`);
@@ -358,7 +390,10 @@ export async function confirmInviteAction(
       }
     }
     const me = viewer ?? (await requirePlayer(db, input.name));
-    const res = await confirmInvite(db, { inviteCode, playerId: me.id, email: input.email, counter: mergesLater(db) });
+    // A session by name that proved nothing keeps no address it types (the owner's decision of 16 October
+    // 2026, D3): the invitation page asks it for a code instead, in `CalendarEmail` after the tap.
+    const email = viewer && (await nameOnly(viewer)) ? undefined : input.email;
+    const res = await confirmInvite(db, { inviteCode, playerId: me.id, email, counter: mergesLater(db) });
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
     // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no

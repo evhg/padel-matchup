@@ -9,8 +9,8 @@ import { requestJoin } from "./joinBus";
 import { PasskeySignIn } from "./PasskeySignIn";
 import { LevelSelect } from "./LevelSelect";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
-import { SeatedAsk } from "./SeatedAsk";
-import { normalName } from "@/lib/domain/dupes";
+import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
+import type { BackInDoors } from "./BackInHelp";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past" | "requested" | "request_declined";
 /** Someone who can confirm the viewer's level for this event: a coach at the club, or the club. */
@@ -42,6 +42,7 @@ export function JoinBar({
   claimable = [],
   held = [],
   heldForMe = null,
+  backIn = null,
 }: {
   code: string;
   state: JoinState;
@@ -96,14 +97,16 @@ export function JoinBar({
    * Join offers "Take Danny's held place" instead of seating a second Danny, on a full match too.
    */
   heldForMe?: string | null;
+  /** For a browser that knows nobody: the deployment's ways back in, so "Sign in as Danny?" can show the record's own email code and Telegram (D4). */
+  backIn?: BackInDoors | null;
 }) {
   const t = useTranslations();
   const [inline, setInline] = useState(false);
   const [name, setName] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
   const [error, setError] = useState<string | null>(null);
-  /** The typed name the server answered with `name_seated` ("Sign in as Danny?"). */
-  const [seated, setSeated] = useState<string | null>(null);
+  /** The server's answer for a typed name (`name_seated`, `name_unreached`: "Sign in as Danny?"). */
+  const [nameAsk, setNameAsk] = useState<NameAsk | null>(null);
   const [askedKeys, setAskedKeys] = useState<string[]>(asked);
   const [pending, start] = useTransition();
   // Fixed pairs: the partner's name on the way in, or later for a player who came alone; and who leaves.
@@ -122,8 +125,9 @@ export function JoinBar({
       setError(null);
       const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined, different ? { differentPerson: true } : undefined);
       startTransition(() => {
-        setSeated(!r.ok && r.error === "name_seated" && withName ? withName : null);
-        if (!r.ok && r.error === "name_seated") return;
+        const asked = askOf(r, withName);
+        setNameAsk(asked);
+        if (asked) return;
         if (!r.ok) setError(r.error === "name_required" ? t("identity.nameRequired") : r.error === "level_required" ? t("errors.level_required") : t(`errors.${r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
         // A player already in alone named a partner and no seat was free: still in, alone.
         else if (withPartner && r.data.outcome === "already_in" && !r.data.partner) setError(t("pairs.noSeat"));
@@ -171,8 +175,8 @@ export function JoinBar({
       });
     });
 
-  // "Sign in as Danny?" while the field still holds the name the server asked about; the ask carries its own doors.
-  const asking = !hasIdentity && seated !== null && normalName(seated) === normalName(name);
+  // "Sign in as Danny?" while the field still holds the name the server asked about; the ask carries the record's own doors.
+  const asking = hasIdentity ? null : askStanding(nameAsk, name);
 
   // What Join does for this viewer (`joinStep`): the held place, the bar's form, Join itself, or the open spot.
   const step = joinStep({ heldForMe: Boolean(heldForMe), fixedPairs, hasIdentity, needsLevel });
@@ -245,7 +249,7 @@ export function JoinBar({
                     </button>
                   </div>
                   {asking ? (
-                    <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} pending={pending} onDifferent={() => join(name, level, fixedPairs ? partner : undefined, true)} />
+                    <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} ask={asking} doors={backIn} pending={pending} onDifferent={() => join(name, level, fixedPairs ? partner : undefined, true)} />
                   ) : (
                     !hasIdentity && <NameHereLine code={code} name={name} namesHere={namesHere} claimable={claimable} held={held} />
                   )}

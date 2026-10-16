@@ -60,8 +60,9 @@ async function decide(db: Db, id: string, target: LevelCheckTarget, approve: boo
   const { check, player } = await decideLevelCheck(db, { id, target, approve: Boolean(approve), level: level ?? undefined, byPlayerId });
   const admitted = approve ? await admitConfirmed(db, player, byPlayerId) : [];
   after(async () => {
-    await notifyLevelCheckDecided(db, { check, player, verifierName, approve: Boolean(approve), admitted });
-    await announceAdmission(db, player, admitted, "coachId" in target ? "coach" : "club", byPlayerId);
+    // Whether the level notice reached the player now: only then does a seat skip its own news (`announceAdmission`).
+    const told = await notifyLevelCheckDecided(db, { check, player, verifierName, approve: Boolean(approve), admitted });
+    await announceAdmission(db, player, admitted, "coachId" in target ? "coach" : "club", byPlayerId, { told });
   });
   for (const a of admitted) revalidatePath(`/${a.event.code}`);
   return { admitted: admitted.length };
