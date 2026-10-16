@@ -6,6 +6,7 @@ import { LOCALE_COOKIE } from "@/i18n/config";
 import { BACKUP_KEEP_DAYS } from "@/lib/backup";
 import { DISPOSABLE_AFTER_DAYS } from "@/lib/domain/disposable";
 import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
+import { PARTNER_WINDOW_MS } from "@/lib/domain/refill";
 import { LEGAL_OPERATOR, legalDate, legalValues } from "@/lib/legal";
 import { hintCookieOptions } from "@/lib/hintCookie";
 import { BY_NAME_COOKIE, HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE } from "@/lib/session";
@@ -116,6 +117,26 @@ describe("the privacy page tells the truth about the code", () => {
       expect(line, l).toBeDefined();
       for (const words of KEEPS[l]) expect(line, `${l}: ${words}`).toContain(words);
       expect(render(l, "privacy.deleteBody"), l).toContain(DELETED[l]);
+    }
+  });
+
+  it("says that an organiser can see a past partner Kicksmash cannot reach, and how far back, in every language", () => {
+    // The owner's decision of 16 October 2026 ("yes, write the privacy sentence"): the organiser's line
+    // "Kicksmash can't reach Tim and Adrian" (DECIDING rule 7, src/lib/domain/unreached.ts) shows a past
+    // partner's first name and that no channel reaches them. The days are the ones partnersQuery reads.
+    const WORDS = {
+      en: ["played a match with an organiser", "first name", "cannot reach you", "send you the link"],
+      ru: ["играли матч с организатором", "ваше имя", "не можем с вами связаться", "отправил вам ссылку"],
+      es: ["jugaste un partido con un organizador", "nombre de pila", "no podemos contactarte", "te envíe el enlace"],
+    } as const;
+    const days = PARTNER_WINDOW_MS / (24 * 60 * 60 * 1000);
+    expect(Number.isInteger(days)).toBe(true);
+    for (const l of LOCALES) {
+      expect(messagesOf(l).privacy.storeBody, l).toContain("{partnerDays");
+      const line = render(l, "privacy.storeBody").split("\n").find((x) => x.includes(WORDS[l][0]));
+      expect(line, l).toBeDefined();
+      for (const words of WORDS[l]) expect(line, `${l}: ${words}`).toContain(words);
+      expect(line, l).toMatch(new RegExp(`(^|\\D)${days}\\s`));
     }
   });
 
