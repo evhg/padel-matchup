@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stayUpdated } from "@/lib/domain/stayUpdated";
+import { mailLine, stayUpdated, welcomeKind } from "@/lib/domain/stayUpdated";
 
 /**
  * The "stay updated" card a player meets the moment they join (the owner, 25 September 2026): which
@@ -36,5 +36,53 @@ describe("the stay-updated card", () => {
     expect(stayUpdated({ ...none, email: "a@b.co" }, { ...all, email: false })).toEqual({ kind: "ask", choices: ["whatsapp", "telegram"] });
     expect(stayUpdated({ ...none, telegramId: 42 }, { ...all, telegram: false })).toEqual({ kind: "ask", choices: ["whatsapp", "email"] });
     expect(stayUpdated({ ...none, phone: "+66810000001" }, { ...all, whatsapp: false })).toEqual({ kind: "ask", choices: ["telegram", "email"] });
+  });
+});
+
+/**
+ * What a saved address gets at once, which is also what the card says went out (15 October 2026: on the
+ * waiting list the card said "Calendar invite sent" while the email held only the personal link). Each
+ * line changes one thing from a seated player on a deployment that sends mail.
+ */
+describe("the welcome a saved address gets", () => {
+  const seated = { emailOn: true, seated: true, cancelled: false, byNameOnly: false };
+  it("a seat in a match that is on: the calendar invitation", () => {
+    expect(welcomeKind(seated)).toBe("invite");
+  });
+  it("no seat (the waiting list), or a match called off: the personal-link email, and no invitation", () => {
+    expect(welcomeKind({ ...seated, seated: false })).toBe("link");
+    expect(welcomeKind({ ...seated, cancelled: true })).toBe("link");
+  });
+  it("a deployment that sends no mail, or no address: nothing", () => {
+    expect(welcomeKind({ ...seated, emailOn: false })).toBeNull();
+  });
+  it("a session by name that proved nothing: nothing, seated or not, because both mails carry the personal link (DECIDING rule 34)", () => {
+    expect(welcomeKind({ ...seated, byNameOnly: true })).toBeNull();
+    expect(welcomeKind({ ...seated, seated: false, byNameOnly: true })).toBeNull();
+  });
+});
+
+/**
+ * What a card says about the address on file (the "Stay updated" card and the invitation page's form ask
+ * this one rule). Before a save on the card, the page's word (`invited`); after it, the save's own answer.
+ * 15 October 2026: the invitation page said "Calendar invite sent" after a save that sent nothing.
+ */
+describe("the mail line a card shows", () => {
+  const at = "ana@example.com";
+  it("no address: no line, whatever else is true", () => {
+    expect(mailLine({ sentTo: null, invited: true, welcome: undefined })).toBeNull();
+    expect(mailLine({ sentTo: null, invited: true, welcome: "invite" })).toBeNull();
+  });
+  it("before a save: the invitation line only where the page says the address brought it", () => {
+    expect(mailLine({ sentTo: at, invited: true, welcome: undefined })).toBe("invite");
+    // The waiting list, a session by name, or no mail: an address on file, and no word of an invitation.
+    expect(mailLine({ sentTo: at, invited: false, welcome: undefined })).toBeNull();
+  });
+  it("after a save: what the save answered, whatever the page said before", () => {
+    expect(mailLine({ sentTo: at, invited: false, welcome: "invite" })).toBe("invite");
+    expect(mailLine({ sentTo: at, invited: true, welcome: "link" })).toBe("link");
+    // A session by name, seated (invited false) or not: the save sent nothing, so nothing is said.
+    expect(mailLine({ sentTo: at, invited: false, welcome: null })).toBeNull();
+    expect(mailLine({ sentTo: at, invited: true, welcome: null })).toBeNull();
   });
 });

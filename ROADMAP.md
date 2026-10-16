@@ -1146,6 +1146,19 @@ Everything in this list is live. The README describes each in detail.
   "Danny is in this match. Sign in as Danny?" with "That's me", or for a record with an email or a
   passkey its own doors, and "I'm a different Danny" joins as typed; `join_match` with a name and no
   token answers 409 `name_seated` (DECIDING rule 34).
+- **"Stay updated" stays on the screen after a join, says only what went, and counts its asks (15
+  October 2026, no migration).** It is the one ask that makes a new player reachable. On Chromium
+  (Android) the page's scroll anchoring moved the page 310 px at the join, and the card ended above the
+  screen. The match page now turns anchoring off, as the share page does, except on a live night. From
+  the third seat on, and on the waiting list, the card still went into the hero above the screen, on
+  every phone. Now a card that appears above the screen at a join scrolls into view, and a reload never
+  moves the page. The card, the invitation page's form and the email row say only what went: "Calendar
+  invite sent" for a seat, "Your link is in your email" on the waiting list (the invitation follows a
+  place), and no mail line for a session by name. "Send it again" refuses a session by name, because
+  every invitation carries the personal link (DECIDING rule 34 already said so; this door did not ask).
+  Two other doors still mail the link to an address that such a session typed ("Open, small", item 7).
+  `stay_asked` and `stay_linked_email` (a save on the card itself) count the card beside
+  `stay_linked_telegram` and `stay_linked_whatsapp` (docs/OPERATING.md).
 
 ## The finish line
 
@@ -1316,6 +1329,25 @@ the player, and invite them to try it.
    2026. B is the owner's action: one other Phuket organiser runs a weekly game for 4 weeks. On 11
    October 2026 one organiser had made matches since 10 October. The next session counts the
    organisers with a match since 11 October and reports it to the owner (DECIDING rule 37).
+7. **A session by name still gets the personal link by email, through two doors.** A review found this
+   on 15 October 2026. It is the owner's decision, because it changes messages that go out and touches
+   identity. DECIDING rule 34 says that the link "cannot be ... mailed from" a session by name. "Send it
+   again" now refuses such a session. But such a session can save an address on the card and then tap
+   Leave and Join. The join sends the match's invitation, with the personal link, to that address
+   (`afterJoin` in `src/lib/aftermath.ts`). Every later email to that address carries the link too,
+   for example a line-up change (`ctx` in `src/lib/notify.ts`). Nobody proved the address. The options:
+   - **A, an email code first (recommended).** A session by name gets a code at the address it types,
+     and the record keeps the address only after the code. Pro: the address is proved before any link
+     goes, so rule 34 holds at every door, and the session is then no longer by name. No migration:
+     `verifyRestoreCode` and `restoreByEmail` already put a proved new address on the current record;
+     only the step that sends the code (`requestRestoreCode`) needs a variant for an address that no
+     record has yet. Con: one more step for these players.
+   - **B, the public link in such mail.** Mail to such an address carries the match's public link, as
+     the `.ics` download does. Pro: no extra step. Con: the session's mark is in the cookie, and a
+     notice goes out with no session, so the record needs a mark of its own (a migration), and every
+     sender must read it.
+   - **C, keep it as it is.** Pro: nothing to build. Con: a stranger who signed in by name gets a full
+     sign-in link in two taps, against rule 34.
 
 Decided 24 September: `kicksmash_agent` keeps its login, and the backup of 23 September is not
 compared with production (rows the old merge dropped that morning stay dropped).

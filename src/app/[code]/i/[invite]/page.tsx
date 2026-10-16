@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { nameOnly } from "@/actions/shared";
 import { CalendarEmail } from "@/components/CalendarEmail";
 import { Header } from "@/components/Header";
 import { InviteActions } from "@/components/InviteActions";
@@ -94,6 +95,10 @@ async function InvitePage({ params, searchParams }: Props) {
   // wait together on the waiting list, where a claimed spot is not yet a place on court.
   const namedBy = ev.fixedPairs ? await namedByOf(db, slot) : null;
   const waitingAt = slot.position > ev.capacity ? slot.position - ev.capacity : 0;
+  // The confirmed view's address brings the match's invitation only to a seat, on a deployment that sends
+  // mail, and never to a session by name (DECIDING rule 34: the invitation carries the personal link), so the
+  // form promises it, and says it went, only then (`CalendarEmail`). A cookie read, only for that view.
+  const invited = view === "confirmed" && me && !waitingAt && emailEnabled() ? !(await nameOnly(me)) : false;
   // The organizer typed an email we already know from another identity: offer to restore it (with a code) before confirming.
   const knownOwner =
     (state === "invited" || state === "declined") && emailEnabled() && slot.invitedEmail && !me?.email
@@ -186,7 +191,7 @@ async function InvitePage({ params, searchParams }: Props) {
             <>
               <h2 className={`text-xl font-extrabold ${waitingAt ? "" : "text-ok"}`}>{waitingAt ? t("event.youAreOnWaitlist", { position: waitingAt }) : `✓ ${t("invitePage.confirmed")}`}</h2>
               <p className="mt-1 text-sm text-muted">{waitingAt ? t("pairs.inviteWaiting") : t("invitePage.confirmedHelp")}</p>
-              {me && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} className="mt-4" />}
+              {me && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} member={!waitingAt} invited={invited} className="mt-4" />}
               <Link href={eventHref} className="btn-primary mt-2 w-full">
                 {t("invitePage.goToEvent")}
               </Link>

@@ -47,6 +47,8 @@ import { DomainError } from "@/lib/domain/errors";
 import { ActionFailure, assertRate, clientKey, loadEvent, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { mergesLater } from "@/lib/mergeCount";
+import { stayUpdated } from "@/lib/domain/stayUpdated";
+import { stayChannels } from "@/lib/calendarFeed";
 
 /** Was the line-up complete before this mutation? Drives the "- COMPLETE" calendar update. */
 
@@ -108,6 +110,9 @@ export async function joinAction(code: string, name?: string, level?: number | n
       const source = countedSource((await cookies()).get(SOURCE_COOKIE)?.value);
       if (source) await bumpMetric(db, `join_src_${source}`).catch(() => undefined);
       after(async () => {
+        // The page now shows "Stay updated" asking for a channel (src/lib/domain/stayUpdated.ts): counted
+        // once for the join, never for a view of the page (docs/OPERATING.md; rule 12).
+        if (stayUpdated(me, stayChannels()).kind === "ask") await bumpMetric(db, "stay_asked").catch(() => undefined);
         await afterJoin(db, res, me, { wasComplete: before, code, level: myLevel });
       });
     }

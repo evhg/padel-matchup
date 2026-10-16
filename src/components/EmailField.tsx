@@ -31,7 +31,10 @@ export function EmailField({
   emailEnabled: boolean;
   /** Activity emails switch (on by default once an email exists). */
   notifyOn?: boolean;
-  /** What "saved" says. The default promises a calendar invitation, which is true of a match and not of a coach's walk. */
+  /**
+   * What "saved" says. The default says the calendar invitation is on its way only when this save sent it
+   * (a seat, not a session by name; 15 October 2026), else "Saved."; a coach's walk has no match at all.
+   */
   savedText?: string;
   /** The "email me when the line-up changes" switch is a match's; a coach's channel screen has no line-up. */
   showNotify?: boolean;
@@ -45,6 +48,8 @@ export function EmailField({
   const t = useTranslations();
   const [email, setEmail] = useState(initial ?? "");
   const [saved, setSaved] = useState(false);
+  // Whether this save sent the match's invitation (`updateMyEmail`'s `welcome`): the default line says so only then.
+  const [invited, setInvited] = useState(false);
   const [knownElsewhere, setKnownElsewhere] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [editing, setEditing] = useState(!initial);
@@ -76,6 +81,7 @@ export function EmailField({
         setSaved(true);
         setEditing(!email);
         setKnownElsewhere(r.data.knownElsewhere);
+        setInvited(r.data.welcome === "invite");
       }
     });
   };
@@ -103,7 +109,7 @@ export function EmailField({
           <div className="min-w-0">
             <div className="text-xs font-bold uppercase tracking-wider text-faint">{t("event.yourEmail")}</div>
             <div className="truncate font-semibold">✉️ {email}</div>
-            {saved && <p className="text-sm font-semibold text-ok">{savedText ?? (mode === "creator" ? t("share.emailSaved") : t("event.emailSaved"))}</p>}
+            {saved && <p className="text-sm font-semibold text-ok">{savedText ?? (mode === "creator" ? t("share.emailSaved") : invited ? t("event.emailSaved") : t("event.emailSavedNoMail"))}</p>}
           </div>
           <button type="button" className="btn-ghost btn-sm shrink-0" onClick={() => setEditing(true)}>
             {t("common.edit")}

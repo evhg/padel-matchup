@@ -2,10 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { resendCalendarInviteAction } from "@/actions/calendar";
 import { updateMyEmail } from "@/actions/identity";
-import type { StayChannel, StayState } from "@/lib/domain/stayUpdated";
+import { mailLine, type StayChannel, type StayState, type WelcomeKind } from "@/lib/domain/stayUpdated";
 import { CalendarSubscribe } from "./CalendarSubscribe";
 import { placeholderWidth } from "@/lib/fieldWidth";
 
@@ -13,6 +13,12 @@ type Props = {
   code: string;
   /** Seated, not waitlisted: only a seat can ask for the invitation again (resendCalendarInviteAction). */
   member: boolean;
+  /**
+   * The address on file brought this player the match's invitation: a seat, a deployment that sends mail,
+   * and not a session by name (DECIDING rule 34). Only then does the card say an invitation went, or offer
+   * it again, before anything is typed here.
+   */
+  invited: boolean;
   email: string | null;
   state: Extract<StayState, { kind: "ask" | "reached" }>;
   /** One tap each into a chat the player already has; null where the deployment does not run it. */
@@ -31,7 +37,10 @@ type Props = {
  * A chat tap leaves the page, so when the person comes back the page asks the server again rather
  * than guessing: the card turns into the quiet line only once the bot has actually linked them.
  */
-export function StayUpdated({ code, member, email, state, links, feed }: Props) {
+/** No store to follow: the snapshots alone say whether this render hydrates the page's own HTML (false) or mounts on a page already live (true). */
+const noStore = () => () => undefined;
+
+export function StayUpdated({ code, member, invited, email, state, links, feed }: Props) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
@@ -39,11 +48,26 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
   // What was typed here wins; otherwise the address the server knows, read on every render so a refresh that brings one is not missed.
   const [typed, setTyped] = useState<string | null>(null);
   const sentTo = typed ?? email;
+  // What the save here sent (`updateMyEmail`'s `welcome`); undefined until an address is typed here.
+  const [welcome, setWelcome] = useState<WelcomeKind | null | undefined>(undefined);
+  // The card says only what went: after a save here, the save's own answer; before it, the page's (`mailLine`).
+  const said = mailLine({ sentTo, invited, welcome });
   const [emailOpen, setEmailOpen] = useState(false);
   const [waiting, setWaiting] = useState<"whatsapp" | "telegram" | null>(null);
   const [resent, setResent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // The card appears in the hero at the join, and the join's form sat lower: from the third seat on, and on
+  // the waiting list, the page kept the form in view and the card was above the screen, wholly from the sixth
+  // joiner of a night (review, 15 October 2026). So a card that mounts on a live page (the join, a sign-in)
+  // comes into view when it is above it. A card that the page's own HTML holds hydrates and stays where the
+  // reader is, so a reload never moves the page.
+  const box = useRef<HTMLDivElement>(null);
+  const live = useSyncExternalStore(noStore, () => true, () => false);
+  const cameLive = useRef(live);
+  useEffect(() => {
+    if (cameLive.current && box.current && box.current.getBoundingClientRect().top < 0) box.current.scrollIntoView({ block: "start" });
+  }, []);
 
   useEffect(() => {
     if (!waiting) return;
@@ -64,40 +88,44 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
     // templates Meta approved (src/lib/whatsapp/templates.ts), Telegram and email as they always did.
     const places = withEmail.map((c) => t(c === "whatsapp" ? "calendar.viaWhatsapp" : c === "telegram" ? "calendar.viaTelegram" : "calendar.viaEmail"));
     const line = t("calendar.reached", { places: new Intl.ListFormat(locale, { type: "conjunction" }).format(places) });
-    return (
-      <div className="mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
-        <div className="font-semibold text-ok">{line}</div>
-        {sentTo ? (
-          <>
-            <div className="mt-1 text-muted">📅 {t("calendar.sentTo", { email: sentTo })}</div>
-            {member && (
-              <div className="mt-1 text-muted">
-                {resent ? (
-                  t("calendar.resent")
-                ) : (
-                  <button
-                    type="button"
-                    className="underline disabled:opacity-60"
-                    disabled={pending}
-                    onClick={() =>
-                      start(async () => {
-                        setError(null);
-                        const r = await resendCalendarInviteAction(code);
-                        if (r.ok) setResent(true);
-                        else setError(t("common.somethingWrong"));
-                      })
-                    }
-                  >
-                    {pending ? t("common.working") : t("calendar.resend")}
-                  </button>
-                )}
-                {error && <span className="ml-2 font-semibold text-danger">{error}</span>}
-              </div>
+    // What the address brought, and nothing else: the invitation (and "Send it again" for a seat); on the
+    // waiting list the personal link, whose invitation follows a place; for a session by name no line at
+    // all, because it gets neither (DECIDING rule 34).
+    const mail = said === "invite" && sentTo ? (
+      <>
+        <div className="mt-1 text-muted">📅 {t("calendar.sentTo", { email: sentTo })}</div>
+        {member && (
+          <div className="mt-1 text-muted">
+            {resent ? (
+              t("calendar.resent")
+            ) : (
+              <button
+                type="button"
+                className="underline disabled:opacity-60"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    setError(null);
+                    const r = await resendCalendarInviteAction(code);
+                    if (r.ok) setResent(true);
+                    else setError(t("common.somethingWrong"));
+                  })
+                }
+              >
+                {pending ? t("common.working") : t("calendar.resend")}
+              </button>
             )}
-          </>
-        ) : (
-          feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />
+            {error && <span className="ml-2 font-semibold text-danger">{error}</span>}
+          </div>
         )}
+      </>
+    ) : said === "link" ? (
+      <div className="mt-1 text-muted">✉️ {t("calendar.linkSent")}</div>
+    ) : null;
+    return (
+      <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
+        <div className="font-semibold text-ok">{line}</div>
+        {sentTo ? mail : feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />}
       </div>
     );
   }
@@ -108,7 +136,7 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
   // Email alone needs no choosing: the form is the card.
   const showForm = emailChoice && (emailOpen || chats.length === 0);
   return (
-    <div className="mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-4" data-testid="stay-updated">
+    <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-4" data-testid="stay-updated">
       <div className="font-bold">🔔 {t("calendar.stayTitle")}</div>
       <p className="mt-0.5 text-sm text-muted">{t("calendar.stayHelp")}</p>
       {chats.length > 0 && (
@@ -135,18 +163,21 @@ export function StayUpdated({ code, member, email, state, links, feed }: Props) 
             if (!value.trim()) return;
             start(async () => {
               setError(null);
-              const r = await updateMyEmail(value, code);
+              // The card's own save: the one that answers "Stay updated" (`stay_linked_email`).
+              const r = await updateMyEmail(value, code, { from: "stay" });
               if (!r.ok || !r.data.email) {
                 setError(t("common.somethingWrong"));
                 return;
               }
               setTyped(r.data.email);
+              setWelcome(r.data.welcome);
             });
           }}
         >
           <input type="email" inputMode="email" autoComplete="email" className="input flex-1" style={{ minWidth: placeholderWidth(t("share.emailPlaceholder")) }} placeholder={t("share.emailPlaceholder")} value={value} onChange={(e) => setValue(e.target.value)} required />
           <button type="submit" className="btn-primary shrink-0" disabled={pending || !value.trim()}>
-            {pending ? t("common.working") : t("calendar.send")}
+            {/* "Send invite" only where an invitation goes: a seat, never a session by name. Anybody else saves the address. */}
+            {pending ? t("common.working") : t(invited ? "calendar.send" : "common.save")}
           </button>
         </form>
       )}
