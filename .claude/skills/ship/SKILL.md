@@ -679,6 +679,12 @@ Wall clock first, credits second. What actually moved it, measured:
 - **Read `GATE_EXIT=` before the push, in a separate command.** A push chained after the gate in one
   shell line (`... ; git push`) went out on a red gate: the exit line was printed, nobody had read
   it. The gate's log is read first, the push is its own command, every time.
+- **A gate proves the tree it started on, so the tree stays still until the gate ends.** On 16 October
+  2026 the full gate started beside a review workflow, to quiet the stop hook about an unpushed
+  commit. The review's fixes then landed while the gate was in its unit suite, so its result would
+  have proved neither version: it was stopped by PID and run again, twenty minutes lost. The order is
+  review, fixes, commit, then the gate, once. An unpushed commit while a review runs is the normal
+  state, not a reason to start the gate early.
 - **A migration number belongs to main, not to the branch that generated it.** Fixed pairs was built
   as 0089 and 0090 on 69c3d3f; while it was being built, main merged its own 0089 and 0090 (the crew's
   Telegram group), and the first full gate ran on a base nobody could merge. Before the full gate, ask
