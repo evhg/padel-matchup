@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { hintCookieOptions } from "@/lib/hintCookie";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
@@ -87,10 +88,19 @@ export async function getSessionPlayerId(): Promise<string | null> {
   return unsealPlayerId(store.get(PLAYER_COOKIE)?.value);
 }
 
+/**
+ * One read of the session's player for each server render: the root layout (the restore seal) and the
+ * page (the viewer) asked for the same row, so a signed-in match page read it twice. React's `cache`
+ * keeps an answer only inside the render of one request. A server action and a route handler run
+ * outside a render, so each of their calls reads the row afresh, and the page that an action renders
+ * again after a write is a new render with a new read.
+ */
+const playerOnce = cache((db: Db, id: string) => getPlayer(db, id));
+
 export async function getSessionPlayer(db: Db): Promise<Player | null> {
   const id = await getSessionPlayerId();
   if (!id) return null;
-  return getPlayer(db, id);
+  return playerOnce(db, id);
 }
 
 /**

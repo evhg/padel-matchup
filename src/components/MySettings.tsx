@@ -6,7 +6,7 @@ import { baseUrl, emailEnabled } from "@/lib/config";
 import { isLevelVerified } from "@/lib/domain/levels";
 import { playerHasPush } from "@/lib/domain/push";
 import { personalPath, personalUrl } from "@/lib/personal";
-import { vapidPublicKey } from "@/lib/push";
+import { vapidPublicKey } from "@/lib/pushConfig";
 import { telegramBotId } from "@/lib/telegram/api";
 import { EmailField } from "./EmailField";
 import { HomeScreenPrompt } from "./HomeScreenPrompt";

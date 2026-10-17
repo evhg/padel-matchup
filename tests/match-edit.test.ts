@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { canEditMatchDetails, createEvent, mayMoveStart, updateEvent } from "@/lib/domain/events";
+import { canEditMatchDetails, createEvent, editFormsShown, mayMoveStart, updateEvent } from "@/lib/domain/events";
 import { editErrorKey, shownStart, startToSend } from "@/lib/editMatchForm";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { getEventByCode } from "@/lib/domain/queries";
@@ -118,5 +118,21 @@ describe("who may change a match's details", () => {
 
   it("the change notice does not claim the organiser made it", () => {
     expect(en.email.updated.body).not.toMatch(/organi[sz]er/i);
+  });
+});
+
+describe("which edit form the match page shows, and so where it reads the venue picker", () => {
+  // The page reads `venuesForPicking` (three reads) only when one of the two is true (16 October 2026).
+  const shown = (isCreator: boolean, canEdit: boolean, cancelled: boolean, over: boolean) => editFormsShown({ isCreator, canEdit, cancelled, over });
+  it("the organiser's panel until the match is called off, a past match included", () => {
+    expect(shown(true, true, false, false)).toEqual({ organiser: true, player: false });
+    expect(shown(true, true, false, true)).toEqual({ organiser: true, player: false });
+    expect(shown(true, true, true, false)).toEqual({ organiser: false, player: false });
+  });
+  it("a seated player's form while the match is neither called off nor over; nobody else's", () => {
+    expect(shown(false, true, false, false)).toEqual({ organiser: false, player: true });
+    expect(shown(false, true, false, true)).toEqual({ organiser: false, player: false });
+    expect(shown(false, true, true, false)).toEqual({ organiser: false, player: false });
+    expect(shown(false, false, false, false)).toEqual({ organiser: false, player: false });
   });
 });

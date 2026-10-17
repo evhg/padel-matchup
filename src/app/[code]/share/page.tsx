@@ -16,7 +16,7 @@ import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
 import { playerHasPush } from "@/lib/domain/push";
-import { pushEnabled, vapidPublicKey } from "@/lib/push";
+import { pushEnabled, vapidPublicKey } from "@/lib/pushConfig";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";

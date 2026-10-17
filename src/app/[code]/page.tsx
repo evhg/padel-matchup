@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { detectPlatform, madeToShare, platformById } from "@/lib/booking/platforms";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -48,7 +49,7 @@ import { SlotActions } from "@/components/SlotActions";
 import { StayUpdated } from "@/components/StayUpdated";
 import { ThatsMeButton, ThatsMeLine } from "@/components/ThatsMe";
 import { LevelAfterJoin } from "@/components/LevelAfterJoin";
-import { getDb } from "@/db";
+import { getDb, type Db } from "@/db";
 import { feedKeyFor, feedLinks, stayChannels } from "@/lib/calendarFeed";
 import { stayUpdated } from "@/lib/domain/stayUpdated";
 import { bindDeepLink } from "@/lib/telegram/deepLinks";
@@ -58,7 +59,7 @@ import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
 import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
-import { canEditMatchDetails, isClaimable, isOccupied, isSeated, mayMoveStart, organiserAlone } from "@/lib/domain/events";
+import { canEditMatchDetails, editFormsShown, isClaimable, isOccupied, isSeated, mayMoveStart, organiserAlone } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { crewTelegramInvite, getGroupById, getGroupMember } from "@/lib/domain/groups";
@@ -73,7 +74,7 @@ import { getJoinRequests } from "@/lib/domain/requests";
 import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
 import { getClubForBooking, venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, rolodexForBrowser, type SlotWithPlayer } from "@/lib/domain/queries";
-import { pushEnabled, vapidPublicKey } from "@/lib/push";
+import { pushEnabled, vapidPublicKey } from "@/lib/pushConfig";
 import { scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
@@ -97,11 +98,23 @@ import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string; join?: string }> };
 
+/**
+ * One read of the match for each request: `generateMetadata` and the page both want it, and the two
+ * read it twice until 16 October 2026. React's `cache` keeps the answer only inside this request's
+ * render; a server action reads afresh, and the page it renders after a write is a new render.
+ * `readAt` is taken before the read, whichever of the two starts it: the page's `now`, so the notices
+ * it marks read are only the ones made before it read the match (`markMatchNoticesRead`).
+ */
+const eventOnce = cache(async (db: Db, code: string) => {
+  const readAt = new Date();
+  return { readAt, detail: await getEventByCode(db, code) };
+});
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
   if (!isValidShareCode(code)) return {};
   const db = await getDb();
-  const detail = await getEventByCode(db, code);
+  const { detail } = await eventOnce(db, code);
   if (!detail) return {};
   const t = await getTranslations();
   const locale = await getLocale();
@@ -141,11 +154,11 @@ async function EventPage({ params, searchParams }: Props) {
   const openJoin = query?.join === "1";
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
-  // Taken before the first read: the notices this page marks read are the ones made before it read the
-  // match (`markMatchNoticesRead`), never one a join made while the page was still reading.
-  const now = new Date();
+  // Taken before the first read, by whichever of the page and its metadata read the match first
+  // (`eventOnce`): the notices this page marks read are the ones made before it read the match
+  // (`markMatchNoticesRead`), never one a join made while the page was still reading.
   const db = await getDb();
-  const detail = await getEventByCode(db, code);
+  const { readAt: now, detail } = await eventOnce(db, code);
   if (!detail) notFound();
   const [t, locale, viewer] = await Promise.all([getTranslations(), getLocale(), getViewer(db, detail)]);
 
@@ -385,7 +398,10 @@ async function EventPage({ params, searchParams }: Props) {
   // Sequential, not parallel: the pooler stalls on pipelined bursts (rule 8).
   // The organiser and every seated player may change the details (canEditMatchDetails), so both get the form.
   const canEdit = canEditMatchDetails(detail, { isCreator: viewer.isCreator, playerId: me?.id });
-  const venues = canEdit ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
+  // The venue picker's three reads, only where an edit form shows (`editFormsShown`): the organiser's
+  // panel until the match is called off, and a seated player's "Change details" below.
+  const forms = editFormsShown({ isCreator: viewer.isCreator, canEdit, cancelled, over });
+  const venues = forms.organiser || forms.player ? await venuesForPicking(db, ev.creatorPlayerId, { tz: ev.tz }) : [];
   // Once it has started, only the organiser moves the start (`mayMoveStart`, the rule `updateEvent` holds).
   const startLocked = canEdit && !mayMoveStart(ev, { playerId: me?.id, asOrganiser: viewer.isCreator }, now);
   // The court: "Book this court" opens the club's own booking, prepared as far as its platform's public
@@ -1047,7 +1063,7 @@ async function EventPage({ params, searchParams }: Props) {
           />
         )}
 
-        {!viewer.isCreator && canEdit && !cancelled && !over && (
+        {forms.player && (
           <section className="card" data-testid="player-edit">
             <h2 className="text-lg font-extrabold">{t("event.changeDetails")}</h2>
             <p className="mt-0.5 text-sm text-muted">{t("event.changeDetailsHelp")}</p>

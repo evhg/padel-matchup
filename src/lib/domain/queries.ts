@@ -22,39 +22,52 @@ export type EventDetail = {
   lateExit?: { name: string; count: number } | null;
 };
 
-export async function getEventByCode(db: Db, code: string): Promise<EventDetail | null> {
-  const [ev] = await db.select().from(events).where(eq(events.code, code)).limit(1);
-  if (!ev) return null;
-  return getEventDetail(db, ev);
-}
+/**
+ * What a match's detail reads beside the match, through the relations `src/db/schema/events.ts`
+ * declares: the organiser, every place with its player in position order, the sets in order, and the
+ * last 50 lines of activity with their actors. `db.query` sends it as one statement, with a lateral
+ * subquery for each, each down its own index (`slots_event_position_idx`, `scores_event_set_idx`,
+ * `activity_event_idx`). Until 16 October 2026 the detail was the match, then four reads at once: five
+ * statements on every page view, card sync and notice. Rule 8 says the pooler stalls on such a burst,
+ * and rule 12 counts each one. `tests/event-detail.test.ts` holds the answer to the old reads.
+ */
+const DETAIL_WITH = {
+  creator: true as const,
+  slots: { with: { player: true as const }, orderBy: [asc(slots.position)] },
+  scores: { orderBy: [asc(scores.setNumber)] },
+  activity: { with: { actor: true as const }, orderBy: [desc(activity.createdAt)], limit: 50 },
+};
 
-export async function getEventDetail(db: Db, ev: Event): Promise<EventDetail> {
-  const [[creator], slotRows, scoreRows, actRows] = await Promise.all([
-    db.select().from(players).where(eq(players.id, ev.creatorPlayerId)),
-    db
-      .select({ slot: slots, player: players })
-      .from(slots)
-      .leftJoin(players, eq(players.id, slots.playerId))
-      .where(eq(slots.eventId, ev.id))
-      .orderBy(asc(slots.position)),
-    db.select().from(scores).where(eq(scores.eventId, ev.id)).orderBy(asc(scores.setNumber)),
-    db
-      .select({ activity, actor: players })
-      .from(activity)
-      .leftJoin(players, eq(players.id, activity.actorPlayerId))
-      .where(eq(activity.eventId, ev.id))
-      .orderBy(desc(activity.createdAt))
-      .limit(50),
-  ]);
-  const all: SlotWithPlayer[] = slotRows.map((r) => ({ ...r.slot, player: r.player }));
+type DetailRows = { creator: Player; slots: SlotWithPlayer[]; scores: Score[]; activity: ActivityWithActor[] };
+
+/** The places inside the capacity are the line-up, and the rest are the waiting list. */
+function detailOf(ev: Event, rows: DetailRows): EventDetail {
   return {
     event: ev,
-    creator,
-    roster: all.filter((s) => s.position <= ev.capacity),
-    waitlist: all.filter((s) => s.position > ev.capacity),
-    scores: scoreRows,
-    activity: actRows.map((r) => ({ ...r.activity, actor: r.actor })),
+    creator: rows.creator,
+    roster: rows.slots.filter((s) => s.position <= ev.capacity),
+    waitlist: rows.slots.filter((s) => s.position > ev.capacity),
+    scores: rows.scores,
+    activity: rows.activity,
   };
+}
+
+/** The match with this code and everything its page shows, in one statement; null for no such match. */
+export async function getEventByCode(db: Db, code: string): Promise<EventDetail | null> {
+  const row = await db.query.events.findFirst({ where: eq(events.code, code), with: DETAIL_WITH });
+  if (!row) return null;
+  const { creator, slots: places, scores: sets, activity: lines, ...ev } = row;
+  return detailOf(ev, { creator, slots: places, scores: sets, activity: lines });
+}
+
+/** The detail of a match the caller already holds, in one statement; `ev` stays as the caller passed it. */
+export async function getEventDetail(db: Db, ev: Event): Promise<EventDetail> {
+  const row = await db.query.events.findFirst({ where: eq(events.id, ev.id), columns: { id: true }, with: DETAIL_WITH });
+  if (row) return detailOf(ev, row);
+  // The match went after the caller read it: its places, sets and activity went with it (on delete
+  // cascade), and the organiser is still there. The five reads gave the same answer.
+  const [creator] = await db.select().from(players).where(eq(players.id, ev.creatorPlayerId));
+  return detailOf(ev, { creator, slots: [], scores: [], activity: [] });
 }
 
 export async function getSlotByInviteCode(db: Db, inviteCode: string): Promise<{ slot: SlotWithPlayer; event: Event; creator: Player } | null> {

@@ -531,6 +531,18 @@ export const canEditMatchDetails = (detail: { roster: Pick<Slot, "status" | "pla
   viewer.isCreator || isSeated(detail, viewer.playerId);
 
 /**
+ * Which edit form the match page shows this viewer, and so whether the page reads the venue picker's
+ * three rows (`venuesForPicking`). The organiser's panel holds a form until the match is called off
+ * (`CreatorPanel`). A seated player gets "Change details" while the match is neither called off nor
+ * over. Nobody else gets a form, and a page with no form reads no venues. Until 16 October 2026 the
+ * picker read for every seated player, also on a past match.
+ */
+export const editFormsShown = (o: { isCreator: boolean; canEdit: boolean; cancelled: boolean; over: boolean }): { organiser: boolean; player: boolean } => ({
+  organiser: o.isCreator && !o.cancelled,
+  player: !o.isCreator && o.canEdit && !o.cancelled && !o.over,
+});
+
+/**
  * Who may move a match's start (`updateEvent`): anybody who may edit it, until the start; after it,
  * only the organiser, by the session or by the manage link (`asOrganiser`). The edit form asks the same
  * question, so a seated player on a started match sees the time it cannot change, and why.
