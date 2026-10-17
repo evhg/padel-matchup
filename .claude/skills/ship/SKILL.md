@@ -592,6 +592,29 @@ learning can be a test, a gate step or a script, make it one and put the story i
   gave two server rows: the real message, and the HTML pass's copy that reads "The specific message is
   omitted in production builds". No unit test could show it, because a test calls the hook once. Run
   the build and break a page before trusting a hook that Next.js calls.
+- **A page's server actions are part of the page.** The brief for 16 October 2026 moved
+  `pushEnabled()` and `vapidPublicKey()` out of `push.ts` so that the match page would not load
+  web-push. The build said otherwise: the match page and My matches still started it. A route's entry
+  loads every module that the page and its server actions import, and both reach a module that can
+  send a push (`notify.ts` behind the match page's join, score and group actions, `feedback/store.ts` on
+  My matches). The static import put web-push into 90 of 140 route entries. The list at the end of
+  `.next/server/app/<route>/page.js` is what starts; `scripts/check-bundle.mjs` reads it (`ON_USE`), and
+  `push.ts` imports web-push on the first send.
+- **A shared read moves the moment that the page names.** With React's `cache`, `generateMetadata` can
+  read the match before the page takes its `now`, and the notices that the page marks read
+  (`lte(notices.createdAt, now)`) would then include a join that the screen never showed. The cached
+  read carries the time it began (`eventOnce`'s `readAt`), and the page uses that time as `now`.
+- **A form can show in two places.** The same brief tied the venue reads to the condition of the
+  player's form on the match page. The organiser's form is in `CreatorPanel`, under another condition,
+  so the literal change would have left the organiser's venue picker empty. Grep every use of the
+  component before you tie a read to one JSX condition (`editFormsShown`).
+- **An order is proven only by rows stored out of order, and seen only by a comparison that keeps
+  order.** The test of the one statement wrote the six places in position order, so the read with
+  its ORDER BY taken out still gave 1 to 6 on both databases, and the whole gate passed (review, 15
+  October 2026). The same change compared its pages before and after with every line sorted first,
+  and so called them the same while the activity lines that share one timestamp had changed places.
+  Store the fixture out of order (`tests/event-detail.test.ts` writes 6, 2, 5, 1, 4, 3 and fills
+  place 1 afterwards), and compare pages as sequences (`difflib`), never as sorted lists or counts.
 
 ### Wall clock
 

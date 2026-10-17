@@ -14,7 +14,7 @@
 //
 // This is that check. It reads the tracing manifests Next writes next to each route — the real list of
 // files that route ships — so it cannot be fooled by a config that looks right.
-import { globSync, readFileSync, statSync } from "node:fs";
+import { globSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 /** Never belongs in a function. Each of these is a build-time or test-time tool. */
@@ -78,6 +78,35 @@ const fat = routes.filter((r) => r.bytes > MAX_ROUTE_BYTES);
 for (const r of fat.slice(0, 3)) problems.push(`${r.name} weighs ${mb(r.bytes)}, over the ${mb(MAX_ROUTE_BYTES)} a route may weigh.`);
 if (fat.length > 3) problems.push(`…and ${fat.length - 3} more route(s) over ${mb(MAX_ROUTE_BYTES)}.`);
 
+/**
+ * Loaded when it is used, never when a route starts. A route's server entry loads every chunk in the
+ * list at the end of its `page.js` or `route.js` before it answers, whatever the request needs. The
+ * server actions a page carries count too, so web-push and its crypto started with 90 of the 140 route
+ * entries, the match page and My matches among them, where nothing but `pushEnabled()` ran (16 October
+ * 2026). Each row: the package, a string only its own code holds, and where it is loaded instead.
+ */
+const ON_USE = [["web-push", "The GCM API Key should be a non-empty string or null.", "src/lib/push.ts imports it on the first send"]];
+const serverDir = path.join(root, ".next/server");
+const chunkHas = new Map();
+const holds = (id, marker) => {
+  const key = `${id}\0${marker}`;
+  if (!chunkHas.has(key)) chunkHas.set(key, readFileSync(path.join(serverDir, "chunks", `${id}.js`), "utf8").includes(marker));
+  return chunkHas.get(key);
+};
+// readdirSync, not globSync: "**" passes over a dot directory, and `.well-known` holds two routes.
+const entries = readdirSync(path.join(serverDir, "app"), { recursive: true })
+  .map((f) => path.join("app", String(f)))
+  .filter((f) => /(^|\/)(page|route)\.js$/.test(f))
+  .map((f) => ({ name: f, chunks: (readFileSync(path.join(serverDir, f), "utf8").match(/\.X\(0,\[([0-9,]*)\]/)?.[1] ?? "").split(",").filter(Boolean) }));
+const atStart = [];
+for (const [pkg, marker, instead] of ON_USE) {
+  // A marker that is in no chunk at all proves nothing: the package changed its words, or left the build.
+  const anywhere = globSync("chunks/*.js", { cwd: serverDir }).some((f) => readFileSync(path.join(serverDir, f), "utf8").includes(marker));
+  if (!anywhere) atStart.push(`${pkg}: its marker is in no chunk of this build, so this check reads nothing. Find a string its code still holds.`);
+  const hit = entries.filter((e) => e.chunks.some((id) => holds(id, marker)));
+  if (hit.length) atStart.push(`${pkg} loads at the start of ${hit.length} of ${entries.length} route entries; ${instead}.\n     first: ${hit[0].name}`);
+}
+
 if (why || problems.length) {
   console.log(`${routes.length} routes · heaviest ${mb(routes[0].bytes)} · median ${mb(routes[Math.floor(routes.length / 2)].bytes)}`);
   for (const r of routes.slice(0, why ? 8 : 3)) console.log(`  ${mb(r.bytes).padStart(8)}  ${r.name}`);
@@ -96,4 +125,14 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log(`✓ functions are lean (${routes.length} routes, heaviest ${mb(routes[0].bytes)})`);
+if (atStart.length) {
+  console.error("\n✗ a package that only one rare step uses loads at the start of routes:\n");
+  for (const p of atStart) console.error(`  ·  ${p}`);
+  console.error(`
+  A static import anywhere on the way from a page or its server actions puts the package in the
+  route's start. Import it where it is used (\`await import("…")\`), then rebuild and run this again.
+`);
+  process.exit(1);
+}
+
+console.log(`✓ functions are lean (${routes.length} routes, heaviest ${mb(routes[0].bytes)}; ${ON_USE.map(([p]) => p).join(", ")} in no route's start)`);
