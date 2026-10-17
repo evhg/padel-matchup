@@ -253,14 +253,52 @@ const keyOf = (expr: SQL) => sql`lower(regexp_replace(btrim(regexp_replace(norma
  * partner on the organiser's unreached list, which the server found for the name typed (the owner's
  * decision of 16 October 2026, D6; `unreachedNamed`). It counts as in context and in the namesake count,
  * and every other limit reads it as it reads any record.
+ *
+ * One statement. `thatsMeRowsMany` sends several of these reads as one statement, each with its own
+ * context, counts and limit; both build their SQL with `thatsMeSql`.
  */
-export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | null; viewerId?: string | null; now?: Date; extra?: string | null } = {}): Promise<ThatsMeRow[]> {
-  const name = o.name?.trim() ? o.name : null;
-  const extra = o.extra && /^[0-9a-f-]{36}$/i.test(o.extra) ? o.extra : null;
+export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: ThatsMeProbe & { now?: Date } = {}): Promise<ThatsMeRow[]> {
   // "Organises" means a match still to come or under way (the owner, 11 October 2026), as `endedBy` reads an end: as text (rule 1).
   const nowIso = (o.now ?? new Date()).toISOString();
+  return rowsOf(await db.execute(thatsMeSql(m, o, nowIso))).map(thatsMeRowOf);
+}
+
+/** What one read of `thatsMeRows` asks for: a name, the browser's own record, one more record in context. */
+export type ThatsMeProbe = { name?: string | null; viewerId?: string | null; extra?: string | null };
+
+/**
+ * Several reads of `thatsMeRows` in one statement, `(read 1) union all (read 2) …`, so a page that needs
+ * more than one sends one statement, not one after another (rules 8 and 12). Each read keeps its own
+ * `with` clause, so its context (its `extra`, its browser), its namesake counts and its limit are the
+ * ones `thatsMeRows` gives for that read alone: one read's `extra` and browser are in no other read.
+ * Each row carries the number of its read and its place in that read's own order; the rows come back
+ * as one list for each read, in the order of `probes`. One `now` for all of them. No statement for no
+ * read.
+ */
+export async function thatsMeRowsMany(db: Db, m: ThatsMeMatch, probes: readonly ThatsMeProbe[], now?: Date): Promise<ThatsMeRow[][]> {
+  if (probes.length === 0) return [];
+  const nowIso = (now ?? new Date()).toISOString();
+  const reads = sql.join(
+    probes.map((o, i) => sql`(${thatsMeSql(m, o, nowIso, i)})`),
+    sql` union all `,
+  );
+  const res = await db.execute(sql`${reads} order by probe, ord`);
+  const out = probes.map((): ThatsMeRow[] => []);
+  for (const x of rowsOf(res)) out[Number(x.probe)].push(thatsMeRowOf(x));
+  return out;
+}
+
+/**
+ * The SQL of one read, for `thatsMeRows` and `thatsMeRowsMany` alike: the one place it is written.
+ * `nowIso` is the read's moment as text (rule 1). With `probe`, each row also carries that number and
+ * its place in the read's own order (`ord`), so reads can share a statement and be told apart.
+ */
+function thatsMeSql(m: ThatsMeMatch, o: ThatsMeProbe, nowIso: string, probe: number | null = null): SQL {
+  const name = o.name?.trim() ? o.name : null;
+  const extra = o.extra && /^[0-9a-f-]{36}$/i.test(o.extra) ? o.extra : null;
   const viewerId = o.viewerId && /^[0-9a-f-]{36}$/i.test(o.viewerId) ? o.viewerId : null;
-  const res = await db.execute(sql`
+  const tag = probe === null ? sql.empty() : sql`${probe}::int as probe, (row_number() over (order by p.created_at))::int as ord, `;
+  return sql`
     with seats as (
       select s.player_id as id from slots s
        where s.event_id = ${m.id} and s.player_id is not null and s.status in ('joined', 'confirmed', 'invited')
@@ -286,7 +324,7 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
       union
       select p.id from players p where p.id = ${viewerId}
     )
-    select p.id, p.display_name, ${keyOf(sql`p.display_name`)} as key,
+    select ${tag}p.id, p.display_name, ${keyOf(sql`p.display_name`)} as key,
       (${name}::text is null or ${keyOf(sql`p.display_name`)} = ${keyOf(sql`${name}::text`)}) as named,
       coalesce((select c.n from counts c where c.key = ${keyOf(sql`p.display_name`)}), 0) as same_name,
       exists (select 1 from ctx where ctx.id = p.id) as in_context,
@@ -315,8 +353,12 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
     from players p
     where p.id in (select id from pool) and p.display_name <> 'Deleted player'
     order by p.created_at
-    limit ${THATS_ME_ROWS}`);
-  return rowsOf(res).map((x) => ({
+    limit ${THATS_ME_ROWS}`;
+}
+
+/** One row of the read, as the rule reads it. */
+function thatsMeRowOf(x: Record<string, unknown>): ThatsMeRow {
+  return {
     id: String(x.id),
     name: String(x.display_name),
     key: String(x.key),
@@ -341,7 +383,7 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: { name?: string | 
     runsCrew: yes(x.runs_crew),
     organisesEvents: yes(x.organises_events),
     inAskingGroup: yes(x.in_asking_group),
-  }));
+  };
 }
 
 /** How good a place in a match is: a seat taken beats a seat held for them, which beats a waiting place. */
@@ -403,6 +445,21 @@ export type ThatsMeDecision = { ok: true; event: { id: string; code: string }; i
 /** The record of the organiser's unreached list that a typed name names (`unreachedNamed` in src/lib/domain/unreached.ts), asked only when nothing in this match or its crew carries the name. */
 export type UnreachedLookup = (name: string) => Promise<{ id: string; name: string } | null>;
 
+/** The read `unreachedVerdict` makes for a record of the list: the record's own name, the record in context (`extra`), no browser. */
+const listedProbe = (u: { id: string; name: string }): ThatsMeProbe => ({ name: u.name, extra: u.id });
+
+/** The verdict for a record of the list, over the rows of `listedProbe`: the verdict every tap gets, and a namesake when it names another record. Pure. */
+function listedVerdict(rows: readonly ThatsMeRow[], u: { id: string }): ThatsMeVerdict {
+  const v = thatsMeVerdict(rows, null);
+  return v.ok && v.id !== u.id ? { ok: false, reason: "namesake" } : v;
+}
+
+/** The tap's first step, over the rows of the typed name for a browser that knows nobody: true when nobody in this match or its crew carries it, the one case where the tap reads the list. Pure. */
+function typedFindsNobody(rows: readonly ThatsMeRow[]): boolean {
+  const first = thatsMeVerdict(rows, null);
+  return !first.ok && first.reason === "nobody";
+}
+
 /**
  * Whether "That's me" signs in this past partner on the organiser's unreached list (D6): the rows read
  * for the record's own name with the record in context (`extra`), and the one verdict every tap gets,
@@ -410,9 +467,7 @@ export type UnreachedLookup = (name: string) => Promise<{ id: string; name: stri
  * ask it after the same first step, for the same typed name, so what the question offers is what the tap does.
  */
 export async function unreachedVerdict(db: Db, m: ThatsMeMatch, u: { id: string; name: string }, now?: Date): Promise<ThatsMeVerdict> {
-  const rows = await thatsMeRows(db, m, { name: u.name, extra: u.id, now });
-  const v = thatsMeVerdict(rows, null);
-  return v.ok && v.id !== u.id ? { ok: false, reason: "namesake" } : v;
+  return listedVerdict(await thatsMeRows(db, m, { ...listedProbe(u), now }), u);
 }
 
 /**
@@ -422,11 +477,10 @@ export async function unreachedVerdict(db: Db, m: ThatsMeMatch, u: { id: string;
  * nobody; only when nobody there carries it does the tap read the list, so only then may the join
  * offer it. Then the list record's own verdict (`unreachedVerdict`). A crew "Tim" beside a listed "Tim
  * Smith" is the case this keeps apart: the tap would sign in crew Tim, so the join never offers Tim Smith.
- * One more bounded read, only for a name on the list.
+ * One bounded read, and a second only when nobody in this match or its crew carries the typed name.
  */
 export async function unreachedOffer(db: Db, m: ThatsMeMatch, typed: string, u: { id: string; name: string }, now?: Date): Promise<boolean> {
-  const first = thatsMeVerdict(await thatsMeRows(db, m, { name: typed, now }), null);
-  if (first.ok || first.reason !== "nobody") return false;
+  if (!typedFindsNobody(await thatsMeRows(db, m, { name: typed, now }))) return false;
   return (await unreachedVerdict(db, m, u, now)).ok;
 }
 
@@ -435,15 +489,25 @@ export async function unreachedOffer(db: Db, m: ThatsMeMatch, typed: string, u: 
  * it is true of everybody it names. Each partner on the line, typing the first name the line shows, gets
  * the question and the tap signs in that partner (`unreachedOffer`), so a partner "That's me" refuses (an
  * address, a passkey, an upcoming match of their own) keeps the plain "Send them the link." for the whole
- * line. A line with more names than it shows ("and 3 more") keeps it too, so the reads stay at most
- * `UNREACHED_SHOWN` partners of two bounded reads each, on the organiser's own view of a match with a seat
- * open (rule 12).
+ * line. A line with more names than it shows ("and 3 more") keeps it too, and so does a line with nobody
+ * on it; neither costs a read.
+ *
+ * One statement for the whole line (rules 8 and 12), on the organiser's own view of a match with a seat
+ * open: `thatsMeRowsMany` with the two reads of `unreachedOffer` for each partner, at most
+ * `UNREACHED_SHOWN` partners, so at most ten reads. Each read keeps its own context, as it has in
+ * `unreachedOffer`: the typed first name's read has no partner in it, and a partner's own read has only
+ * that partner. Then the same two steps, partner by partner, in the line's order: the rows of the
+ * second read count only when the first finds nobody, as `unreachedOffer` sends the second read only then.
  */
 export async function unreachedSignsIn(db: Db, m: ThatsMeMatch, partners: readonly { id: string; name: string }[], now?: Date): Promise<boolean> {
   if (partners.length === 0 || partners.length > UNREACHED_SHOWN) return false;
-  // One partner after another (AGENTS.md rule 8), and none after the first that the tap would not sign in.
-  for (const u of partners) if (!(await unreachedOffer(db, m, firstName(u.name), u, now))) return false;
-  return true;
+  const reads = await thatsMeRowsMany(
+    db,
+    m,
+    partners.flatMap((u) => [{ name: firstName(u.name) }, listedProbe(u)]),
+    now,
+  );
+  return partners.every((u, i) => typedFindsNobody(reads[2 * i]) && listedVerdict(reads[2 * i + 1], u).ok);
 }
 
 /**
