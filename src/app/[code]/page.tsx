@@ -26,6 +26,8 @@ import { ReturningPlayer } from "@/components/ReturningPlayer";
 import type { BackInDoors } from "@/components/BackInHelp";
 import { BackInOpener } from "@/components/BackInOpener";
 import { RememberPhone } from "@/components/RememberPhone";
+import { PasskeyAutofill } from "@/components/PasskeyAutofill";
+import { pageSignInOptions } from "@/lib/passkeys/page";
 import { TelegramReturn } from "@/components/TelegramLogin";
 import { hasPasskey, mayRegister } from "@/lib/domain/passkeys";
 import { signedInByName } from "@/lib/session";
@@ -504,6 +506,10 @@ async function EventPage({ params, searchParams }: Props) {
   // match with no waiting list, a past or called-off one, a fixed-pairs night's bar), the closed line
   // under the line-up stays, so the way back in is never gone from the page.
   const joinFormHere = !me && ((joinState === "join" && !fixedPairs) || joinState === "join_waitlist");
+  // The passkey above the keyboard in the player's own name field (the owner, 28 October 2026): the page's
+  // own challenge, for a browser that knows nobody on a match it can still join. No read and no call:
+  // 32 random bytes and an HMAC (src/lib/passkeys/page.ts); null while the kill switch is off.
+  const autofill = !me && !cancelled && !over ? pageSignInOptions(now) : null;
   // "Remember me on this phone" (DECIDING rule 39): for a seated player whose session may save a passkey
   // (never one by name) and whose record has none. A cookie read, then one lookup down
   // `passkeys_player_idx`, only for such a viewer; an anonymous view reads nothing for it.
@@ -1094,6 +1100,7 @@ async function EventPage({ params, searchParams }: Props) {
         <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
       <Footer />
+      {autofill && <PasskeyAutofill options={autofill} />}
       <JoinBar
         code={code}
         state={joinState}

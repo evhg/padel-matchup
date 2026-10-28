@@ -6,6 +6,7 @@ import { joinAction, reserveAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
 import { answerKey, askFor, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
 import { BackInHelp, type BackInDoors } from "./BackInHelp";
+import { useOwnNameAutofill } from "./PasskeyAutofill";
 import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
 import { PastAsk } from "./PastAsk";
@@ -100,6 +101,8 @@ export function OpenSpot({
   const [pending, start] = useTransition();
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  // The passkey above the keyboard, in join mode only: the organiser's "reserve" field holds another person's name.
+  const own = useOwnNameAutofill();
 
   const reset = () => {
     setName("");
@@ -282,6 +285,8 @@ export function OpenSpot({
         className="flex flex-col gap-2"
         onSubmit={(e) => {
           e.preventDefault();
+          // A typed name and Join, as before: the passkey's request waiting in the field ends first.
+          if (mode === "join") own.stop();
           if (mode === "reserve") reserve();
           else if (!hasIdentity && !hasNames) setError(t("identity.nameRequired"));
           // The Go key and Join while "Take Danny's held place" is on screen: a second Danny would close the place for good.
@@ -298,7 +303,8 @@ export function OpenSpot({
               className="input"
               placeholder={mode === "reserve" ? t("creator.name") : t("identity.namePlaceholder")}
               value={name}
-              autoComplete={mode === "reserve" ? "off" : "given-name"}
+              autoComplete={mode === "reserve" ? "off" : own.autoComplete}
+              onFocus={mode === "join" ? own.onFocus : undefined}
               maxLength={40}
               enterKeyHint={mode === "reserve" ? "done" : "go"}
               onChange={(e) => {
@@ -319,6 +325,7 @@ export function OpenSpot({
           the exception: the form sends no Join while it is offered, and a namesake adds a last name. A
           crew member who is not on this line-up joins, and is then offered the fold into their old record.
         */}
+        {mode === "join" && !hasIdentity && own.note}
         {asking ? (
           <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} ask={asking} doors={backIn} pending={pending} onDifferent={() => join(name, true)} />
         ) : (

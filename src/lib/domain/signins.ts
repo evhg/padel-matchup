@@ -21,7 +21,9 @@ import { bumpMetric, bumpMetrics } from "./metrics";
  *   - `email_code`: a six-digit code that came back from the address.
  *   - `telegram`: the Telegram login widget; `telegram_miniapp`: the Mini App inside Telegram.
  *   - `passkey`: Face ID or a fingerprint (DECIDING rule 39); `passkey_fold` as well when it folded the
- *     new record this browser had made into the passkey's own record.
+ *     new record this browser had made into the passkey's own record; `passkey_autofill` as well when
+ *     the player picked the passkey above the keyboard in their own name field (the owner, 28 October
+ *     2026), not on the button.
  *
  * A link of a second channel to a browser already signed in is not a sign-in and is not counted.
  *
@@ -29,7 +31,7 @@ import { bumpMetric, bumpMetrics } from "./metrics";
  * phone counters (`uaClass`: a computer is `other`), once a sign-in however many ways it names (the
  * owner's questions of 28 October 2026). The door hands in the user agent it read before the answer.
  */
-export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp", "passkey", "passkey_fold"] as const;
+export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp", "passkey", "passkey_fold", "passkey_autofill"] as const;
 export type SignInWay = (typeof SIGNIN_WAYS)[number];
 
 /**

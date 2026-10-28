@@ -265,7 +265,9 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`;
   `signin_passkey` (Face ID or a fingerprint, DECIDING rule 39), with `signin_passkey_fold` when it
-  folded the new record the browser had made into the passkey's own. `passkey_saved` counts a phone
+  folded the new record the browser had made into the passkey's own, and `signin_passkey_autofill`
+  when the player picked the passkey above the keyboard in their own name field, not on the button
+  (the owner, 28 October 2026; below, "The passkey in the name field"). `passkey_saved` counts a phone
   that saved one ("Remember me on this phone"), and `passkey_refused` any save or sign-in the server
   turned down (an unknown passkey, a deleted record, a signature or a challenge that did not check
   out). Each `signin_*` counts only when the cookie changes to another record; a link to a browser already signed in
@@ -360,6 +362,48 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.
+
+## The passkey in the name field
+
+The owner decided on 28 October 2026: "Yes, own name field (Recommended)". A phone that keeps a passkey
+for Kicksmash offers the player's name above the keyboard ("Tim", then Face ID) when the player taps
+their own name field. The field is in the match page's join forms, the create form, a crew's join form,
+a competition's entry and its claim card. Never a field for another person's name.
+
+- **What a view costs.** Nothing on the server but 32 random bytes and one HMAC for each page that a
+  browser that knows nobody opens. The page carries its own challenge (`pageSignInOptions` in
+  `src/lib/passkeys/page.ts`). No database read, and no call from the browser until the player picks
+  the passkey. The browser loads the passkey library only when it says that it can offer a passkey in
+  its autofill.
+- **What a sign-in costs.** The same as the button's: one call, one spend row, one read of the passkey.
+  The challenge is good for ten minutes, and the page tells the browser when it ends
+  (`src/lib/passkeys/autofill.ts`). The browser does not hand the phone a challenge in its last 30
+  seconds. A live page's refresh brings a new one at no cost. On a page that stayed open longer, the
+  player's tap in the field makes one options call, as the button does. The server's "expired" stays
+  for a pick at the very boundary: the browser then asks for new options.
+- **Counters.** `signin_passkey_autofill` counts each sign-in from the name field, beside
+  `signin_passkey`, which counts every sign-in by passkey. `passkey_refused` counts the refusals of both
+  ways. An expired page, or one that meets the kill switch, counts nothing. Compare
+  `signin_passkey_autofill` with `signin_passkey`: the difference is the button.
+- **The notice.** Each saved passkey sends "A phone now signs you in: iPhone, Safari. Not you? Remove it
+  on My matches." It goes through the notice gate (sender `passkeySaved`, kind "changes"), after the
+  answer. The inbox always keeps it. The record's own channel gets it while the player has "Match
+  changes" on, and quiet hours hold it. It carries no personal link. Whether a player may switch it off
+  waits for the owner (ROADMAP.md).
+- **The kill switch.** Set `PASSKEY_AUTOFILL=off` in Vercel (Production), then redeploy the latest
+  production deployment. After the deploy, no page carries the challenge, and no name field asks the
+  phone. A page that a browser opened before the deploy gets `autofill_off` at its next pick. That page
+  then ends its request and drops the token from its name fields, until it loads again. It counts no
+  refusal. The button "Sign in with Face ID or fingerprint" keeps working, because it never used the
+  page's challenge. Empty, or any other value, leaves the autofill on.
+- **The revert path.** The switch first: it needs no code change. When the code itself must go, revert
+  the change with `git revert` in a pull request. No migration came with it, so the database needs no
+  step either way. The page's challenge is in no table: its spend rows go with the rate rows after two
+  days.
+- **What nobody has checked yet.** A real iPhone: Safari, Chrome on iOS, a private tab and the
+  home-screen icon (ROADMAP.md). Also the button while the autofill waits, and the first tap on a page
+  whose challenge ran out. The browser suites prove it in Chromium only, with its virtual
+  authenticator, which picks the passkey at once.
 
 ## From a shared link to a seat
 

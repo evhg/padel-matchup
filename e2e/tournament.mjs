@@ -11,6 +11,19 @@ const browser = await launch();
 const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Asia/Bangkok", reducedMotion: "reduce" };
 const results = [];
 const check = makeCheck(results);
+/**
+ * Whether a field for the player's own name carries the passkey token as this browser warrants: "given-name
+ * webauthn" where the browser says it can offer a passkey in its autofill, plain "given-name" where not.
+ * The token comes after the page asked the browser, so a yes waits for it.
+ */
+async function autofillToken(page, field) {
+  await field.waitFor({ timeout: 10000 });
+  const can = await page.evaluate(async () => Boolean(await window.PublicKeyCredential?.isConditionalMediationAvailable?.().catch(() => false)));
+  if (can) await page.waitForFunction((el) => el.getAttribute("autocomplete") === "given-name webauthn", await field.elementHandle(), { timeout: 10000 }).catch(() => undefined);
+  const token = await field.getAttribute("autocomplete");
+  return { ok: token === (can ? "given-name webauthn" : "given-name"), said: `${token} (conditional mediation: ${can})` };
+}
+
 const newPage = async () => {
   const ctx = await browser.newContext(iphone);
   const p = await ctx.newPage();
@@ -62,6 +75,10 @@ try {
 
   // 4. Ana enters Gold with Boris, who has no account: the pair is in, the partner's link is shown.
   await category(ana, "Gold").getByRole("button", { name: "Enter" }).click();
+  // The passkey above the keyboard (the owner, 28 October 2026): on the player's own name, never on the partner's.
+  const anaOwn = await autofillToken(ana, ana.getByLabel("Your name"));
+  const anaPartner = await ana.getByLabel("Your partner's name").getAttribute("autocomplete");
+  check("the entry's own name carries the passkey token where the browser can offer one, and the partner's name never", anaOwn.ok && anaPartner === "off", `${anaOwn.said} / ${anaPartner}`);
   await ana.getByLabel("Your name").fill("Ana");
   await ana.getByLabel("Your partner's name").fill("Boris");
   await ana.getByRole("button", { name: "Enter the pair" }).click();
@@ -78,6 +95,9 @@ try {
   await boris.goto(claimLink);
   await boris.getByTestId("claim-card").waitFor({ timeout: 20000 });
   check("the claim card says whose spot it is", (await boris.getByTestId("claim-card").innerText()).includes("Ana entered you as their partner in Gold"));
+  // The partner types their OWN name on the claim card, so it offers the passkey too (review, 28 October 2026).
+  const borisOwn = await autofillToken(boris, boris.getByTestId("claim-own-name"));
+  check("Boris's own name on the claim card carries the passkey token where the browser can offer one", borisOwn.ok, borisOwn.said);
   await boris.getByLabel("Your name").fill("Boris R");
   await boris.getByRole("button", { name: "Yes, that's me" }).click();
   await boris.getByText("Confirmed. You are in Gold with Ana.").waitFor({ timeout: 20000 });

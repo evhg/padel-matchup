@@ -12,8 +12,10 @@ import { LIMITS } from "@/lib/domain/ratelimit";
 import { countSignIn, type SignInWay } from "@/lib/domain/signins";
 import { mergesLater } from "@/lib/mergeCount";
 import { promotedOf } from "@/lib/domain/slots";
-import { notifyLineupChange, notifyPromotion, notifyRefill } from "@/lib/notify";
+import { notifyLineupChange, notifyPasskeySaved, notifyPromotion, notifyRefill } from "@/lib/notify";
 import { isDomainError } from "@/lib/domain/errors";
+import { passkeyAutofillOn } from "@/lib/config";
+import { answerChallenge, openPageChallenge, pageChallengeCheck } from "@/lib/passkeys/page";
 import { answerCredentialId, authenticationOptions, CHALLENGE_COOKIE, challengeCookie, openChallenge, quietPasskeyError, registrationOptions, sealChallenge, spendChallenge, verifyAssertion, verifyRegistration } from "@/lib/passkeys/webauthn";
 import { getSessionPlayer, getSessionPlayerId, passkeyHandle, setSessionPlayer, signedInByName } from "@/lib/session";
 import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from "./shared";
@@ -24,8 +26,12 @@ import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from ".
  * door is two calls: the options (a challenge, sealed into a five-minute cookie for its purpose) and
  * the answer (the cookie deleted first, so a challenge is used once, then checked). Both halves count
  * against the caller's address. A refusal of any kind answers `invalid` and nothing more, and counts
- * `passkey_refused`. No credential id, public key or user handle reaches an answer, a page or a log:
- * every action runs through `runP`, which hands the error report a failure without the query's values.
+ * `passkey_refused`. The sign-in also takes the page's own challenge (src/lib/passkeys/page.ts), which a
+ * page renders for the autofill of the player's own name field (the owner, 28 October 2026), with no
+ * options call. Past its ten minutes it answers `expired`, and the browser asks for options as the
+ * button does; while the kill switch is off it answers `autofill_off`, and the browser ends the
+ * autofill. No credential id, public key or user handle reaches an answer, a page or a log: every
+ * action runs through `runP`, which hands the error report a failure without the query's values.
  */
 
 /** `runA`, with any failure but a refusal turned into one that names no value (`quietPasskeyError`) before it is reported. */
@@ -60,6 +66,36 @@ async function takeChallenge(db: Db, purpose: "register" | "signin", playerId: s
   return opened && (await spendChallenge(db, opened)) ? opened.challenge : null;
 }
 
+/** What the library checks the challenge the phone signed against: the options call's challenge itself, or the check of a page's seal. */
+type Expected = string | ((signed: string) => boolean);
+
+/**
+ * The challenge a sign-in answer is checked against, spent once before anything signs in. A page's own
+ * challenge, for the autofill on the player's own name field, when the phone signed one: the seal, its
+ * purpose ("passkey-page") and its ten minutes, then the spend, on the row the options call's challenge
+ * uses (`spendChallenge`, dated by the seal's expiry). Anything else is the options call's, from its
+ * cookie (`takeChallenge`), as before. `expired`: a page's challenge past its ten minutes, so the page
+ * falls back to the options call. `off`: any page's challenge while the kill switch is off
+ * (`PASSKEY_AUTOFILL`), so a page that was open before the switch ends its request and drops the token
+ * (review, 28 October 2026: "expired" there kept the autofill on every open tab until it reloaded).
+ * Null: nothing to check against, or spent already.
+ */
+async function signInChallenge(db: Db, answer: unknown, now: Date): Promise<{ expected: Expected } | "expired" | "off" | null> {
+  const page = openPageChallenge(answerChallenge(answer), now);
+  if (page.state === "none") {
+    const challenge = await takeChallenge(db, "signin", null);
+    return challenge ? { expected: challenge } : null;
+  }
+  if (!passkeyAutofillOn()) return "off";
+  if (page.state === "expired") return "expired";
+  if (!(await spendChallenge(db, page))) return null;
+  // The library runs this on the challenge inside the signed client data: the one just spent, still a page's own, still inside its ten minutes.
+  return { expected: pageChallengeCheck(page.challenge, now) };
+}
+
+/** The sign-in's hint from the name field's autofill: it names the counter, and grants nothing. */
+const fromAutofill = (hint: unknown): boolean => typeof hint === "object" && hint !== null && (hint as { via?: unknown }).via === "autofill";
+
 /** "Remember me on this phone", first half: the options for `navigator.credentials.create`, for a session that may save one (`mayRegister`). */
 export async function passkeySaveOptionsAction(): Promise<ActionResult<PublicKeyCredentialCreationOptionsJSON>> {
   return runP(async () => {
@@ -86,6 +122,9 @@ export async function passkeySaveAction(answer: unknown): Promise<ActionResult<{
       throw new ActionFailure("invalid");
     }
     await later(() => bumpMetric(db, "passkey_saved"));
+    // "A phone now signs you in: iPhone, Safari. Not you? Remove it on My matches.", to the record's own
+    // channel through the notice gate, after the answer; never a personal link in it.
+    await later(() => notifyPasskeySaved(db, me, label));
     // No revalidatePath: nothing else on the page changed. The cookie deleted above already makes Next.js
     // send the page again with the answer, and the match page keeps the card mounted for that render
     // (`RememberPhone` with `offer` false), so "This phone remembers you now." stays.
@@ -109,21 +148,28 @@ export async function passkeySignInOptionsAction(): Promise<ActionResult<PublicK
  * checked, then the browser becomes the passkey's own record with a full session. The record this
  * browser held before folds into it only when the rule says so (`passkeyFold`); otherwise the session
  * only switches. Never "Are these yours?": a passkey folds nothing else (the owner: "Nothing more").
+ * The same for the autofill on the player's own name field, over the page's own challenge
+ * (`signInChallenge`). Its hint, `{ via: "autofill" }`, only counts the sign-in as
+ * `signin_passkey_autofill` beside `signin_passkey`: every check is the button's.
  */
-export async function passkeySignInAction(answer: unknown): Promise<ActionResult<{ name: string; folded: boolean }>> {
+export async function passkeySignInAction(answer: unknown, hint?: { via?: "autofill" }): Promise<ActionResult<{ name: string; folded: boolean }>> {
   return runP(async () => {
     const db = await getDb();
     await assertRate(db, "passkey_check", await clientKey(), LIMITS.passkeyChecksPerIpPerDay);
-    const challenge = await takeChallenge(db, "signin", null);
+    const challenge = await signInChallenge(db, answer, new Date());
     const refuse = async (): Promise<never> => {
       await later(() => bumpMetric(db, "passkey_refused"));
       throw new ActionFailure("invalid");
     };
+    // A page left open past its ten minutes: no refusal of the person, so no counter; the browser asks for options.
+    if (challenge === "expired") throw new ActionFailure("expired");
+    // The kill switch, pulled while the page was open: no refusal either; the browser ends the autofill.
+    if (challenge === "off") throw new ActionFailure("autofill_off");
     if (!challenge) return refuse();
     const id = answerCredentialId(answer);
     const passkey = id ? await passkeyById(db, id) : null;
     if (!passkey) return refuse();
-    const checked = await verifyAssertion(answer, challenge, passkey);
+    const checked = await verifyAssertion(answer, challenge.expected, passkey);
     if (!checked) return refuse();
     const currentId = await getSessionPlayerId();
     const session = { playerId: currentId, byName: currentId ? await signedInByName(currentId) : false };
@@ -132,7 +178,8 @@ export async function passkeySignInAction(answer: unknown): Promise<ActionResult
     if (!res.ok) return refuse();
     if (res.player.id !== currentId || session.byName) await setSessionPlayer(res.player.id);
     // Counted when the cookie changes to another record, as every way in is (`countSignIn`).
-    const ways: SignInWay[] = [...(res.player.id !== currentId ? (["passkey"] as const) : []), ...(res.folded ? (["passkey_fold"] as const) : [])];
+    const moved = res.player.id !== currentId;
+    const ways: SignInWay[] = [...(moved ? (["passkey"] as const) : []), ...(moved && fromAutofill(hint) ? (["passkey_autofill"] as const) : []), ...(res.folded ? (["passkey_fold"] as const) : [])];
     const ua = (await headers()).get("user-agent");
     await later(() => countSignIn(db, ways, ua));
     // A fold that gave up a place in a match: the line-up changed, and whoever moved up hears it, as after a leave.

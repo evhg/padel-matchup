@@ -8,6 +8,7 @@ import { nextOccurrence, tomorrowAt } from "@/lib/dates";
 import { defaultLength } from "@/lib/domain/matchLength";
 import { EventFields, type EventFormValues, type TimePatternInput } from "./EventFields";
 import type { PastNamesState } from "./PastNames";
+import { useOwnNameAutofill } from "./PasskeyAutofill";
 import type { VenueOption } from "./VenueCombobox";
 
 /** Inputs that press themselves on Enter: a browser clicks them, and that is theirs to keep. */
@@ -103,6 +104,8 @@ export function CreateEventForm({
   };
 }) {
   const t = useTranslations();
+  // The passkey above the keyboard, on the organiser's own name field only: never on "Players you already have".
+  const own = useOwnNameAutofill();
   // Default to the organizer's most usual slot; tomorrow 18:00 only for first-timers.
   const defaultFor = (tz: string) => (patterns[0] ? nextOccurrence(patterns[0].dow, patterns[0].time, tz) : tomorrowAt(tz));
   // In the zone the form opens in: a pasted booking's club's zone, else the person's own.
@@ -203,6 +206,8 @@ export function CreateEventForm({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    // The organiser's own name typed, as before: the passkey's request waiting in that field ends first.
+    own.stop();
     setError(null);
     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
     // "Is this Danny…?" still open: the place is held only once the organiser said who it is.
@@ -262,7 +267,8 @@ export function CreateEventForm({
       {!hasIdentity && (
         <div className="card bg-accent-soft border-accent">
           <label className="label text-ink">{t("identity.whatsYourName")}</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" enterKeyHint="next" maxLength={40} />
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} enterKeyHint="next" maxLength={40} data-testid="create-own-name" />
+          {own.note}
           <p className="mt-1.5 text-sm text-muted">{t("identity.nameHelp")}</p>
           {returning}
         </div>

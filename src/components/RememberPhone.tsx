@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { startTransition, useEffect, useState, useTransition } from "react";
 import { passkeyCardAction, passkeySaveAction, passkeySaveOptionsAction } from "@/actions/passkeys";
+import { canKeepPasskey } from "@/lib/passkeys/caps";
 import { PasskeySignIn } from "./PasskeySignIn";
 import { PASSKEY_NOT_NOW, PASSKEY_SHOWN_DAY } from "@/lib/browserKeys";
 
@@ -13,14 +14,17 @@ import { PASSKEY_NOT_NOW, PASSKEY_SHOWN_DAY } from "@/lib/browserKeys";
  */
 const NOT_NOW = PASSKEY_NOT_NOW;
 
-/** Whether this browser can keep a passkey on the phone itself (Face ID, a fingerprint, the phone's lock). */
+/**
+ * Whether this browser can keep a passkey on the phone itself (Face ID, a fingerprint, the phone's lock):
+ * `getClientCapabilities()` first where it exists, because Chrome on iOS 26.2 and later may answer false
+ * to the older `isUserVerifyingPlatformAuthenticatorAvailable()` while it can keep one (`canKeepPasskey`).
+ */
 export function usePlatformPasskey(): boolean {
   const [ok, setOk] = useState(false);
   useEffect(() => {
     let live = true;
-    import("@simplewebauthn/browser")
-      .then((w) => w.platformAuthenticatorIsAvailable())
-      .then((yes) => live && setOk(Boolean(yes)))
+    canKeepPasskey()
+      .then((yes) => live && setOk(yes))
       .catch(() => undefined);
     return () => {
       live = false;

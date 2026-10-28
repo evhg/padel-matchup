@@ -55,6 +55,15 @@ export const bookAddress = () => `book@${apexHost()}`;
 export const bookMailOpen = () => Boolean(process.env.RESEND_WEBHOOK_SECRET) && emailEnabled();
 
 /**
+ * The passkey in the autofill of the player's own name field (the owner, 28 October 2026), on unless
+ * `PASSKEY_AUTOFILL` says "off": the kill switch. Off, no page carries its challenge, so no name field
+ * asks the phone, and the sign-in answers a page's challenge `autofill_off`, so a page that was open
+ * before ends its autofill; "Sign in with Face ID or fingerprint" keeps working (src/lib/passkeys/page.ts,
+ * docs/OPERATING.md).
+ */
+export const passkeyAutofillOn = () => (process.env.PASSKEY_AUTOFILL ?? "").trim().toLowerCase() !== "off";
+
+/**
  * Sender for all email. EMAIL_FROM wins; otherwise "Kicksmash <matches@<apex>>",
  * which works as soon as the domain is verified in Resend. Localhost falls back
  * to Resend's sandbox sender.

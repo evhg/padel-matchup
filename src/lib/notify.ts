@@ -36,7 +36,8 @@ import { eventUrl, inviteUrl } from "@/lib/share";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { sendWaTemplate, waLocale, waMatchLine } from "@/lib/whatsapp/templates";
 import { markHeldDelivered, matchParams, quietSummariesDue, recordNotice, recordNotices, type NoticeInput } from "@/lib/domain/notices";
-import { kindOn, type Sender } from "@/lib/domain/noticeKinds";
+import { kindOn, type NoticeParams, type Sender } from "@/lib/domain/noticeKinds";
+import { noticeVars } from "@/lib/noticeText";
 import { claimPlayAgainRound, playAgainRecipients, toldOfGame } from "@/lib/domain/playAgain";
 import { firstName } from "@/lib/domain/result";
 import { welcomeKind, type WelcomeKind } from "@/lib/domain/stayUpdated";
@@ -320,6 +321,23 @@ export async function notifyGroupAsk(db: Db, group: Pick<Group, "id" | "code" | 
 export async function notifyGroupAskCapped(db: Db, group: Pick<Group, "id" | "code" | "name">, asker: Pick<Player, "id" | "displayName">, note: string | null, now = new Date()): Promise<number | null> {
   if (!(await takeRate(db, "group_ask_notice", group.id, LIMITS.groupAskNoticesPerGroupPerDay, "day", now))) return null;
   return notifyGroupAsk(db, group, asker, note);
+}
+
+/**
+ * "A phone now signs you in: iPhone, Safari. Not you? Remove it on My matches." Whenever a passkey is
+ * saved (DECIDING rule 39; the owner, 28 October 2026, with the autofill on the player's own name
+ * field), the record's own channel hears it through the notice gate (sender `passkeySaved`), and the
+ * inbox on My matches keeps it, so a passkey put on a record from a browser that is not the player's
+ * does not stay unseen. The button opens My matches, which knows only the browser it opens in: never a
+ * personal link, and no "get this on Telegram" line, whose link binds whoever taps it (`bind: false`).
+ * The row keeps the label My matches shows ("iPhone, Safari"), never a credential id.
+ */
+export async function notifyPasskeySaved(db: Db, player: Player, label: string | null): Promise<void> {
+  const { t, locale } = await translatorFor(player.locale);
+  const params: NoticeParams = label ? { name: label } : { what: "unknown" };
+  const text = t("noticeItem.passkeySaved", noticeVars(params, locale, ""));
+  const mine = t("common.myMatches");
+  await tell(db, player, text, { inline_keyboard: [[{ text: mine, url: `${baseUrl()}/me` }]] }, { notice: { sender: "passkeySaved", params }, label: mine, bind: false });
 }
 
 /** The asker hears the answer either way: a yes with the door to the group, a no kindly, with when they may ask again. */

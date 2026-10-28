@@ -7,6 +7,7 @@ import type { LevelRange } from "@/lib/domain/levels";
 import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { formState, registerJoinHandler, sendForm } from "./joinBus";
 import { LevelSelect } from "./LevelSelect";
+import { useOwnNameAutofill } from "./PasskeyAutofill";
 import { heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import { normalName } from "@/lib/domain/dupes";
@@ -52,6 +53,8 @@ export function JoinInline({
   const [pending, start] = useTransition();
   const box = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  // The passkey above the keyboard in the player's own name field.
+  const own = useOwnNameAutofill();
 
   // The fixed Join button: a second tap, with the form open and a name in it, sends the form through its
   // own checks (the name, the held place, the level), as the form's own Join does. Before that it opens
@@ -97,6 +100,8 @@ export function JoinInline({
         className="rounded-2xl border border-court/30 bg-court-soft/40 p-3 animate-pop"
         onSubmit={(e) => {
           e.preventDefault();
+          // A typed name and the button, as before: the passkey's request waiting in the field ends first.
+          own.stop();
           if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
           // The Go key and the button while "Take Danny's held place" is on screen: a second Danny would close the place for good.
           if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
@@ -107,12 +112,13 @@ export function JoinInline({
         <div className="text-sm font-bold text-court">{hasIdentity ? t("level.pickTitle") : t("identity.whatsYourName")}</div>
         <div className="mt-2 flex flex-col gap-2">
           <div className="flex gap-2">
-            {!hasIdentity && <input ref={input} data-testid="waitlist-name" className="input" placeholder={t("identity.namePlaceholder")} value={name} autoComplete="given-name" maxLength={40} enterKeyHint="go" onChange={(e) => setName(e.target.value)} />}
+            {!hasIdentity && <input ref={input} data-testid="waitlist-name" className="input" placeholder={t("identity.namePlaceholder")} value={name} autoComplete={own.autoComplete} onFocus={own.onFocus} maxLength={40} enterKeyHint="go" onChange={(e) => setName(e.target.value)} />}
             {(askLevel || (levelRange && !hasIdentity)) && <LevelSelect value={level} onChange={setLevel} />}
             <button type="submit" className="btn-primary shrink-0" disabled={pending}>
               {pending ? t("common.working") : label}
             </button>
           </div>
+          {!hasIdentity && own.note}
           {asking ? (
             <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} ask={asking} doors={backIn} pending={pending} onDifferent={() => send(true)} />
           ) : (

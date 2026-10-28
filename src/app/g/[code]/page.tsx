@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { fillText } from "@/components/EventRow";
 import { GroupJoin, GroupMembers, GroupRequests, GroupSettings, type MyAsk } from "@/components/GroupPanel";
+import { PasskeyAutofill } from "@/components/PasskeyAutofill";
+import { pageSignInOptions } from "@/lib/passkeys/page";
 import { Footer, Header } from "@/components/Header";
 import { LevelChip } from "@/components/LevelSelect";
 import { ShareButtons } from "@/components/ShareSheet";
@@ -54,6 +56,9 @@ async function GroupPage({ params }: Props) {
   const member = me ? detail.members.find((m) => m.playerId === me.id) : undefined;
   const isAdmin = member?.role === "admin";
   const seesLevels = canSeeMemberLevels(member);
+  // The passkey above the keyboard in the visitor's own name field (the owner, 28 October 2026): the page's
+  // own challenge, for a browser that knows nobody, no read and no call; null while the kill switch is off.
+  const autofill = me ? null : pageSignInOptions();
   // One more read at most, after the detail (rules 8 and 12): the admins' pending asks, or the
   // visitor's own ask on a group that asks to join. A plain visitor of an open group pays for neither.
   const asks = isAdmin ? await pendingGroupRequests(db, group.id) : [];
@@ -151,6 +156,7 @@ async function GroupPage({ params }: Props) {
           </div>
           <div className="mt-4">
             <GroupJoin code={code} member={Boolean(member)} hasIdentity={Boolean(me)} canLeave={Boolean(member) && group.creatorPlayerId !== me?.id} name={group.name} askToJoin={group.askToJoin} ask={myAsk} />
+            {autofill && <PasskeyAutofill options={autofill} />}
           </div>
           {isAdmin && <GroupRequests code={code} items={asks.map((r) => ({ id: r.id, name: r.player.displayName, level: r.player.level, note: r.note, ago: relativeTime(r.createdAt, locale, now) }))} />}
           {isAdmin && (
