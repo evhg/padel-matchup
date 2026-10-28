@@ -7,6 +7,7 @@ import { askLevelCheckAction } from "@/actions/verify";
 import { formatLevel, joinBarLevel, joinStep, type LevelRange, type RangeWaiver } from "@/lib/domain/levels";
 import { requestJoin } from "./joinBus";
 import { PasskeySignIn } from "./PasskeySignIn";
+import { useOwnNameAutofill } from "./PasskeyAutofill";
 import { LevelSelect } from "./LevelSelect";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
@@ -112,6 +113,8 @@ export function JoinBar({
   // Fixed pairs: the partner's name on the way in, or later for a player who came alone; and who leaves.
   const [partner, setPartner] = useState("");
   const [addingPartner, setAddingPartner] = useState(false);
+  // The passkey above the keyboard, on the player's own name field only: never on the partner's.
+  const own = useOwnNameAutofill();
 
   // Outside the range, or inside it with only a declared level where the event wants a confirmed one;
   // the same answer the server gives, a past game with the organiser included.
@@ -228,6 +231,8 @@ export function JoinBar({
                   className="flex flex-col gap-2"
                   onSubmit={(e) => {
                     e.preventDefault();
+                    // A typed name and Join, as before: the passkey's request waiting in the field ends first.
+                    own.stop();
                     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
                     // The Go key and Join while "Take Danny's held place" is on screen: a second Danny would close the place for good.
                     if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
@@ -242,12 +247,13 @@ export function JoinBar({
                     </>
                   )}
                   <div className="flex gap-2">
-                    {!hasIdentity && <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} enterKeyHint="go" />}
+                    {!hasIdentity && <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} maxLength={40} enterKeyHint="go" data-testid="join-bar-name" />}
                     {levelRange && <LevelSelect value={level} onChange={setLevel} />}
                     <button type="submit" className="btn-primary shrink-0" disabled={pending}>
                       {pending ? t("common.working") : t("event.joinShort")}
                     </button>
                   </div>
+                  {!hasIdentity && own.note}
                   {asking ? (
                     <SeatedAsk code={code} typed={name} namesHere={namesHere} claimable={claimable} ask={asking} doors={backIn} pending={pending} onDifferent={() => join(name, level, fixedPairs ? partner : undefined, true)} />
                   ) : (

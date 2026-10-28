@@ -88,6 +88,7 @@ Only **one** variable is required in production: the database URL. Everything el
 | `LISTEN_MODEL` | no | The model those drafts use. Defaults to `claude-sonnet-5`, which `src/lib/ops/anthropic.ts` also prices. |
 | `ANTHROPIC_MONTHLY_CAP_USD` | no | The ceiling the app keeps itself under, in US dollars. Defaults to 20. |
 | `ANTHROPIC_ADMIN_KEY` | no | An Admin API key, so the service board reads the real spend instead of its own estimate. |
+| `PASSKEY_AUTOFILL` | no | `off` stops the passkey in the autofill of the player's own name field (the owner, 28 October 2026): no page carries its challenge, and a page that was open before ends its autofill at the next pick. "Sign in with Face ID or fingerprint" keeps working. Empty, or anything else, leaves it on. Vercel applies it at the next deploy (docs/OPERATING.md, "The passkey in the name field"). |
 | `SCRAPE_DISABLED` | no | Platform ids, comma separated (`playtomic,matchi`), or `all`: the fifteen-minute read of free court times stops for those platforms (DECIDING rule 35). Vercel applies it at the next deploy; the `scrape_off_<platform>` row through `POST /api/admin/metrics` needs none (docs/OPERATING.md). Empty reads every platform that has a reader and is not resting after a block. |
 | `TAVILY_API_KEY` | no | The research desk: clubs and coaches per city, and grounding for answer pages. |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USERNAME` / `REDDIT_PASSWORD` | no | Lets an approved reply be posted on Reddit as the project's account. Without them, Approve means copy and paste. |

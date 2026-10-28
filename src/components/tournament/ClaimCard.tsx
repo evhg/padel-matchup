@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { claimSpotAction } from "@/actions/competitions";
+import { useOwnNameAutofill } from "@/components/PasskeyAutofill";
 
 /** The partner's side of the link: whose spot it is, one button, a name when they have none yet. */
 export function ClaimCard({ slug, token, p1Name, categoryName, hasIdentity, own }: { slug: string; token: string; p1Name: string; categoryName: string; hasIdentity: boolean; own: boolean }) {
@@ -13,6 +14,8 @@ export function ClaimCard({ slug, token, p1Name, categoryName, hasIdentity, own 
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ category: string; p1: string; pairId: string } | null>(null);
+  // The passkey above the keyboard (the owner, 28 October 2026): the partner types their OWN name here.
+  const ownName = useOwnNameAutofill();
   if (own) {
     return (
       <section className="card" data-testid="claim-card">
@@ -35,6 +38,8 @@ export function ClaimCard({ slug, token, p1Name, categoryName, hasIdentity, own 
         className="mt-3 flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
+          // A typed name and the claim, as before: the passkey's request waiting in the field ends first.
+          ownName.stop();
           setError(null);
           start(async () => {
             const r = await claimSpotAction(slug, token, hasIdentity ? undefined : name);
@@ -49,9 +54,10 @@ export function ClaimCard({ slug, token, p1Name, categoryName, hasIdentity, own 
         {!hasIdentity && (
           <label className="block">
             <span className="text-sm font-bold">{t("tournament.yourName")}</span>
-            <input className="input mt-1" value={name} maxLength={40} required onChange={(e) => setName(e.target.value)} autoComplete="given-name" />
+            <input className="input mt-1" value={name} maxLength={40} required onChange={(e) => setName(e.target.value)} onFocus={ownName.onFocus} autoComplete={ownName.autoComplete} data-testid="claim-own-name" />
           </label>
         )}
+        {!hasIdentity && ownName.note}
         {error && <p className="text-sm font-semibold text-warn">{error}</p>}
         <button type="submit" className="btn-primary" disabled={pending}>
           {t("tournament.claimButton")}

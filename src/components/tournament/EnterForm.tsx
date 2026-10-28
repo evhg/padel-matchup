@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { enterPairAction, type EnteredView } from "@/actions/competitions";
 import { ShareButtons } from "@/components/ShareSheet";
+import { useOwnNameAutofill } from "@/components/PasskeyAutofill";
 
 /**
  * One category's door: a name (when the visitor has none yet), the partner's name, one button.
@@ -19,6 +20,8 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
   const [done, setDone] = useState<EnteredView | null>(null);
   const [yourName, setYourName] = useState("");
   const [partnerName, setPartnerName] = useState("");
+  // The passkey above the keyboard, on "Your name" only: never on the partner's.
+  const own = useOwnNameAutofill();
 
   if (done) {
     return (
@@ -58,6 +61,7 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
       className="mt-3 flex flex-col gap-3 rounded-2xl border border-line p-3"
       onSubmit={(e) => {
         e.preventDefault();
+        own.stop();
         setError(null);
         start(async () => {
           const r = await enterPairAction(slug, categoryId, { yourName: hasIdentity ? undefined : yourName, partnerName });
@@ -89,7 +93,8 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
       {!hasIdentity && (
         <label className="block">
           <span className="text-sm font-bold">{t("tournament.yourName")}</span>
-          <input className="input mt-1" value={yourName} maxLength={40} required onChange={(e) => setYourName(e.target.value)} autoComplete="given-name" />
+          <input className="input mt-1" value={yourName} maxLength={40} required onChange={(e) => setYourName(e.target.value)} onFocus={own.onFocus} autoComplete={own.autoComplete} />
+          {own.note}
         </label>
       )}
       <div>

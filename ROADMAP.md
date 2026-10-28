@@ -1222,6 +1222,36 @@ Everything in this list is live. The README describes each in detail.
     `passkey_not_now`, `session_renewed`, `signout` (docs/OPERATING.md, "Finding the jar").
   The other two questions of the day, the sign-in in a browser that has never seen the player and the
   saved passkey above the keyboard, are separate changes.
+- **The passkey above the keyboard in the player's own name field (28 October 2026, no migration).** The
+  owner's decision, DECIDING rule 39: "May the player's own name field offer a saved passkey above the
+  keyboard ('Tim', then Face ID)?" — "Yes, own name field (Recommended)". In a browser that knows
+  nobody, the phone shows the player's name above the keyboard, and Face ID signs the browser in as that
+  record. It is not the declined design A ("Then it should be B"): a passkey and Face ID prove the
+  player, and a phone model does not. The own name field carries the token, in the match page's join
+  forms, the create form, a crew's join and a competition's entry; another person's field never does.
+  The partner's own name on a competition's claim card carries it too. The page carries its own
+  ten-minute challenge and its end, so a view costs no read and no call (`src/lib/passkeys/page.ts`,
+  `src/lib/passkeys/autofill.ts`, `src/components/PasskeyAutofill.tsx`). The browser never hands the
+  phone a challenge in its last 30 seconds: a tap gets new options instead. Each saved passkey tells the
+  player: "A phone now signs you in: iPhone, Safari. Not you? Remove it on My matches." The inbox always
+  keeps it, and the own channel gets it while "Match changes" is on; the privacy page says so.
+  "Remember me on this phone" asks `getClientCapabilities()` first, because Chrome on iOS 26.2 may say
+  no to the older check. Counter `signin_passkey_autofill`; kill switch `PASSKEY_AUTOFILL=off`
+  (docs/OPERATING.md), which also ends the autofill on pages that were open before it. **Still owed: a
+  test on a real iPhone.** Safari, Chrome on iOS, a private tab and the home-screen icon, on iOS 17, 18
+  and 26. It must show that "given-name webauthn" keeps the browser's own first-name suggestion and
+  shows the passkey, that Join still works, and that the button "Sign in with Face ID or fingerprint"
+  works while the autofill waits. It must also show whether iOS offers the passkey on the first tap
+  when the request starts after that tap (a page whose challenge ran out), and that "Remember me on
+  this phone" shows in Chrome on iOS 26.2. The browser suites prove it in Chromium only.
+  **One question waits for the owner.** May a player switch the new-phone notice off? Option A: the
+  own channel always gets it, with quiet hours, also with "Match changes" off. A session that is not
+  the player's (a forwarded link, a shared phone) then cannot silence the warning about the passkey it
+  saved. The cost: the one notice a player cannot switch off, and a new path beside the notice gate.
+  Option B (today): it keeps the gate, and the privacy page says that the channel gets it only while
+  "Match changes" is on. The cost: such a session can turn "Match changes" off before it saves a
+  passkey, and mark the inbox row as read. We recommend A, because the notice exists for exactly that
+  session.
 
 ## The finish line
 

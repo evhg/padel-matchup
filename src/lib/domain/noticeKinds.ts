@@ -38,6 +38,10 @@ export const SENDERS = {
   lineupOpen: "changes", // notifyLineupChange
   movedUp: "changes", // notifyPromotion: off the waiting list
   removed: "changes", // notifyRemoved: the organiser took them out, or the night went on without them
+  // A phone now signs the player in (a passkey saved, DECIDING rule 39): not a match's change, but the kind
+  // that is on by default, and the settings line `notices.line_changes` names the new phone. A session chose
+  // it on 28 October 2026; whether a player may switch this notice off waits for the owner (ROADMAP.md).
+  passkeySaved: "changes", // notifyPasskeySaved
   requestApproved: "changes", // notifyRequestDecided: the organiser said yes
   requestWaitlisted: "changes", // notifyRequestDecided: the organiser said yes, and the match is full: a place on the waiting list
   requestDeclined: "changes", // notifyRequestDecided: the organiser said no

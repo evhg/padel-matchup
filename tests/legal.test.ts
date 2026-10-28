@@ -14,6 +14,7 @@ import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 import { CHALLENGE_COOKIE, challengeCookie } from "@/lib/passkeys/webauthn";
+import { KIND_DEFAULTS, SENDERS } from "@/lib/domain/noticeKinds";
 
 /**
  * /privacy promises things about the code: which cookies it sets, how long it keeps what. A promise
@@ -120,6 +121,31 @@ describe("the privacy page tells the truth about the code", () => {
       for (const words of KEEPS[l]) expect(line, `${l}: ${words}`).toContain(words);
       expect(render(l, "privacy.deleteBody"), l).toContain(DELETED[l]);
     }
+  });
+
+  it("says that each phone that starts to remember you is told to you, and on your channel only while match changes are on", () => {
+    // The owner, 28 October 2026, with the autofill on the own name field: a saved passkey sends the
+    // notice "A phone now signs you in: <label>. Not you? Remove it on My matches." through the gate
+    // (`notifyPasskeySaved`, sender `passkeySaved`): the inbox always keeps it, and the record's own
+    // channel gets it while the kind "changes" is on. The sentence once promised the channel with no
+    // condition, while the switch "Match changes" silenced it (review, 28 October 2026), and the phone and
+    // the browser with no condition, while a label the code cannot read sends the line without them.
+    const TELLS = {
+      en: ["Each time a phone starts to remember you, we tell you in your inbox", "on your own channel while notices about match changes are on", "when we can tell them", "remove it"],
+      ru: ["Каждый раз, когда новый телефон начинает вас помнить, мы сообщаем об этом в ваших входящих", "в вашем канале — пока включены уведомления об изменениях матча", "Если мы можем определить телефон и браузер", "удалить телефон"],
+      es: ["Cada vez que un teléfono empieza a recordarte, te lo decimos en tu bandeja", "en tu propio canal mientras tengas activados los avisos de cambios del partido", "cuando podemos identificarlos", "lo quites"],
+    } as const;
+    for (const l of LOCALES) {
+      const line = render(l, "privacy.storeBody").split("\n").find((x) => x.includes("passkey"));
+      for (const words of TELLS[l]) expect(line, `${l}: ${words}`).toContain(words);
+    }
+    // The switch the sentence names is the one the code reads: the sender's kind is "changes", on by
+    // default, and the settings line of that switch names the new phone, so a player who turns it off knows.
+    expect(SENDERS.passkeySaved).toBe("changes");
+    expect(KIND_DEFAULTS[SENDERS.passkeySaved]).toBe(true);
+    const PHONE = { en: "a new phone that signs you in", ru: "новый телефон, который вас помнит", es: "un teléfono nuevo que te recuerda" } as const;
+    for (const l of LOCALES) expect(render(l, `notices.line_${SENDERS.passkeySaved}`), l).toContain(PHONE[l]);
+    expect(readFileSync(path.resolve(process.cwd(), "src/actions/passkeys.ts"), "utf8")).toMatch(/later\(\(\) => notifyPasskeySaved\(db, me, label\)\)/);
   });
 
   it("says that an organiser can see a past partner Kicksmash cannot reach, and how far back, in every language", () => {

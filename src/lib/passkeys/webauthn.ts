@@ -5,8 +5,8 @@ import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON
 import type { Db } from "@/db";
 import type { Passkey } from "@/db/schema";
 import { takeRate } from "@/lib/domain/ratelimit";
-import { baseUrl } from "@/lib/config";
 import { sessionSecret } from "@/lib/env";
+import { isPageSeal, relyingParty } from "./page";
 
 /**
  * The passkey ceremony (DECIDING rule 39): the one module that touches @simplewebauthn/server, so the
@@ -28,11 +28,8 @@ export const CHALLENGE_COOKIE = "km_passkey";
 export const CHALLENGE_TTL_MS = 5 * 60_000;
 export type CeremonyPurpose = "register" | "signin";
 
-/** The relying party: the app's own host and origin (`baseUrl`): kicksma.sh in production, localhost in the browser suites. */
-export function relyingParty(): { rpID: string; origin: string } {
-  const u = new URL(baseUrl());
-  return { rpID: u.hostname, origin: u.origin };
-}
+/** The relying party, kept beside the page's challenge (src/lib/passkeys/page.ts), which a page renders without this module. */
+export { relyingParty };
 
 const hmac = (value: string) => createHmac("sha256", sessionSecret()).update(value).digest();
 
@@ -161,6 +158,10 @@ const shaped = (v: unknown): boolean => isObject(v) && typeof v.id === "string" 
  * have the shape of one: the library compares the answer's `id` with its `rawId` only, and a crafted
  * save with another id, or one of 3000 bytes, inside the data otherwise reached the insert and failed
  * there, as a server error with the key in its message (review, 12 October 2026).
+ *
+ * A page's own challenge ("passkey-page", src/lib/passkeys/page.ts) signs in and never saves: a save
+ * signed over one is refused whatever challenge the caller expected, so a page's challenge can never
+ * become a way to put a passkey on a record.
  */
 export async function verifyRegistration(response: unknown, challenge: string): Promise<NewPasskey | null> {
   if (!shaped(response)) return null;
@@ -168,7 +169,7 @@ export async function verifyRegistration(response: unknown, challenge: string): 
   try {
     const r = await verifyRegistrationResponse({
       response: response as RegistrationResponseJSON,
-      expectedChallenge: challenge,
+      expectedChallenge: (signed: string) => signed === challenge && !isPageSeal(signed),
       expectedOrigin: origin,
       expectedRPID: rpID,
       requireUserVerification: true,
@@ -189,8 +190,10 @@ export const answerCredentialId = (response: unknown): string | null => (shaped(
 /**
  * The phone's answer to a sign-in, checked against the challenge, this app's origin and host, the
  * stored public key and counter, with Face ID or a fingerprint required. The new counter, or null.
+ * `challenge` is the options call's challenge itself, or, for a page's own challenge, the check of its
+ * seal, its purpose and its expiry, which the library runs on the challenge the phone signed.
  */
-export async function verifyAssertion(response: unknown, challenge: string, passkey: Pick<Passkey, "id" | "publicKey" | "counter" | "transports">): Promise<{ newCounter: number } | null> {
+export async function verifyAssertion(response: unknown, challenge: string | ((signed: string) => boolean), passkey: Pick<Passkey, "id" | "publicKey" | "counter" | "transports">): Promise<{ newCounter: number } | null> {
   if (!shaped(response) || (response as { id: string }).id !== passkey.id) return null;
   const { rpID, origin } = relyingParty();
   try {

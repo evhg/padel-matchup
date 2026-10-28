@@ -8,6 +8,8 @@ import { AutoRefresh } from "@/components/tournament/AutoRefresh";
 import { ClaimCard } from "@/components/tournament/ClaimCard";
 import { DrawView } from "@/components/tournament/DrawView";
 import { EnterForm } from "@/components/tournament/EnterForm";
+import { PasskeyAutofill } from "@/components/PasskeyAutofill";
+import { pageSignInOptions } from "@/lib/passkeys/page";
 import { MyMatches } from "@/components/tournament/MyMatches";
 import { OrderOfPlay } from "@/components/tournament/OrderOfPlay";
 import { WithdrawButton } from "@/components/tournament/WithdrawButton";
@@ -59,6 +61,10 @@ async function TournamentPage({ params, searchParams }: Props) {
   // During the days of play the page asks again every minute: the tables and the brackets move with the scores.
   const live = play.length > 0 && isDayOfPlay(c);
   const claim = sp.claim ? await pairByClaimToken(db, sp.claim) : null;
+  // The passkey above the keyboard in the player's own name (the owner, 28 October 2026): "Your name" of an
+  // entry while entries are open, and the partner's own name on the claim card. The page's own challenge,
+  // for a browser that knows nobody; no read, no call (src/lib/passkeys/page.ts).
+  const autofill = !me && (c.status === "open" || Boolean(claim)) ? pageSignInOptions() : null;
   const claimedPair = sp.claimed && me ? await pairSummary(db, sp.claimed) : null;
   const claimed = claimedPair && claimedPair.p2PlayerId === me?.id ? claimedPair : null;
   const organizer = isOrganizer(c, me?.id);
@@ -262,6 +268,7 @@ async function TournamentPage({ params, searchParams }: Props) {
           <ShareButtons url={url} text={`${c.name} · ${days}${c.venueName ? ` · ${c.venueName}` : ""}`} />
         </section>
       </main>
+      {autofill && <PasskeyAutofill options={autofill} />}
       <Footer />
     </>
   );

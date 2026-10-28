@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { startTransition, useState, useTransition } from "react";
 import { bePartnerAction, pairSinglesAction, removeAction, splitPairAction } from "@/actions/slots";
 import { ShareButtons } from "./ShareSheet";
+import { useOwnNameAutofill } from "./PasskeyAutofill";
 
 /**
  * The controls of a fixed-pairs night's list (the owner's decision F): "Be their partner" on a player
@@ -30,6 +31,8 @@ export function BePartnerButton({ code, slotId, hasIdentity }: { code: string; s
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // The viewer's own name, to be the partner: the passkey above the keyboard signs in instead.
+  const own = useOwnNameAutofill();
   const go = (withName?: string) =>
     start(async () => {
       setError(null);
@@ -45,11 +48,12 @@ export function BePartnerButton({ code, slotId, hasIdentity }: { code: string; s
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
+            own.stop();
             if (!name.trim()) return setError(t("identity.nameRequired"));
             go(name);
           }}
         >
-          <input className="input min-h-11 min-w-0 flex-1 text-sm" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} aria-label={t("identity.namePlaceholder")} />
+          <input className="input min-h-11 min-w-0 flex-1 text-sm" autoFocus value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} maxLength={40} aria-label={t("identity.namePlaceholder")} />
           <button type="submit" className="btn-primary btn-sm shrink-0" disabled={pending}>
             {pending ? t("common.working") : t("pairs.bePartner")}
           </button>
@@ -59,6 +63,7 @@ export function BePartnerButton({ code, slotId, hasIdentity }: { code: string; s
           {pending ? t("common.working") : t("pairs.bePartner")}
         </button>
       )}
+      {open && !hasIdentity && own.note}
       {error && <p className="mt-1 text-xs font-semibold text-danger">{error}</p>}
     </div>
   );

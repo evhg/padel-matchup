@@ -239,6 +239,19 @@ learning can be a test, a gate step or a script, make it one and put the story i
   `e2e/passkeys.mjs` copies one passkey into three browsers with `WebAuthn.addCredential`, as a phone's
   password manager does. A real synced passkey reports 0 every time; the virtual one goes up, and the
   server refuses a count that did not go up. Take each copy from the browser that used it last.
+- **Chromium's virtual authenticator answers a waiting conditional request by itself, at two moments.**
+  The autofill on the own name field (28 October 2026) starts `navigator.credentials.get({ mediation:
+  "conditional" })` when the page loads. A real phone waits for the player to pick the passkey above the
+  keyboard. The virtual authenticator picks at once when it holds a passkey as the request starts, and
+  when a field with the `webauthn` token takes the focus. A passkey added while the request waits
+  answers nothing until that focus; walk K in `e2e/passkeys.mjs` checks both facts before it relies on
+  them. So every browser in that suite that held a passkey signed in by itself, and the walks of the
+  button failed on a page that was already signed in. Those walks now take a browser that says no to
+  conditional mediation (`phoneBrowser({ autofill: false })`), and one walk lets the autofill sign in.
+  Walk K taps the button while a request waits: it adds the passkey after the request started, and
+  takes the focus off the field first. A check that a library runs after your own read
+  of the same data cannot fail alone: `() => true` in place of the library's `expectedChallenge` left
+  every action test green. Name such a check (`pageChallengeCheck`) and test it on its own.
 - **A frozen clock makes every write the same instant, and a fake that reads late hides a race.** Two
   guards of the crew group passed with the code broken (10 October 2026): "the first group stays the
   crew's" ordered by `listening_since`, which `freezeClock` gave both groups to the millisecond, and two

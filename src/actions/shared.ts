@@ -22,8 +22,10 @@ import { manageUrl } from "@/lib/share";
  * `name_held`: the name has a held place this browser may take (DECIDING rule 34); a plain join would leave it behind for good.
  * `name_seated`: a record of the typed name holds a seat or a waiting place here, so the join asks "Sign in as Danny?" first (the owner, 15 October 2026).
  * `name_unreached`: the typed name is a past partner on the organiser's unreached list that "That's me" signs in, so the join asks first (the owner, 16 October 2026, D6).
+ * `expired`: a page's own passkey challenge, past its ten minutes (src/lib/passkeys/page.ts): the browser asks for a new one, as the button does.
+ * `autofill_off`: a page's own passkey challenge while `PASSKEY_AUTOFILL` is off: the browser ends the autofill on that page.
  */
-export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held" | "name_seated" | "name_unreached";
+export type ActionError = DomainErrorCode | "generic" | "name_required" | "no_identity" | "email_disabled" | "too_many" | "level_required" | "name_held" | "name_seated" | "name_unreached" | "expired" | "autofill_off";
 export type ActionResult<T = null> = { ok: true; data: T } | { ok: false; error: ActionError; detail?: string };
 
 export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {

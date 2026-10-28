@@ -12,9 +12,26 @@ const view = (p, name) => (process.env.SHOTS ? p.screenshot({ path: `${process.e
 const results = [];
 const check = makeCheck(results);
 
-/** A browser on a phone whose password manager can keep a passkey (Face ID or a fingerprint, always passed). */
-async function phoneBrowser() {
+/**
+ * A browser on a phone whose password manager can keep a passkey (Face ID or a fingerprint, always passed).
+ * Chromium's virtual authenticator answers a waiting conditional request at once, as a player who picks
+ * their passkey above the keyboard would, so a page for a browser that knows nobody signs it in by itself
+ * (the autofill on the own name field, the owner, 28 October 2026). The walks of the button, the offer and
+ * the question take a browser with no autofill (`autofill: false`): one that says no to
+ * `isConditionalMediationAvailable()` and to the capability `conditionalGet`, as an older phone does.
+ * `init` runs in every page of the browser before the app's own scripts.
+ */
+async function phoneBrowser({ autofill = true, init = null } = {}) {
   const ctx = await browser.newContext(iphone);
+  if (init) await ctx.addInitScript(init);
+  if (!autofill)
+    await ctx.addInitScript(() => {
+      const P = window.PublicKeyCredential;
+      if (!P) return;
+      P.isConditionalMediationAvailable = async () => false;
+      const caps = P.getClientCapabilities?.bind(P);
+      if (caps) P.getClientCapabilities = async () => ({ ...(await caps()), conditionalGet: false });
+    });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
   const cdp = await ctx.newCDPSession(page);
@@ -47,13 +64,26 @@ const ask = async (q) => {
   if (!r.ok) throw new Error(`${r.error} in: ${q}`);
   return r.rows;
 };
+/** A counter's total over all days, from `metrics_daily`: a walk compares it before and after. */
+const counter = async (key) => Number((await ask(`select coalesce(sum(value), 0)::int as n from metrics_daily where key = '${key}'`))[0]?.n ?? 0);
 const recordsNamed = async (name) => Number((await ask(`select count(*)::int as n from players where display_name = '${name}'`))[0]?.n ?? -1);
 
 /** A match made through the public API, as an assistant makes one; its organiser has an email, so nobody here is them. */
 async function newMatch(page, venue) {
-  const made = await page.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: new Date(Date.now() + 30 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue, organizer: { name: "Kai" } } });
-  return (await made.json())?.match?.code;
+  return (await newMatchWithManage(page, venue)).code;
 }
+/** The same, with the organiser's manage link, which opens the organiser's view in a browser that knows nobody. */
+async function newMatchWithManage(page, venue) {
+  const made = await page.request.post(`${BASE}/api/v1/matches`, { data: { startsAt: new Date(Date.now() + 30 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue, organizer: { name: "Kai" } } });
+  const j = await made.json();
+  return { code: j?.match?.code, manage: j?.organizer?.manageUrl };
+}
+/** The autocomplete a field carries once the page's autofill had its moment to put the token on. */
+const tokenOf = async (field) => {
+  await field.waitFor({ timeout: 10000 });
+  await field.page().waitForTimeout(800);
+  return field.getAttribute("autocomplete");
+};
 
 /** Joins the match from a browser that knows nobody, by the open spot's name field. */
 async function joinAs(page, code, name) {
@@ -147,9 +177,12 @@ try {
     "a record with a passkey gets no \"Remember me\" card on My matches, only the small link \"Also remember this phone\"",
     (await a.page.getByTestId("remember-phone").count()) === 0 && (await phones.getByRole("button", { name: "Also remember this phone", exact: true }).count()) === 1,
   );
+  // The owner, 28 October 2026: a saved passkey tells the record's own channel, and the inbox keeps it.
+  const inbox = ((await a.page.locator("main").textContent()) ?? "").replace(/\s+/g, " ");
+  check("the inbox on My matches says a phone now signs the player in, by its label, and where to remove it", /A phone now signs you in: [^.]+\. Not you\? Remove it on My matches\./.test(inbox), inbox.match(/A phone now[^.]*\./)?.[0] ?? "no line");
 
   // ---- B: another browser on the same phone, no cookies, signs in with Face ID ----
-  const b = await phoneBrowser();
+  const b = await phoneBrowser({ autofill: false });
   await b.cdp.send("WebAuthn.addCredential", { authenticatorId: b.authenticatorId, credential: credentials[0] });
   await b.page.goto(`${BASE}/${code}`);
   check("a second browser on the phone does not know the player", (await b.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 0);
@@ -164,7 +197,7 @@ try {
   check("the second browser holds a full session, not one by name", cookies.some((c) => c.name === "km_player" && c.value.split(".").length === 2));
 
   // ---- C: a third browser first joins as a new record, then signs in: the new record folds ----
-  const c = await phoneBrowser();
+  const c = await phoneBrowser({ autofill: false });
   await c.cdp.send("WebAuthn.addCredential", { authenticatorId: c.authenticatorId, credential: await heldBy(b) });
   const code2 = await newMatch(c.page, "Kata Padel");
   await joinAs(c.page, code2, NAME);
@@ -182,7 +215,7 @@ try {
   check("the third browser is that player on the new match", (await c.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 1);
 
   // ---- G: a browser that knows nobody, on a match the player is not in yet, signs in from the join form ----
-  const g = await phoneBrowser();
+  const g = await phoneBrowser({ autofill: false });
   await g.cdp.send("WebAuthn.addCredential", { authenticatorId: g.authenticatorId, credential: await heldBy(c) });
   const code5 = await newMatch(g.page, "Surin Padel");
   await g.page.goto(`${BASE}/${code5}`);
@@ -204,7 +237,7 @@ try {
   // Before this, Join made a second record of the name. Now the join answers "Ana Passkey is in this
   // match. Sign in as Ana Passkey?" with the record's own doors, because "That's me" refuses a record
   // with a passkey, and Face ID there signs this browser in as the seated record.
-  const h = await phoneBrowser();
+  const h = await phoneBrowser({ autofill: false });
   await h.cdp.send("WebAuthn.addCredential", { authenticatorId: h.authenticatorId, credential: await heldBy(g) });
   await h.page.goto(`${BASE}/${code}`);
   await h.page.getByRole("button", { name: "Join this match" }).click();
@@ -241,6 +274,162 @@ try {
   await seatedAsk.getByTestId("passkey-signin").click();
   await h.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
   check("Face ID from the question signs the browser in as the seated record: one record of the name", (await recordsNamed(NAME)) === 1);
+
+  // ---- K: "Sign in with Face ID or fingerprint" while the autofill's request waits (review, 28 October 2026) ----
+  // On every phone that can offer a passkey above the keyboard, the page starts a conditional request when
+  // it loads. The button must end that request first (the library's one ceremony at a time) and then ask
+  // the phone in the open. A spy on `navigator.credentials.get` keeps each call's mediation and whether
+  // its signal aborted. First what Chromium's virtual authenticator does with a waiting request: a passkey
+  // added to the phone answers nothing by itself, and the own name field taking focus picks it at once.
+  const spyGets = () => {
+    const get = navigator.credentials.get.bind(navigator.credentials);
+    window.__gets = [];
+    navigator.credentials.get = (o) => {
+      const rec = { mediation: o?.mediation ?? null, aborted: false };
+      window.__gets.push(rec);
+      o?.signal?.addEventListener("abort", () => {
+        rec.aborted = true;
+      });
+      return get(o);
+    };
+  };
+  const armed = (p) => p.waitForFunction(() => (window.__gets ?? []).some((g) => g.mediation === "conditional" && !g.aborted), null, { timeout: 15000 });
+  const youOn = (p) => p.locator("main li", { hasText: NAME }).getByText("you", { exact: true });
+  const k0 = await phoneBrowser({ init: spyGets });
+  await k0.page.goto(`${BASE}/${code}`);
+  await armed(k0.page);
+  const k0Autofill = await counter("signin_passkey_autofill");
+  await k0.cdp.send("WebAuthn.addCredential", { authenticatorId: k0.authenticatorId, credential: await heldBy(h) });
+  await k0.page.waitForTimeout(1500);
+  const k0Before = await youOn(k0.page).count();
+  check("Chromium: a passkey added to the phone while the conditional request waits answers nothing by itself", k0Before === 0 && (await counter("signin_passkey_autofill")) === k0Autofill, `you=${k0Before}`);
+  // "Join this match" puts the cursor in the open spot's name field.
+  await k0.page.getByRole("button", { name: "Join this match" }).click();
+  const k0Picked = await youOn(k0.page).waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+  check("Chromium: the own name field taking focus picks the passkey for the waiting request at once", k0Picked, "so the walk below takes the passkey only after the field had its focus");
+
+  const k = await phoneBrowser({ init: spyGets });
+  const kErrors = [];
+  k.page.on("pageerror", (e) => kErrors.push(e.message));
+  await k.page.goto(`${BASE}/${code}`);
+  await armed(k.page);
+  // The help opens with the cursor in the name field while the phone has no passkey yet; the field then
+  // loses the focus, as it does on a phone when the player taps the button.
+  await k.page.getByRole("button", { name: "Played before? Sign in", exact: true }).click();
+  const kButton = k.page.getByTestId("back-in-open").getByTestId("passkey-signin");
+  await kButton.waitFor({ timeout: 10000 });
+  await k.page.waitForTimeout(500);
+  await k.page.evaluate(() => document.activeElement?.blur());
+  const [kAutofill, kPasskey] = [await counter("signin_passkey_autofill"), await counter("signin_passkey")];
+  await k.cdp.send("WebAuthn.addCredential", { authenticatorId: k.authenticatorId, credential: await heldBy(k0) });
+  await k.page.waitForTimeout(1000);
+  check("the conditional request still waits, unanswered, when the player reaches for the button", (await youOn(k.page).count()) === 0 && (await k.page.evaluate(() => window.__gets.some((g) => g.mediation === "conditional" && !g.aborted))));
+  await kButton.click();
+  await youOn(k.page).waitFor({ timeout: 20000 });
+  const gets = await k.page.evaluate(() => window.__gets);
+  const firstModal = gets.findIndex((g) => g.mediation === null);
+  check(
+    "the button ends the waiting conditional request, then asks the phone in the open, and signs in as the seated player",
+    firstModal > 0 && gets.slice(0, firstModal).some((g) => g.mediation === "conditional" && g.aborted) && (await recordsNamed(NAME)) === 1 && (await k.ctx.cookies()).some((x) => x.name === "km_player" && x.value.split(".").length === 2),
+    JSON.stringify(gets),
+  );
+  let kSigned = await counter("signin_passkey");
+  for (let n = 0; n < 10 && kSigned === kPasskey; n += 1) {
+    await k.page.waitForTimeout(300);
+    kSigned = await counter("signin_passkey");
+  }
+  check("it counts as the button's sign-in, not the autofill's", kSigned === kPasskey + 1 && (await counter("signin_passkey_autofill")) === kAutofill, `passkey ${kPasskey} → ${kSigned}`);
+  check("and the page threw nothing on the way", kErrors.length === 0, kErrors.join(" | "));
+
+  // ---- J: the passkey above the keyboard sits on the player's own name field only (the owner, 28 October 2026) ----
+  // A browser that knows nobody and keeps no passkey: the page's own challenge waits for a pick that never
+  // comes, so the token can be read on every field, and nothing reaches the server for it.
+  const j = await phoneBrowser();
+  let jPosts = 0;
+  j.page.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) jPosts += 1;
+  });
+  const six = await newMatchWithManage(j.page, "Bang Tao Padel");
+  await j.page.goto(`${BASE}/${six.code}`, { waitUntil: "load" });
+  await j.page.getByRole("button", { name: "Join this match" }).click();
+  const ownSpot = await tokenOf(j.page.getByTestId("open-spot-name").first());
+  check("the player's own name in the open spot carries the passkey token, after its own", ownSpot === "given-name webauthn", String(ownSpot));
+  await j.page.goto(`${BASE}/`, { waitUntil: "load" });
+  const ownCreate = await tokenOf(j.page.getByTestId("create-own-name"));
+  await j.page.locator("button[aria-expanded]", { hasText: "More options" }).click();
+  const others = await tokenOf(j.page.getByTestId("have-already"));
+  check("the create form's own name field carries it, and \"Players you already have\" does not", ownCreate === "given-name webauthn" && !String(others ?? "").includes("webauthn"), `${ownCreate} / ${others}`);
+  // Another person's name: the organiser's view (the manage link, in this browser that knows nobody) holds a place for a name.
+  await j.page.goto(six.manage, { waitUntil: "load" });
+  await j.page.getByText("Tap to reserve for someone").first().click();
+  const reserve = await tokenOf(j.page.getByTestId("open-spot-name").first());
+  check("the organiser's open spot, which holds another person's name, carries no passkey token", reserve === "off", String(reserve));
+  check("no call reached the server for the autofill on any of these pages: the page carries its own challenge", jPosts === 0, `posts=${jPosts}`);
+
+  // ---- I: a browser that knows nobody, on a phone that keeps the passkey, signs in from the name field ----
+  // Chromium's virtual authenticator picks the passkey as the player taps "Ana Passkey" above the keyboard.
+  const i = await phoneBrowser();
+  await i.cdp.send("WebAuthn.addCredential", { authenticatorId: i.authenticatorId, credential: await heldBy(k) });
+  const autofilledBefore = await counter("signin_passkey_autofill");
+  await i.page.goto(`${BASE}/${code}`);
+  await i.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  check(
+    "the passkey in the name field's autofill signs the browser in as the seated player, with no button and no Join, and makes no record",
+    (await i.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 1 && (await recordsNamed(NAME)) === 1,
+  );
+  check("it is a full session, not one by name", (await i.ctx.cookies()).some((x) => x.name === "km_player" && x.value.split(".").length === 2));
+  let autofilled = await counter("signin_passkey_autofill");
+  for (let n = 0; n < 10 && autofilled === autofilledBefore; n += 1) {
+    await i.page.waitForTimeout(300);
+    autofilled = await counter("signin_passkey_autofill");
+  }
+  check("the sign-in counts as signin_passkey_autofill", autofilled === autofilledBefore + 1, `${autofilledBefore} → ${autofilled}`);
+  check("a signed-in page carries no passkey token: the name field is gone", (await i.page.locator('input[autocomplete$="webauthn"]').count()) === 0);
+  await shot(i.page, "passkeys-05-autofill-signed-in");
+
+  // ---- L: a page whose challenge ran out while it stayed open (review, 28 October 2026) ----
+  // The browser's clock runs eleven minutes ahead, so the page's own challenge reads as spent time: a tab
+  // that iOS kept in memory, or a page the back button brought back. The page must not hand the phone that
+  // challenge (a Face ID for an "expired"), and a view still makes no call: the tap that opens the name
+  // field makes the options call, and the pick over its options signs in once.
+  const l = await phoneBrowser({
+    init: () => {
+      const real = Date.now;
+      Date.now = () => real() + 11 * 60_000;
+      const get = navigator.credentials.get.bind(navigator.credentials);
+      window.__gets = [];
+      navigator.credentials.get = (o) => {
+        window.__gets.push({ mediation: o?.mediation ?? null });
+        return get(o);
+      };
+    },
+  });
+  await l.cdp.send("WebAuthn.addCredential", { authenticatorId: l.authenticatorId, credential: await heldBy(i) });
+  let lPosts = 0;
+  l.page.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) lPosts += 1;
+  });
+  const lAutofill = await counter("signin_passkey_autofill");
+  await l.page.goto(`${BASE}/${code}`, { waitUntil: "load" });
+  await l.page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
+  await l.page.waitForTimeout(1500);
+  const lGets = await l.page.evaluate(() => window.__gets.length);
+  const lEarly = await l.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count();
+  check("a page whose challenge ran out hands the phone nothing, and the view makes no call", lGets === 0 && lEarly === 0 && lPosts === 0, `gets=${lGets} you=${lEarly} posts=${lPosts}`);
+  // "Join this match" opens the open spot and puts the cursor in its name field: the player's tap.
+  await l.page.getByRole("button", { name: "Join this match" }).click();
+  await l.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const lPostsAtSignIn = lPosts;
+  let lCount = await counter("signin_passkey_autofill");
+  for (let n = 0; n < 10 && lCount === lAutofill; n += 1) {
+    await l.page.waitForTimeout(300);
+    lCount = await counter("signin_passkey_autofill");
+  }
+  check(
+    "the tap in the name field makes the options call, and the pick over its options signs in once, from the name field",
+    lCount === lAutofill + 1 && lPostsAtSignIn === 2 && (await recordsNamed(NAME)) === 1 && (await l.page.getByText("That took too long").count()) === 0,
+    `autofill ${lAutofill} → ${lCount}, posts=${lPostsAtSignIn}`,
+  );
 
   // ---- D: a session by name ("That's me") is never offered a passkey ----
   const e = await plainBrowser();
@@ -286,8 +475,8 @@ try {
   await a.page.getByTestId("my-phones").getByRole("button", { name: /^Remove / }).click();
   await a.page.getByTestId("my-phone").waitFor({ state: "detached", timeout: 20000 });
   check("Remove takes the passkey away", Number((await ask(`select count(*)::int as n from passkeys k join players p on p.id = k.player_id where p.display_name = '${NAME}'`))[0]?.n) === 0);
-  const f = await phoneBrowser();
-  await f.cdp.send("WebAuthn.addCredential", { authenticatorId: f.authenticatorId, credential: await heldBy(h) });
+  const f = await phoneBrowser({ autofill: false });
+  await f.cdp.send("WebAuthn.addCredential", { authenticatorId: f.authenticatorId, credential: await heldBy(l) });
   await f.page.goto(`${BASE}/${code}`);
   await f.page.getByRole("button", { name: "Join this match" }).click();
   await f.page.getByTestId("back-in-open").getByTestId("passkey-signin").click();

@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { createGroupFromEventAction, decideGroupRequestAction, deleteGroupAction, handOverGroupAction, joinGroupAction, leaveGroupAction, removeGroupMemberAction, updateGroupAction, withdrawGroupRequestAction } from "@/actions/groups";
 import { ASK_NOTE_MAX } from "@/lib/domain/groupAccess";
 import { formatLevel } from "@/lib/domain/levels";
+import { useOwnNameAutofill } from "./PasskeyAutofill";
 
 const errKey = (e: string) => (e === "name_required" || e === "no_identity" || e === "level_required" ? "generic" : e);
 
@@ -82,6 +83,8 @@ export function GroupJoin({ code, member, hasIdentity, canLeave, name: groupName
 
 function GroupJoinOpen({ code, member, hasIdentity, canLeave, name: groupName, askToJoin }: { code: string; member: boolean; hasIdentity: boolean; canLeave: boolean; name: string; askToJoin: boolean }) {
   const t = useTranslations();
+  // The passkey above the keyboard in the player's own name field.
+  const own = useOwnNameAutofill();
   const [name, setName] = useState("");
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,17 +134,19 @@ function GroupJoinOpen({ code, member, hasIdentity, canLeave, name: groupName, a
       className="flex flex-col gap-2 animate-pop"
       onSubmit={(e) => {
         e.preventDefault();
+        own.stop();
         if (!name.trim()) return setError(t("identity.nameRequired"));
         join();
       }}
     >
       <div className="text-sm font-bold text-court">{t("identity.whatsYourName")}</div>
       <div className="flex gap-2">
-        <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} enterKeyHint="go" />
+        <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} maxLength={40} enterKeyHint="go" />
         <button type="submit" className="btn-primary shrink-0" disabled={pending}>
           {pending ? t("common.working") : t("group.join")}
         </button>
       </div>
+      {own.note}
       {error ? <p className="text-sm font-semibold text-danger">{error}</p> : <p className="text-xs text-faint">{t("identity.nameHelp")}</p>}
     </form>
   );
@@ -154,6 +159,8 @@ function GroupJoinOpen({ code, member, hasIdentity, canLeave, name: groupName, a
  */
 function GroupAsk({ code, hasIdentity, ask }: { code: string; hasIdentity: boolean; ask: MyAsk }) {
   const t = useTranslations();
+  // The passkey above the keyboard in the player's own name field.
+  const own = useOwnNameAutofill();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [open, setOpen] = useState(false);
@@ -215,6 +222,7 @@ function GroupAsk({ code, hasIdentity, ask }: { code: string; hasIdentity: boole
       className="flex flex-col gap-2 animate-pop"
       onSubmit={(e) => {
         e.preventDefault();
+        own.stop();
         if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
         send();
       }}
@@ -222,7 +230,8 @@ function GroupAsk({ code, hasIdentity, ask }: { code: string; hasIdentity: boole
       {!hasIdentity && (
         <>
           <div className="text-sm font-bold text-court">{t("identity.whatsYourName")}</div>
-          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t("identity.namePlaceholder")} autoComplete="given-name" maxLength={40} />
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} maxLength={40} />
+          {own.note}
         </>
       )}
       <label className="label" htmlFor="group-ask-note">
