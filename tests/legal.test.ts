@@ -14,6 +14,10 @@ import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 import { CHALLENGE_COOKIE, challengeCookie } from "@/lib/passkeys/webauthn";
+import { HINT_KEEP_DAYS } from "@/lib/domain/deviceHints";
+import { isEuropeanZone, SIGNALS_COOKIE, SIGNALS_COOKIE_MAX_AGE } from "@/lib/domain/hintSignals";
+import { HINT_SCOPE_STATUSES } from "@/lib/domain/deviceHintAsk";
+import { HINT_ASKED_KEY } from "@/lib/deviceSignals";
 import { KIND_DEFAULTS, SENDERS } from "@/lib/domain/noticeKinds";
 
 /**
@@ -32,7 +36,7 @@ const notMineCookie = readFileSync(path.resolve(process.cwd(), "src/components/S
 describe("the privacy page tells the truth about the code", () => {
   it("names every cookie the app sets, in every language", () => {
     expect(notMineCookie).toBe("ks_notmine");
-    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, SIGNED_OUT_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE];
+    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, SIGNED_OUT_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE, SIGNALS_COOKIE];
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
@@ -46,6 +50,7 @@ describe("the privacy page tells the truth about the code", () => {
       [365 * 24 * 3600]: { en: "One year", ru: "Один год", es: "Un año" },
       [24 * 3600]: { en: "One day", ru: "Один день", es: "Un día" },
       [5 * 60]: { en: "Five minutes", ru: "Пять минут", es: "Cinco minutos" },
+      [60]: { en: "One minute", ru: "Одна минута", es: "Un minuto" },
     };
     const textSizeAge = Number(/max-age=(\d+)/.exec(textSizeCookie("big"))?.[1]);
     const lifetimes: [string, number][] = [
@@ -58,6 +63,7 @@ describe("the privacy page tells the truth about the code", () => {
       [COACH_SOURCE_COOKIE, SOURCE_MAX_AGE],
       [TEXT_SIZE_COOKIE, textSizeAge],
       [CHALLENGE_COOKIE, challengeCookie().maxAge],
+      [SIGNALS_COOKIE, SIGNALS_COOKIE_MAX_AGE],
     ];
     for (const l of LOCALES) {
       const lines = render(l, "privacy.cookiesBody").split("\n");
@@ -123,6 +129,167 @@ describe("the privacy page tells the truth about the code", () => {
     }
   });
 
+  it("says what a phone we recognise keeps, why, and never for a European zone, without calling it a fingerprint", () => {
+    // Device hints, the owner's decision of 28 October 2026 (design B): a key made on the server with a secret
+    // from what a browser tells every site (src/lib/deviceHint.ts), a label and two dates (the device_hints
+    // table). Never the values, never for a browser set to a European zone (`isEuropeanZone`), never a sign-in.
+    const WORDS = {
+      en: ["a key that we make with a secret", "what your browser tells every site", "the screen size", "the languages", "the time zone", "the text size", "the day we saved it", "the day you last used it", "Never those details themselves", "European time zone", "another browser on the same phone", "never signs you in by itself"],
+      ru: ["ключ, который мы делаем с секретом", "что ваш браузер сообщает любому сайту", "размер экрана", "языки", "часовой пояс", "размер текста", "день, когда мы его сохранили", "в последний раз", "Никогда — сами эти данные", "европейским часовым поясом", "в другом браузере на том же телефоне", "никогда не входит за вас"],
+      es: ["una clave que hacemos con un secreto", "lo que tu navegador le dice a cualquier web", "el tamaño de la pantalla", "los idiomas", "la zona horaria", "el tamaño del texto", "el día en que la guardamos", "el día en que la usaste por última vez", "Nunca esos datos", "zona horaria europea", "otro navegador en el mismo teléfono", "Nunca inicia sesión por sí sola"],
+    } as const;
+    // "Never your face, your fingerprint" is the passkey's line about the body: the key is not a fingerprint, and the page never calls it one.
+    const FINGER = { en: /fingerprint/i, ru: /отпечат/i, es: /huella/i } as const;
+    expect(isEuropeanZone("Europe/Madrid") && isEuropeanZone("Atlantic/Canary") && !isEuropeanZone("Asia/Bangkok")).toBe(true);
+    for (const l of LOCALES) {
+      const line = render(l, "privacy.storeBody").split("\n").find((x) => x.includes(WORDS[l][0]));
+      expect(line, l).toBeDefined();
+      for (const words of WORDS[l]) expect(line, `${l}: ${words}`).toContain(words);
+      expect(line, l).not.toMatch(FINGER[l]);
+      expect(render(l, "identity.hintsHelp" as never), l).not.toMatch(FINGER[l]);
+    }
+  });
+
+  it("says how long a phone we recognise is kept, that \"Forget this phone\" and deletion take it, and that it comes back", () => {
+    // One year after the last use: the hourly job's prune (`pruneDeviceHints`, HINT_KEEP_DAYS). "Forget this
+    // phone" deletes the row; the next join or sign-in from that phone keeps a key again, and the page says so.
+    expect(HINT_KEEP_DAYS).toBe(365);
+    const YEAR = { en: "one year after you last used it", ru: "один год после того, как вы пользовались им в последний раз", es: "un año después de la última vez que lo usaste" } as const;
+    const AGAIN = { en: "keeps it again", ru: "сохраняет его снова", es: "se guarda de nuevo" } as const;
+    const RIGHTS = { en: "Forget a phone we recognise", ru: "забыть телефон, который мы узнаём", es: "olvidar un teléfono que reconocemos" } as const;
+    for (const l of LOCALES) {
+      const m = messagesOf(l);
+      const keep = render(l, "privacy.keepBody").split("\n").find((x) => x.includes(YEAR[l]));
+      expect(keep, l).toBeDefined();
+      expect(keep, l).toContain(m.identity.hintForget);
+      expect(keep, l).toContain(AGAIN[l]);
+      // The words the deletion and the rights name are the card's own title on My matches.
+      const title = (m.identity.hintsTitle as string).toLowerCase();
+      expect(render(l, "privacy.deleteBody").toLowerCase(), l).toContain(title);
+      expect(render(l, "privacy.rightsBody"), l).toContain(RIGHTS[l]);
+    }
+  });
+
+  it("names \"Don't recognise my phones\" where it names the key, says that it lasts until the player switches it off, and that it covers the one account it is on", () => {
+    // Thai PDPA s.32: the key is kept under a legitimate interest with no tap, so the player may object for
+    // good (`players.hints_off`, `setHintsOff`; DECIDING rule 40). The page names the switch by the screen's
+    // own words, in the key's own bullet, in the line on how long a phone is kept, among the rights, and on
+    // the short page that names the key too.
+    const UNTIL = { en: "until you switch it off", ru: "пока вы это не выключите", es: "hasta que lo desactives" } as const;
+    const LASTS = { en: "it covers that account and lasts until you switch it off", ru: "он действует для этого аккаунта, пока вы его не выключите", es: "vale para esa cuenta hasta que lo desactives" } as const;
+    const ABOUT_UNTIL = { en: "stops it for your account until you switch it off", ru: "останавливает это для вашего аккаунта, пока вы его не выключите", es: "lo detiene para tu cuenta hasta que lo desactives" } as const;
+    const ACCOUNT = { en: "The switch covers the account you switch it on in.", ru: "Переключатель действует для того аккаунта, в котором вы его включили.", es: "La opción vale para la cuenta en la que la activas." } as const;
+    const NEW_ACCOUNT = { en: "If you join from another browser that does not know you, that makes a new account with its own key", ru: "Если вы запишетесь на матч из другого браузера, который вас не знает, там появится новый аккаунт со своим ключом", es: "Si te apuntas desde otro navegador que no te conoce, allí se crea una cuenta nueva con su propia clave" } as const;
+    const JOINS = { en: "which joins the two accounts", ru: "тогда два аккаунта станут одним", es: "entonces las dos cuentas se unen" } as const;
+    const UNQUALIFIED = { en: "we delete every key at once and keep none until", ru: "мы сразу удалим все ключи и не будем хранить новые", es: "borramos todas las claves al instante y no guardamos ninguna hasta" } as const;
+    const KEEP_ACCOUNT = { en: "is on for that account", ru: "если для этого аккаунта не включено", es: "en esa cuenta" } as const;
+    const LINE_ACCOUNT = { en: "makes a new account with its own key, until you sign in there", ru: "там появится новый аккаунт со своим ключом — пока вы там не войдёте", es: "allí se crea una cuenta nueva con su propia clave, hasta que inicies sesión allí" } as const;
+    const KEY = { en: "a key that we make with a secret", ru: "ключ, который мы делаем с секретом", es: "una clave que hacemos con un secreto" } as const;
+    const YEAR = { en: "one year after you last used it", ru: "один год после того, как вы пользовались им в последний раз", es: "un año después de la última vez que lo usaste" } as const;
+    for (const l of LOCALES) {
+      const sw = messagesOf(l).identity.hintsOff as string;
+      const store = render(l, "privacy.storeBody").split("\n").find((x) => x.includes(KEY[l]));
+      expect(store, l).toBeDefined();
+      expect(store, `${l}: the key's bullet names the switch`).toContain(sw);
+      expect(store, `${l}: until it is switched off`).toContain(UNTIL[l]);
+      // The mark is on one record (`players.hints_off`), so the promise is for that account, and the page
+      // names the second account that a join in a browser that knows nobody makes (rule 39), with its key.
+      expect(store, `${l}: the switch covers the account it is on`).toContain(ACCOUNT[l]);
+      expect(store, `${l}: a new account in another browser keeps its own key`).toContain(NEW_ACCOUNT[l]);
+      expect(store, `${l}: until a sign-in there joins the two`).toContain(JOINS[l]);
+      expect(store, `${l}: no promise of "none" beyond the account`).not.toContain(UNQUALIFIED[l]);
+      const keep = render(l, "privacy.keepBody").split("\n").find((x) => x.includes(YEAR[l]));
+      expect(keep, `${l}: a later act keeps nothing while the switch is on`).toContain(sw);
+      expect(keep, `${l}: for that account`).toContain(KEEP_ACCOUNT[l]);
+      const rights = render(l, "privacy.rightsBody");
+      expect(rights, l).toContain(sw);
+      expect(rights, l).toContain(LASTS[l]);
+      const about = render(l, "about.storeBody");
+      expect(about, l).toContain(sw);
+      expect(about, l).toContain(ABOUT_UNTIL[l]);
+      // The switch's own two lines on My matches say the same limit.
+      const id = messagesOf(l).identity as Record<string, string>;
+      for (const k of ["hintsOffHelp", "hintsOffOn"]) expect(id[k], `${l}: identity.${k}`).toContain(LINE_ACCOUNT[l]);
+    }
+  });
+
+  it("says how the question \"Welcome back, Tim?\" reads a browser: once, keeping nothing, only for a name the page shows; and that \"Not me\" takes the phone", () => {
+    // Part 2 of the device hint (the owner's decision of 28 October 2026, DECIDING rule 40): a browser that knows
+    // nobody sends its values once per match in a tab (`WelcomeBack`, a sessionStorage guard), the server makes
+    // the key and keeps nothing of it (`deviceHintAction` writes no row), and the scope is the records the match
+    // page already shows such a browser (`hintScopeIds`). "Not me" deletes that record's row of the key
+    // (`deviceHintNotMeAction`).
+    const ASK = {
+      en: ["sends the same details once when it opens a match", "we keep nothing of them", "We ask only about a name that the match page already shows"],
+      ru: ["один раз отправляет те же данные, когда открывает матч", "мы ничего из них не храним", "Мы спрашиваем только об имени, которое уже есть на странице матча"],
+      es: ["envía esos mismos datos una vez al abrir un partido", "no guardamos nada de ellos", "Solo preguntamos por un nombre que la página del partido ya muestra"],
+    } as const;
+    const GONE = { en: "it goes at once too", ru: "он тоже сразу удаляется", es: "también se borra al instante" } as const;
+    expect(HINT_SCOPE_STATUSES).toEqual(["joined", "confirmed", "invited"]);
+    for (const l of LOCALES) {
+      const m = messagesOf(l);
+      const store = render(l, "privacy.storeBody").split("\n").find((x) => x.includes(ASK[l][0]));
+      expect(store, l).toBeDefined();
+      for (const words of ASK[l]) expect(store, `${l}: ${words}`).toContain(words);
+      // The same line as the key itself: one bullet says what is kept and how the question reads it.
+      expect(store, l).toContain(l === "en" ? "a key that we make with a secret" : l === "ru" ? "ключ, который мы делаем с секретом" : "una clave que hacemos con un secreto");
+      const keep = render(l, "privacy.keepBody").split("\n").find((x) => x.includes(GONE[l]));
+      expect(keep, l).toBeDefined();
+      // The button's own words, so the page and the screen cannot drift apart.
+      expect(keep, l).toContain(m.identity.hintNo);
+    }
+  });
+
+  it("names the tab's note of the question, outside Europe only, and that it goes with the tab", () => {
+    // `hintAskOnce` (src/lib/deviceSignals.ts) writes `km_hint_asked:<code>` to the tab's sessionStorage, once
+    // per match, and only after the zone: a European browser writes nothing (review, 28 October 2026).
+    const NOTE = { en: ["Outside Europe", "goes when you close the tab"], ru: ["За пределами Европы", "исчезает, когда вы закрываете вкладку"], es: ["Fuera de Europa", "se borra al cerrar la pestaña"] } as const;
+    expect(HINT_ASKED_KEY).toBe("km_hint_asked:");
+    for (const l of LOCALES) {
+      const line = render(l, "privacy.cookiesBody").split("\n").find((x) => x.includes(HINT_ASKED_KEY));
+      expect(line, l).toBeDefined();
+      for (const words of NOTE[l]) expect(line, `${l}: ${words}`).toContain(words);
+      // The question's own words, so the page and the screen cannot drift apart.
+      const ask = (messagesOf(l).identity.hintAsk as string).split(",")[0];
+      expect(line, l).toContain(ask.replace(/^¿/, ""));
+    }
+  });
+
+  it("names the legal basis of each use: our agreement for the app, our legitimate interest for the key", () => {
+    // PDPA s.23(1) and the PDPC notice guideline of 7 September 2022: a notice names its legal basis. The key
+    // under "What we keep" is saved with no tap, so its basis is a legitimate interest, not consent
+    // (DECIDING rule 40; the law research of 28 October 2026).
+    const BASES = {
+      en: ["our agreement with you", "sign in on your own phone", "duplicate players", "our legitimate interest"],
+      ru: ["наше соглашение с вами", "входить со своего телефона", "один игрок не появлялся в приложении дважды", "наш законный интерес"],
+      es: ["nuestro acuerdo contigo", "iniciar sesión desde tu propio teléfono", "jugadores duplicados", "nuestro interés legítimo"],
+    } as const;
+    const CONSENT = { en: /consent/i, ru: /согласи/i, es: /consentimiento/i } as const;
+    for (const l of LOCALES) {
+      const law = render(l, "privacy.lawBody");
+      expect(law, l).toContain("PDPA");
+      for (const words of BASES[l]) expect(law, `${l}: ${words}`).toContain(words);
+      expect(law, l).not.toMatch(CONSENT[l]);
+    }
+  });
+
+  it("keeps \"No tracking\" true: across other sites, on the privacy page and on /about", () => {
+    // A key made from what a browser tells every site is first-party, for sign-in only, and never read on
+    // another site; a bare "No tracking" stopped being literally true on 28 October 2026.
+    const ACROSS = { en: "No tracking across other sites", ru: "Без трекинга на других сайтах", es: "Sin rastreo en otras webs" } as const;
+    const BARE = { en: /No tracking(?! across other sites)/, ru: /Без трекинга(?! на других сайтах)/, es: /Sin rastreo(?! en otras webs)/ } as const;
+    // The short page says what it keeps too: the key, outside Europe, for one question on the same phone.
+    const ABOUT = { en: ["Outside Europe we also keep a key", "what your browser tells every site", "another browser on the same phone"], ru: ["За пределами Европы мы также храним ключ", "что ваш браузер сообщает любому сайту", "другой браузер на том же телефоне"], es: ["Fuera de Europa también guardamos una clave", "lo que tu navegador le dice a cualquier web", "otro navegador del mismo teléfono"] } as const;
+    for (const l of LOCALES) {
+      for (const key of ["privacy.cookiesBody", "about.cookiesBody"]) {
+        const text = render(l, key);
+        expect(text, `${l} ${key}`).toContain(ACROSS[l]);
+        expect(text, `${l} ${key}`).not.toMatch(BARE[l]);
+      }
+      for (const words of ABOUT[l]) expect(render(l, "about.storeBody"), `${l}: ${words}`).toContain(words);
+    }
+  });
+
   it("says that each phone that starts to remember you is told to you, and on your channel only while match changes are on", () => {
     // The owner, 28 October 2026, with the autofill on the own name field: a saved passkey sends the
     // notice "A phone now signs you in: <label>. Not you? Remove it on My matches." through the gate
@@ -172,9 +339,10 @@ describe("the privacy page tells the truth about the code", () => {
   });
 
   it("names every door that signs in by a name alone on the km_by_name line, in every language", () => {
-    // Three calls set the mark (`markSignedInByName`): "That's me" (`thatsMeAction`), "I'm in" on an
+    // Four calls set the mark (`markSignedInByName`): "That's me" (`thatsMeAction`), "I'm in" on an
     // invitation to a place kept for a past player's record (`confirmInviteAction`, the owner's decision
-    // of 11 October 2026), and `restoreIdentity`, which brings the same session back and makes no new
+    // of 11 October 2026), "It's me" under "Welcome back, Tim?" (`deviceHintYesAction`, the device hint's
+    // question, 28 October 2026), and `restoreIdentity`, which brings the same session back and makes no new
     // door. Until 16 October 2026 the line named only "That's me". A new door is named on the page in
     // three languages first, then added here.
     const callers = readdirSync(path.resolve(process.cwd(), "src"), { recursive: true, encoding: "utf8" })
@@ -182,11 +350,11 @@ describe("the privacy page tells the truth about the code", () => {
       .filter((f) => /\bmarkSignedInByName\(/.test(readFileSync(path.resolve(process.cwd(), "src", f), "utf8").replace(/export (async )?function markSignedInByName\(/, "")))
       .map((f) => f.split(path.sep).join("/"))
       .sort();
-    expect(callers).toEqual(["actions/identity.ts", "actions/slots.ts"]);
+    expect(callers).toEqual(["actions/deviceHints.ts", "actions/identity.ts", "actions/slots.ts"]);
     for (const l of LOCALES) {
       const m = messagesOf(l);
       const line = render(l, "privacy.cookiesBody").split("\n").find((x) => x.includes(BY_NAME_COOKIE));
-      for (const button of [m.identity.thatsMeIn, m.invitePage.confirm]) expect(line, `${l}: ${button}`).toContain(button);
+      for (const button of [m.identity.thatsMeIn, m.identity.hintYes, m.invitePage.confirm]) expect(line, `${l}: ${button}`).toContain(button);
     }
   });
 
@@ -243,6 +411,33 @@ describe("the privacy page tells the truth about the code", () => {
       for (const words of CONFIRM[l]) expect(m.identity.signOutConfirm, `${l}: ${words}`).toContain(words);
       expect(m.identity.signOutConfirm, l).toContain(ICON[l]);
     }
+  });
+
+  it("says that 'Sign out on this browser' takes this phone's key off the account it signs out of, in every language", () => {
+    // DECIDING, "A phone is never shared" (28 October 2026): `SignOut` sends this browser's values with the
+    // sign-out, and `signOutAction` deletes that key from the record that signs out, in the same request
+    // (`forgetDeviceHints`). The page says so in the line on how long a phone we recognise is kept, by the
+    // button's own words.
+    const YEAR = { en: "one year after you last used it", ru: "один год после того, как вы пользовались им в последний раз", es: "un año después de la última vez que lo usaste" } as const;
+    const GOES = { en: "we delete at once, from the account you sign out of, the key that this browser's details make at that moment", ru: "мы сразу удалим из аккаунта, из которого вы выходите, ключ, который дают данные этого браузера в этот момент", es: "borramos al instante, de la cuenta de la que sales, la clave que dan los datos de este navegador en ese momento" } as const;
+    // The promise holds only for the key that the browser's values make at the tap (`forgetKeyOf`), and
+    // `readDeviceSignals` sends none in a European zone. A key kept under other values (the phone flew home
+    // to Europe/London, or its text size or languages changed) stays: no request can find it without its
+    // values. So the line names the condition, and names "Forget this phone" as the full way out for it.
+    const ONLY = { en: "outside Europe only", ru: "и только за пределами Европы", es: "y solo fuera de Europa" } as const;
+    const OTHER = { en: "A key that we kept under other details", ru: "Ключ, который мы сохранили при других данных", es: "Una clave que guardamos con otros datos" } as const;
+    for (const l of LOCALES) {
+      const m = messagesOf(l);
+      const keep = render(l, "privacy.keepBody").split("\n").find((x) => x.includes(YEAR[l]));
+      expect(keep, l).toContain(m.identity.signOut);
+      const out = keep!.slice(keep!.indexOf(m.identity.signOut));
+      expect(out, l).toContain(GOES[l]);
+      expect(out, l).toContain(ONLY[l]);
+      expect(out, l).toContain(OTHER[l]);
+      expect(out.slice(out.indexOf(OTHER[l])), l).toContain(m.identity.hintForget);
+    }
+    expect(readFileSync(path.resolve(process.cwd(), "src/actions/identity.ts"), "utf8")).toMatch(/await forgetDeviceHints\(db, leaving, key\)/);
+    expect(readFileSync(path.resolve(process.cwd(), "src/components/SignOut.tsx"), "utf8")).toMatch(/signOutAction\(sub\?\.endpoint \?\? null, \{ hint \}\)/);
   });
 
   it("says that a sign-in by name proves who it is before it deletes the account, in every language", () => {

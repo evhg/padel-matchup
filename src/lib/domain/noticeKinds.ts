@@ -40,7 +40,10 @@ export const SENDERS = {
   removed: "changes", // notifyRemoved: the organiser took them out, or the night went on without them
   // A phone now signs the player in (a passkey saved, DECIDING rule 39): not a match's change, but the kind
   // that is on by default, and the settings line `notices.line_changes` names the new phone. A session chose
-  // it on 28 October 2026; whether a player may switch this notice off waits for the owner (ROADMAP.md).
+  // it on 28 October 2026. It keeps this one gate, so "Match changes" switches it off on the own channel and
+  // the inbox keeps it: a phone is never shared (the owner's rule, DECIDING), and for a forwarded personal
+  // link a session kept the gate too (option B, one gate, no new code; the reasons are in rule 39). The
+  // owner can ask for option A, the own channel always: that needs a path beside `releaseOf`.
   passkeySaved: "changes", // notifyPasskeySaved
   requestApproved: "changes", // notifyRequestDecided: the organiser said yes
   requestWaitlisted: "changes", // notifyRequestDecided: the organiser said yes, and the match is full: a place on the waiting list

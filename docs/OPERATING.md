@@ -149,6 +149,23 @@ Since 28 October 2026 a signed-in browser adds one invocation in 30 days for its
 (`POST /api/me/session?do=renew`, no read), a browser whose record is gone one in its life (`?do=dead`),
 and the "Remember me on this phone" card one a day for a browser that sees it (`passkey_shown`). At 1,000
 active browsers that is under 35,000 a month, 3.5% of the 1M.
+A device hint (DECIDING rule 40, the owner's decision of 28 October 2026) costs one statement after
+the answer of a join or a sign-in: the upsert, the cap of three, the read of a collision down
+`device_hints_key_idx` and the two counters, together. My matches adds one read of three rows at most
+down `device_hints_player_idx`, and the hourly job one delete of 500 rows at most. "Sign out on this
+browser" adds one delete of one row at most, down `device_hints_player_key_idx`, only when its request
+carries values that make a key; its counter shares the one upsert of `signout`. The question
+"Welcome back, Tim?" adds one `exists` of one row at most to the match page, only for a browser that
+knows nobody on a match still to come, down `device_hints_player_idx` over the places the page read.
+Only where that finds a row does the browser send its values. Part 1 keeps a key at nearly every join
+from a browser outside Europe, so in Phuket nearly every match still to come has a remembered player,
+and the read nearly always finds one. Count on this: the first anonymous view of such a match in each
+tab adds one server-action invocation, with about five statements (the two rate upserts, the match,
+the candidates and the "That's me" read) and a counter after the answer. That is up to about twice
+the invocations of anonymous match views; a European browser, a signed-in viewer, a second view in
+the same tab and a match nobody is remembered on add none. One match takes 100 a day at most. If the
+invocations come near the 1M ceiling, set `DEVICE_HINTS=save`: the question and its call stop, and
+the keys stay. The table holds three rows a player at most, about 150 bytes each.
 Supabase: 500 MB database, 5 GB egress a month. On 15 October 2026 the database used 32 MB
 (`pg_database_size`), and its largest relation was pg_cron's run log at 7.27 MB, which a weekly job
 now keeps to 14 to 21 days ("Cron jobs", below). Resend: 3,000 emails a month, 100 a day (book@ may
@@ -228,7 +245,7 @@ Which of these makes the second record is a question for the numbers, so these d
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
 current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'merge_%' or key like
 'join_src_%' or key like 'passkey_%' or key like 'thats_me_%' or key like 'join_name_%' or key = 'email_proved_by_name' or key like 'held_by_name%'
-or key like 'view_known_%' or key like 'view_anon_%' or key like 'session_%' or key = 'signout') group by 1 order by 1`.
+or key like 'view_known_%' or key like 'view_anon_%' or key like 'session_%' or key = 'signout' or key like 'hint%') group by 1 order by 1`.
 A page render's counters go in one statement after the answer: the layout's `pageviews`, the match
 page's view counters and `card_views` share one upsert through `countAfter` (`src/lib/countLater.ts`,
 over `bumpMetrics` in `src/lib/domain/metrics.ts`; `tests/rules.test.ts` holds every page to it). A
@@ -348,6 +365,15 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
 - **Not you?** `signout`: "Sign out on this browser" in the header's ⋯ menu or on My matches. The
   browser keeps `km_signed_out`, the moment, and every restore seal or manage cookie it held from before
   opens nothing (`predatesSignOut`). The push row of that browser goes in the same request.
+  `hint_signout`, in the same statement as `signout`: the sign-out also took this browser's device key
+  off the record it left (DECIDING, "A phone is never shared"; one delete, only when the request carried
+  values that make a key, so never in a European zone). It counts two cases that the numbers cannot tell
+  apart: a wrong sign-in by name undone on the holder's own phone (Bob on Tim's seat), and a player who
+  signed out of their own record, whose next act from that phone keeps the key again. Read it against
+  `signout`: the share of sign-outs on a phone that the device hint remembered. It does not move for a
+  row that the phone kept under other values (its zone, languages or text size changed after the save,
+  or it is in a European zone now): the sign-out cannot find that row, which stays until "Forget this
+  phone" or the yearly prune, as the privacy page says.
 - **The passkey card.** `passkey_shown`: the "Remember me on this phone" card really showed (the phone can
   keep a passkey, no "Not now" hid it), at most once a UTC day per browser, counted by the browser
   through one small action (`passkeyCardAction`); `passkey_not_now`: a tap on its "Not now". Against
@@ -359,6 +385,50 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   costs about as much as a page view, so it is no new kind of load, but it can inflate
   `session_renewed`, `passkey_shown`, `passkey_not_now` and `signout`. Read them as trends; a sudden
   jump with no jump in `pageviews` is a script.
+- **The device hint.** The owner decided design B on 28 October 2026 (DECIDING rule 40, "A device hint
+  asks 'Welcome back, Tim?'"). `hint_saved`: a join of the player's own record, or a sign-in into
+  it, kept the key of the browser's values for that record. A new row and a row seen again both count.
+  `hint_collide`: such a save in a match found the same key on another record of that match, seen in
+  the last year. "Another record of that match" is a place of any status, or the organiser. A save with
+  a match is a join, the create form, "That's me", "I'm in" on a held place or an invitation, "Take
+  Danny's held place", "Be their partner", or an email code typed on a match page. The email code on My
+  matches, Telegram, a passkey and the personal link save with no match, so they never collide.
+  `hints_pruned`: the rows that the hourly job deleted one year after their last use, at most 500 a run.
+  `hint_signout`: "Sign out on this browser" took this browser's key off the record it left ("Not you?" above).
+  Only the key that the values at the tap make: a key kept under other values of the same phone stays.
+  A browser set to a European time zone sends no values and keeps no row, so no counter moves for it.
+  `hint_objected`: a player switched on "Don't recognise my phones" on My matches (Thai PDPA s.32,
+  DECIDING rule 40). The switch deleted every key of that player at once, and no door keeps one while it
+  is on. A second tap and a tap to switch it off count nothing. Such a player's saves count nothing
+  either: the save's own statement inserts no row and moves no counter. The switch shows on My matches
+  with no phone too, while `DEVICE_HINTS` is not `off`, so a player with no key can count here. Read it
+  against the players who have a key: a few is the right working; a steady rise says that the question
+  or the privacy page troubles people. The operator's door counts the players under the mark:
+  `select count(*) from players where hints_off is not null`.
+  The deployment's switch is `DEVICE_HINTS`, read on the server: `off` keeps nothing and asks nothing, `save` keeps
+  the key and asks nothing, `ask` keeps the key and asks "Welcome back, Tim?". Empty is `ask`. A word
+  that the code does not know is `off`. Vercel applies a change at the next deploy, so `save` is the
+  way to stop the question and keep the keys.
+  Read the collisions against the saves that had a match. Above one in five, the key does not tell the
+  players of this crowd apart: set `DEVICE_HINTS` to `save`, and the question stops. At one in ten or
+  fewer, the question can go on.
+  The operator's door reads the labels, the dates and the counts (`device_hints`), never the key.
+- **The device hint's question.** "Welcome back, Tim?" on the match page (DECIDING rule 40), for a
+  browser that knows nobody, once per match in a tab. `hint_asked`: the page showed the question, with
+  "It's me" or with the record's own doors. `hint_doors`: of those, a question with the doors of a record
+  that can prove itself (the email code, Telegram, Face ID). `hint_yes`: "It's me" signed the browser in,
+  as "That's me" does, so `signin_thats_me` counts it too. `hint_no`: "Not me" deleted the key of that
+  phone from that record. The record's next join or sign-in from a phone with the same key keeps it
+  again, so the same question can come back (DECIDING rule 40). `hint_ambiguous`: two records or more in
+  the match have the key, so no question. `hint_fresh`: the one record is a "second Tim": made in the
+  last seven days, and never in a taken seat beside another person in a match that has already started
+  (a match still to come does not count), so no question. Each is one upsert after the answer.
+  Read `hint_yes` against `hint_asked` minus `hint_doors`: a low share means that the question reaches
+  the wrong people. Read `hint_no` against `hint_asked` the same way: above one in five, set
+  `DEVICE_HINTS` to `save`. Many `hint_ambiguous` or `hint_fresh` against few `hint_asked`: the key does not tell this
+  crowd's phones apart. The rates are `rl:hint:*` (20 questions a day for one address, "Not me" and
+  "It's me" too) and `rl:hint_match:*` (100 a day for one match, "It's me" too). "It's me" takes both
+  before it reads anything, then the "That's me" rates.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.
@@ -376,6 +446,8 @@ a competition's entry and its claim card. Never a field for another person's nam
   the passkey. The browser loads the passkey library only when it says that it can offer a passkey in
   its autofill.
 - **What a sign-in costs.** The same as the button's: one call, one spend row, one read of the passkey.
+  Like the button's, the call carries the browser's device values (`passkeySignInAction(answer, { via,
+  hint })`), and the device hint's one statement after the answer keeps the key (DECIDING rule 40).
   The challenge is good for ten minutes, and the page tells the browser when it ends
   (`src/lib/passkeys/autofill.ts`). The browser does not hand the phone a challenge in its last 30
   seconds. A live page's refresh brings a new one at no cost. On a page that stayed open longer, the
@@ -388,8 +460,11 @@ a competition's entry and its claim card. Never a field for another person's nam
 - **The notice.** Each saved passkey sends "A phone now signs you in: iPhone, Safari. Not you? Remove it
   on My matches." It goes through the notice gate (sender `passkeySaved`, kind "changes"), after the
   answer. The inbox always keeps it. The record's own channel gets it while the player has "Match
-  changes" on, and quiet hours hold it. It carries no personal link. Whether a player may switch it off
-  waits for the owner (ROADMAP.md).
+  changes" on, and quiet hours hold it. It carries no personal link. It keeps that one gate: a phone is
+  never shared (the owner's rule, DECIDING), and for a forwarded personal link a session kept the gate
+  too on 28 October 2026 (option B, one gate, no new code; DECIDING rule 39 gives the reasons). The
+  owner can ask for option A, the own channel always, also with "Match changes" off. That needs a path
+  beside the gate (`releaseOf`).
 - **The kill switch.** Set `PASSKEY_AUTOFILL=off` in Vercel (Production), then redeploy the latest
   production deployment. After the deploy, no page carries the challenge, and no name field asks the
   phone. A page that a browser opened before the deploy gets `autofill_off` at its next pick. That page
@@ -455,6 +530,7 @@ Three jobs call the app from Supabase `pg_cron` through `pg_net`, and the servic
   After it reads the clubs' feeds of free courts, the run offers each free court two to six hours ahead to the players whose want names that club, day and hour (`offerFreeCourts` in `src/lib/notify.ts`, the rules in `src/lib/domain/courtOffers.ts`): at most twenty notices a run, one per player, one court a day for each want, and a want that heard anything in the last six hours hears nothing. The run's `courtOffers` counts them, and each one is a `demand.court_offered` fact. The free courts come from a club's own feed or from a read of its booking platform from the last two hours (below), as the club page shows them (`freeCourtsState`). A club that runs its page here (approved) offers them, and so does a club that the directory lists, as the best times do. A club that only a player listed does not. Until 11 October 2026 only an approved club offered a court. Production had none, so no platform's read ever reached a want.
   Once a day, the first run after 03:00 UTC (after the day's backup) removes the player rows nothing ties to a person: no contact, no public profile, nothing in the database pointing at them (read from the schema; their saved clubs and a coach page with no lesson ever booked go with them; a note, a want or a seat keeps them), and at least 14 days old (`src/lib/domain/disposable.ts`, the owner's decision of 24 September 2026). `GET /api/admin/disposable` lists what today's run would remove and changes nothing; the run's `disposed` and the daily metric `players_disposed` count what went.
   Every run, near its end, sends what players' quiet hours held (the owner's decision D, 9 October 2026; `sendQuietSummaries` in `src/lib/notify.ts`): each person whose quiet hours ended with notices waiting hears once, one short message per channel they have (Telegram, email when activity emails are on, each push device; WhatsApp has no template for it, so a WhatsApp-only player reads the inbox), and those notices count as delivered. At most 200 people a run, read on the partial index `notices_due_idx`; the rest go the next hour. Then it prunes the inbox: rows older than 90 days (`INBOX_DAYS`), at most 5,000 a run, oldest by `notices_created_idx`. The run's `noticeSummaries` and `noticesPruned` count them, and so do the daily metrics `notice_summaries` and `notices_pruned`. The inbox grows by one row per notice per player, a few kilobytes a day at today's size; 90 days keeps it far below the database's 500 MB.
+  Every run also deletes the device hints last seen more than a year ago, 500 at most a run (`pruneDeviceHints` in `src/lib/domain/deviceHints.ts`; the owner's decision of 28 October 2026), and counts them as `hints_pruned`. /privacy promises "one year after you last used it".
 - the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour). Each tick also reads the free court times of about a third of the clubs on the booking platforms (below).
 - `kicksmash-sync`, every 10 minutes → `/api/cron/sync`: the coaches' calendars, both ways.
 

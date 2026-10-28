@@ -1244,14 +1244,133 @@ Everything in this list is live. The README describes each in detail.
   works while the autofill waits. It must also show whether iOS offers the passkey on the first tap
   when the request starts after that tap (a page whose challenge ran out), and that "Remember me on
   this phone" shows in Chrome on iOS 26.2. The browser suites prove it in Chromium only.
-  **One question waits for the owner.** May a player switch the new-phone notice off? Option A: the
-  own channel always gets it, with quiet hours, also with "Match changes" off. A session that is not
-  the player's (a forwarded link, a shared phone) then cannot silence the warning about the passkey it
-  saved. The cost: the one notice a player cannot switch off, and a new path beside the notice gate.
-  Option B (today): it keeps the gate, and the privacy page says that the channel gets it only while
-  "Match changes" is on. The cost: such a session can turn "Match changes" off before it saves a
-  passkey, and mark the inbox row as read. We recommend A, because the notice exists for exactly that
-  session.
+  **The new-phone notice keeps the gate (option B).** The question "May a player switch the new-phone
+  notice off?" named two sessions that are not the player's: a shared phone and a forwarded link. The
+  owner's rule of the same day, "assume phones are never shared. period", settles the first: no shared
+  phone needs option A. A session decided the second on 28 October 2026: the notice keeps the gate of
+  "Match changes" (one gate, no new code). A personal link is a full sign-in, so whoever holds a
+  forwarded one can do all that the player can do on My matches, and the way out is "Reset link". A
+  reset does not remove a passkey, but My matches lists every passkey under "Phones that remember you",
+  with Remove, on the same page. Option A would add a path beside the notice gate for one rare case. The
+  owner can ask for option A: the own channel then always gets the notice, with quiet hours, also with
+  "Match changes" off (DECIDING rule 39).
+- **The device hint, part 1: the key, its table and its duties (the owner, 28 October 2026; migrations
+  0102 and 0103).** The question was: "Which design do you want for the sign-in in a browser that has
+  never seen the player?" The answer was: "I like A, obviously the fingerprint needs to include more than
+  just iphone model… is it really just the iphone model? Then it should be B." B is the scoped device
+  hint "Welcome back, Tim?". A was the automatic sign-in by fingerprint, which the owner declined because
+  two iPhones of one model look the same. Part 1 keeps the key and asks nothing yet. At a join of the
+  player's own record and at every sign-in into a record, the browser sends what it tells every site
+  (our own few lines, no library) in the request of that act. The server checks each value and makes an
+  HMAC-SHA256 key with a secret derived from `SESSION_SECRET` for the purpose `device-hint:v1`. It keeps
+  the key, a label ("iPhone") and two dates in `device_hints`, three a player at most, and never the
+  values. It keeps nothing for a browser in a European time zone, or while `DEVICE_HINTS` is `off`. A
+  merge moves the keys, an account deletion deletes them, the disposal job ignores them, and the hourly
+  job deletes a key one year after its last use. The download of a player's data lists the label and the
+  two dates. My matches lists the phones under "Phones we recognise", with "Forget this phone", and the
+  operator's read-only door never sees a key. `forgetDeviceHints(db, playerId, key?)` also serves
+  "Sign out on this browser" (the entry "Design B on today's main" below). Counters: `hint_saved`,
+  `hint_collide`, `hints_pruned`. The privacy page says what the key is, why, how long and how it goes, in three languages; "No tracking"
+  now reads "No tracking across other sites", and the page's date is 28 October 2026. Its line on the
+  law now names the legal basis: our agreement with the player for the app, and our legitimate interest
+  for the key. The lasting objection to the key is part 3, "Don't recognise my phones".
+  `src/lib/domain/hintSignals.ts`, `src/lib/domain/deviceHints.ts`, `src/lib/deviceHint.ts` and
+  `src/lib/deviceSignals.ts`; proven in `tests/device-hints.test.ts`, `tests/device-hint-doors.test.ts`,
+  `tests/legal.test.ts`, `tests/readonly.test.ts` and `e2e/passkeys.mjs`. Part 2, the question itself,
+  is the next entry.
+- **The device hint, part 2: the question "Welcome back, Tim?" (the owner, 28 October 2026; DECIDING rule
+  40; no migration).** The question was: "Which design do you want for the sign-in in a browser that has
+  never seen the player?" The answer was: "I like A, obviously the fingerprint needs to include more than
+  just iphone model… is it really just the iphone model? Then it should be B." A browser that knows
+  nobody opens a match that is not called off and has not started. The page reads one row at most: does
+  a record that it shows (a seat, a waiting place, a held place that keeps a record) have a key from the
+  last year? Only then does the browser send its values, once for each match in a tab. For exactly one
+  record of that key, the page asks "Welcome back, Tim?". "It's me" signs in as "That's me" does, with
+  the same rule, rates and session by name. A record that can prove itself gets only its own doors: the
+  email code, Telegram, Face ID. "Not me" deletes the key of that phone from that record; the record's
+  next join or sign-in from a phone with the same key keeps it again, so the question can come back. No
+  record, two records, the organiser's unreached list, a crew member with no place and a "second Tim" (a
+  record made in the last seven days that has never sat beside another person in a match that has
+  already started) get no question. The answer is a first name, never an id, a key or a value. Twenty
+  questions a day for one address, 100 a day for one match, and "It's me" takes both before it reads
+  anything. A browser in a European time zone writes nothing to the tab and sends nothing. Counters: `hint_asked`, `hint_doors`, `hint_yes`, `hint_no`, `hint_ambiguous`, `hint_fresh`. The
+  privacy page says that the browser sends its values once and that we keep nothing of them, that we ask
+  only about a name the page shows, and that "Not me" deletes the key; the cookie line names "It's me".
+  `src/lib/domain/deviceHintAsk.ts`, `src/actions/deviceHints.ts`, `src/components/WelcomeBack.tsx`;
+  proven in `tests/device-hint-ask.test.ts`, `tests/device-hints.test.ts`, `tests/legal.test.ts` and
+  `e2e/device-hints.mjs` (a join in one browser; no question in a second while the record has only a
+  match to come, and none in Europe/Madrid; then a seat beside Kai in a match under way, and the
+  question and "It's me" in a second browser with the same screen, language and zone; nothing in a
+  third with another screen; the question in Russian and Spanish).
+- **The device hint, part 3: "Don't recognise my phones", and a phone is never shared (28 October 2026;
+  in migration 0102, which has not reached production).** The owner's decision of the day was: "Which
+  design do you want for the sign-in in a browser that has never seen the player?" The answer was: "I
+  like A, obviously the fingerprint needs to include more than just iphone model… is it really just the
+  iphone model? Then it should be B." B saves the key with no tap, under our legitimate interest, so
+  Thai law (PDPA s.32) gives the player a right to object for good. A session decided the switch under
+  standing order 3: it is routine compliance, and it costs least before the migration ships. The column
+  `players.hints_off` is in the same migration as the table (0102, made again with drizzle-kit; the
+  grants of the read-only role, 0103, show the column). On My matches, under the remembered phones,
+  "Don't recognise my phones" deletes every key of the player at once, keeps the moment, and counts
+  `hint_objected`. The switch shows with no phone too, while the deployment keeps keys (`DEVICE_HINTS`
+  not `off`), so a player can object before the first key and after "Forget this phone" took the last one.
+  While it is on, the save of every door inserts nothing, inside its own one statement, with no extra
+  round trip, and "Welcome back, Tim?" never offers that record. Off, the next join or sign-in keeps a
+  key again. The mark covers one record. A join from another browser that knows nobody makes a new record
+  with its own key, until a sign-in there joins the two records. To link them without that sign-in, we
+  would have to recognise the phone, and that is what the player objected to; the privacy page says
+  this limit. A session by name that proved
+  nothing cannot change it either way, and the block says why and names the door below that proves the
+  player. That follows the owner's answer to "A session by name ('That's me') can delete that player's
+  account today, and the deletion cancels that player's upcoming matches. Close this gap?": "Close it
+  (Recommended)". A merge keeps the mark when either record has it, with the earlier moment, and then
+  keeps no key. An account deletion clears it. The download lists it (`player.hintsOff`). The privacy
+  page names the switch where it names the key, says that it lasts until the player switches it off, and
+  says it in the rights and on the short page, in three languages. The same day the owner set a standing
+  design assumption: "assume phones are never shared. period" (DECIDING, "A phone is never shared"). Two
+  answers of the day meet it. To "May a sign-in last one year after the last visit, and may every
+  browser get 'Not you? Sign out'?" the owner said "Yes, both (Recommended)". The person who taps "Not
+  you?" holds their own phone, so a key saved during that session belongs to the holder, not to the
+  record. So the sign-out forgets that browser's key from the record it leaves (`forgetDeviceHints`, one
+  delete; the entry "Design B on today's main" below). The personal link still signs a browser in after
+  the sign-out, as before. To "May the player's own name
+  field offer a saved passkey above the keyboard ('Tim', then Face ID)?" the owner said "Yes, own name
+  field (Recommended)". That change left the question "May a player switch the new-phone notice off?".
+  The question named a shared phone and a forwarded link. No shared phone needs option A, so the
+  shared-phone half adds no reason for it. A session decided the forwarded-link half: the notice keeps
+  the gate (option B; the entry "The passkey above the keyboard" gives the reasons, and the owner can ask
+  for option A).
+  `src/lib/domain/deviceHints.ts` (`setHintsOff`, `saveDeviceHint`, `capHintsSql`),
+  `src/lib/domain/deviceHintAsk.ts` (`hintCandidates`), `src/actions/deviceHints.ts` (`hintsOffAction`),
+  `src/components/MyHints.tsx`; proven in `tests/device-hints.test.ts`, `tests/device-hint-doors.test.ts`,
+  `tests/device-hint-ask.test.ts`, `tests/legal.test.ts` and `e2e/passkeys.mjs`.
+- **Design B on today's main: the sign-out forgets this phone's key, and the passkey above the keyboard
+  keeps it (28 October 2026; no migration beyond 0102 and 0103).** Design B now stands on the two
+  changes that main merged the same day, "Safer sign-in" and "The passkey above the keyboard", each with
+  its own decision of the owner. "Which design do you want for the sign-in in a browser that has never
+  seen the player?": "I like A, obviously the fingerprint needs to include more than just iphone model…
+  is it really just the iphone model? Then it should be B." "May a sign-in last one year after the last
+  visit, and may every browser get 'Not you? Sign out'?": "Yes, both (Recommended)". "May the player's
+  own name field offer a saved passkey above the keyboard ('Tim', then Face ID)?": "Yes, own name field
+  (Recommended)". "A session by name ('That's me') can delete that player's account today, and the
+  deletion cancels that player's upcoming matches. Close this gap?": "Close it (Recommended)".
+  "Sign out on this browser" sends the browser's device values (none in a European zone), and the same
+  request deletes the key of this browser from the record that signs out, in one statement, counted as
+  `hint_signout` in the one upsert of `signout`. It is the one exception to "The sign-out changes nothing
+  else" (DECIDING rule 34), for the reason in "A phone is never shared": Bob taps "That's me" on Tim's
+  seat on Bob's own phone, and Tim's record no longer keeps Bob's phone. The server finds only the key
+  that the values at the tap make. A key that the phone kept under other values (another zone, other
+  languages, another text size, or a European zone now) stays until "Forget this phone" or the yearly
+  prune. The privacy page says so, with that limit, in three languages, and a unit test proves the limit.
+  `passkeySignInAction(answer, o)` takes one options object: `o.via` ("autofill")
+  names the counter, `o.hint` carries the device values, so the autofill's sign-in keeps the key as the
+  button's does. Every sign-in door counts with its user agent in one statement and keeps the hint
+  after it; "It's me" counts `hint_yes` in that statement, and the question's counters share one upsert.
+  On My matches, the locked "Don't recognise my phones" and the refused deletion name the same doors
+  that prove a session by name. The new-phone notice keeps the gate (the entry "The passkey above the
+  keyboard"). `src/actions/identity.ts` (`signOutAction`), `src/lib/deviceHint.ts` (`forgetKeyOf`),
+  `src/components/SignOut.tsx`, `src/actions/passkeys.ts` (`PasskeySignInOptions`); proven in
+  `tests/device-hint-doors.test.ts`, `tests/legal.test.ts` and `e2e/device-hints.mjs`.
 
 ## The finish line
 

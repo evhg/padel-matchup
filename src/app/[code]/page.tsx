@@ -26,6 +26,7 @@ import { ReturningPlayer } from "@/components/ReturningPlayer";
 import type { BackInDoors } from "@/components/BackInHelp";
 import { BackInOpener } from "@/components/BackInOpener";
 import { RememberPhone } from "@/components/RememberPhone";
+import { WelcomeBack } from "@/components/WelcomeBack";
 import { PasskeyAutofill } from "@/components/PasskeyAutofill";
 import { pageSignInOptions } from "@/lib/passkeys/page";
 import { TelegramReturn } from "@/components/TelegramLogin";
@@ -94,6 +95,8 @@ import { countParts, heldSeats, lineupNames, previewText, tellGroupText } from "
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer, unreachedSignsIn } from "@/lib/domain/thatsMe";
+import { anyHintAmong, hintOpen, hintScopeIds } from "@/lib/domain/deviceHintAsk";
+import { deviceHintMode } from "@/lib/deviceHint";
 import { heldOffers } from "@/lib/domain/heldByName";
 import { withClientMessages } from "@/i18n/withClientMessages";
 import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
@@ -502,6 +505,13 @@ async function EventPage({ params, searchParams }: Props) {
   // Telegram, each where this deployment runs it. No read: what the deployment runs, and nothing else.
   const botId = me ? null : telegramBotId();
   const backIn: BackInDoors | null = me ? null : { email: emailEnabled(), telegram: botId ? { botId, lang: locale, authUrl: `${base}/api/telegram/login` } : null };
+  // "Welcome back, Tim?" (the device hint's question, DECIDING rule 40): for a browser that knows nobody, on
+  // a match not called off and not started, with `DEVICE_HINTS` at ask. One bounded `exists` over the
+  // records this page shows such a browser (a seat, a waiting place, a held place that keeps a record:
+  // `hintScopeIds`, from the places read already), down `device_hints_player_idx`. Only where it says yes
+  // does the client part send the browser's values, once per match in a tab; an anonymous view of a match
+  // where nobody is remembered reads this one row at most and sends nothing.
+  const hintAsk = !me && !viewer.isCreator && hintOpen(ev, now) && deviceHintMode() === "ask" ? await anyHintAmong(db, hintScopeIds([...roster, ...waitlist]), now) : false;
   // A join form this viewer can open here: an open spot, or the waiting list's form. With none (a full
   // match with no waiting list, a past or called-off one, a fixed-pairs night's bar), the closed line
   // under the line-up stays, so the way back in is never gone from the page.
@@ -891,6 +901,7 @@ async function EventPage({ params, searchParams }: Props) {
               the one that reaches the player, competing. */}
           {me && askLevel && !(stay && stay.kind === "ask") && <LevelAfterJoin playerId={me.id} />}
           {rememberSession && <RememberPhone offer={rememberOffer} />}
+          {hintAsk && <WelcomeBack code={code} doors={backIn} />}
         </section>
 
         {creatorBanner && (

@@ -59,6 +59,13 @@ export const players = pgTable(
     /** Opted in to the public club and city rankings. Off by default. */
     rankingOptIn: boolean("ranking_opt_in").notNull().default(false),
     /**
+     * "Don't recognise my phones" (device hints, DECIDING rule 40): the moment the player objected to the
+     * device key (PDPA s.32). While it is set, no door keeps a key for the player (`saveDeviceHint` inserts
+     * nothing, in its own one statement), and the switch deleted every row the player had. Null: the keys
+     * are kept as the privacy page says. Only a session that is not by name sets or clears it.
+     */
+    hintsOff: timestamp("hints_off", { withTimezone: true }),
+    /**
      * Banter on the matches this player organises: one playful line about the crew's own facts (three
      * wins in a row, a third late pull-out) in the crew's chat and on the result card. On by default;
      * the organiser switches it off with one tap on their match page (`docs/DECIDING.md` rule 18).
@@ -210,6 +217,35 @@ export const passkeys = pgTable(
 );
 
 export type Passkey = typeof passkeys.$inferSelect;
+
+/**
+ * A device hint (design B, the owner's decision of 28 October 2026; src/lib/domain/deviceHints.ts): a
+ * key made on the server with a secret from what a browser on the player's phone tells every site, so
+ * another browser on the same phone can be asked "Welcome back, Tim?". A question, never a sign-in. Never
+ * the values themselves: the key (an HMAC under the purpose `device-hint:v1`), a label in words
+ * ("iPhone", "Android phone", "other") and two dates. At most three a player, the least recently seen
+ * goes; a year after the last use the hourly job deletes the row. The read-only role never sees `key`
+ * (src/lib/db/readonly.ts). A player's rows go with the player (cascade), move in a merge (duplicates
+ * dropped), go at an account deletion (`anonymizePlayer`) and keep no record alive (`disposable.ts`).
+ */
+export const deviceHints = pgTable(
+  "device_hints",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** HMAC-SHA256 of the canonical values, base64url (`hintKey` in src/lib/deviceHint.ts). */
+    key: text("key").notNull(),
+    /** iPhone | iPad | Android phone | other (`HINT_LABELS`). */
+    label: text("label").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("device_hints_player_key_idx").on(t.playerId, t.key), index("device_hints_key_idx").on(t.key), index("device_hints_player_idx").on(t.playerId)],
+);
+
+export type DeviceHint = typeof deviceHints.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Types

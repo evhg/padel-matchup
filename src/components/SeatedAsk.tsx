@@ -49,6 +49,41 @@ export function thatsMeTapOf(ask: NameAsk, typed: string, claimable: readonly st
 export const askStanding = (ask: NameAsk | null, typed: string): NameAsk | null => (ask && normalName(ask.name) === normalName(typed) ? ask : null);
 
 /**
+ * A record's own doors, the email code first (the owner's decision of 16 October 2026, D4): never the
+ * deployment's whole set. The email code where the record has an address and the deployment sends mail,
+ * Telegram where it has a linked Telegram and the deployment runs the sign-in, Face ID or a fingerprint
+ * where it has a passkey. "Sign in as Danny?" shows them for a seated record, and "Welcome back, Tim?"
+ * (the device hint, DECIDING rule 40) for the one record its key names (`testid` "hint").
+ */
+export function OwnDoorList({ own, doors, testid = "seated" }: { own: OwnDoors; doors: BackInDoors | null; testid?: "seated" | "hint" }) {
+  const t = useTranslations();
+  const email = Boolean(own.email && doors?.email);
+  const telegram = own.telegram && doors?.telegram ? doors.telegram : null;
+  const passkey = own.passkey;
+  return (
+    <div className="mt-2 flex flex-col gap-3" data-testid={`${testid}-doors`}>
+      {email && (
+        <div data-testid={`${testid}-door-email`}>
+          <p className="mb-2 text-sm text-muted">{t("identity.backInEmail")}</p>
+          <RestoreWithEmail compact />
+        </div>
+      )}
+      {telegram && (
+        <div data-testid={`${testid}-door-telegram`} className={email ? "border-t border-line pt-3" : ""}>
+          <p className="mb-2 text-sm text-muted">{t("identity.seatedTelegram")}</p>
+          <TelegramLogin bare botId={telegram.botId} linked={false} linkedUsername={null} lang={telegram.lang} authUrl={telegram.authUrl} />
+        </div>
+      )}
+      {passkey && (
+        <div data-testid={`${testid}-door-passkey`} className={email || telegram ? "border-t border-line pt-3" : ""}>
+          <PasskeySignIn className="btn-ghost btn-sm w-full whitespace-normal leading-snug" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * "Danny is in this match. Sign in as Danny?" The owner's decision of 15 October 2026 (D2, DECIDING
  * rule 34): a browser that knows nobody types a name a record holds a seat or a waiting place with, and
  * Join no longer makes a second Danny; the server answers `name_seated`, and every join form shows this
@@ -108,9 +143,6 @@ export function SeatedAsk({
   const name = ask.kind === "unreached" ? ask.first : seatedNameOf(typed, namesHere);
   const thatsMe = thatsMeTapOf(ask, typed, claimable);
   const own = ask.kind === "seated" ? ask.own : null;
-  const email = Boolean(own?.email && doors?.email);
-  const telegram = own?.telegram && doors?.telegram ? doors.telegram : null;
-  const passkey = Boolean(own?.passkey);
   return (
     <div ref={box} data-testid="seated-ask" data-ask={ask.kind} className="rounded-2xl border border-court/30 bg-card px-3 py-3 animate-pop">
       <p className="text-sm font-bold">{t(unreached ? "identity.unreachedAsk" : "identity.seatedAsk", { name })}</p>
@@ -119,26 +151,7 @@ export function SeatedAsk({
           <ThatsMeButton code={code} name={thatsMe.name} label={thatsMe.label} className="btn-primary btn-sm" armedClassName="btn-primary btn-sm whitespace-normal leading-tight ring-2 ring-ink" />
         </div>
       ) : own && anyDoor(own) ? (
-        // The record's own doors, the email code first (D4): never the deployment's whole set.
-        <div className="mt-2 flex flex-col gap-3" data-testid="seated-doors">
-          {email && (
-            <div data-testid="seated-door-email">
-              <p className="mb-2 text-sm text-muted">{t("identity.backInEmail")}</p>
-              <RestoreWithEmail compact />
-            </div>
-          )}
-          {telegram && (
-            <div data-testid="seated-door-telegram" className={email ? "border-t border-line pt-3" : ""}>
-              <p className="mb-2 text-sm text-muted">{t("identity.seatedTelegram")}</p>
-              <TelegramLogin bare botId={telegram.botId} linked={false} linkedUsername={null} lang={telegram.lang} authUrl={telegram.authUrl} />
-            </div>
-          )}
-          {passkey && (
-            <div data-testid="seated-door-passkey" className={email || telegram ? "border-t border-line pt-3" : ""}>
-              <PasskeySignIn className="btn-ghost btn-sm w-full whitespace-normal leading-snug" />
-            </div>
-          )}
-        </div>
+        <OwnDoorList own={own} doors={doors} />
       ) : null}
       <button type="button" className="link mt-3 block text-xs font-semibold" data-testid="seated-different" disabled={pending} onClick={onDifferent}>
         {t("identity.seatedDifferent", { name })}

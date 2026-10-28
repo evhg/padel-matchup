@@ -34,6 +34,7 @@ export const READER_ROLE = "kicksmash_reader";
 /**
  * Columns no reader may see, by exact name, in any table.
  *
+ * An entry is a column's name, hidden in every table, or `table.column`, hidden in that table only.
  * Exact names rather than a pattern, because the patterns are wrong in both directions here:
  * `events.code` is the public share code that lives in every URL, while `events.manage_code` is the
  * organiser's secret; `metrics_daily.key` is the name of a metric and `api_keys.key_hash` is a
@@ -65,6 +66,10 @@ export const HIDDEN_COLUMNS: readonly string[] = [
   // it is not a secret; it is hidden because no question of the operator needs it, and the owner's
   // decision keeps it out of every list and log.
   "public_key",
+  // A device hint's key (device_hints, the owner's decision of 28 October 2026): an HMAC of what a phone's
+  // browser tells every site. It signs nothing in, but it ties a phone to a player, and no question of the
+  // operator needs it. Named with its table, because `key` elsewhere is the name of a metric or a message.
+  "device_hints.key",
 ];
 
 /**
@@ -84,7 +89,11 @@ export const REVIEWED_SAFE: readonly string[] = [
 /** The shapes worth a second look. Used by the test, not by the grants. */
 export const SUSPICIOUS = /(token|secret|hash|key|code|password|endpoint|p256dh|auth|credential)/i;
 
-export const isHidden = (column: string): boolean => HIDDEN_COLUMNS.includes(column);
+/**
+ * Whether a reader may never see this column: by its name in any table, or, for an entry written
+ * `table.column`, in that one table only.
+ */
+export const isHidden = (column: string, table?: string): boolean => HIDDEN_COLUMNS.includes(column) || (table !== undefined && HIDDEN_COLUMNS.includes(`${table}.${column}`));
 
 /** Every table the schema declares, with its SQL column names, sorted so the output never churns. */
 export function schemaTables(): { table: string; columns: string[] }[] {
@@ -112,7 +121,7 @@ export function readerGrantsSql(): string {
     `grant usage on schema public to ${ident(READER_ROLE)};`,
   ];
   for (const { table, columns } of schemaTables()) {
-    const visible = columns.filter((c) => !isHidden(c));
+    const visible = columns.filter((c) => !isHidden(c, table));
     if (visible.length === 0) continue;
     lines.push(`grant select (${visible.map(ident).join(", ")}) on public.${ident(table)} to ${ident(READER_ROLE)};`);
   }

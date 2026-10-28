@@ -19,8 +19,8 @@ import { bumpMetric, dayKey } from "./metrics";
  *   2. No public profile: switching one on is a deliberate act of a real person.
  *   3. Nothing else in the database points at the row — read from the schema, the same list a merge
  *      moves (`playerReferences`), so a table added next month keeps a row without anybody
- *      remembering to — except what is theirs alone and goes with them: their saved clubs, their inbox, and a
- *      coach page on which no lesson was ever booked. Three references are not foreign keys and are
+ *      remembering to — except what is theirs alone and goes with them: their saved clubs, their inbox, their
+ *      device hints, and a coach page on which no lesson was ever booked. Three references are not foreign keys and are
  *      named here: a want (`demand_signals`), a level they confirmed, a tournament's standings or
  *      resting list. A note on the feedback desk keeps the row: it is a person's own words, and the
  *      thank-you (standing order 5) needs somebody to thank.
@@ -32,8 +32,12 @@ import { bumpMetric, dayKey } from "./metrics";
 export const DISPOSABLE_AFTER_DAYS = 14;
 const DAY = 24 * 3600 * 1000;
 
-/** What goes with the row rather than keeping it. */
-const BELONGINGS = new Set(["venues.creator_player_id", "coaches.player_id", "notices.player_id"]);
+/**
+ * What goes with the row rather than keeping it. A device hint is among them (the owner's decision of 28
+ * October 2026): a key from a browser is nothing a person would miss, so it never keeps a record alive,
+ * and the cascade takes it with the row.
+ */
+const BELONGINGS = new Set(["venues.creator_player_id", "coaches.player_id", "notices.player_id", "device_hints.player_id"]);
 
 const id = (s: string) => sql.identifier(s);
 

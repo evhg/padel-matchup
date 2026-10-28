@@ -10,6 +10,7 @@ import { EventFields, type EventFormValues, type TimePatternInput } from "./Even
 import type { PastNamesState } from "./PastNames";
 import { useOwnNameAutofill } from "./PasskeyAutofill";
 import type { VenueOption } from "./VenueCombobox";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /** Inputs that press themselves on Enter: a browser clicks them, and that is theirs to keep. */
 const PRESSED = new Set(["submit", "button", "image", "reset"]);
@@ -256,7 +257,7 @@ export function CreateEventForm({
         payNote: values.payNote || undefined,
         booked: booking ? bookedByMe : undefined,
         invite: invite?.url,
-      });
+      }, { hint: readDeviceSignals() });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
     });

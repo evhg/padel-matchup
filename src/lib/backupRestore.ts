@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { BACKUP_TABLES } from "@/lib/backup";
-import { HIDDEN_COLUMNS } from "@/lib/db/readonly";
+import { isHidden } from "@/lib/db/readonly";
 
 /**
  * A night's backup, loaded into a database on a laptop without the keys to anybody's account.
@@ -46,7 +46,7 @@ export function makeScrubber(o: { keepContacts?: boolean; salt?: string } = {}):
     const out: Record<string, unknown> = { ...row };
     for (const [k, v] of Object.entries(out)) {
       if (v === null || v === undefined) continue;
-      if (HIDDEN_COLUMNS.includes(k)) out[k] = replaceToken(String(v));
+      if (isHidden(k, table)) out[k] = replaceToken(String(v));
       else if (o.keepContacts) continue;
       else if (ADDRESS.has(k)) out[k] = `masked-${hash("address", v).slice(0, 12)}@example.invalid`;
       // +999 is a country code nobody has been given.

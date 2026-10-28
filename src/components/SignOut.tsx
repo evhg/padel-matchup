@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { signOutAction } from "@/actions/identity";
 import { browserPushSubscription, forgetBrowser } from "@/lib/browserKeys";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * "Not you? Sign out on this browser" (the owner, 28 October 2026), where a signed-in player sees their own
@@ -13,6 +14,11 @@ import { browserPushSubscription, forgetBrowser } from "@/lib/browserKeys";
  * then the subscription in the browser, and the page renders again signed out. A notification carries the
  * personal link, so a subscription left behind would sign the next person in as the player. Never on the
  * personal-link page, whose address is itself the sign-in (`MySettings`' `signOut`).
+ *
+ * The call carries this browser's device values, as every door's does (`readDeviceSignals`: nothing in a
+ * European zone), and the server forgets the key that these values make from the record that signs out
+ * (DECIDING, "A phone is never shared"). A key kept under other values stays (`signOutAction`). The values
+ * are read before the storage goes, in the same tap.
  */
 export function SignOut({ notYou, label, confirmText, testId, compact = false }: { notYou: string; label: string; confirmText: string; testId: string; compact?: boolean }) {
   const [pending, start] = useTransition();
@@ -26,10 +32,11 @@ export function SignOut({ notYou, label, confirmText, testId, compact = false }:
         disabled={pending}
         onClick={() => {
           if (!confirm(confirmText)) return;
+          const hint = readDeviceSignals();
           forgetBrowser();
           start(async () => {
             const sub = await browserPushSubscription();
-            await signOutAction(sub?.endpoint ?? null);
+            await signOutAction(sub?.endpoint ?? null, { hint });
             // After the server's delete. Should that delete have failed, the push service now answers "gone" and the next send removes the row.
             await sub?.unsubscribe().catch(() => undefined);
           });

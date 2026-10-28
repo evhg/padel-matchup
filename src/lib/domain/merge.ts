@@ -3,6 +3,7 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@/db";
 import * as schema from "@/db/schema";
 import { demandSignals, events, players, scores, slots, tournamentRounds } from "@/db/schema";
+import { capHintsSql } from "./deviceHints";
 import { DomainError } from "./errors";
 import { countMerge, type MergeCounter, type MergeDoor } from "./signins";
 
@@ -172,6 +173,11 @@ export async function mergePlayers(db: Db, into: string, from: string[], o: { pr
     if (withEmail?.emailVerifiedAt && !target.emailVerifiedAt) patch.emailVerifiedAt = withEmail.emailVerifiedAt;
     if (!target.recoveryEmail && first("recoveryEmail")) patch.recoveryEmail = first("recoveryEmail");
     if (!target.homescreenAt && first("homescreenAt")) patch.homescreenAt = first("homescreenAt");
+    // "Don't recognise my phones" (DECIDING rule 40) is the person's objection, whichever record set it: the
+    // survivor keeps it, with the earliest moment, and `capHintsSql` below then keeps no row at all.
+    const offs = [target.hintsOff, ...srcRows.map((s) => s.hintsOff)].filter((d): d is Date => d instanceof Date);
+    const earliest = offs.length ? new Date(Math.min(...offs.map((d) => d.getTime()))) : null;
+    if (earliest && earliest.getTime() !== target.hintsOff?.getTime()) patch.hintsOff = earliest;
     // A level travels whole, from one row: the number, where it came from, its log and who confirmed it.
     const leveled = target.level === null ? srcRows.find((s) => s.level !== null) : undefined;
     if (leveled) {
@@ -204,6 +210,10 @@ export async function mergePlayers(db: Db, into: string, from: string[], o: { pr
     if (!target.lineId && first("lineId")) patch.lineId = first("lineId");
     await tx.delete(players).where(inArray(players.id, sources));
     if (Object.keys(patch).length) await tx.update(players).set(patch).where(eq(players.id, into));
+    // Device hints moved with the schema read above, a key both held dropped by its unique key; the
+    // survivor may now hold six, and a player keeps three, the ones seen most recently (`deviceHints.ts`),
+    // or none once the survivor carries the mark of "Don't recognise my phones".
+    await tx.execute(capHintsSql(into));
   });
   await (o.counter ?? ((door, records) => countMerge(db, door, records)))(o.door, sources.length);
   return sources.length;

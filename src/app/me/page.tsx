@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
-import { DeleteAccount } from "@/components/DeleteAccount";
+import { DeleteAccount, type ProofDoors } from "@/components/DeleteAccount";
 import { SameNameCard } from "@/components/SameNameCard";
 import { MyMatches } from "@/components/MyMatches";
 import { NoticeInbox } from "@/components/NoticeInbox";
@@ -12,6 +12,9 @@ import { getDb } from "@/db";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { getSessionPlayer, passkeyHandle, signedInByName } from "@/lib/session";
 import { MyPhones } from "@/components/MyPhones";
+import { MyHints } from "@/components/MyHints";
+import { deviceHintsOf } from "@/lib/domain/deviceHints";
+import { deviceHintMode } from "@/lib/deviceHint";
 import { RememberPhone } from "@/components/RememberPhone";
 import { mayRegister, passkeysOf } from "@/lib/domain/passkeys";
 import { QUIET_FALLBACK_TZ } from "@/lib/domain/noticeKinds";
@@ -88,9 +91,15 @@ async function MePage({ searchParams }: Props) {
   const tz = me.quietTz ?? QUIET_FALLBACK_TZ;
   const phones = (await passkeysOf(db, me.id)).map((p) => ({ handle: passkeyHandle(me.id, p.id), label: p.label, saved: formatDayMonth(p.createdAt, tz, locale), used: p.lastUsedAt ? formatDayMonth(p.lastUsedAt, tz, locale) : null }));
   const canSavePasskey = mayRegister({ playerId: me.id, byName: await signedInByName(me.id) }, me);
-  // A session by name that proved nothing may not delete the account (the owner, 28 October 2026): the
-  // last line names the doors on this page that prove it. Two cookie reads, no database read.
-  const proofDoors = (await nameOnly(me)) ? (emailEnabled() && telegramBotId() ? "both" : emailEnabled() ? "email" : telegramBotId() ? "telegram" : "other") : null;
+  // "Phones we recognise" (device hints, the owner's decision of 28 October 2026): one read down
+  // `device_hints_player_idx`, three rows at most, then a label and two days each; never the key.
+  const hints = (await deviceHintsOf(db, me.id)).map((h) => ({ id: h.id, label: h.label, first: formatDayMonth(h.createdAt, tz, locale), last: formatDayMonth(h.lastSeenAt, tz, locale) }));
+  // A session by name that proved nothing (DECIDING rule 34): two cookie reads, no database read. It may not
+  // delete the account (the owner, 28 October 2026), and it sees "Don't recognise my phones" locked (rule 40);
+  // both lines name the doors on this page that prove it. The mark itself is on the row the page already
+  // holds, and while the deployment keeps keys the switch shows with no phone too, so the player can always object.
+  const byNameOnly = await nameOnly(me);
+  const proofDoors: ProofDoors = emailEnabled() && telegramBotId() ? "both" : emailEnabled() ? "email" : telegramBotId() ? "telegram" : "other";
   return (
     <>
       {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
@@ -106,6 +115,7 @@ async function MePage({ searchParams }: Props) {
             confirmation outlives the render that the action's cookie change brings. */}
         {canSavePasskey && <RememberPhone offer={phones.length === 0} where="me" />}
         <MyPhones rows={phones} canSave={canSavePasskey} />
+        <MyHints rows={hints} off={Boolean(me.hintsOff)} locked={byNameOnly} doors={proofDoors} enabled={deviceHintMode() !== "off"} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
         <MomentsStrip db={db} playerId={me.id} />
         <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
@@ -137,7 +147,7 @@ async function MePage({ searchParams }: Props) {
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} shipped={showsShipped(shipped) ? shipped : undefined} />
         <MySettings player={me} personalToken={token} hasMatches={hasMatches} signOut />
         {/* Last on the page, always: the one action that cannot be undone. */}
-        <DeleteAccount byName={proofDoors} />
+        <DeleteAccount byName={byNameOnly ? proofDoors : null} />
       </main>
       <Footer />
     </>

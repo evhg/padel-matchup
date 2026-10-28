@@ -8,6 +8,7 @@ import { setCreatorEmailAction, setCreatorEmailNotificationsAction } from "@/act
 import { EmailCodeStep } from "./EmailCodeStep";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { placeholderWidth } from "@/lib/fieldWidth";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * Decision 9: email is optional, never required, and always explained with the
@@ -118,7 +119,7 @@ export function EmailField({
         email={codeTo}
         verifyLabel={t("identity.confirmCode")}
         onVerify={async (c) => {
-          const r = await proveMyEmail(codeTo, c, code || undefined);
+          const r = await proveMyEmail(codeTo, c, code || undefined, { hint: readDeviceSignals() });
           if (r.ok) setInvited(r.data.welcome === "invite");
           return r;
         }}

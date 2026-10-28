@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useState, useTransition } from "react";
 import { passkeySignInAction, passkeySignInOptionsAction } from "@/actions/passkeys";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * "Sign in with Face ID or fingerprint" (DECIDING rule 39): the phone offers the passkeys it keeps for
@@ -47,7 +48,7 @@ export function PasskeySignIn({ className = "btn-ghost w-full whitespace-normal 
         // Cancelled, or no passkey of ours on this phone: the phone said so already, so the line stays plain.
         return startTransition(() => setError(t("identity.passkeyNo")));
       }
-      const r = await passkeySignInAction(answer);
+      const r = await passkeySignInAction(answer, { hint: readDeviceSignals() });
       startTransition(() => {
         if (!r.ok) return setError(r.error === "too_many" ? t("errors.too_many") : t("identity.passkeyNo"));
         setWelcome(r.data.name);

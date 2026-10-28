@@ -57,6 +57,10 @@ const RULES = [
   // The passkey above the keyboard (the owner, 28 October 2026): one request per page, and the token on
   // every own-name field: the match page, the create form, a crew's page and a competition's entry.
   [/^src\/components\/PasskeyAutofill\.tsx$/, ["passkeys", "core", "player-states", "groups", "tournament"], "the passkey in the player's own name field, on every page that has one"],
+  // The device hint's question, "Welcome back, Tim?" (DECIDING rule 40): its own suite, and every suite with a
+  // browser outside Europe, where the question can come up on a match page (Asia/Bangkok, or the host's own zone).
+  [/^e2e\/device-hints\.mjs$/, ["device-hints"], "the suite itself"],
+  [/^src\/(components\/WelcomeBack\.tsx|lib\/domain\/deviceHintAsk\.ts|actions\/deviceHints\.ts)$/, ["device-hints", "passkeys", "core", "pairs", "series", "tournament", "americano"], "the device hint's question and its actions, and the suites whose browsers are outside Europe"],
   [/^src\/components\/(MyMatches|MySettings|DeleteAccount|FeedbackInline|PersonalLinkCard|WhenIPlay)\.tsx$/, ["core", "player-states"], "what My matches is made of, in the order it is made of it"],
   [/^src\/actions\/coach\.ts$/, ["coach", "telegram"], "the coach's writes, which the bot shares"],
   [/^src\/lib\/domain\/(clubs|venueBoard)\.ts$/, ["clubs", "venues"], "clubs and their boards"],

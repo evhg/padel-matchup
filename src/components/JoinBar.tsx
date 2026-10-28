@@ -12,6 +12,7 @@ import { LevelSelect } from "./LevelSelect";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import type { BackInDoors } from "./BackInHelp";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past" | "requested" | "request_declined";
 /** Someone who can confirm the viewer's level for this event: a coach at the club, or the club. */
@@ -126,7 +127,7 @@ export function JoinBar({
   const join = (withName?: string, withLevel?: number | null, withPartner?: string, different = false) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined, different ? { differentPerson: true } : undefined);
+      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined, { differentPerson: different || undefined, hint: readDeviceSignals() });
       startTransition(() => {
         const asked = askOf(r, withName);
         setNameAsk(asked);
