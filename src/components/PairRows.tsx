@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { startTransition, useState, useTransition } from "react";
 import { bePartnerAction, pairSinglesAction, removeAction, splitPairAction } from "@/actions/slots";
 import { ShareButtons } from "./ShareSheet";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 import { useOwnNameAutofill } from "./PasskeyAutofill";
 
 /**
@@ -36,7 +37,7 @@ export function BePartnerButton({ code, slotId, hasIdentity }: { code: string; s
   const go = (withName?: string) =>
     start(async () => {
       setError(null);
-      const r = await bePartnerAction(code, slotId, withName);
+      const r = await bePartnerAction(code, slotId, withName, readDeviceSignals());
       startTransition(() => {
         if (!r.ok) setError(errorText(r));
       });

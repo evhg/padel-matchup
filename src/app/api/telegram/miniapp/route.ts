@@ -7,6 +7,7 @@ import { initDataUser, telegramEnabled, verifyInitData } from "@/lib/telegram/ap
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/bot";
 import { miniAppNext } from "@/lib/telegram/login";
 import { mergesLater } from "@/lib/mergeCount";
+import { saveHintLater } from "@/lib/deviceHint";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request) {
   if (!telegramEnabled()) return NextResponse.json({ ok: false, error: "telegram_disabled" }, { status: 503 });
-  const body = (await req.json().catch(() => null)) as { initData?: string; startParam?: string } | null;
+  const body = (await req.json().catch(() => null)) as { initData?: string; startParam?: string; hint?: unknown } | null;
   const fields = body?.initData ? verifyInitData(body.initData) : null;
   const user = fields ? initDataUser(fields) : null;
   if (!fields || !user) return NextResponse.json({ ok: false, error: "invalid" }, { status: 401 });
@@ -28,5 +29,7 @@ export async function POST(req: Request) {
   await setSessionPlayer(player.id);
   const ua = req.headers.get("user-agent");
   if (!me) await later(() => countSignIn(db, "telegram_miniapp", ua));
+  // The device hint's values came in the same body (`MiniAppGate`): kept for the record this browser signed in as.
+  if (!me) await saveHintLater(db, player.id, body?.hint);
   return NextResponse.json({ ok: true, next: miniAppNext(body?.startParam ?? fields.start_param) });
 }

@@ -3,6 +3,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { notices, passkeys, players, type Player } from "@/db/schema";
 import { clubStatus, listClubsClaimedBy } from "./clubs";
+import { deviceHintsOf } from "./deviceHints";
 import { placesOf } from "./fixedPairs";
 import { getPlayerGroups } from "./groups";
 import { bandOf, isLevelVerified } from "./levels";
@@ -124,6 +125,9 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
   // The phones that remember them (DECIDING rule 39): the words, the day saved and the day last used, as My
   // matches lists them. Never the credential id or the public key: the select names neither column.
   const phones = await db.select({ label: passkeys.label, savedAt: passkeys.createdAt, lastUsedAt: passkeys.lastUsedAt }).from(passkeys).where(eq(passkeys.playerId, player.id)).orderBy(asc(passkeys.createdAt));
+  // The phones we recognise (device hints, the owner's decision of 28 October 2026): the words and the two
+  // days, as My matches lists them. Never the key: the read names no such column.
+  const deviceHints = (await deviceHintsOf(db, player.id)).map((h) => ({ label: h.label, savedAt: h.createdAt, lastSeenAt: h.lastSeenAt }));
   return {
     exportedAt: now.toISOString(),
     format: "kicksmash-export/1",
@@ -138,6 +142,8 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
       levelVerifiedAt: player.levelVerifiedAt,
       levelLog: player.levelLog ?? [],
       rankingOptIn: player.rankingOptIn,
+      // "Don't recognise my phones" (DECIDING rule 40): the moment the player switched it on, or null.
+      hintsOff: player.hintsOff,
       publicProfile: player.publicProfile,
       publicUrl: player.publicProfile && player.publicSlug ? `${base}/u/${player.publicSlug}` : null,
       telegram: player.telegramUsername,
@@ -150,6 +156,7 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
     clubs: clubs.map((c) => ({ slug: c.slug, name: c.name, status: clubStatus(c), url: `${base}/v/${c.slug}` })),
     notices: { kinds: player.noticeKinds ?? {}, quietFrom: player.quietFrom, quietTo: player.quietTo, quietTz: player.quietTz, inbox },
     phones,
+    deviceHints,
     passport: await issuePassport(player, stats, base, now),
   };
 }

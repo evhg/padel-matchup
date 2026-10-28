@@ -7,6 +7,7 @@ import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/brow
 import { passkeySignInAction, passkeySignInOptionsAction } from "@/actions/passkeys";
 import { createAutofillPage, OPTIONS_TTL_MS, type HeldOptions, type Phase } from "@/lib/passkeys/autofill";
 import { canAutofillPasskey, type PageSignInOptions } from "@/lib/passkeys/caps";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * The passkey above the keyboard in the player's own name field (the owner, 28 October 2026: "May the
@@ -44,7 +45,8 @@ const page = createAutofillPage<Options>({
     // The cookie's five minutes, counted from the answer on the phone's own clock.
     return r.ok ? { optionsJSON: r.data, expiresAt: Date.now() + OPTIONS_TTL_MS } : null;
   },
-  signIn: (answer) => passkeySignInAction(answer, { via: "autofill" }),
+  // `via` names the counter; `hint`, the device values, keeps this phone as the record's device hint, as the button does.
+  signIn: (answer) => passkeySignInAction(answer, { via: "autofill", hint: readDeviceSignals() }),
 });
 
 /** The page's challenge as the machine holds it: the options for the phone, and their end, which stays in the browser. */

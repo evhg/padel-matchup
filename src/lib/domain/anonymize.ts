@@ -9,6 +9,7 @@ import { withdrawEntriesOf } from "./competitions";
 import { dropGroupRequestsFor } from "./groups";
 import { dropNoticesFor } from "./notices";
 import { dropPasskeysFor } from "./passkeys";
+import { forgetDeviceHints } from "./deviceHints";
 import { getPlayer } from "./players";
 import { cancelEvent } from "./events";
 import { leaveEvent, type Promotion } from "./slots";
@@ -82,6 +83,9 @@ export async function anonymizePlayer(
   // A passkey is a way in (DECIDING rule 39). The row stays as "Deleted player", so the cascade never
   // fires: left here, a phone's Face ID would still sign in to the emptied record.
   await dropPasskeysFor(db, playerId);
+  // A device hint ties a phone to the person (the owner's decision of 28 October 2026), and the row stays,
+  // so the cascade never fires: the hints go here, every one of them.
+  await forgetDeviceHints(db, playerId);
   // What they said they wanted goes with them. It is a standing instruction to contact them, and the
   // one thing an account deletion must not leave behind is a reason to send somebody a message.
   await dropWantsFor(db, playerId);
@@ -106,6 +110,9 @@ export async function anonymizePlayer(
       emailVerifiedAt: null,
       emailNotifications: false,
       homescreenAt: null,
+      // The objection to the device key goes with the rest: the rows are gone, and no door keeps a key for
+      // "Deleted player", who signs in nowhere.
+      hintsOff: null,
       telegramId: null,
       telegramUsername: null,
       discordId: null,

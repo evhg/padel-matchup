@@ -47,6 +47,7 @@ import { getSessionPlayer, markSignedInByName, setSessionPlayer } from "@/lib/se
 import { attachHeldRecord, decideHeldLink, heldRecordsFor, pastPlayerRows, recordForAnswer, takeHeldLink } from "@/lib/domain/heldRecord";
 import { answerOfPick, cleanPicks } from "@/lib/domain/pastAsk";
 import { countSignIn } from "@/lib/domain/signins";
+import { saveHintLater } from "@/lib/deviceHint";
 import { getPlayer } from "@/lib/domain/players";
 import { DomainError } from "@/lib/domain/errors";
 import { ActionFailure, assertRate, clientKey, loadEvent, nameOnly, requireCreator, requirePlayer, runA, userAgent, type ActionResult } from "./shared";
@@ -61,9 +62,10 @@ import { stayChannels } from "@/lib/calendarFeed";
 /**
  * The plain join on the web. `o.differentPerson`: the person tapped "I'm a different Danny" under "Danny
  * is in this match. Sign in as Danny?" (the owner's decision of 15 October 2026), so a typed name that a
- * seated record carries joins as typed; nothing else sets it.
+ * seated record carries joins as typed; nothing else sets it. `o.hint`: what this browser tells every
+ * site (`readDeviceSignals`), kept as a device hint for the record that joined (`saveHintLater`).
  */
-export async function joinAction(code: string, name?: string, level?: number | null, partnerName?: string | null, o: { differentPerson?: boolean } = {}): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested"; partner?: { name: string; inviteUrl: string } }>> {
+export async function joinAction(code: string, name?: string, level?: number | null, partnerName?: string | null, o: { differentPerson?: boolean; hint?: unknown } = {}): Promise<ActionResult<{ outcome: JoinOutcome["outcome"] | "requested"; partner?: { name: string; inviteUrl: string } }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
@@ -122,6 +124,8 @@ export async function joinAction(code: string, name?: string, level?: number | n
     // `whoJoins` asked this before any record was made; the shared rule asks again for every door.
     if (decision.kind === "name_held") throw new ActionFailure("name_held");
     if (decision.kind === "level_required") throw new ActionFailure("level_required");
+    // The player's own record joined, or asked to: this browser's device hint is kept for it, after the answer.
+    if (decision.kind === "requested" || decision.result.outcome === "joined" || decision.result.outcome === "waitlisted") await saveHintLater(db, me.id, o.hint, { eventId: ev.id }, now);
     if (decision.kind === "requested") {
       after(async () => {
         // The page now shows "Stay updated" to the player who asked too (the owner's decision of 16 October 2026, D5): counted as an ask, as after a join.
@@ -157,7 +161,7 @@ export async function joinAction(code: string, name?: string, level?: number | n
  * Somebody new is joined as any join is, with its notices (`afterJoin`); a ranged night holds them to
  * the range the way the Join button does, and an ask to join goes through that button.
  */
-export async function bePartnerAction(code: string, slotId: string, name?: string): Promise<ActionResult<{ outcome: "paired" }>> {
+export async function bePartnerAction(code: string, slotId: string, name?: string, hint?: unknown): Promise<ActionResult<{ outcome: "paired" }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
@@ -170,6 +174,7 @@ export async function bePartnerAction(code: string, slotId: string, name?: strin
     if (gate !== "ok") throw new ActionFailure(gate);
     const res = await bePartner(db, { eventId: ev.id, playerId: me.id, slotId });
     if (res.joined && ev.groupId) await joinGroup(db, ev.groupId, me.id, "match").catch(() => undefined);
+    await saveHintLater(db, me.id, hint, { eventId: ev.id });
     after(async () => {
       if (res.joined) await afterJoin(db, { outcome: "joined", slot: res.slot, event: res.event }, me, { wasComplete: before, code, level: me.level });
       else await notifyLineupChange(db, res.event, before);
@@ -359,7 +364,7 @@ export async function attachHeldRecordAction(code: string, slotId: string): Prom
 export async function confirmInviteAction(
   code: string,
   inviteCode: string,
-  input: { name?: string; email?: string },
+  input: { name?: string; email?: string; hint?: unknown },
 ): Promise<ActionResult<{ outcome: ConfirmOutcome["outcome"] }>> {
   return runA(async () => {
     const db = await getDb();
@@ -381,6 +386,8 @@ export async function confirmInviteAction(
           await markSignedInByName(d.playerId);
           const ua = await userAgent();
           await later(() => countSignIn(db, "held_link", ua));
+          // A sign-in by a held place's link keeps this browser's device hint, as every sign-in does.
+          await saveHintLater(db, d.playerId, input.hint, { eventId: res.event.id });
           if (res.event.groupId) await joinGroup(db, res.event.groupId, d.playerId, "match").catch(() => undefined);
           const record = await getPlayer(db, d.playerId);
           if (record) after(async () => void (await afterConfirm(db, res, record, { wasComplete: before })));
@@ -397,6 +404,8 @@ export async function confirmInviteAction(
     const res = await confirmInvite(db, { inviteCode, playerId: me.id, email, counter: mergesLater(db) });
     // An organiser's invitation is to the match, not the crew: the same match door as any other seat.
     if (res.outcome === "confirmed" && res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
+    // "I'm in" is the player's own record taking its place: this browser's device hint is kept for it.
+    if (res.outcome === "confirmed") await saveHintLater(db, me.id, input.hint, { eventId: res.event.id });
     // A fixed-pairs night's partner can claim a spot that waits with their pair: no "you're in" and no
     // invitation yet. The organiser hears that they wait, and the promotion sends the invitation.
     if (res.outcome === "confirmed") after(async () => void (await afterConfirm(db, res, me, { wasComplete: before })));
@@ -418,7 +427,7 @@ export async function confirmInviteAction(
  * once more (`takeHeldByName`). The organiser hears "Danny confirmed", as from the personal link.
  * The session is not marked as signed in by name: a record made here has no history to hold back.
  */
-export async function takeHeldPlaceAction(code: string, name: string): Promise<ActionResult<{ outcome: "confirmed" }>> {
+export async function takeHeldPlaceAction(code: string, name: string, hint?: unknown): Promise<ActionResult<{ outcome: "confirmed" }>> {
   return runA(async () => {
     if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
     const db = await getDb();
@@ -430,6 +439,7 @@ export async function takeHeldPlaceAction(code: string, name: string): Promise<A
     if (!res.ok) throw new ActionFailure("invalid");
     if (res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
     await later(() => bumpMetric(db, "held_by_name"));
+    await saveHintLater(db, me.id, hint, { eventId: res.event.id });
     after(async () => void (await afterConfirm(db, res, me, { wasComplete: res.wasComplete })));
     revalidatePath(`/${code}`);
     return { outcome: "confirmed" as const };

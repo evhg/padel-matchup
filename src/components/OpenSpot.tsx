@@ -13,6 +13,7 @@ import { PastAsk } from "./PastAsk";
 import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import { normalName } from "@/lib/domain/dupes";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 export type RolodexItem = { name: string; email: string | null; phone: string | null };
 type Mode = "reserve" | "join" | "none";
@@ -141,7 +142,7 @@ export function OpenSpot({
   const join = (withName?: string, different = false) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName, level ?? undefined, undefined, different ? { differentPerson: true } : undefined);
+      const r = await joinAction(code, withName, level ?? undefined, undefined, { differentPerson: different || undefined, hint: readDeviceSignals() });
       startTransition(() => {
         const asked = askOf(r, withName);
         setNameAsk(asked);

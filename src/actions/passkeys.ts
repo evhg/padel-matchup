@@ -10,6 +10,7 @@ import { bumpMetric, bumpMetrics } from "@/lib/domain/metrics";
 import { completePasskeySignIn, mayRegister, passkeyById, passkeyLabel, passkeysOf, removePasskey, savePasskey } from "@/lib/domain/passkeys";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { countSignIn, type SignInWay } from "@/lib/domain/signins";
+import { saveHintLater } from "@/lib/deviceHint";
 import { mergesLater } from "@/lib/mergeCount";
 import { promotedOf } from "@/lib/domain/slots";
 import { notifyLineupChange, notifyPasskeySaved, notifyPromotion, notifyRefill } from "@/lib/notify";
@@ -93,8 +94,15 @@ async function signInChallenge(db: Db, answer: unknown, now: Date): Promise<{ ex
   return { expected: pageChallengeCheck(page.challenge, now) };
 }
 
-/** The sign-in's hint from the name field's autofill: it names the counter, and grants nothing. */
-const fromAutofill = (hint: unknown): boolean => typeof hint === "object" && hint !== null && (hint as { via?: unknown }).via === "autofill";
+/** The sign-in's door, `o.via`, from the name field's autofill: it names the counter, and grants nothing. */
+const fromAutofill = (o: unknown): boolean => typeof o === "object" && o !== null && (o as { via?: unknown }).via === "autofill";
+
+/**
+ * The second argument of `passkeySignInAction`, one object for two things that two changes of 28 October
+ * 2026 added. `via`: the door, `"autofill"` from the passkey above the keyboard, absent from the button.
+ * `hint`: the device values (`readDeviceSignals`), as every other door sends them in its `o.hint`.
+ */
+export type PasskeySignInOptions = { via?: "autofill"; hint?: unknown };
 
 /** "Remember me on this phone", first half: the options for `navigator.credentials.create`, for a session that may save one (`mayRegister`). */
 export async function passkeySaveOptionsAction(): Promise<ActionResult<PublicKeyCredentialCreationOptionsJSON>> {
@@ -149,10 +157,11 @@ export async function passkeySignInOptionsAction(): Promise<ActionResult<PublicK
  * browser held before folds into it only when the rule says so (`passkeyFold`); otherwise the session
  * only switches. Never "Are these yours?": a passkey folds nothing else (the owner: "Nothing more").
  * The same for the autofill on the player's own name field, over the page's own challenge
- * (`signInChallenge`). Its hint, `{ via: "autofill" }`, only counts the sign-in as
- * `signin_passkey_autofill` beside `signin_passkey`: every check is the button's.
+ * (`signInChallenge`). Its `o.via`, `"autofill"`, only counts the sign-in as
+ * `signin_passkey_autofill` beside `signin_passkey`: every check is the button's. Both doors send
+ * `o.hint`, the device values, kept as the record's device hint (the owner's decision of 28 October 2026).
  */
-export async function passkeySignInAction(answer: unknown, hint?: { via?: "autofill" }): Promise<ActionResult<{ name: string; folded: boolean }>> {
+export async function passkeySignInAction(answer: unknown, o: PasskeySignInOptions = {}): Promise<ActionResult<{ name: string; folded: boolean }>> {
   return runP(async () => {
     const db = await getDb();
     await assertRate(db, "passkey_check", await clientKey(), LIMITS.passkeyChecksPerIpPerDay);
@@ -179,9 +188,11 @@ export async function passkeySignInAction(answer: unknown, hint?: { via?: "autof
     if (res.player.id !== currentId || session.byName) await setSessionPlayer(res.player.id);
     // Counted when the cookie changes to another record, as every way in is (`countSignIn`).
     const moved = res.player.id !== currentId;
-    const ways: SignInWay[] = [...(moved ? (["passkey"] as const) : []), ...(moved && fromAutofill(hint) ? (["passkey_autofill"] as const) : []), ...(res.folded ? (["passkey_fold"] as const) : [])];
+    const ways: SignInWay[] = [...(moved ? (["passkey"] as const) : []), ...(moved && fromAutofill(o) ? (["passkey_autofill"] as const) : []), ...(res.folded ? (["passkey_fold"] as const) : [])];
     const ua = (await headers()).get("user-agent");
     await later(() => countSignIn(db, ways, ua));
+    // `o.hint`: what this browser tells every site, kept as the record's device hint (the owner's decision of 28 October 2026).
+    await saveHintLater(db, res.player.id, o?.hint);
     // A fold that gave up a place in a match: the line-up changed, and whoever moved up hears it, as after a leave.
     for (const seats of res.seats) {
       after(async () => {

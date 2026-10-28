@@ -715,6 +715,20 @@
       "when": 1792039964678,
       "tag": "0101_cron_log_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1793171901877,
+      "tag": "0102_device_hints",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1793171915566,
+      "tag": "0103_reader_grants",
+      "breakpoints": true
     }
   ]
 }

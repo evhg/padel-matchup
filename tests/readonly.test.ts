@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { bare, checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
 import { HIDDEN_COLUMNS, isHidden, readAsReader, readerGrantsSql, refusalOf, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
+import { deviceHints } from "@/db/schema";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 /**
@@ -26,9 +27,24 @@ const MIGRATION = `drizzle/${readdirSync("drizzle")
 describe("the reader role sees no credential", () => {
   it("grants nothing that is hidden", () => {
     const sql = readFileSync(MIGRATION, "utf8");
-    for (const column of HIDDEN_COLUMNS) {
-      expect(sql.includes(`"${column}"`), `${column} is granted in ${MIGRATION}`).toBe(false);
+    for (const entry of HIDDEN_COLUMNS) {
+      // `table.column` is hidden in that table alone: its own grant line must not name it.
+      const [table, column] = entry.includes(".") ? entry.split(".") : [null, entry];
+      const lines = table ? sql.split("\n").filter((l) => l.includes(`on public."${table}" to`)) : [sql];
+      if (table) expect(lines.length, `${table} has a grant in ${MIGRATION}`).toBe(1);
+      for (const line of lines) expect(line.includes(`"${column}"`), `${entry} is granted in ${MIGRATION}`).toBe(false);
     }
+  });
+
+  it("hides a column named with its table in that table only", () => {
+    // The device hint's key ties a phone to a player (the owner's decision of 28 October 2026); a metric's `key` is its name.
+    expect(isHidden("key", "device_hints")).toBe(true);
+    expect(isHidden("key", "metrics_daily")).toBe(false);
+    expect(isHidden("key")).toBe(false);
+    expect(isHidden("personal_token", "players")).toBe(true);
+    const grants = readerGrantsSql().split("\n");
+    expect(grants.find((l) => l.includes(`on public."device_hints" to`))).toBe(`grant select ("created_at", "id", "label", "last_seen_at", "player_id") on public."device_hints" to "kicksmash_reader";`);
+    expect(grants.find((l) => l.includes(`on public."metrics_daily" to`))).toContain(`"key"`);
   });
 
   it("the migration on disk is what the live schema generates", () => {
@@ -42,7 +58,7 @@ describe("the reader role sees no credential", () => {
     for (const { table, columns } of schemaTables()) {
       for (const column of columns) {
         if (!SUSPICIOUS.test(column)) continue;
-        if (isHidden(column) || REVIEWED_SAFE.includes(column)) continue;
+        if (isHidden(column, table) || REVIEWED_SAFE.includes(column)) continue;
         undecided.push(`${table}.${column}`);
       }
     }
@@ -95,6 +111,19 @@ describe("the reader sees the rows, and still not the tokens", () => {
     expect(await refusal(db, "select personal_token from players")).toMatch(/permission denied/);
     expect(await refusal(db, "select to_jsonb(p) from players p")).toMatch(/permission denied/);
     expect(await refusal(db, "select * from players")).toMatch(/permission denied/);
+  });
+
+  it("counts device hints and reads their labels and days, and is refused their key", async () => {
+    // The owner's decision of 28 October 2026: the key ties a phone to a player; the operator's questions
+    // (how many, how old, which kind of phone) need none of it.
+    const { db } = await createTestDb();
+    const ana = await makePlayer(db, "Ana");
+    await db.insert(deviceHints).values({ playerId: ana.id, key: "a-key-nobody-reads", label: "iPhone" });
+    const [row] = (await readAsReader(db, "select count(*)::int as n, min(label) as label from device_hints")) as { n: number; label: string }[];
+    expect(row).toEqual({ n: 1, label: "iPhone" });
+    expect(await refusal(db, "select key from device_hints")).toMatch(/permission denied/);
+    expect(await refusal(db, "select to_jsonb(h) from device_hints h")).toMatch(/permission denied/);
+    expect(await refusal(db, "select * from device_hints")).toMatch(/permission denied/);
   });
 
   it("cannot write, even past the query rule", async () => {

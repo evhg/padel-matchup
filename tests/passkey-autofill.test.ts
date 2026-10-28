@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { metricsDaily, notices, passkeys, players, type Player } from "@/db/schema";
+import { deviceHints, metricsDaily, notices, passkeys, players, type Player } from "@/db/schema";
+import type { SignalsWire } from "@/lib/domain/hintSignals";
 import { createTranslator } from "next-intl";
 import { notifyPasskeySaved } from "@/lib/notify";
 import { noticeVars } from "@/lib/noticeText";
@@ -163,6 +164,27 @@ describe("the sign-in from the name field, with real signatures", () => {
     expect(await count("passkey_refused")).toBe(refused);
     // The page's challenge never needed a cookie, and the answer leaves none behind.
     expect(done.cookies[CHALLENGE_COOKIE]).toBeUndefined();
+  });
+
+  it("takes the device values in the same options object: both doors keep this phone's key, and only `via` counts the autofill", async () => {
+    // Two changes of 28 October 2026 each gave the action a second argument: the autofill's `via` and
+    // design B's device values. One options object holds both, so neither can pass for the other.
+    const PHONE: SignalsWire = { w: 390, h: 844, dpr: 3, langs: ["en-US"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false };
+    const { player, key } = await withPasskey("Vic");
+    const hintsOf = async () => (await db.select({ label: deviceHints.label }).from(deviceHints).where(eq(deviceHints.playerId, player.id))).map((h) => h.label);
+    const [passkey, autofilled] = [await count("signin_passkey"), await count("signin_passkey_autofill")];
+    const field = await asAction({}, () => passkeySignInAction(assertion(key, pageSignInOptions()!.challenge, 1), { via: "autofill", hint: PHONE }));
+    expect(field.result).toEqual({ ok: true, data: { name: "Vic", folded: false } });
+    expect(await hintsOf()).toEqual(["iPhone"]);
+    expect([await count("signin_passkey"), await count("signin_passkey_autofill")]).toEqual([passkey + 1, autofilled + 1]);
+    // The button sends the values with no `via`: the same key is seen again, and no autofill is counted.
+    await db.delete(deviceHints).where(eq(deviceHints.playerId, player.id));
+    const opts = await asAction({}, () => passkeySignInOptionsAction());
+    if (!opts.result.ok) throw new Error("no sign-in options");
+    const button = await asAction({ [CHALLENGE_COOKIE]: opts.cookies[CHALLENGE_COOKIE] }, () => passkeySignInAction(assertion(key, opts.result.ok ? opts.result.data.challenge : "", 2), { hint: PHONE }));
+    expect(button.result).toEqual({ ok: true, data: { name: "Vic", folded: false } });
+    expect(await hintsOf()).toEqual(["iPhone"]);
+    expect([await count("signin_passkey"), await count("signin_passkey_autofill")]).toEqual([passkey + 2, autofilled + 1]);
   });
 
   it("signs in once for the same answer sent twice, and once for a new signature over the same page", async () => {

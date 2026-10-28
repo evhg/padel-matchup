@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { thatsMeAction } from "@/actions/identity";
 import { requestBackIn } from "./backInBus";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * Two taps, the owner's pattern for a tap that acts as somebody (10 October 2026): the first arms the
@@ -66,7 +67,7 @@ export function ThatsMeButton({
     }
     setArmed(false);
     start(async () => {
-      const r = await thatsMeAction(code, name);
+      const r = await thatsMeAction(code, name, readDeviceSignals());
       startTransition(() => {
         if (r.ok) return;
         setError(r.error === "too_many" ? t("errors.too_many") : t("identity.thatsMeNo"));

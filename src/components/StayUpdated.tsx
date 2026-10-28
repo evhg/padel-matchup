@@ -9,6 +9,7 @@ import { mailLine, type StayChannel, type StayState, type WelcomeKind } from "@/
 import { CalendarSubscribe } from "./CalendarSubscribe";
 import { EmailCodeStep } from "./EmailCodeStep";
 import { placeholderWidth } from "@/lib/fieldWidth";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 type Props = {
   code: string;
@@ -175,7 +176,7 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
             email={codeTo}
             verifyLabel={t("identity.confirmCode")}
             onVerify={async (c) => {
-              const r = await proveMyEmail(codeTo, c, code, { from: "stay" });
+              const r = await proveMyEmail(codeTo, c, code, { from: "stay", hint: readDeviceSignals() });
               if (r.ok) {
                 setTyped(r.data.email ?? codeTo);
                 setWelcome(r.data.welcome);

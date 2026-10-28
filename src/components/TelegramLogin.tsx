@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { readAuthResult, returnToFor, telegramAuthUrl } from "@/lib/telegram/login";
+import { writeSignalsCookie } from "@/lib/deviceSignals";
 
 /**
  * Sign in with Telegram, in this tab: one button that sends the tab to
@@ -31,6 +32,8 @@ export function useTelegramReturn(authUrl: string, onBack?: () => void): void {
       // Two pages keep My matches: the landing page, where "the way back to your own matches" is the
       // reason to sign in, and a personal link, whose token must never travel in another URL.
       const keep = window.location.pathname !== "/" && !/^\/p(\/|$)/i.test(window.location.pathname);
+      // The device hint's values ride to the login route in a one-minute cookie of its own: a plain navigation carries no argument.
+      writeSignalsCookie();
       window.location.replace(`${authUrl}?${new URLSearchParams(keep ? { ...fields, next: here } : fields)}`);
     };
     back();

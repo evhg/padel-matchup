@@ -8,6 +8,7 @@ import { proveMyEmail, updateMyEmail } from "@/actions/identity";
 import { mailLine, type WelcomeKind } from "@/lib/domain/stayUpdated";
 import { placeholderWidth } from "@/lib/fieldWidth";
 import { EmailCodeStep } from "./EmailCodeStep";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * "Add to your calendar" = give us an email. The invite we send is a real
@@ -107,7 +108,7 @@ export function CalendarEmail({
           email={codeTo}
           verifyLabel={t("identity.confirmCode")}
           onVerify={async (c) => {
-            const r = await proveMyEmail(codeTo, c, code);
+            const r = await proveMyEmail(codeTo, c, code, { hint: readDeviceSignals() });
             if (r.ok) {
               setSentTo(r.data.email ?? codeTo);
               setWelcome(r.data.welcome);

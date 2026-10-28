@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { miniAppStart } from "@/lib/telegram/login";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 type WebApp = { initData: string; initDataUnsafe?: { start_param?: string }; ready?: () => void; expand?: () => void };
 
@@ -17,7 +18,7 @@ export function MiniAppGate({ signingIn, notInside, failed }: { signingIn: strin
     }
     wa.ready?.();
     wa.expand?.();
-    fetch("/api/telegram/miniapp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: wa.initData, startParam: miniAppStart(wa.initDataUnsafe?.start_param, window.location.search) }) })
+    fetch("/api/telegram/miniapp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ initData: wa.initData, startParam: miniAppStart(wa.initDataUnsafe?.start_param, window.location.search), hint: readDeviceSignals() }) })
       .then(async (r) => {
         const j = (await r.json().catch(() => null)) as { ok?: boolean; next?: string } | null;
         if (j?.ok && j.next) window.location.replace(j.next);

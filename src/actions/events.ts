@@ -32,6 +32,7 @@ import { cleanPicks, type PastView } from "@/lib/domain/pastAsk";
 import { ActionFailure, assertRate, getViewer, loadEvent, nameOnly, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
 import { askForProof } from "./emailProof";
 import { LIMITS } from "@/lib/domain/ratelimit";
+import { saveHintLater } from "@/lib/deviceHint";
 
 const createSchema = z.object({
   name: z.string().optional(),
@@ -87,7 +88,8 @@ const createSchema = z.object({
 });
 export type CreateEventInput = z.infer<typeof createSchema>;
 
-export async function createEventAction(raw: CreateEventInput): Promise<ActionResult<{ code: string }>> {
+/** `o.hint`: what this browser tells every site, kept as the organiser's device hint when the form seats them (`saveHintLater`). */
+export async function createEventAction(raw: CreateEventInput, o: { hint?: unknown } = {}): Promise<ActionResult<{ code: string }>> {
   let code: string | null = null;
   const res = await runA(async () => {
     const input = createSchema.parse(raw);
@@ -142,6 +144,8 @@ export async function createEventAction(raw: CreateEventInput): Promise<ActionRe
     const picks = cleanPicks(input.picks);
     const records = input.names?.length && picks.length ? heldRecordsFor(await pastPlayerRows(db, me.id, new Date()), input.names, picks) : undefined;
     const settled = await settleNewMatch(db, { event: ev, organiser: me, joinSelf: input.joinSelf, names: input.names, records, booked: input.booked });
+    // The organiser's own seat is a join of their own record: this browser's device hint is kept for it. A new match holds nobody else, so it has no scope.
+    if (settled.joined) await saveHintLater(db, me.id, o.hint);
     // One event for the new match, and the court booked rides on it: the cards are first drawn after
     // the mark, so they already say "Court booked ✓", and the hooks get `courtBooked` as "I booked it"
     // sends it. A second event for the same moment would sync every card twice (rule 12).

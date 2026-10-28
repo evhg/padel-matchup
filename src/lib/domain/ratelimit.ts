@@ -64,6 +64,14 @@ export const LIMITS = {
   thatsMePerIpPerDay: 20,
   /** Sign-ins by name into one record in a day, from anywhere: a record is not taken over and over. */
   thatsMePerRecordPerDay: 3,
+  /**
+   * "Welcome back, Tim?" (the device hint's question, DECIDING rule 40): questions one address may ask in
+   * a day, as many as "That's me" taps; "Not me" counts here too. A browser asks once a match in a tab, so
+   * a person never meets the limit; a script that tries values one after another does.
+   */
+  hintAsksPerIpPerDay: 20,
+  /** Questions about one match in a day, from everybody together: a link opened by a whole club fits, and a script still meets a bound on one line-up. */
+  hintAsksPerMatchPerDay: 100,
   clientErrorReportsPerIpPerDay: 60,
   /**
    * Pasted bookings read from one address in a day ("Paste your booking"). Each may open one link a

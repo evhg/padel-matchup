@@ -482,6 +482,71 @@ try {
   await f.page.getByTestId("back-in-open").getByTestId("passkey-signin").click();
   await f.page.getByText("Your phone did not sign you in.").waitFor({ timeout: 20000 });
   check("a removed passkey signs in nobody, and the page says so plainly", (await f.page.locator("main li", { hasText: NAME }).getByText("you", { exact: true }).count()) === 0);
+
+  // ---- Device hints (the owner's decision of 28 October 2026, design B): the join keeps a key, outside Europe only ----
+  // An iPhone in Phuket: its join keeps a key made from what the browser tells every site, a label and two
+  // days, and My matches lists it with "Forget this phone". Every other context in this suite is in
+  // Europe/Madrid (`iphone` in e2e/lib.mjs), and those joins keep nothing.
+  const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
+  const hintsOf = async (name) => (await ask(`select count(*)::int as n, min(h.label) as label from device_hints h join players p on p.id = h.player_id where p.display_name = '${name}'`))[0];
+  const phuket = await browser.newContext({ ...iphone, timezoneId: "Asia/Bangkok", userAgent: IPHONE_UA });
+  const hp = await phuket.newPage();
+  hp.on("pageerror", (e) => console.log("  [pageerror]", e.message));
+  const code6 = await newMatch(hp, "Rawai Padel");
+  await joinAs(hp, code6, "Hana Hint");
+  // The key is kept after the answer: give the after() a moment.
+  await hp.waitForTimeout(1000);
+  const kept = await hintsOf("Hana Hint");
+  check("a join from a phone in Phuket keeps one device hint, under the words \"iPhone\"", kept?.n === 1 && kept?.label === "iPhone", JSON.stringify(kept));
+  const keyRead = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select key from device_hints")}`, { headers: CRON }).then((x) => x.json());
+  check("the operator's read-only door is refused the key itself", keyRead.ok !== true && /permission denied/.test(String(keyRead.error)), JSON.stringify(keyRead).slice(0, 160));
+  await hp.goto(`${BASE}/me`);
+  const hints = hp.getByTestId("my-hints");
+  await hints.waitFor({ timeout: 10000 });
+  await hints.scrollIntoViewIfNeeded();
+  const hintsText = (await hints.innerText()).replace(/\s+/g, " ");
+  check(
+    "My matches lists the phone under \"Phones we recognise\": the label, its first and last day, and \"Forget this phone\"",
+    hintsText.includes("Phones we recognise") && (await hints.getByTestId("my-hint").count()) === 1 && /iPhone/.test(hintsText) && /Since .+ · last used /.test(hintsText) && (await hints.getByRole("button", { name: "Forget this phone: iPhone", exact: true }).count()) === 1,
+    hintsText.slice(0, 200),
+  );
+  check("the card never calls it a fingerprint", !/fingerprint/i.test(hintsText));
+  await view(hp, "passkeys-05-phones-we-recognise-390");
+  await hints.getByRole("button", { name: "Forget this phone: iPhone", exact: true }).click();
+  await hints.getByTestId("my-hint").waitFor({ state: "detached", timeout: 20000 });
+  // The card stays with no phone: the privacy page sends the player to its switch at any time (PDPA s.32).
+  check(
+    "\"Forget this phone\" deletes the row, and the card stays with no phone and the switch \"Don't recognise my phones\"",
+    (await hintsOf("Hana Hint"))?.n === 0 && (await hints.getByTestId("my-hint").count()) === 0 && (await hints.getByRole("switch", { name: "Don't recognise my phones", exact: true }).count()) === 1,
+  );
+  // "Don't recognise my phones" (Thai PDPA s.32; DECIDING rule 40): the player's lasting objection, under the
+  // list. Another join keeps the key again; the switch then deletes it at once, and the block lists no phone.
+  const code8 = await newMatch(hp, "Chalong Padel");
+  await hp.goto(`${BASE}/${code8}`);
+  await hp.getByRole("button", { name: "Join this match" }).click();
+  await hp.locator("main li", { hasText: "Hana Hint" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  await hp.waitForTimeout(1000);
+  check("another join from the same phone keeps the key again", (await hintsOf("Hana Hint"))?.n === 1);
+  await hp.goto(`${BASE}/me`);
+  const objection = hints.getByRole("switch", { name: "Don't recognise my phones", exact: true });
+  await objection.waitFor({ timeout: 10000 });
+  await objection.scrollIntoViewIfNeeded();
+  check("the block carries the switch \"Don't recognise my phones\", off, under the phone", (await objection.getAttribute("aria-checked")) === "false" && (await hints.getByTestId("my-hint").count()) === 1);
+  await objection.click();
+  await hints.locator('[role="switch"][aria-checked="true"]').waitFor({ timeout: 20000 });
+  const marked = (await ask("select count(*)::int as n from players where display_name = 'Hana Hint' and hints_off is not null"))[0]?.n;
+  check(
+    "after the switch the block lists no phone, the database keeps no key, and the moment is kept",
+    (await hints.getByTestId("my-hint").count()) === 0 && (await hintsOf("Hana Hint"))?.n === 0 && marked === 1,
+    (await hints.innerText()).replace(/\s+/g, " ").slice(0, 200),
+  );
+  await view(hp, "passkeys-06-dont-recognise-my-phones-390");
+  // The control: the same join from a browser set to a European zone keeps nothing.
+  const madrid = await phoneBrowser();
+  const code7 = await newMatch(madrid.page, "Kata Padel");
+  await joinAs(madrid.page, code7, "Ivo Europe");
+  await madrid.page.waitForTimeout(1000);
+  check("the control: a join from a browser in Europe/Madrid keeps no hint at all", (await hintsOf("Ivo Europe"))?.n === 0);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {

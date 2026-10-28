@@ -11,6 +11,7 @@ import { useOwnNameAutofill } from "./PasskeyAutofill";
 import { heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import { normalName } from "@/lib/domain/dupes";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * In-flow name (and level, on ranged events) entry for joining the waitlist without an identity: the
@@ -82,7 +83,7 @@ export function JoinInline({
     start(async () => {
       setError(null);
       const typed = hasIdentity ? undefined : name;
-      const r = await joinAction(code, typed, level ?? undefined, undefined, different ? { differentPerson: true } : undefined);
+      const r = await joinAction(code, typed, level ?? undefined, undefined, { differentPerson: different || undefined, hint: readDeviceSignals() });
       startTransition(() => {
         const asked = askOf(r, typed);
         setNameAsk(asked);

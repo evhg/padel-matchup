@@ -7,6 +7,7 @@ import { takeHeldPlaceAction } from "@/actions/slots";
 import { nameIsHere, normalName } from "@/lib/domain/dupes";
 import { requestBackIn } from "./backInBus";
 import { ThatsMeButton, useTwoTap } from "./ThatsMe";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 /**
  * "Take Danny's held place" (DECIDING rule 34, the owner, 11 October 2026): two taps fill the place
@@ -37,7 +38,7 @@ export function TakeHeldButton({
     }
     setArmed(false);
     start(async () => {
-      const r = await takeHeldPlaceAction(code, name);
+      const r = await takeHeldPlaceAction(code, name, readDeviceSignals());
       startTransition(() => {
         if (!r.ok) setError(r.error === "too_many" ? t("errors.too_many") : t("identity.takeHeldNo", { name }));
       });

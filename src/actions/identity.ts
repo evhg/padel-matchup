@@ -27,6 +27,8 @@ import { liftOnConsent } from "@/lib/domain/emailMarks";
 import { claimSameNameRow } from "@/lib/domain/sameName";
 import { later } from "@/lib/alerts";
 import { countSignIn } from "@/lib/domain/signins";
+import { forgetKeyOf, saveHintLater } from "@/lib/deviceHint";
+import { forgetDeviceHints } from "@/lib/domain/deviceHints";
 import { deletionRefusal, thatsMe } from "@/lib/domain/thatsMe";
 import { unreachedNamed } from "@/lib/domain/unreached";
 import { channelsOffered } from "@/lib/coach/reach";
@@ -135,7 +137,7 @@ function countStayEmail(db: Db, before: Player, now: Player): void {
  * match's invitation for a seat, else the personal link (`welcomeFor`), unless the record that stays
  * held the address already. A wrong or spent code saves nothing (`invalid`).
  */
-export async function proveMyEmail(email: string, code: string, eventCode?: string, o?: { from?: "stay" }): Promise<ActionResult<PublicPlayer & { welcome: WelcomeKind | null }>> {
+export async function proveMyEmail(email: string, code: string, eventCode?: string, o?: { from?: "stay"; hint?: unknown }): Promise<ActionResult<PublicPlayer & { welcome: WelcomeKind | null }>> {
   return runA(async () => {
     if (typeof email !== "string" || typeof code !== "string") throw new ActionFailure("invalid");
     const db = await getDb();
@@ -154,6 +156,8 @@ export async function proveMyEmail(email: string, code: string, eventCode?: stri
     const proved = byName ? ["email_proved_by_name"] : [];
     if (player.id !== me.id) await later(() => countSignIn(db, "email_code", ua, proved));
     else if (byName) await later(() => bumpMetrics(db, proved));
+    // The code came back: this browser's device hint is kept for the record it is now (the owner's decision of 28 October 2026).
+    await saveHintLater(db, player.id, o?.hint, eventCode ? { code: eventCode } : null);
     await removeOptOut(db, verified);
     let welcome: WelcomeKind | null = null;
     if (!held) {
@@ -200,7 +204,7 @@ export async function requestRestoreCode(email: string): Promise<ActionResult<{ 
 }
 
 /** Restore step 2: verify the code, merge every identity with that email, sign in as the result. */
-export async function verifyRestoreCode(email: string, code: string): Promise<ActionResult<PublicPlayer>> {
+export async function verifyRestoreCode(email: string, code: string, hint?: unknown): Promise<ActionResult<PublicPlayer>> {
   return runA(async () => {
     const db = await getDb();
     const verified = await consumeEmailCode(db, email, code);
@@ -209,6 +213,7 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
     await setSessionPlayer(player.id);
     const ua = await userAgent();
     if (player.id !== currentId) await later(() => countSignIn(db, "email_code", ua));
+    await saveHintLater(db, player.id, hint);
     revalidatePath("/", "layout");
     return pub(player);
   });
@@ -236,7 +241,7 @@ export async function claimSameNameAction(rowId: string): Promise<ActionResult<n
  * made its own new record folds it into the old one. Refused as `invalid` whatever the reason, so the
  * answer says nothing about the record beyond what the page already showed; `too_many` past the rate.
  */
-export async function thatsMeAction(code: string, name: string): Promise<ActionResult<PublicPlayer & { folded: boolean }>> {
+export async function thatsMeAction(code: string, name: string, hint?: unknown): Promise<ActionResult<PublicPlayer & { folded: boolean }>> {
   return runA(async () => {
     if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
     const db = await getDb();
@@ -255,6 +260,8 @@ export async function thatsMeAction(code: string, name: string): Promise<ActionR
     // how often the organiser's unreached list brought a player back.
     const ua = await userAgent();
     await later(() => countSignIn(db, res.folded ? ["thats_me", "thats_me_fold"] : "thats_me", ua, res.via === "unreached" ? ["thats_me_unreached"] : []));
+    // A session by name keeps a device hint too: a hint never grants more than "That's me" already does.
+    await saveHintLater(db, res.player.id, hint, { code });
     // A fold that gave up a place in the match: the line-up changed, and whoever moved up hears it, as after a leave.
     const seats = res.seats;
     if (seats) {
@@ -383,31 +390,46 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
 /**
  * "Not you? Sign out on this browser" (the owner, 28 October 2026: "Yes, both"). The header's menu and
  * My matches offer it wherever the signed-in player sees their own name. It ends the session in this
- * browser and nothing else: the record, its matches, its passkeys and its personal link stay as they
- * are. The cookies go, the browser is stamped with the moment, so the restore seal and the manage
- * cookies it held from before open nothing (`signOutBrowser`), and the page's script removes the seal
- * from its storage before it calls this (`forgetBrowser`). The page renders again signed out. Counted
- * as `signout`.
+ * browser and nothing else but this browser's device key on the record (`o.hint`, below): the record, its
+ * matches, its passkeys, its other phones and its personal link stay as they are. The cookies go, the
+ * browser is stamped with the moment, so the restore seal and the manage cookies it held from before
+ * open nothing (`signOutBrowser`), and the page's script removes the seal from its storage before it
+ * calls this (`forgetBrowser`). The page renders again signed out. Counted as `signout`, and
+ * `hint_signout` when a key went.
  *
  * `endpoint`: this browser's push subscription, which the page's script reads and ends after the call
  * (`SignOut`). Its row goes here, in one statement, by the endpoint alone, as "Turn off" does: whoever
  * holds the endpoint is this browser, and a row bound to another record (a session by name that changed
  * record) goes too. Without this, the next person on the phone kept the player's notifications, and each
  * one carries the personal link, which signs the browser in again in full.
+ *
+ * `o.hint`: this browser's device values (`readDeviceSignals`, none in a European zone), as every door
+ * sends them. The record that signs out loses the device hint of this browser's key, in one statement
+ * (`forgetDeviceHints`), and only that row: its other phones stay. The key is the one that the values make
+ * at the tap. A row kept under other values of the same phone (another zone, other languages, another text
+ * size, or a European zone now) stays until "Forget this phone" or the yearly prune: nothing can find it
+ * without its values, and privacy.keepBody says so. A phone is never shared (DECIDING, "A
+ * phone is never shared"), so the person who taps "Not you?" holds this phone, and a key saved during a
+ * wrong sign-in belongs to that person, not to the record. Bob taps "That's me" on Tim's seat on Bob's own
+ * phone: without this, Tim's record kept Bob's phone, "Welcome back, Tim?" asked Bob again, and Tim's
+ * "Phones we recognise" listed Bob's phone. Counted as `hint_signout` beside `signout`, in one statement.
  */
-export async function signOutAction(endpoint?: string | null): Promise<ActionResult<null>> {
+export async function signOutAction(endpoint?: string | null, o: { hint?: unknown } = {}): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();
     if (validEndpoint(endpoint)) await removePushSubscription(db, endpoint);
+    const leaving = await getSessionPlayerId();
+    const key = forgetKeyOf(o?.hint);
+    const forgot = leaving && key ? await forgetDeviceHints(db, leaving, key) : 0;
     await signOutBrowser();
-    await later(() => bumpMetrics(db, ["signout"]));
+    await later(() => bumpMetrics(db, forgot > 0 ? ["signout", "hint_signout"] : ["signout"]));
     revalidatePath("/", "layout");
     return null;
   });
 }
 
 /** Called by the personal-link page so the device that opened it gets the cookie. A link with a destination is handed on server-side instead (`/p/[token]/go`). */
-export async function adoptPersonalToken(token: string): Promise<ActionResult<PublicPlayer | null>> {
+export async function adoptPersonalToken(token: string, hint?: unknown): Promise<ActionResult<PublicPlayer | null>> {
   return runA(async () => {
     const db = await getDb();
     const p = await findPlayerByPersonalToken(db, token);
@@ -417,6 +439,7 @@ export async function adoptPersonalToken(token: string): Promise<ActionResult<Pu
       await setSessionPlayer(p.id);
       const ua = await userAgent();
       await later(() => countSignIn(db, "personal_link", ua));
+      await saveHintLater(db, p.id, hint);
     }
     return pub(p);
   });

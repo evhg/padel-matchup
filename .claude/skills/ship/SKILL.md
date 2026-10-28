@@ -778,6 +778,11 @@ Wall clock first, credits second. What actually moved it, measured:
   at the point the walk needs it, never at the first convenient save, and read what the rest of the
   file assumes before you tick a box near the top of it.
 
+- **Never search a whole row for a short value.** A test that proved no device value was stored
+  searched the row's JSON for "390" (a screen width), and a fresh uuid, `b0313907-…`, holds "390": the
+  gate went red at random on 28 October 2026. Check the row's column names exactly, and search only the
+  columns that are not random (ids, keys and hashes can hold any short text).
+
 ### Editing that keeps going wrong
 
 - **A test that reads a query plan must run on both databases.** PGlite's `db.execute` answers `{ rows }`
@@ -891,6 +896,14 @@ Wall clock first, credits second. What actually moved it, measured:
   right for a stranger and wrong for the organiser, whose page holds every past player for "Is this
   Tomasz…?" in "Paste the names". Check a leak on the viewer it is about; on the organiser's page,
   check the element.
+- **Two branches that change one message string conflict on the whole line, so merge the string, not the
+  file.** A privacy text is one JSON line, and both sides of the merge of 28 October 2026 changed three of
+  them (a new bullet on one side, a changed bullet on the other). Take the base, ours and theirs of each
+  string with `git show <ref>:messages/<l>.json`, split each on its `\n`, merge with
+  `git merge-file`, settle what is left by hand, and write the value back into the conflict hunk alone
+  with `json.dumps(v, ensure_ascii=False)`. Check first that the dump reproduces an untouched line of the
+  file. Then prove the keys: every key that either side added is in the merged file at the same path, in
+  three locales, and no change of one side is lost.
 - **Anchor on the name, never the line number.** Keys have landed in `coach.home` when they were meant
   for `coach.page` because the insertion point was found by counting.
 - **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that
@@ -914,6 +927,42 @@ Wall clock first, credits second. What actually moved it, measured:
   suites red — two of them not the coach suite. Grep the step names before renaming one. Placeholders
   count: "or type a club" → "or pick a club" is four words and five red suites, because
   `getByPlaceholder` takes the whole string.
+
+- **A statement with a data-modifying CTE sees one snapshot.** The device hint's save is one
+  statement: the upsert, the cap and the counters (28 October 2026). The cap's delete cannot see the row
+  that the upsert in the same statement inserts, so a plain "keep the newest three" keeps four: the
+  break-guard run of that day showed it. Count the other rows and keep `N - 1` of them
+  (`saveDeviceHint` in `src/lib/domain/deviceHints.ts`), and test a fourth key on a player who has three.
+- **A column named `key` is hidden only by its table.** `HIDDEN_COLUMNS` in `src/lib/db/readonly.ts`
+  hid a column by its name in every table, and `metrics_daily.key` is the name of a metric. The device
+  hint's key is `device_hints.key`, an entry with its table (`isHidden(column, table)`). The restore
+  of a backup asks the same function, so it replaces that key too.
+- **The read-only door answers a refusal without `ok`.** `/api/admin/sql` gives `{ error }` alone when
+  Postgres refuses a column, so a browser check of `ok === false` failed on a correct refusal (28
+  October 2026). Check `ok !== true` and the words "permission denied".
+- **A locator's `name` is a part of the name, in any case.** `getByRole("button", { name: "That's me" })`
+  finds "Yes, that's me" too, and ten checks use that string; `coach.mjs` finds any button with `/Yes/`.
+  So "Welcome back, Tim?" says "It's me" and "Not me" (28 October 2026). Before a new button gets its
+  words, test them against every locator in `e2e/`: each string with a case-blind `includes`, each regex
+  with `test`. The new suite then asks for its own buttons with `exact: true`.
+- **Every record that a browser suite makes is minutes old.** The device hint's question refuses a
+  record made less than seven days ago that shares no earlier match with anybody (the second Tim). The
+  first build counted any match that starts before this one, so the suite passed with a match 26 hours
+  out, and so did the newcomer who joins two posted matches today (review, 28 October 2026). An earlier
+  match has already started. The public API takes a start in the past, and a join stays open for the
+  match's length, so `e2e/device-hints.mjs` seats Tim beside Kai in a match that started 20 minutes ago,
+  and checks that a browser is asked nothing before that. When a suite needs history, make it happen
+  in the past; never let a rule count the future as history so that a suite can pass. The same rule, and
+  the rule of one record per key, keep the question away from the Bangkok suites, whose contexts all
+  give one key.
+- **A key test with changed values tests the values, not the guard.** "European values forget nothing" at
+  the sign-out passed with the zone check removed, because the European values make another key, and no
+  row held it (28 October 2026). The test now keeps a row of exactly that key by hand, so the zone check
+  is the only thing between the row and the delete; break it, and the test goes red.
+- **A guard that walks the source names the new door for you.** `tests/legal.test.ts` lists every caller
+  of `markSignedInByName`, and "It's me" went red there before the privacy page named it on the
+  `km_by_name` line. A new way to sign in by name puts its button's words on that line in three
+  languages, and its file in that list.
 
 ### A new kind of row in an old table
 

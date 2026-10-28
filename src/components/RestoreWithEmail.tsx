@@ -6,6 +6,7 @@ import { startTransition, useState, useTransition } from "react";
 import { requestRestoreCode, verifyRestoreCode } from "@/actions/identity";
 import { placeholderWidth } from "@/lib/fieldWidth";
 import { EmailCodeStep } from "./EmailCodeStep";
+import { readDeviceSignals } from "@/lib/deviceSignals";
 
 
 /**
@@ -99,7 +100,7 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
           email={email}
           verifyLabel={t("identity.verify")}
           onVerify={async (code) => {
-            const r = await verifyRestoreCode(email, code);
+            const r = await verifyRestoreCode(email, code, readDeviceSignals());
             if (r.ok) setName(r.data.name);
             return r;
           }}

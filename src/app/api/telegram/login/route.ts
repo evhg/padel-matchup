@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { later } from "@/lib/alerts";
@@ -7,6 +8,8 @@ import { telegramEnabled, verifyLoginWidget } from "@/lib/telegram/api";
 import { findOrCreateTelegramPlayer, linkTelegram } from "@/lib/telegram/bot";
 import { loginNext } from "@/lib/telegram/login";
 import { mergesLater } from "@/lib/mergeCount";
+import { saveHintLater, signalsFromCookie } from "@/lib/deviceHint";
+import { SIGNALS_COOKIE, SIGNALS_COOKIE_PATH } from "@/lib/domain/hintSignals";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +41,14 @@ export async function GET(req: Request) {
   // A browser that knew nobody is signed in; one that was signed in only linked an account.
   const ua = req.headers.get("user-agent");
   if (!me) await later(() => countSignIn(db, "telegram", ua));
+  // The device hint's values rode in on a one-minute cookie the return wrote (`writeSignalsCookie`): read once, deleted on the way out.
+  const store = await cookies();
+  const signals = store.get(SIGNALS_COOKIE)?.value;
+  if (!me) await saveHintLater(db, player.id, signalsFromCookie(signals));
   const dest = new URL(loginNext(url.searchParams.get("next")), url.origin);
   // My matches says "Telegram linked"; any other page shows it by being signed in.
   if (dest.pathname === "/me") dest.searchParams.set("telegram", "linked");
-  return NextResponse.redirect(dest, { status: 303 });
+  const res = NextResponse.redirect(dest, { status: 303 });
+  if (signals !== undefined) res.cookies.set(SIGNALS_COOKIE, "", { path: SIGNALS_COOKIE_PATH, maxAge: 0 });
+  return res;
 }

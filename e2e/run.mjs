@@ -39,6 +39,8 @@ const env = {
   // as RESEND_WEBHOOK_SECRET in e2e/lib.mjs.
   RESEND_WEBHOOK_SECRET: "whsec_ZTJlLXJlc2VuZC13ZWJob29r",
   SESSION_SECRET: "e2e-session-secret-not-for-production",
+  // The device hint's switch at its default, whatever the machine holds: e2e/device-hints.mjs asks the question.
+  DEVICE_HINTS: "ask",
   CRON_SECRET: "e2e-cron-secret",
   // A fake bot: the Bot API answers 401 (or is unreachable) and the code must stay quiet about it.
   TELEGRAM_BOT_TOKEN: "1:e2e-fake-token",
