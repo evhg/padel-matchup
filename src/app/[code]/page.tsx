@@ -5,10 +5,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer, manageUrlFor, nameOnly } from "@/actions/shared";
-import { cleanSource, isFullPageLoad, taggedUrl, viewCounters } from "@/lib/source";
+import { cleanSource, isFullPageLoad, phoneViewCounter, taggedUrl, viewCounters } from "@/lib/source";
+import { countAfter } from "@/lib/countLater";
 import { headers } from "next/headers";
 import { later } from "@/lib/alerts";
-import { bumpMetric } from "@/lib/domain/metrics";
 import { markMatchNoticesRead } from "@/lib/domain/notices";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { AmericanoPanel } from "@/components/AmericanoPanel";
@@ -189,13 +189,15 @@ async function EventPage({ params, searchParams }: Props) {
   // tag (docs/OPERATING.md, "From a shared link to a seat"). One counter upsert after the response, on
   // a full page load only: never the 20-second refresh of a live night, a server action or a prefetch.
   // While the organiser holds the only seat, `view_lone` too: one more upsert, on such views only.
+  // Beside it, a phone's full load of a match still to come, by whether the browser knows the viewer
+  // (`view_known_<class>`, `view_anon_<class>`). Every key of this request, the layout's `pageviews`
+  // included, goes in one statement after the answer (`countAfter`).
   const h = await headers();
-  const viewKeys = viewCounters({ source, seated: Boolean(mySlot) || viewer.isCreator, ua: h.get("user-agent") ?? "", fullLoad: isFullPageLoad(h), lone: organiserAlone(roster, ev.creatorPlayerId) });
-  if (viewKeys.length) {
-    await later(async () => {
-      for (const key of viewKeys) await bumpMetric(db, key);
-    });
-  }
+  const ua = h.get("user-agent") ?? "";
+  const fullLoad = isFullPageLoad(h);
+  const phoneView = phoneViewCounter({ ua, fullLoad, upcoming: !cancelled && !started, known: Boolean(me) });
+  const viewKeys = [...viewCounters({ source, seated: Boolean(mySlot) || viewer.isCreator, ua, fullLoad, lone: organiserAlone(roster, ev.creatorPlayerId) }), ...(phoneView ? [phoneView] : [])];
+  await countAfter(db, viewKeys);
   // Opening the match reads its notices, so the bell counts only what this person has not seen (the
   // owner's question, 12 October 2026). One indexed update after the response, for a signed-in viewer,
   // a tap from My matches included; the header of this response may still show the old count. Only the
@@ -488,7 +490,11 @@ async function EventPage({ params, searchParams }: Props) {
   // A browser that knows a record of a held place's name, with no place here: the rule offers it that
   // place alone (`heldVerdict`: its own name, one place of it), and Join offers the place, never a second Danny.
   const heldForMe = me && held.length > 0 ? held[0].name : null;
-  const hasPush = me && pushEnabled() ? await playerHasPush(db, me.id) : false;
+  // "Remind me 1 hour before", for a seated player of a match still to come. Never for a session by name
+  // that proved nothing: every notification carries the personal link, a full sign-in (DECIDING rule 34;
+  // `subscribePushAction` refuses it too). Two cookie reads, then one lookup, only for a viewer it shows to.
+  const pushHere = Boolean(me && isMember && !cancelled && !started && pushEnabled()) && !(await nameOnly(me));
+  const hasPush = pushHere && me ? await playerHasPush(db, me.id) : false;
   // "Played before?", open under the name field of a join form, for a browser that knows nobody (the
   // owner, 12 October 2026, with passkeys, DECIDING rule 39): Face ID or a fingerprint, the email code,
   // Telegram, each where this deployment runs it. No read: what the deployment runs, and nothing else.
@@ -1009,7 +1015,7 @@ async function EventPage({ params, searchParams }: Props) {
               <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} notifyOn={me.emailNotifications} />
             </div>
           )}
-          {me && isMember && !cancelled && !started && pushEnabled() && (
+          {pushHere && (
             <div className="mt-4 border-t border-line pt-4">
               <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
             </div>

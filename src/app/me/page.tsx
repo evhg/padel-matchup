@@ -9,14 +9,15 @@ import { MySettings } from "@/components/MySettings";
 import { NameGate } from "@/components/NameGate";
 import { canRestore, ReturningPlayer } from "@/components/ReturningPlayer";
 import { getDb } from "@/db";
-import { baseUrl } from "@/lib/config";
+import { baseUrl, emailEnabled } from "@/lib/config";
 import { getSessionPlayer, passkeyHandle, signedInByName } from "@/lib/session";
 import { MyPhones } from "@/components/MyPhones";
 import { RememberPhone } from "@/components/RememberPhone";
 import { mayRegister, passkeysOf } from "@/lib/domain/passkeys";
 import { QUIET_FALLBACK_TZ } from "@/lib/domain/noticeKinds";
 import { formatDayMonth } from "@/lib/dates";
-import { personalTokenFor } from "@/actions/shared";
+import { nameOnly, personalTokenFor } from "@/actions/shared";
+import { telegramBotId } from "@/lib/telegram/api";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
 import { FeedbackInline } from "@/components/FeedbackInline";
 import { countShipped, showsShipped } from "@/lib/feedback/store";
@@ -87,6 +88,9 @@ async function MePage({ searchParams }: Props) {
   const tz = me.quietTz ?? QUIET_FALLBACK_TZ;
   const phones = (await passkeysOf(db, me.id)).map((p) => ({ handle: passkeyHandle(me.id, p.id), label: p.label, saved: formatDayMonth(p.createdAt, tz, locale), used: p.lastUsedAt ? formatDayMonth(p.lastUsedAt, tz, locale) : null }));
   const canSavePasskey = mayRegister({ playerId: me.id, byName: await signedInByName(me.id) }, me);
+  // A session by name that proved nothing may not delete the account (the owner, 28 October 2026): the
+  // last line names the doors on this page that prove it. Two cookie reads, no database read.
+  const proofDoors = (await nameOnly(me)) ? (emailEnabled() && telegramBotId() ? "both" : emailEnabled() ? "email" : telegramBotId() ? "telegram" : "other") : null;
   return (
     <>
       {/* The doors belong here too: this screen used to be a room with only the logo to leave by, so a coach who landed on it lost their book. */}
@@ -131,9 +135,9 @@ async function MePage({ searchParams }: Props) {
             player's matches; the stakeholders have their own front doors on the landing page, and
             asking a player to become something else is not what they came for. */}
         <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} shipped={showsShipped(shipped) ? shipped : undefined} />
-        <MySettings player={me} personalToken={token} hasMatches={hasMatches} />
+        <MySettings player={me} personalToken={token} hasMatches={hasMatches} signOut />
         {/* Last on the page, always: the one action that cannot be undone. */}
-        <DeleteAccount />
+        <DeleteAccount byName={proofDoors} />
       </main>
       <Footer />
     </>

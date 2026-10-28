@@ -24,6 +24,8 @@ const noRawKeys = async (page, where) => {
   const keys = await rawKeysOn(page);
   check(`${where} shows no message key as text`, keys.length === 0, keys.slice(0, 5).join(", "));
 };
+// What the reminder switch shows wherever it shows at all: the button, the on-state, or why the browser blocks it.
+const PUSH_SWITCH = /Remind me 1 hour before|Reminders on · 1 hour before|Notifications are blocked for this site/;
 const headingOrder = (page, first, second) =>
   page.locator("main h2").evaluateAll((hs, [x, y]) => {
     const at = (t) => hs.findIndex((h) => h.textContent.includes(t));
@@ -455,6 +457,54 @@ try {
       byNameManifest.start_url === "/?source=homescreen",
     byNameManifest.start_url,
   );
+  // No reminders for it either: every notification carries the personal link, a full sign-in, and a
+  // stranger's "That's me", reminders on and a sign-out let the next reminder sign the phone in as the
+  // player in full (28 October 2026). Dana's full session below shows the switch on the same screen.
+  await j2.waitForLoadState("networkidle").catch(() => {});
+  check("after \"That's me\", My matches offers no reminders on this browser", (await j2.getByText(PUSH_SWITCH).count()) === 0);
+  // A session by name may not delete the account (the owner, 28 October 2026, "Close it"): the last line
+  // says why and names the doors on the page that prove it, and there is no button to tap.
+  check(
+    "after \"That's me\", My matches says why this browser cannot delete the account, and shows no delete button",
+    /came in by tapping your name, so this browser cannot delete the account/.test((await j2.getByTestId("delete-by-name").textContent()) ?? "") &&
+      (await j2.getByRole("button", { name: "Delete my account" }).count()) === 0,
+  );
+  // "Not you? Sign out on this browser" (the owner, 28 October 2026), where the player sees their own name.
+  // The header's menu names the browser's player only while it is open, so a closed menu adds no "Jordi".
+  check("a closed header menu holds no name and no sign-out", (await j2.getByTestId("nav-signed-in").count()) === 0 && (await j2.getByTestId("nav-signout").count()) === 0);
+  await j2.getByTestId("delete-by-name").scrollIntoViewIfNeeded();
+  await shot(j2, "12a-me-by-name-delete");
+  await j2.getByTestId("nav-more").click();
+  await shot(j2, "12a-menu-signed-in");
+  check(
+    "the open header menu says who this browser is signed in as, with \"Not you? Sign out on this browser\" under it",
+    ((await j2.getByTestId("nav-signed-in").textContent()) ?? "") === "Signed in as Jordi" && ((await j2.getByTestId("nav-signout").textContent()) ?? "") === "Sign out on this browser",
+  );
+  await j2.getByTestId("nav-more").click();
+  const sealBefore = await j2.evaluate(() => localStorage.getItem("km_player"));
+  // What the passkey card keeps in this browser: its two "Not now" and the day it last counted itself shown.
+  const PASSKEY_KEYS = ["km_passkey_not_now", "km_passkey_not_now_me", "km_passkey_shown_day"];
+  await j2.evaluate((keys) => keys.forEach((k) => localStorage.setItem(k, "1")), PASSKEY_KEYS);
+  await j2.getByTestId("me-signout").click(); // the confirm is accepted by the page's dialog handler
+  await j2.getByText("First time here? Just your name, that's it.").waitFor({ timeout: 20000 });
+  const jarAfter = (await j2.context().cookies()).map((c) => c.name);
+  const keptAfter = await j2.evaluate((keys) => keys.filter((k) => localStorage.getItem(k) !== null), PASSKEY_KEYS);
+  check(
+    "the sign-out empties the browser: no session cookie, no restore seal in storage, the sign-out mark set, and My matches signed out",
+    sealBefore !== null && (await j2.evaluate(() => localStorage.getItem("km_player"))) === null && !jarAfter.includes("km_player") && !jarAfter.includes("km_has_id") && jarAfter.includes("km_signed_out"),
+    jarAfter.join(","),
+  );
+  check("the sign-out removes the passkey card's \"Not now\" and its shown day, so the next person gets the card", keptAfter.length === 0, keptAfter.join(","));
+  await shot(j2, "12b-signed-out");
+  // The seal the browser held before the sign-out, put back in its storage, signs nobody in: the page asks
+  // the server once, the server refuses it, and the page drops it (IdentitySync).
+  await j2.evaluate((seal) => localStorage.setItem("km_player", seal), sealBefore);
+  await j2.reload();
+  await j2.waitForFunction(() => localStorage.getItem("km_player") === null, null, { timeout: 20000 });
+  check(
+    "a restore seal from before the sign-out cannot sign the browser back in",
+    !(await j2.context().cookies()).some((c) => c.name === "km_player") && (await j2.getByText("First time here? Just your name, that's it.").count()) === 1,
+  );
   await j2.close();
 
   // The duplicate is born in the open spot, not in the fold. A stranger on the future match — Dana
@@ -810,6 +860,8 @@ try {
   check("email changed to dana2@example.com", (await a.getByText("dana2@example.com").count()) > 0);
   await a.goto(`${BASE}/me`);
   check("service worker registered", await a.evaluate(() => navigator.serviceWorker.getRegistration("/").then((r) => Boolean(r))));
+  // The other half of the by-name check above: a full session sees the reminder switch (or why it cannot).
+  check("a full session's My matches offers reminders on this browser", await a.getByText(PUSH_SWITCH).first().waitFor({ timeout: 10000 }).then(() => true, () => false));
   const health = await a.evaluate(async () => (await fetch("/api/health")).json());
   const cronPush = await a.evaluate(async (secret) => (await fetch("/api/cron/push", { headers: secret ? { authorization: `Bearer ${secret}` } : {} })).json(), process.env.CRON_SECRET ?? "");
   check("push enabled + cron push endpoint answers", health.push === "enabled" && cronPush.ok === true && cronPush.push === "enabled", JSON.stringify(cronPush));
@@ -823,8 +875,12 @@ try {
   await nd.getByText("My matches").first().waitFor({ timeout: 20000 });
   await nd.waitForFunction(() => document.cookie.includes("km_has_id"), null, { timeout: 20000 }).catch(() => {});
   check("personal link shows Dana's matches on a new device", (await nd.content()).includes('href="/PLAY"') && (await nd.getByText("Dana").count()) > 0);
+  // The link is itself the sign-in, and the page adopts it: a sign-out here signed the browser straight
+  // back in (28 October 2026). So the page has none; My matches has it.
+  check("the personal-link page offers no \"Sign out on this browser\"", (await nd.getByTestId("me-signout").count()) === 0);
   await nd.goto(BASE + "/me");
   check("new device is now signed in as Dana via cookie", (await nd.getByText("Dana").count()) > 0 && (await nd.content()).includes('href="/PLAY"'));
+  check("My matches offers \"Sign out on this browser\" under the name", (await nd.getByTestId("me-signout").count()) === 1);
   await nd.context().close();
   await shot(a, "11b-me-outcome");
 

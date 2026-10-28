@@ -289,6 +289,22 @@ learning can be a test, a gate step or a script, make it one and put the story i
   as a stranger, and `e2e/checks/publicIds.mjs` reads every public page for a player id after the
   suites. A dev server puts the props of server components in its payload, so only a production
   build shows what a browser gets.
+- **A server deletes only the cookies the browser sends it.** "Sign out" was asked to clear every
+  `km_manage_<code>`, and `cookies().getAll()` looked like the list. It is not: each manage cookie lives
+  on its match's own path, so a sign-out from My matches sees none of them (28 October 2026). What the
+  server cannot see it shuts instead: the browser keeps the moment it signed out (`km_signed_out`), and
+  a credential minted before that moment opens nothing (`predatesSignOut`). The same holds for a value
+  the page's script keeps: removing the restore seal from storage is not enough, because another tab or
+  a copy can put it back, so the server refuses an old seal too. And a cookie's end is not a session's
+  end while a restore seal can bring it back: a sign-in by name came back with a new year each time,
+  until its seal carried its end (`until`). Before promising that something ends, list every door that
+  can bring it back. The review still found two more. Every push notification carries the personal
+  link, so a subscription left on the phone signed the next person in, and a session by name could
+  turn on reminders and get a full session from the next one. And the personal-link page adopted its
+  token again on the render that the sign-out itself caused (`AdoptToken` now decides on its first
+  render). A link that signs in is a door wherever it travels: a notification, an email, a calendar
+  entry, the home-screen icon's start page. Grep for `personalEventUrl` and `personalPath` before you
+  promise anything about a session.
 - **`JSON.stringify` is not escaping.** Eight pages wrote their structured data as
   `dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}`. A browser ends a script tag at the
   first `</script>`, also inside a JSON string. So a competition named `</script><img onerror=…>`,

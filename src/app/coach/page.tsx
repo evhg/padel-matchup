@@ -19,6 +19,7 @@ import { busyBetween, coachCardGaps, DAY_MS, earnedInvite, getCoachForActor, has
 import { listLevelChecks } from "@/lib/domain/verify";
 import { relativeTime } from "@/lib/dates";
 import { getSessionPlayer } from "@/lib/session";
+import { nameOnly } from "@/actions/shared";
 import { playerTicket } from "@/lib/coach/link";
 import { botDeepLink } from "@/lib/telegram/bot";
 import { telegramBotUsername } from "@/lib/telegram/api";
@@ -77,7 +78,9 @@ async function CoachPage({ searchParams }: Props) {
     // has to be one a club page can match (rule: the slug is the address).
     const clubOptions = (await listClubsForPicking(db)).map((c) => ({ slug: c.slug, name: c.name, city: c.city }));
     const resumedLink = found ? studentLink(baseUrl(), found.coach.handle, await inviteCode(db, found.coach)) : null;
-    const hasPush = pushEnabled() ? await playerHasPush(db, me.id) : false;
+    // No reminders for a session by name that proved nothing: a notification carries the personal link (DECIDING rule 34).
+    const pushKey = (await nameOnly(me)) ? null : vapidPublicKey();
+    const hasPush = pushKey && pushEnabled() ? await playerHasPush(db, me.id) : false;
     return shell(
       <>
         {tag}
@@ -90,7 +93,7 @@ async function CoachPage({ searchParams }: Props) {
           studentUrl={resumedLink}
           email={me.email}
           emailEnabled={emailEnabled()}
-          vapidPublicKey={vapidPublicKey()}
+          vapidPublicKey={pushKey}
           pushSubscribed={hasPush}
           waitingChannels={waitingChannels()}
         />
@@ -114,7 +117,7 @@ async function CoachPage({ searchParams }: Props) {
           botUrl={botDeepLink(`coach_${playerTicket(me)}`)}
           email={me.email}
           emailEnabled={emailEnabled()}
-          vapidPublicKey={vapidPublicKey()}
+          vapidPublicKey={(await nameOnly(me)) ? null : vapidPublicKey()}
           pushSubscribed={false}
           waiting={waitingChannels()}
           gate

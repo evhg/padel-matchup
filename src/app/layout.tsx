@@ -8,10 +8,10 @@ import { IdentitySync } from "@/components/IdentitySync";
 import { PwaSetup } from "@/components/PwaSetup";
 import { getDb } from "@/db";
 import { APP_NAME, APP_TAGLINE, baseUrl } from "@/lib/config";
-import { bumpMetric } from "@/lib/domain/metrics";
-import { later } from "@/lib/alerts";
+import { countAfter } from "@/lib/countLater";
+import { isDeletedPlayer } from "@/lib/domain/result";
 import { isCrawler } from "@/lib/source";
-import { getSessionPlayer, restoreSealForSession } from "@/lib/session";
+import { getSessionPlayer, getSessionPlayerId, restoreSealForSession, sessionRenewDue } from "@/lib/session";
 import { pickMessages, ROOT_CLIENT_MESSAGES } from "@/i18n/clientMessages";
 import { htmlTextAttr, TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
 
@@ -44,13 +44,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const textSize = htmlTextAttr(textSizeOf((await cookies()).get(TEXT_SIZE_COOKIE)?.value));
   // What the browser keeps to come back after a lost cookie: the server's seal, never the player id (IdentitySync).
   let seal: string | null = null;
+  // What only a route may act on (IdentitySync asks it): a full sign-in due its new year, or a signed
+  // cookie whose record is gone. Cookie reads only; the record is the one read this render makes anyway.
+  // A deleted account keeps its row ("Deleted player"), so a browser still signed in to it somewhere else
+  // gets no seal and no new year: the route ends that session as one whose record is gone.
+  let check: "renew" | "dead" | null = null;
   try {
     const db = await getDb();
     const p = await getSessionPlayer(db);
-    if (p) seal = await restoreSealForSession(p.id);
+    if (p && !isDeletedPlayer(p)) {
+      seal = await restoreSealForSession(p.id);
+      check = (await sessionRenewDue()) ? "renew" : null;
+    } else if (p || (await getSessionPlayerId())) check = "dead";
     // Our own page-render counter, so the service board knows when Vercel's analytics ceiling is near. Crawlers do not count.
+    // Written with the page's own counters in one statement after the answer (`countAfter`).
     const ua = (await headers()).get("user-agent") ?? "";
-    if (!isCrawler(ua)) await later(() => bumpMetric(db, "pageviews"));
+    if (!isCrawler(ua)) await countAfter(db, ["pageviews"]);
   } catch (e) {
     console.error("[layout] db unavailable", e);
   }
@@ -63,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             (withClientMessages). The whole catalogue was 146 KB to 230 KB inline in every page. */}
         <NextIntlClientProvider messages={pickMessages(messages, ROOT_CLIENT_MESSAGES)}>
           {children}
-          <IdentitySync seal={seal} />
+          <IdentitySync seal={seal} check={check} />
           <PwaSetup signedIn={Boolean(seal)} />
         </NextIntlClientProvider>
         {/* Vercel Web Analytics: page views and Web Vitals, no cookies, no personal data. */}

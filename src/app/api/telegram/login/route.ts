@@ -36,7 +36,8 @@ export async function GET(req: Request) {
   // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
   // A browser that knew nobody is signed in; one that was signed in only linked an account.
-  if (!me) await later(() => countSignIn(db, "telegram"));
+  const ua = req.headers.get("user-agent");
+  if (!me) await later(() => countSignIn(db, "telegram", ua));
   const dest = new URL(loginNext(url.searchParams.get("next")), url.origin);
   // My matches says "Telegram linked"; any other page shows it by being signed in.
   if (dest.pathname === "/me") dest.searchParams.set("telegram", "linked");

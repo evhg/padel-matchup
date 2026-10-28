@@ -37,7 +37,27 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
         <span className={`truncate ${minimal ? "" : "[[data-text=big]_&]:max-sm:hidden"} ${oneRoleDoor ? "max-[380px]:hidden" : ""}`}>{APP_NAME}</span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
-        {!minimal && <HeaderNav roles={roles} current={current} labels={{ myMatches: t("common.myMatches"), assistant: t("common.assistant"), club: t("common.club"), series: t("common.series"), more: t("common.more"), findGame: t("common.findGame"), coaches: t("common.coaches"), clubs: t("common.clubs"), tournaments: t("common.tournaments"), biggerText: t("common.biggerText"), updates: updatesLabel((k, v) => t(k as never, v as never), roles.unread) }} />}
+        {!minimal && (
+          <HeaderNav
+            roles={roles}
+            current={current}
+            labels={{
+              myMatches: t("common.myMatches"),
+              assistant: t("common.assistant"),
+              club: t("common.club"),
+              series: t("common.series"),
+              more: t("common.more"),
+              findGame: t("common.findGame"),
+              coaches: t("common.coaches"),
+              clubs: t("common.clubs"),
+              tournaments: t("common.tournaments"),
+              biggerText: t("common.biggerText"),
+              updates: updatesLabel((k, v) => t(k as never, v as never), roles.unread),
+              // The name comes in the roles' one round trip; a cookie whose record is gone has none, and no sign-out.
+              you: roles.name ? { signedInAs: t("identity.signedInAs", { name: roles.name }), notYou: t("identity.notYou"), signOut: t("identity.signOut"), confirm: t("identity.signOutConfirm") } : undefined,
+            }}
+          />
+        )}
         <LocaleToggle />
       </div>
     </header>

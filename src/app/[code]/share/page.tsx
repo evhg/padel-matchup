@@ -58,7 +58,10 @@ async function SharePage({ params }: Props) {
   const mUrl = await manageUrlFor(viewer.player, ev);
   // No personal link for a session by name that proved nothing (DECIDING rule 34): it would be a full sign-in.
   const token = await personalTokenFor(db, viewer.player);
-  const hasPush = viewer.player && pushEnabled() ? await playerHasPush(db, viewer.player.id) : false;
+  // No reminders for a session by name that proved nothing, as no personal link (`token` is null for it):
+  // every notification carries that link (DECIDING rule 34).
+  const pushHere = Boolean(viewer.player && pushEnabled() && token);
+  const hasPush = pushHere && viewer.player ? await playerHasPush(db, viewer.player.id) : false;
 
   return (
     <>
@@ -93,7 +96,7 @@ async function SharePage({ params }: Props) {
           {t(isTournament ? "share.openTournament" : "share.openMatch")} →
         </Link>
 
-        {viewer.player && pushEnabled() && <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />}
+        {pushHere && <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />}
         <HomeScreenPrompt personalPath={token ? personalPath(token) : null} installed={Boolean(viewer.player?.homescreenAt)} />
 
         {emailEnabled() && (

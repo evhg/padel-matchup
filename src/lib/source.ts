@@ -1,3 +1,5 @@
+import { phoneClass } from "@/lib/domain/browserClass";
+
 /**
  * Where a visitor came from, when a link says so: kicksma.sh/CODE?s=ig on a
  * coach's Instagram story, ?s=poster on a printed poster. Kept in a short-lived
@@ -63,6 +65,20 @@ export function viewCounters(o: { source: string | null; seated: boolean; ua: st
   const key = viewCounter(o);
   if (!key) return [];
   return o.lone ? [key, "view_lone"] : [key];
+}
+
+/**
+ * Who opens a match still to come on a phone, and whether the phone's browser knows them (the owner's
+ * questions of 28 October 2026): `view_known_<class>` for a signed-in viewer, `view_anon_<class>` for one
+ * the browser does not know, in the five words of `phoneClass`. Every viewer counts, seated or not, the
+ * organiser too: the question is how often a phone's browser has forgotten the person, not the funnel
+ * `viewCounter` reads. Only a full page load, never a link preview, a computer or a match that started or
+ * was called off. One more key in the request's one statement (`countAfter`), on such loads only.
+ */
+export function phoneViewCounter(o: { ua: string; fullLoad: boolean; upcoming: boolean; known: boolean }): string | null {
+  if (!o.fullLoad || !o.upcoming || isCrawler(o.ua)) return null;
+  const cls = phoneClass(o.ua);
+  return cls ? `view_${o.known ? "known" : "anon"}_${cls}` : null;
 }
 
 /**

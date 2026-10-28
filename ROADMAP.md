@@ -1196,6 +1196,32 @@ Everything in this list is live. The README describes each in detail.
   fails when a third caller of `markSignedInByName` appears. The page's date is 16 October 2026. The
   owner also kept the reading of D5: each answer reaches a player once, by its own email where the
   address works, else on the first channel they gave.
+- **The owner's decisions of 28 October 2026 on sessions (no migration).** Three answers, built in one
+  change.
+  - "A session by name ('That's me') can delete that player's account today, and the deletion cancels
+    that player's upcoming matches. Close this gap?" The answer: "Close it (Recommended)". A session by
+    name that proved nothing gets `proof_required` from `deleteMyAccountAction`, the one door that
+    deletes an account (no API route, bot command or MCP tool does). My matches shows no button to it,
+    only why, and the doors on the page that prove the player: the email code, Telegram.
+  - "May a sign-in last one year after the last visit, and may every browser get 'Not you? Sign out'?"
+    The answer: "Yes, both (Recommended)". A full sign-in gets a new year at most once in 30 days, from
+    the day `km_has_id` carries, with no read (`POST /api/me/session?do=renew`, `session_renewed`). A
+    sign-in by name still ends a year after it began: its mark and its restore seal carry the end, so
+    the restore no longer gives it a new year. "Sign out on this browser" stands under the player's
+    name on My matches and at the foot of the header's ⋯ menu ("Signed in as Tim", only while the menu
+    is open). It removes the cookies, the restore seal and this browser's push subscription, stamps
+    the browser (`km_signed_out`), and from then on every restore seal and manage cookie the browser
+    held from before opens nothing. The personal link, and a home-screen icon that opens it, still
+    sign a signed-out browser in; the confirm and the privacy page say so, and the personal-link page
+    has no sign-out. The privacy page says it in three languages, and `tests/legal.test.ts` holds each
+    new promise.
+  - A fact of DECIDING rule 34, found in review: every notification carries the personal link, so a
+    session by name that proved nothing gets no notifications (`proof_required`, no reminder switch).
+  - The counters that come with them, each request's in one statement after the answer:
+    `view_anon_<class>`, `view_known_<class>`, `signin_ua_<class>`, `session_dead`, `passkey_shown`,
+    `passkey_not_now`, `session_renewed`, `signout` (docs/OPERATING.md, "Finding the jar").
+  The other two questions of the day, the sign-in in a browser that has never seen the player and the
+  saved passkey above the keyboard, are separate changes.
 
 ## The finish line
 

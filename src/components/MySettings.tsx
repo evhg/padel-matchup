@@ -15,9 +15,11 @@ import { NameEditor } from "./NameEditor";
 import { PersonalLinkCard } from "./PersonalLinkCard";
 import { PushToggle } from "./PushToggle";
 import { RestoreWithEmail } from "./RestoreWithEmail";
+import { SignOut } from "./SignOut";
 import { TelegramLogin } from "./TelegramLogin";
 import { markOf } from "@/lib/domain/emailMarks";
 import { TEXT_SIZE_COOKIE, textSizeOf } from "@/lib/textSize";
+import { nameOnly } from "@/actions/shared";
 import { TextSizeSwitch } from "./TextSizeSwitch";
 import { NoticeSettings } from "./NoticeSettings";
 import { kindOn, NOTICE_KINDS, noticeSummary, type NoticeKind } from "@/lib/domain/noticeKinds";
@@ -33,11 +35,18 @@ import { kindOn, NOTICE_KINDS, noticeSummary, type NoticeKind } from "@/lib/doma
  */
 /**
  * `personalToken` is null for a session that came in by "That's me" and has proved nothing since
- * (`nameOnlySession`, DECIDING rule 34): no personal link and no home-screen card for it.
+ * (`nameOnlySession`, DECIDING rule 34): no personal link and no home-screen card for it. No reminders
+ * either: every notification carries the personal link (`subscribePushAction` refuses such a session).
+ *
+ * `signOut`: "Not you? Sign out on this browser" under the name, on My matches only. The personal-link
+ * page leaves it off: its address is itself the sign-in, so a sign-out there signed the browser straight
+ * back in (`AdoptToken`).
  */
-export async function MySettings({ player, personalToken, hasMatches }: { player: Player; personalToken: string | null; hasMatches: boolean }) {
+export async function MySettings({ player, personalToken, hasMatches, signOut = false }: { player: Player; personalToken: string | null; hasMatches: boolean; signOut?: boolean }) {
   const [t, locale, db, jar] = await Promise.all([getTranslations(), getLocale(), getDb(), cookies()]);
-  const hasPush = await playerHasPush(db, player.id);
+  // Two cookie reads; for a session by name, the reminders' read is not made at all.
+  const pushHere = !(await nameOnly(player));
+  const hasPush = pushHere ? await playerHasPush(db, player.id) : false;
   // Mail to this address stopped arriving: the one place the person can fix it is here, so it says so here.
   const mark = emailEnabled() && player.email ? await markOf(db, player.email) : null;
   const markedOn = mark ? new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", timeZone: "UTC" }).format(mark.markedAt) : "";
@@ -48,13 +57,15 @@ export async function MySettings({ player, personalToken, hasMatches }: { player
   return (
     <>
       {/* The toggle draws its own card: a phone that cannot do push sees no card, not an empty one. */}
-      <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />
+      {pushHere && <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />}
       {/* What reaches this player and when: one line here, the switches behind it (the owner's decision D). */}
       <NoticeSettings on={on} quietFrom={player.quietFrom} quietTo={player.quietTo} summary={summary} />
       {personalToken && <PersonalLinkCard url={personalUrl(baseUrl(), personalToken)} email={player.email} emailEnabled={emailEnabled()} />}
       {personalToken && <HomeScreenPrompt personalPath={personalPath(personalToken)} installed={Boolean(player.homescreenAt)} />}
       <section className="card">
         <NameEditor name={player.displayName} />
+        {/* Where the player sees their own name: "Not you? Sign out on this browser" (the owner, 28 October 2026). */}
+        {signOut && <SignOut notYou={t("identity.notYou")} label={t("identity.signOut")} confirmText={t("identity.signOutConfirm")} testId="me-signout" />}
         <div className="mt-4 border-t border-line pt-4">
           <LevelEditor level={player.level} source={player.levelSource} log={player.levelLog} verified={isLevelVerified(player)} rankingOptIn={player.rankingOptIn} offerRanking={hasMatches} />
         </div>

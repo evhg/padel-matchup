@@ -26,6 +26,21 @@ export async function bumpMetric(db: Db, key: string, by = 1, day = dayKey()): P
     .onConflictDoUpdate({ target: [metricsDaily.day, metricsDaily.key], set: { value: sql`${metricsDaily.value} + ${by}` } });
 }
 
+/**
+ * Every counter of one request in one statement: one upsert with a row per key, a key named twice
+ * counted twice (Postgres refuses one statement that updates a row twice, so the keys are summed first).
+ * A page that counts three things this way costs one round trip after the answer, not three.
+ */
+export async function bumpMetrics(db: Db, keys: readonly string[], day = dayKey()): Promise<void> {
+  const sums = new Map<string, number>();
+  for (const k of keys) sums.set(k, (sums.get(k) ?? 0) + 1);
+  if (sums.size === 0) return;
+  await db
+    .insert(metricsDaily)
+    .values([...sums].map(([key, value]) => ({ day, key, value })))
+    .onConflictDoUpdate({ target: [metricsDaily.day, metricsDaily.key], set: { value: sql`${metricsDaily.value} + excluded.value` } });
+}
+
 export async function setMetric(db: Db, key: string, value: number, day = dayKey()): Promise<void> {
   await db
     .insert(metricsDaily)

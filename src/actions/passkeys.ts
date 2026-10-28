@@ -6,10 +6,10 @@ import { after } from "next/server";
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server";
 import { getDb, type Db } from "@/db";
 import { later } from "@/lib/alerts";
-import { bumpMetric } from "@/lib/domain/metrics";
+import { bumpMetric, bumpMetrics } from "@/lib/domain/metrics";
 import { completePasskeySignIn, mayRegister, passkeyById, passkeyLabel, passkeysOf, removePasskey, savePasskey } from "@/lib/domain/passkeys";
 import { LIMITS } from "@/lib/domain/ratelimit";
-import { countSignIn } from "@/lib/domain/signins";
+import { countSignIn, type SignInWay } from "@/lib/domain/signins";
 import { mergesLater } from "@/lib/mergeCount";
 import { promotedOf } from "@/lib/domain/slots";
 import { notifyLineupChange, notifyPromotion, notifyRefill } from "@/lib/notify";
@@ -132,8 +132,9 @@ export async function passkeySignInAction(answer: unknown): Promise<ActionResult
     if (!res.ok) return refuse();
     if (res.player.id !== currentId || session.byName) await setSessionPlayer(res.player.id);
     // Counted when the cookie changes to another record, as every way in is (`countSignIn`).
-    if (res.player.id !== currentId) await later(() => countSignIn(db, "passkey"));
-    if (res.folded) await later(() => countSignIn(db, "passkey_fold"));
+    const ways: SignInWay[] = [...(res.player.id !== currentId ? (["passkey"] as const) : []), ...(res.folded ? (["passkey_fold"] as const) : [])];
+    const ua = (await headers()).get("user-agent");
+    await later(() => countSignIn(db, ways, ua));
     // A fold that gave up a place in a match: the line-up changed, and whoever moved up hears it, as after a leave.
     for (const seats of res.seats) {
       after(async () => {
@@ -164,6 +165,23 @@ export async function removePasskeyAction(handle: string): Promise<ActionResult<
     const mine = typeof handle === "string" ? (await passkeysOf(db, me.id)).find((p) => passkeyHandle(me.id, p.id) === handle) : undefined;
     if (!mine || !(await removePasskey(db, me.id, mine.id))) throw new ActionFailure("invalid");
     revalidatePath("/", "layout");
+    return null;
+  });
+}
+
+/**
+ * The "Remember me on this phone" card, counted from the browser, because only the browser knows that it
+ * really showed: the phone can keep a passkey and no "Not now" hides it (the owner's questions of
+ * 28 October 2026). `shown` at most once a day per browser (`RememberPhone` keeps the day it last
+ * counted), `not_now` on each tap of "Not now". One upsert after the answer; nothing else read or written.
+ * The limit is the browser's own, so a script can call this as often as it likes (docs/OPERATING.md,
+ * "Honest browsers only"): a page view's cost each time, and a counter to read as a trend.
+ */
+export async function passkeyCardAction(what: "shown" | "not_now"): Promise<ActionResult<null>> {
+  return runA(async () => {
+    if (what !== "shown" && what !== "not_now") throw new ActionFailure("invalid");
+    const db = await getDb();
+    await later(() => bumpMetrics(db, [what === "shown" ? "passkey_shown" : "passkey_not_now"]));
     return null;
   });
 }

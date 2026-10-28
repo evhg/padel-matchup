@@ -36,6 +36,11 @@ export async function run<T>(fn: () => Promise<T>): Promise<ActionResult<T>> {
   }
 }
 
+/** The request's user agent, read before the answer, for a counter that runs after it (`countSignIn`). Never kept. */
+export async function userAgent(): Promise<string | null> {
+  return (await headers()).get("user-agent");
+}
+
 /** The caller's rate-limit key: a keyed hash of their address, never the address itself (`src/lib/ipKey.ts`). */
 export async function clientKey(): Promise<string> {
   return clientKeyFrom(await headers());

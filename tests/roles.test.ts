@@ -33,7 +33,8 @@ describe("the role set", () => {
   it("gives a plain player nothing but Play", async () => {
     const p = await makePlayer(db, "Erik");
     const roles = await rolesFor(db, p.id);
-    expect(roles).toEqual(NO_ROLES);
+    // No role, and the name the header's menu shows beside "Not you? Sign out on this browser", in the same round trip.
+    expect(roles).toEqual({ ...NO_ROLES, name: "Erik" });
     expect(roleCount(roles)).toBe(0);
   });
 

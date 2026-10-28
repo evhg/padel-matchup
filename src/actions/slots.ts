@@ -49,7 +49,7 @@ import { answerOfPick, cleanPicks } from "@/lib/domain/pastAsk";
 import { countSignIn } from "@/lib/domain/signins";
 import { getPlayer } from "@/lib/domain/players";
 import { DomainError } from "@/lib/domain/errors";
-import { ActionFailure, assertRate, clientKey, loadEvent, nameOnly, requireCreator, requirePlayer, runA, type ActionResult } from "./shared";
+import { ActionFailure, assertRate, clientKey, loadEvent, nameOnly, requireCreator, requirePlayer, runA, userAgent, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { mergesLater } from "@/lib/mergeCount";
 import { stayUpdated } from "@/lib/domain/stayUpdated";
@@ -379,7 +379,8 @@ export async function confirmInviteAction(
         if (res.outcome === "confirmed") {
           await setSessionPlayer(d.playerId);
           await markSignedInByName(d.playerId);
-          await later(() => countSignIn(db, "held_link"));
+          const ua = await userAgent();
+          await later(() => countSignIn(db, "held_link", ua));
           if (res.event.groupId) await joinGroup(db, res.event.groupId, d.playerId, "match").catch(() => undefined);
           const record = await getPlayer(db, d.playerId);
           if (record) after(async () => void (await afterConfirm(db, res, record, { wasComplete: before })));

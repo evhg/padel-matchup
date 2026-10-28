@@ -2,15 +2,16 @@
 
 import { useTranslations } from "next-intl";
 import { startTransition, useEffect, useState, useTransition } from "react";
-import { passkeySaveAction, passkeySaveOptionsAction } from "@/actions/passkeys";
+import { passkeyCardAction, passkeySaveAction, passkeySaveOptionsAction } from "@/actions/passkeys";
 import { PasskeySignIn } from "./PasskeySignIn";
+import { PASSKEY_NOT_NOW, PASSKEY_SHOWN_DAY } from "@/lib/browserKeys";
 
 /**
  * The browser's own "not now" for the offer: per browser, never a row (a convenience, not a setting). One
  * for the match page and one for My matches, so a "Not now" after a join does not take the offer away from
- * the page where a player manages their phones.
+ * the page where a player manages their phones. "Not you? Sign out" removes both (`forgetBrowser`).
  */
-const NOT_NOW = { match: "km_passkey_not_now", me: "km_passkey_not_now_me" } as const;
+const NOT_NOW = PASSKEY_NOT_NOW;
 
 /** Whether this browser can keep a passkey on the phone itself (Face ID, a fingerprint, the phone's lock). */
 export function usePlatformPasskey(): boolean {
@@ -68,6 +69,21 @@ export function RememberPhone({ offer, where = "match" }: { offer: boolean; wher
       setHidden(false);
     }
   }, [where]);
+  // `passkey_shown` counts a card the person really saw: the phone can keep a passkey, no "Not now" hid it,
+  // the record has none, and nothing was saved yet. Once a UTC day per browser, the day kept beside the
+  // "Not now" (the owner's questions of 28 October 2026); the count is one small action, never a render.
+  const visible = platform && !hidden && offer && outcome === null;
+  useEffect(() => {
+    if (!visible) return;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem(PASSKEY_SHOWN_DAY) === today) return;
+      localStorage.setItem(PASSKEY_SHOWN_DAY, today);
+    } catch {
+      return;
+    }
+    passkeyCardAction("shown").catch(() => undefined);
+  }, [visible]);
   // On the match page the card sits under the join's own cards; on My matches the page's gap spaces it.
   const gap = where === "match" ? "mt-3 " : "";
 
@@ -95,6 +111,7 @@ export function RememberPhone({ offer, where = "match" }: { offer: boolean; wher
       /* storage unavailable: hidden for this view only */
     }
     setHidden(true);
+    passkeyCardAction("not_now").catch(() => undefined);
   };
 
   return (

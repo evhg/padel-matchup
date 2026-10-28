@@ -7,6 +7,9 @@ export const PUSH_REMINDER_LEAD_MS = 60 * 60 * 1000;
 
 export type SubscriptionInput = { endpoint: string; keys: { p256dh: string; auth: string } };
 
+/** A push endpoint as a browser gives it: an https address of a push service, under 2048 characters. */
+export const validEndpoint = (e: unknown): e is string => typeof e === "string" && /^https:\/\//.test(e) && e.length < 2048;
+
 export async function savePushSubscription(db: Db, playerId: string, sub: SubscriptionInput, userAgent?: string | null, now = new Date()): Promise<void> {
   await db
     .insert(pushSubscriptions)

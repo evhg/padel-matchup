@@ -217,6 +217,16 @@ describe("work that must outlive the response is handed to after()", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("a page's render hands its counters to countAfter, so they share the layout's one statement", () => {
+    // docs/OPERATING.md: a page render's counters go in one statement after the answer (`countAfter` in
+    // src/lib/countLater.ts). A page that wrote its own (`card_views`, until 28 October 2026) made a second
+    // upsert beside the layout's `pageviews` on every view.
+    const offenders = sourceFiles(root("src/app"))
+      .filter((f) => /[\\/](page|layout)\.tsx$/.test(f) && /\bbumpMetrics?\(/.test(readFileSync(f, "utf8")))
+      .map((f) => path.relative(root("."), f));
+    expect(offenders).toEqual([]);
+  });
+
   it("the cron jobs report every error they record, and none waits behind the proposals sweep", () => {
     for (const route of ["src/app/api/cron/hourly/route.ts", "src/app/api/cron/push/route.ts"]) {
       const lines = readFileSync(root(route), "utf8").split("\n");

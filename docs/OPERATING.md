@@ -145,6 +145,10 @@ counted on the server, crawlers left out, while Vercel counts page views in the 
 Vercel Hobby functions also count time: 4 hours of active CPU and 360 GB-hours of provisioned memory a
 month (Vercel's Hobby figures as read on 10 October 2026; the usage page has the live numbers). A
 function that waits on the network counts against the memory, not the CPU, for every second it waits.
+Since 28 October 2026 a signed-in browser adds one invocation in 30 days for its new year
+(`POST /api/me/session?do=renew`, no read), a browser whose record is gone one in its life (`?do=dead`),
+and the "Remember me on this phone" card one a day for a browser that sees it (`passkey_shown`). At 1,000
+active browsers that is under 35,000 a month, 3.5% of the 1M.
 Supabase: 500 MB database, 5 GB egress a month. On 15 October 2026 the database used 32 MB
 (`pg_database_size`), and its largest relation was pg_cron's run log at 7.27 MB, which a weekly job
 now keeps to 14 to 21 days ("Cron jobs", below). Resend: 3,000 emails a month, 100 a day (book@ may
@@ -223,7 +227,15 @@ Which of these makes the second record is a question for the numbers, so these d
 `metrics_daily` answer it. None holds a name, an address or a token. Read them through
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
 current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'merge_%' or key like
-'join_src_%' or key like 'passkey_%' or key like 'thats_me_%' or key like 'join_name_%' or key = 'email_proved_by_name' or key like 'held_by_name%') group by 1 order by 1`.
+'join_src_%' or key like 'passkey_%' or key like 'thats_me_%' or key like 'join_name_%' or key = 'email_proved_by_name' or key like 'held_by_name%'
+or key like 'view_known_%' or key like 'view_anon_%' or key like 'session_%' or key = 'signout') group by 1 order by 1`.
+A page render's counters go in one statement after the answer: the layout's `pageviews`, the match
+page's view counters and `card_views` share one upsert through `countAfter` (`src/lib/countLater.ts`,
+over `bumpMetrics` in `src/lib/domain/metrics.ts`; `tests/rules.test.ts` holds every page to it). A
+sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in one statement through
+`countSignIn`. A merge count (`mergesLater`), an action's own counters (for example `signout`,
+`passkey_*` and the join counters) and the cron counters stay in statements of their own (since
+28 October 2026).
 
 - **Where a player came from.** `join_src_wa` and `newid_src_wa`: a join, and a record made from a
   name, that started from a WhatsApp share link. Every WhatsApp button that carries a match link
@@ -305,6 +317,46 @@ current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'me
   bound: `stay_asked` counts only the plain web join, and a player who came in by an invitation link, a
   held place or "Be their partner" meets the card later on the match page, so that player's answer
   counts in `stay_linked_*` with no ask before it.
+- **Which phone opens a match, and whether its browser knows the player.** `view_known_<class>` and
+  `view_anon_<class>`: a full load (`isFullPageLoad`) of a match page that has not started and is not
+  called off, by a phone, with a signed-in player (`known`) or none (`anon`); every viewer counts,
+  seated or not, the organiser too (`phoneViewCounter` in `src/lib/source.ts`; the owner's questions of
+  28 October 2026). The class is one of five words (`phoneClass` in `src/lib/domain/browserClass.ts`):
+  `ios_safari`, `ios_chrome`, `android_chrome`, `android_samsung`, and `other` for every other phone
+  browser, an app's own view and the home-screen icon. A computer, an iPad that says "Macintosh", a
+  link preview and a refresh count nothing. A high `view_anon_ios_chrome` against
+  `view_known_ios_chrome`: that browser forgets players, or the link opens it for players who live in
+  another one.
+- **The browser of every sign-in.** `signin_ua_<class>`: once for each sign-in, beside its
+  `signin_<way>` (and its `_fold`), in the same five words, a computer as `other` (`countSignIn`, which
+  takes the user agent the door read before the answer; since 28 October 2026).
+- **A cookie whose record is gone.** `session_dead`: a browser sent a session cookie with a good
+  signature for a record that no longer exists, or for an account that was deleted ("Deleted player").
+  A record goes in two ways: a merge folds it into another, or the daily clean-up removes a disposable
+  record (a name with no match and no way to reach it, `src/lib/domain/disposable.ts`) while the browser
+  that made it still holds its cookie. Nothing measured yet which way is more common. The root layout
+  sees it, the page's script asks `POST /api/me/session?do=dead`, and the route ends the cookie and
+  counts it, so a browser counts once, not once a page (since 28 October 2026). One read of that
+  record, only for such a browser.
+- **A year after the last visit.** `session_renewed`: a full sign-in got its new year (the owner,
+  28 October 2026: a sign-in lasts one year after the last visit). At most once in 30 days for each
+  browser (`RENEW_EVERY_DAYS`), from the day `km_has_id` carries; the layout reads the cookies and the
+  page's script asks `POST /api/me/session?do=renew`. No read. A sign-in by name is never renewed, and
+  its restore seal carries its end, so it ends a year after it began.
+- **Not you?** `signout`: "Sign out on this browser" in the header's ⋯ menu or on My matches. The
+  browser keeps `km_signed_out`, the moment, and every restore seal or manage cookie it held from before
+  opens nothing (`predatesSignOut`). The push row of that browser goes in the same request.
+- **The passkey card.** `passkey_shown`: the "Remember me on this phone" card really showed (the phone can
+  keep a passkey, no "Not now" hid it), at most once a UTC day per browser, counted by the browser
+  through one small action (`passkeyCardAction`); `passkey_not_now`: a tap on its "Not now". Against
+  `passkey_saved`, they say whether the card works.
+- **Honest browsers only.** The limits above ("once in 30 days", "once a day", "once in its life") are
+  kept by the browser: the day in `km_has_id`, which a script can write, and the day in the page's
+  storage. A script that holds any valid `km_player` (a join gives one) can post `?do=renew` with an old
+  day each time, and anybody can call `passkeyCardAction` or `signOutAction` again and again. Each call
+  costs about as much as a page view, so it is no new kind of load, but it can inflate
+  `session_renewed`, `passkey_shown`, `passkey_not_now` and `signout`. Read them as trends; a sudden
+  jump with no jump in `pageviews` is a script.
 - **Reading them.** Many `newid_name_here` with few `signin_thats_me`: players do not see the button.
   A high `newid_ua_ios_webview` against `ios_safari`: identities made in the home-screen icon or an
   app's view. `newid_src_wa` close to all new records: the jar is the WhatsApp tap itself.
