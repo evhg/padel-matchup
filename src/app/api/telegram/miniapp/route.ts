@@ -26,6 +26,7 @@ export async function POST(req: Request) {
   const player = me ? await linkTelegram(db, me.id, user, mergesLater(db)) : await findOrCreateTelegramPlayer(db, user);
   // Linking keeps the record with more history, which can be the one that held Telegram: the session follows it.
   await setSessionPlayer(player.id);
-  if (!me) await later(() => countSignIn(db, "telegram_miniapp"));
+  const ua = req.headers.get("user-agent");
+  if (!me) await later(() => countSignIn(db, "telegram_miniapp", ua));
   return NextResponse.json({ ok: true, next: miniAppNext(body?.startParam ?? fields.start_param) });
 }

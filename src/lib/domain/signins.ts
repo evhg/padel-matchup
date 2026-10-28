@@ -1,7 +1,7 @@
 import type { Db } from "@/db";
-import { browserClass } from "./browserClass";
+import { browserClass, uaClass } from "./browserClass";
 import { nameIsHere } from "./dupes";
-import { bumpMetric } from "./metrics";
+import { bumpMetric, bumpMetrics } from "./metrics";
 
 /**
  * How a browser came to be signed in, counted per day with nothing personal (docs/OPERATING.md).
@@ -24,13 +24,23 @@ import { bumpMetric } from "./metrics";
  *     new record this browser had made into the passkey's own record.
  *
  * A link of a second channel to a browser already signed in is not a sign-in and is not counted.
+ *
+ * Beside each sign-in, `signin_ua_<class>` counts the browser it happened in, in the five words of the
+ * phone counters (`uaClass`: a computer is `other`), once a sign-in however many ways it names (the
+ * owner's questions of 28 October 2026). The door hands in the user agent it read before the answer.
  */
 export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp", "passkey", "passkey_fold"] as const;
 export type SignInWay = (typeof SIGNIN_WAYS)[number];
 
-/** Never throws: a sign-in must not fail because its counter did. */
-export async function countSignIn(db: Db, way: SignInWay): Promise<void> {
-  await bumpMetric(db, `signin_${way}`).catch(() => undefined);
+/**
+ * One sign-in, by one way or more (`thats_me` and `thats_me_fold`), its browser, and any other counter the
+ * same sign-in bumps (`also`, such as `thats_me_unreached`), in one statement. Never throws: a sign-in must
+ * not fail because its counter did.
+ */
+export async function countSignIn(db: Db, way: SignInWay | readonly SignInWay[], ua: string | null | undefined, also: readonly string[] = []): Promise<void> {
+  const ways = typeof way === "string" ? [way] : way;
+  if (ways.length === 0) return;
+  await bumpMetrics(db, [...ways.map((w) => `signin_${w}`), `signin_ua_${uaClass(ua)}`, ...also]).catch(() => undefined);
 }
 
 /**
@@ -83,9 +93,11 @@ export async function countMerge(db: Db, door: MergeDoor, records = 1): Promise<
  */
 export async function countNewRecord(db: Db, o: { ua: string | null | undefined; source: string | null; name: string; namesHere?: readonly (string | null | undefined)[] }): Promise<void> {
   try {
-    await bumpMetric(db, `newid_ua_${browserClass(o.ua)}`);
-    if (o.source) await bumpMetric(db, `newid_src_${o.source}`);
-    if (o.namesHere && nameIsHere(o.name, o.namesHere)) await bumpMetric(db, "newid_name_here");
+    // One statement for the record's counters (`bumpMetrics`), not one each (since 28 October 2026).
+    const keys = [`newid_ua_${browserClass(o.ua)}`];
+    if (o.source) keys.push(`newid_src_${o.source}`);
+    if (o.namesHere && nameIsHere(o.name, o.namesHere)) keys.push("newid_name_here");
+    await bumpMetrics(db, keys);
   } catch {
     /* counters are optional */
   }

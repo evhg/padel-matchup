@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { RoleSet } from "@/lib/domain/roles";
 import { InboxBell } from "./InboxBell";
+import { MenuSignOut } from "./SignOut";
 import { TextSizeSwitch } from "./TextSizeSwitch";
 
 /**
@@ -20,8 +21,25 @@ import { TextSizeSwitch } from "./TextSizeSwitch";
 const chip = "btn-ghost btn-xs";
 
 type Door = { key: string; href: string; label: string; kind: "coach" | "club" | "series" | "public"; testId: string };
-/** `updates`: the unread notices as words ("2 new updates"), the name of the bell; empty when there are none. */
-export type NavLabels = { myMatches: string; assistant: string; club: string; series: string; more: string; findGame: string; coaches: string; clubs: string; tournaments: string; biggerText: string; updates?: string };
+/**
+ * `updates`: the unread notices as words ("2 new updates"), the name of the bell; empty when there are none.
+ * `you`: for a signed-in player, "Signed in as Tim" and "Not you? Sign out on this browser" at the foot of
+ * the menu (the owner, 28 October 2026), the one place on every page where the person's own name shows.
+ */
+export type NavLabels = {
+  myMatches: string;
+  assistant: string;
+  club: string;
+  series: string;
+  more: string;
+  findGame: string;
+  coaches: string;
+  clubs: string;
+  tournaments: string;
+  biggerText: string;
+  updates?: string;
+  you?: { signedInAs: string; notYou: string; signOut: string; confirm: string };
+};
 
 /** The bell's name from the unread count: "2 new updates", or "More than 9 new updates" past nine. */
 export const updatesLabel = (t: (key: string, values?: Record<string, number>) => string, unread: number): string => (unread > 9 ? t("common.manyNewNotices") : t("common.newNotices", { count: unread }));
@@ -87,6 +105,7 @@ export function HeaderNav({ roles, current, labels }: { roles: RoleSet; current?
           {publicDoors(labels).map(link)}
           <div className="my-1 border-t border-line" />
           <TextSizeSwitch label={labels.biggerText} compact />
+          {labels.you && <MenuSignOut signedInAs={labels.you.signedInAs} notYou={labels.you.notYou} label={labels.you.signOut} confirmText={labels.you.confirm} />}
         </div>
       </details>
     );

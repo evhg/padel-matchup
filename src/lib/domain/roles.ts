@@ -35,9 +35,15 @@ export type RoleSet = {
    * (`notices_player_created_idx`; the owner's decision D).
    */
   unread: number;
+  /**
+   * The person's own name, for "Signed in as Tim · Not you? Sign out on this browser" in the header's menu
+   * (the owner, 28 October 2026). In the same round trip, one lookup down the players' key; null for a
+   * cookie whose record is gone.
+   */
+  name: string | null;
 };
 
-export const NO_ROLES: RoleSet = { coach: null, clubs: [], series: [], studentOf: 0, unread: 0 };
+export const NO_ROLES: RoleSet = { coach: null, clubs: [], series: [], studentOf: 0, unread: 0, name: null };
 
 /** How many doors besides Play this person holds; the header changes shape on it. */
 export const roleCount = (r: RoleSet): number => (r.coach ? 1 : 0) + r.clubs.length + r.series.length;
@@ -81,7 +87,8 @@ export async function rolesFor(db: Db, playerId: string | null | undefined): Pro
       (select count(*) from coach_students cs
         where cs.player_id = ${playerId} and cs.status = 'accepted') as student_of,
       (select count(*) from (select 1 from notices n
-        where n.player_id = ${playerId} and n.read_at is null limit 10) u) as unread
+        where n.player_id = ${playerId} and n.read_at is null limit 10) u) as unread,
+      (select p.display_name from players p where p.id = ${playerId}) as name
   `);
   const row = rowOf(res);
   if (!row) return NO_ROLES;
@@ -92,5 +99,6 @@ export async function rolesFor(db: Db, playerId: string | null | undefined): Pro
     series: asJson<RoleSeries[]>(row.series, []),
     studentOf: Number(row.student_of ?? 0),
     unread: Number(row.unread ?? 0),
+    name: typeof row.name === "string" ? row.name : null,
   };
 }

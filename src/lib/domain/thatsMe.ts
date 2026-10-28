@@ -203,6 +203,16 @@ export function nameOnlySession(signedByName: boolean, p: Pick<Player, "emailVer
   return !(p.emailVerifiedAt || p.telegramId || p.discordId || p.lineId || p.phone);
 }
 
+/**
+ * Why this session may not delete its account, or null. A session by name that proved nothing
+ * (`nameOnlySession`) may not: the deletion wipes the record and cancels every match it organises, and a
+ * name on a line-up proves nobody is that person. The way through is proof in this browser: an email code
+ * or Telegram, which turns the session into a full one.
+ */
+export function deletionRefusal(signedByName: boolean, p: Pick<Player, "emailVerifiedAt" | "telegramId" | "discordId" | "lineId" | "phone"> | null): "proof_required" | null {
+  return nameOnlySession(signedByName, p) ? "proof_required" : null;
+}
+
 /** The records a browser that knows nobody may sign in as, from the rows read for a whole match: what the page offers. Pure. */
 export const claimableRows = (rows: readonly ThatsMeRow[]): ThatsMeRow[] => rows.filter((r) => whyNot(r) === null);
 

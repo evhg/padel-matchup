@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
-import { BROWSER_CLASSES, browserClass, type BrowserClass } from "@/lib/domain/browserClass";
+import { BROWSER_CLASSES, browserClass, PHONE_CLASSES, phoneClass, uaClass, type BrowserClass, type PhoneClass } from "@/lib/domain/browserClass";
 import { dayKey } from "@/lib/domain/metrics";
 import { countNewRecord, countSignIn } from "@/lib/domain/signins";
 import { freezeClock } from "./helpers/clock";
@@ -49,6 +49,36 @@ describe("which browser made a new record", () => {
   });
 });
 
+describe("the phone counters' five words", () => {
+  // The four browsers a link opens most on a phone keep their names; every other phone browser is `other`;
+  // a computer, an iPad that says Macintosh and a user agent with no phone in it are no phone at all.
+  const PHONE: Record<BrowserClass, PhoneClass | null> = {
+    ios_safari: "ios_safari",
+    ios_chrome: "ios_chrome",
+    android_chrome: "android_chrome",
+    android_samsung: "android_samsung",
+    ios_other: "other",
+    ios_webview: "other",
+    android_webview: "other",
+    android_other: "other",
+    app_whatsapp: "other",
+    app_telegram: "other",
+    app_instagram: "other",
+    app_facebook: "other",
+    app_line: "other",
+    desktop: null,
+    other: null,
+  };
+  it.each(UA)("%s", (_label, ua, cls) => {
+    expect(phoneClass(ua)).toBe(PHONE[cls]);
+    expect(uaClass(ua)).toBe(PHONE[cls] ?? "other");
+  });
+
+  it("names only the five words", () => {
+    expect(new Set(UA.map(([, ua]) => uaClass(ua)))).toEqual(new Set(PHONE_CLASSES));
+  });
+});
+
 // A fixed clock (rule 11): every counter lands on this day.
 const NOW = new Date(Date.UTC(2026, 9, 10, 4, 0));
 freezeClock(NOW);
@@ -75,12 +105,31 @@ describe("the counters, with nothing personal in them", () => {
   });
 
   it("counts each way a browser signs in", async () => {
-    for (const way of ["thats_me", "restore", "personal_link", "email_code", "telegram"] as const) await countSignIn(db, way);
-    await countSignIn(db, "thats_me");
+    for (const way of ["thats_me", "restore", "personal_link", "email_code", "telegram"] as const) await countSignIn(db, way, UA[0][1]);
+    await countSignIn(db, "thats_me", UA[0][1]);
     expect(await metric("signin_thats_me")).toBe(2);
     expect(await metric("signin_restore")).toBe(1);
     expect(await metric("signin_personal_link")).toBe(1);
     expect(await metric("signin_email_code")).toBe(1);
     expect(await metric("signin_telegram")).toBe(1);
+  });
+
+  it("counts the browser beside every sign-in, once a sign-in, in the phone counters' five words", async () => {
+    const before = await metric("signin_ua_ios_safari");
+    // One sign-in that also folded: two ways, one browser.
+    await countSignIn(db, ["thats_me", "thats_me_fold"], UA[0][1], ["thats_me_unreached"]);
+    expect(await metric("signin_ua_ios_safari")).toBe(before + 1);
+    expect(await metric("signin_thats_me_fold")).toBe(1);
+    expect(await metric("thats_me_unreached")).toBe(1);
+    // Samsung Internet keeps its name; a computer and no user agent at all are `other`.
+    await countSignIn(db, "passkey", UA[9][1]);
+    await countSignIn(db, "passkey", UA[17][1]);
+    await countSignIn(db, "passkey", null);
+    expect(await metric("signin_ua_android_samsung")).toBe(1);
+    expect(await metric("signin_ua_other")).toBe(2);
+    expect(await metric("signin_passkey")).toBe(3);
+    // No way, no count: a passkey sign-in that changed nothing names none.
+    await countSignIn(db, [], UA[0][1]);
+    expect(await metric("signin_ua_ios_safari")).toBe(before + 1);
   });
 });

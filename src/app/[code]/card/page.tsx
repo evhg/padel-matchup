@@ -10,8 +10,7 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { formatEventDay } from "@/lib/dates";
-import { bumpMetric } from "@/lib/domain/metrics";
-import { later } from "@/lib/alerts";
+import { countAfter } from "@/lib/countLater";
 import { streakLine, winStreakFor } from "@/lib/domain/banter";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
@@ -51,7 +50,8 @@ async function CardPage({ params }: Props) {
   const participant = Boolean(me && (ev.creatorPlayerId === me.id || isSeated({ roster: detail.roster }, me.id)));
   const nameOf = (s: (typeof detail.roster)[number]) => s.player?.displayName ?? s.invitedName ?? "?";
   // One count per render: the funnel's last step.
-  await later(() => bumpMetric(db, "card_views"));
+  // With the layout's `pageviews`, in one statement after the answer (`countAfter`).
+  await countAfter(db, ["card_views"]);
   let line: string;
   let praise: string | null = null;
   let banter: string | null = null;

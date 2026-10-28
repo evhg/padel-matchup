@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * Private event link (the one saved in calendar entries and emails):
  * signs this device in as the token's player, then opens the match page.
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ token: string; code: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string; code: string }> }) {
   const { token, code } = await params;
   const target = new URL(isValidShareCode(code) ? `/${code}` : "/", baseUrl());
   try {
@@ -21,7 +21,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     const player = await findPlayerByPersonalToken(db, token);
     if (player && (await getSessionPlayerId()) !== player.id) {
       await setSessionPlayer(player.id);
-      await later(() => countSignIn(db, "personal_link"));
+      const ua = req.headers.get("user-agent");
+      await later(() => countSignIn(db, "personal_link", ua));
     }
   } catch (e) {
     console.warn("[personal] could not adopt token", e);

@@ -7,7 +7,7 @@ import { nameOnly } from "@/actions/shared";
 import { createPlayer } from "@/lib/domain/players";
 import { dayKey } from "@/lib/domain/metrics";
 import { DELETED_PLAYER_NAME } from "@/lib/domain/result";
-import { BY_NAME_COOKIE, markSignedInByName, PLAYER_COOKIE, restoreSeal, restoreSealForSession, sealPlayerId, setSessionPlayer, signedInByName, unsealPlayerId } from "@/lib/session";
+import { BY_NAME_COOKIE, markSignedInByName, openRestoreSeal, PLAYER_COOKIE, restoreSeal, restoreSealForSession, sealPlayerId, setSessionPlayer, signedInByName, unsealPlayerId } from "@/lib/session";
 import { asAction } from "./helpers/action";
 
 /**
@@ -98,12 +98,14 @@ describe("restoring a lost session", () => {
     const forged = await asAction({ [PLAYER_COOKIE]: sealPlayerId(ana.id), [BY_NAME_COOKIE]: "x" }, () => restoreSealForSession(ana.id));
     expect(forged.result).toBe(restoreSeal(ana.id, false));
     // A sign-in by name from before the mark moved into the session cookie: a plain cookie and a valid mark beside it.
+    // Since 28 October 2026 the mark carries the end of the sign-in, and so does the seal (`until`).
     const marked = await asAction({}, async () => {
       await setSessionPlayer(ana.id);
       await markSignedInByName(ana.id);
     });
     const legacy = await asAction({ [PLAYER_COOKIE]: sealPlayerId(ana.id), [BY_NAME_COOKIE]: marked.cookies[BY_NAME_COOKIE] }, () => restoreSealForSession(ana.id));
-    expect(legacy.result).toBe(restoreSeal(ana.id, true));
+    expect(openRestoreSeal(legacy.result)).toMatchObject({ playerId: ana.id, byName: true });
+    expect(openRestoreSeal(legacy.result)!.until).toBeGreaterThan(Date.now());
   });
 
   it("refuses the seal of a deleted account", async () => {

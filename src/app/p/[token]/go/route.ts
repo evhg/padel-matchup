@@ -25,7 +25,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     const player = await findPlayerByPersonalToken(db, token);
     if (player && (await getSessionPlayerId()) !== player.id) {
       await setSessionPlayer(player.id);
-      await later(() => countSignIn(db, "personal_link"));
+      const ua = req.headers.get("user-agent");
+      await later(() => countSignIn(db, "personal_link", ua));
     }
   } catch (e) {
     console.warn("[personal] could not adopt token", e);

@@ -69,3 +69,22 @@ export function browserClass(ua: string | null | undefined): BrowserClass {
   if (/Windows NT|Macintosh|X11|CrOS/.test(s)) return "desktop";
   return "other";
 }
+
+/**
+ * The five words the phone counters carry (`view_anon_<class>`, `view_known_<class>`, `signin_ua_<class>`,
+ * the owner's questions of 28 October 2026): the four browsers a link in a chat opens most on a phone, and
+ * `other` for every other phone browser, an app's own view, the home-screen icon and the rest. Fewer rows
+ * than the fifteen classes of `newid_ua_*`, because these count every visit, not only a new record.
+ */
+export const PHONE_CLASSES = ["ios_safari", "ios_chrome", "android_chrome", "android_samsung", "other"] as const;
+export type PhoneClass = (typeof PHONE_CLASSES)[number];
+
+/** The phone's class from its user agent (`browserClass`, folded to five words); null for a computer, an iPad that says Macintosh, or a user agent that names no phone. */
+export function phoneClass(ua: string | null | undefined): PhoneClass | null {
+  const cls = browserClass(ua);
+  if (cls === "desktop" || cls === "other") return null;
+  return (PHONE_CLASSES as readonly string[]).includes(cls) ? (cls as PhoneClass) : "other";
+}
+
+/** `phoneClass`, with a computer or an unknown browser as `other`: for a counter that counts every browser, such as a sign-in. */
+export const uaClass = (ua: string | null | undefined): PhoneClass => phoneClass(ua) ?? "other";

@@ -15,17 +15,19 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { notifyLineupChange, notifyPromotion, notifyRefill, sendEmailCode, welcomeEmail, welcomeFor } from "@/lib/notify";
 import { stayUpdated, type WelcomeKind } from "@/lib/domain/stayUpdated";
 import { stayChannels } from "@/lib/calendarFeed";
-import { bumpMetric } from "@/lib/domain/metrics";
+import { bumpMetric, bumpMetrics } from "@/lib/domain/metrics";
 import { personalUrl } from "@/lib/personal";
-import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, markSignedInByName, openRestoreSeal, setSessionPlayer } from "@/lib/session";
-import { ActionFailure, assertRate, clientKey, nameOnly, requirePlayer, runA, type ActionResult } from "./shared";
+import { removePushSubscription, validEndpoint } from "@/lib/domain/push";
+import { clearSessionPlayer, getSessionPlayer, getSessionPlayerId, markSignedInByName, openRestoreSeal, setSessionPlayer, signedInByName, signedOutAt, signOutBrowser } from "@/lib/session";
+import { byNameOver, predatesSignOut } from "@/lib/domain/browserSession";
+import { ActionFailure, assertRate, clientKey, nameOnly, requirePlayer, runA, userAgent, type ActionResult } from "./shared";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { removeOptOut } from "@/lib/domain/optouts";
 import { liftOnConsent } from "@/lib/domain/emailMarks";
 import { claimSameNameRow } from "@/lib/domain/sameName";
 import { later } from "@/lib/alerts";
 import { countSignIn } from "@/lib/domain/signins";
-import { thatsMe } from "@/lib/domain/thatsMe";
+import { deletionRefusal, thatsMe } from "@/lib/domain/thatsMe";
 import { unreachedNamed } from "@/lib/domain/unreached";
 import { channelsOffered } from "@/lib/coach/reach";
 import { isDeletedPlayer } from "@/lib/domain/result";
@@ -145,9 +147,13 @@ export async function proveMyEmail(email: string, code: string, eventCode?: stri
     const held = (await playersWithEmail(db, verified)).some((p) => p.email === verified);
     const player = await restoreByEmail(db, verified, me.id, undefined, mergesLater(db));
     await setSessionPlayer(player.id);
-    if (player.id !== me.id) await later(() => countSignIn(db, "email_code"));
-    // A session by name that proved its address: how often a real player who came in by "That's me" typed the one code (the decision's con).
-    if (byName) await later(() => bumpMetric(db, "email_proved_by_name"));
+    // One statement after the answer: the sign-in when the browser changed record, and, for a session by name
+    // that proved its address, `email_proved_by_name`: how often a real player who came in by "That's me"
+    // typed the one code (the decision's con).
+    const ua = await userAgent();
+    const proved = byName ? ["email_proved_by_name"] : [];
+    if (player.id !== me.id) await later(() => countSignIn(db, "email_code", ua, proved));
+    else if (byName) await later(() => bumpMetrics(db, proved));
     await removeOptOut(db, verified);
     let welcome: WelcomeKind | null = null;
     if (!held) {
@@ -201,7 +207,8 @@ export async function verifyRestoreCode(email: string, code: string): Promise<Ac
     const currentId = await getSessionPlayerId();
     const player = await restoreByEmail(db, verified, currentId, undefined, mergesLater(db));
     await setSessionPlayer(player.id);
-    if (player.id !== currentId) await later(() => countSignIn(db, "email_code"));
+    const ua = await userAgent();
+    if (player.id !== currentId) await later(() => countSignIn(db, "email_code", ua));
     revalidatePath("/", "layout");
     return pub(player);
   });
@@ -244,10 +251,10 @@ export async function thatsMeAction(code: string, name: string): Promise<ActionR
     await setSessionPlayer(res.player.id);
     // Marked until the record proves something: no personal link for a sign-in by name.
     await markSignedInByName(res.player.id);
-    await later(() => countSignIn(db, "thats_me"));
-    // Counted beside `signin_thats_me`: how often the organiser's unreached list brought a player back (D6).
-    if (res.via === "unreached") await later(() => bumpMetric(db, "thats_me_unreached"));
-    if (res.folded) await later(() => countSignIn(db, "thats_me_fold"));
+    // One statement: the sign-in, its fold, its browser, and (D6) `thats_me_unreached` beside `signin_thats_me`,
+    // how often the organiser's unreached list brought a player back.
+    const ua = await userAgent();
+    await later(() => countSignIn(db, res.folded ? ["thats_me", "thats_me_fold"] : "thats_me", ua, res.via === "unreached" ? ["thats_me_unreached"] : []));
     // A fold that gave up a place in the match: the line-up changed, and whoever moved up hears it, as after a leave.
     const seats = res.seats;
     if (seats) {
@@ -333,12 +340,17 @@ export async function rotatePersonalLinkAction(): Promise<ActionResult<{ url: st
 /**
  * "Delete my account": personal data goes, history stays anonymous. Upcoming
  * spots are released; upcoming matches this player organizes are cancelled.
+ * A session by name that proved nothing may not (`deletionRefusal`, the owner, 28 October 2026): a name
+ * on a line-up proves nobody is that person, and the deletion cancels the record's matches. This is the
+ * one door that deletes an account: no API route, bot command or MCP tool does.
  */
 export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
+    const refusal = deletionRefusal(await signedInByName(me.id), me);
+    if (refusal) throw new ActionFailure(refusal);
     const { anonymizePlayer } = await import("@/lib/domain/anonymize");
     const { cancelledEvents, leftEvents, coachClosure } = await anonymizePlayer(db, me.id);
     after(async () => {
@@ -368,6 +380,32 @@ export async function deleteMyAccountAction(): Promise<ActionResult<null>> {
   });
 }
 
+/**
+ * "Not you? Sign out on this browser" (the owner, 28 October 2026: "Yes, both"). The header's menu and
+ * My matches offer it wherever the signed-in player sees their own name. It ends the session in this
+ * browser and nothing else: the record, its matches, its passkeys and its personal link stay as they
+ * are. The cookies go, the browser is stamped with the moment, so the restore seal and the manage
+ * cookies it held from before open nothing (`signOutBrowser`), and the page's script removes the seal
+ * from its storage before it calls this (`forgetBrowser`). The page renders again signed out. Counted
+ * as `signout`.
+ *
+ * `endpoint`: this browser's push subscription, which the page's script reads and ends after the call
+ * (`SignOut`). Its row goes here, in one statement, by the endpoint alone, as "Turn off" does: whoever
+ * holds the endpoint is this browser, and a row bound to another record (a session by name that changed
+ * record) goes too. Without this, the next person on the phone kept the player's notifications, and each
+ * one carries the personal link, which signs the browser in again in full.
+ */
+export async function signOutAction(endpoint?: string | null): Promise<ActionResult<null>> {
+  return runA(async () => {
+    const db = await getDb();
+    if (validEndpoint(endpoint)) await removePushSubscription(db, endpoint);
+    await signOutBrowser();
+    await later(() => bumpMetrics(db, ["signout"]));
+    revalidatePath("/", "layout");
+    return null;
+  });
+}
+
 /** Called by the personal-link page so the device that opened it gets the cookie. A link with a destination is handed on server-side instead (`/p/[token]/go`). */
 export async function adoptPersonalToken(token: string): Promise<ActionResult<PublicPlayer | null>> {
   return runA(async () => {
@@ -377,7 +415,8 @@ export async function adoptPersonalToken(token: string): Promise<ActionResult<Pu
     const currentId = await getSessionPlayerId();
     if (currentId !== p.id) {
       await setSessionPlayer(p.id);
-      await later(() => countSignIn(db, "personal_link"));
+      const ua = await userAgent();
+      await later(() => countSignIn(db, "personal_link", ua));
     }
     return pub(p);
   });
@@ -397,11 +436,16 @@ export async function restoreIdentity(seal: string): Promise<ActionResult<boolea
     if (!opened) return false;
     const db = await getDb();
     if (await getSessionPlayerId()) return true;
+    // "Not you? Sign out" (the owner, 28 October 2026): a seal this browser held from before its last
+    // sign-out brings nobody back, and a sign-in by name ends a year after it began, also through here.
+    if (predatesSignOut(opened.out, await signedOutAt())) return false;
+    if (opened.byName && byNameOver(opened.until, Date.now())) return false;
     const p = await getPlayer(db, opened.playerId);
     if (!p || isDeletedPlayer(p)) return false;
     await setSessionPlayer(p.id);
-    if (opened.byName) await markSignedInByName(p.id);
-    await later(() => countSignIn(db, "restore"));
+    if (opened.byName) await markSignedInByName(p.id, { until: opened.until || undefined });
+    const ua = await userAgent();
+    await later(() => countSignIn(db, "restore", ua));
     return true;
   });
 }

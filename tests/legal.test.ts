@@ -9,7 +9,8 @@ import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { PARTNER_WINDOW_MS } from "@/lib/domain/refill";
 import { LEGAL_OPERATOR, legalDate, legalValues } from "@/lib/legal";
 import { hintCookieOptions } from "@/lib/hintCookie";
-import { BY_NAME_COOKIE, HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE } from "@/lib/session";
+import { BY_NAME_COOKIE, HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE, SIGNED_OUT_COOKIE } from "@/lib/session";
+import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 import { CHALLENGE_COOKIE, challengeCookie } from "@/lib/passkeys/webauthn";
@@ -30,7 +31,7 @@ const notMineCookie = readFileSync(path.resolve(process.cwd(), "src/components/S
 describe("the privacy page tells the truth about the code", () => {
   it("names every cookie the app sets, in every language", () => {
     expect(notMineCookie).toBe("ks_notmine");
-    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE];
+    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, SIGNED_OUT_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE];
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
@@ -49,6 +50,7 @@ describe("the privacy page tells the truth about the code", () => {
     const lifetimes: [string, number][] = [
       [PLAYER_COOKIE, ONE_YEAR],
       [BY_NAME_COOKIE, ONE_YEAR],
+      [SIGNED_OUT_COOKIE, ONE_YEAR],
       [manageCookieName(""), ONE_YEAR],
       [HAS_ID_COOKIE, hintCookieOptions().maxAge],
       [SOURCE_COOKIE, SOURCE_MAX_AGE],
@@ -159,6 +161,74 @@ describe("the privacy page tells the truth about the code", () => {
       const m = messagesOf(l);
       const line = render(l, "privacy.cookiesBody").split("\n").find((x) => x.includes(BY_NAME_COOKIE));
       for (const button of [m.identity.thatsMeIn, m.invitePage.confirm]) expect(line, `${l}: ${button}`).toContain(button);
+    }
+  });
+
+  it("says a sign-in lasts a year after the last visit, renewed at most once in the days the code renews it, and one by name a year after it began", () => {
+    // The owner, 28 October 2026: "May a sign-in last one year after the last visit ...?" "Yes, both".
+    // `renewSession` gives km_player and km_has_id a new year at most once in RENEW_EVERY_DAYS, so the
+    // line names that figure from the code; a sign-in by name is never renewed (`renewDue`).
+    const LAST = { en: "One year after your last visit", ru: "Один год после вашего последнего визита", es: "Un año después de tu última visita" } as const;
+    const BY_NAME = { en: "one year after you came in, and no longer", ru: "один год после входа, не дольше", es: "un año después de entrar, y no más" } as const;
+    for (const l of LOCALES) {
+      const raw = (messagesOf(l).privacy.cookiesBody as string).split("\n");
+      expect(raw.find((x) => x.includes(`${PLAYER_COOKIE}:`)), l).toContain("{renewDays");
+      const lines = render(l, "privacy.cookiesBody").split("\n");
+      const player = lines.find((x) => x.includes(`${PLAYER_COOKIE}:`))!;
+      expect(player, l).toContain(LAST[l]);
+      expect(player, l).toMatch(new RegExp(`(^|\\D)${RENEW_EVERY_DAYS}\\s`));
+      expect(player, l).toContain(BY_NAME[l]);
+      expect(lines.find((x) => x.includes(`${HAS_ID_COOKIE}:`)), l).toContain(LAST[l]);
+    }
+  });
+
+  it("says what 'Sign out on this browser' removes, where it is, and what the sign-out mark keeps, in every language", () => {
+    // `signOutAction` deletes the session cookies and stamps km_signed_out; the page's script removes the
+    // restore seal from the browser's storage (`forgetBrowser`). The button's own words are on the page.
+    const COPY = { en: "removes that copy", ru: "удаляет эту копию", es: "borra esa copia" } as const;
+    for (const l of LOCALES) {
+      const m = messagesOf(l);
+      const text = render(l, "privacy.cookiesBody");
+      const storage = text.split("\n").at(-1)!;
+      expect(storage, l).toContain(m.identity.signOut);
+      expect(storage, l).toContain(COPY[l]);
+      expect(text.split("\n").find((x) => x.includes(`${SIGNED_OUT_COOKIE}:`)), l).toContain(m.identity.signOut);
+    }
+  });
+
+  it("says the sign-out stops this browser's notifications, and that the personal link and a home-screen icon still sign in", () => {
+    // `signOutAction(endpoint)` deletes this browser's push row and `SignOut` ends the subscription: a
+    // notification carries the personal link, so one left behind signed the next person in as the player.
+    // The personal link is a sign-in by design (DECIDING rule 34), and the home-screen icon's start page is
+    // that link (the manifest), so km_signed_out stops neither: the page says so, and names the way out.
+    const STOPS = { en: "stops this browser's notifications", ru: "выключает уведомления в этом браузере", es: "desactiva las notificaciones de este navegador" } as const;
+    const EXCEPT = { en: "except your personal link", ru: "кроме вашей личной ссылки", es: "salvo tu enlace personal" } as const;
+    const ICON = { en: "home-screen icon", ru: "значок на главном экране", es: "icono de la pantalla de inicio" } as const;
+    const CONFIRM = { en: ["stops your notifications", "personal link"], ru: ["уведомления сюда больше не придут", "Личная ссылка"], es: ["no recibirás más notificaciones", "enlace personal"] } as const;
+    for (const l of LOCALES) {
+      const m = messagesOf(l);
+      const lines = render(l, "privacy.cookiesBody").split("\n");
+      const storage = lines.at(-1)!;
+      expect(storage, l).toContain(STOPS[l]);
+      expect(storage, l).toContain(ICON[l]);
+      // The way out is the button My matches really shows.
+      expect(storage, l).toContain(m.identity.resetLink);
+      expect(lines.find((x) => x.includes(`${SIGNED_OUT_COOKIE}:`)), l).toContain(EXCEPT[l]);
+      for (const words of CONFIRM[l]) expect(m.identity.signOutConfirm, `${l}: ${words}`).toContain(words);
+      expect(m.identity.signOutConfirm, l).toContain(ICON[l]);
+    }
+  });
+
+  it("says that a sign-in by name proves who it is before it deletes the account, in every language", () => {
+    // The owner, 28 October 2026, "Close it": `deleteMyAccountAction` refuses a session by name that proved nothing (`deletionRefusal`).
+    const WORDS = {
+      en: ["came in by your name alone", "email code", "Telegram"],
+      ru: ["вошли по одному имени", "кодом из письма", "Telegram"],
+      es: ["entraste solo con tu nombre", "código por email", "Telegram"],
+    } as const;
+    for (const l of LOCALES) {
+      const del = render(l, "privacy.deleteBody");
+      for (const words of WORDS[l]) expect(del, `${l}: ${words}`).toContain(words);
     }
   });
 

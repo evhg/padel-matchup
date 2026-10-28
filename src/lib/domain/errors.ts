@@ -33,7 +33,10 @@ export type DomainErrorCode =
   | "no_coach"
   // More standing wants than one player may hold: past ten it is not a want, it is a subscription
   // to everything happening at that club.
-  | "too_many";
+  | "too_many"
+  // A session by name ("That's me", DECIDING rule 34) asked for what only a proved session may do:
+  // delete the account (the owner, 28 October 2026, "Close it"). An email code or Telegram proves it.
+  | "proof_required";
 
 export class DomainError extends Error {
   constructor(
