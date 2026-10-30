@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState, useTransition } from "react";
 import { deviceHintAction, deviceHintNotMeAction, deviceHintYesAction } from "@/actions/deviceHints";
 import type { HintAnswer } from "@/lib/domain/deviceHintAsk";
-import { hintAskOnce, readDeviceSignals } from "@/lib/deviceSignals";
+import { hintAnswerValues, hintAskOnce } from "@/lib/deviceSignals";
 import type { BackInDoors } from "./BackInHelp";
 import { requestBackIn } from "./backInBus";
 import { OwnDoorList } from "./SeatedAsk";
@@ -23,7 +23,8 @@ import { OwnDoorList } from "./SeatedAsk";
  * question (`OwnDoorList`, the seated question's rule). "Not me" deletes that record's row of this key
  * (`deviceHintNotMeAction`), so this phone is not asked about that record until the record's own next join
  * or sign-in from a phone that gives the same key keeps it again (DECIDING rule 40). The browser never
- * holds an id, a key or which value matched: each tap sends the values again and the server decides again.
+ * holds an id, a key or which value matched: each tap sends again exactly the values that the question
+ * sent (`hintAnswerValues`, nothing is read again), and the server decides again.
  */
 export function WelcomeBack({ code, doors }: { code: string; doors: BackInDoors | null }) {
   const t = useTranslations();
@@ -34,11 +35,10 @@ export function WelcomeBack({ code, doors }: { code: string; doors: BackInDoors 
 
   useEffect(() => {
     // The zone first, then the tab's note, then the values: in Europe nothing is written and nothing is sent.
-    const values = hintAskOnce(code);
-    if (!values) return;
-    deviceHintAction(code, values)
+    hintAskOnce(code)
+      .then((values) => (values ? deviceHintAction(code, values) : null))
       .then((r) => {
-        if (r.ok && r.data) setAnswer(r.data);
+        if (r?.ok && r.data) setAnswer(r.data);
       })
       .catch(() => undefined);
   }, [code]);
@@ -48,7 +48,7 @@ export function WelcomeBack({ code, doors }: { code: string; doors: BackInDoors 
   const yes = () =>
     start(async () => {
       setError(null);
-      const r = await deviceHintYesAction(code, readDeviceSignals());
+      const r = await deviceHintYesAction(code, hintAnswerValues(code));
       // Signed in: the page renders again for the record, and this question is no longer on it.
       if (r.ok) return;
       setError(r.error === "too_many" ? t("errors.too_many") : t("identity.hintFailed"));
@@ -57,7 +57,7 @@ export function WelcomeBack({ code, doors }: { code: string; doors: BackInDoors 
   const no = () =>
     start(async () => {
       setGone(true);
-      await deviceHintNotMeAction(code, readDeviceSignals()).catch(() => undefined);
+      await deviceHintNotMeAction(code, hintAnswerValues(code)).catch(() => undefined);
     });
 
   return (

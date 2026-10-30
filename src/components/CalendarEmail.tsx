@@ -108,7 +108,7 @@ export function CalendarEmail({
           email={codeTo}
           verifyLabel={t("identity.confirmCode")}
           onVerify={async (c) => {
-            const r = await proveMyEmail(codeTo, c, code, { hint: readDeviceSignals() });
+            const r = await proveMyEmail(codeTo, c, code, { hint: await readDeviceSignals() });
             if (r.ok) {
               setSentTo(r.data.email ?? codeTo);
               setWelcome(r.data.welcome);

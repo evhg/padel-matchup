@@ -67,7 +67,7 @@ export function ThatsMeButton({
     }
     setArmed(false);
     start(async () => {
-      const r = await thatsMeAction(code, name, readDeviceSignals());
+      const r = await thatsMeAction(code, name, await readDeviceSignals());
       startTransition(() => {
         if (r.ok) return;
         setError(r.error === "too_many" ? t("errors.too_many") : t("identity.thatsMeNo"));

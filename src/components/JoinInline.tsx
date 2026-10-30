@@ -83,7 +83,7 @@ export function JoinInline({
     start(async () => {
       setError(null);
       const typed = hasIdentity ? undefined : name;
-      const r = await joinAction(code, typed, level ?? undefined, undefined, { differentPerson: different || undefined, hint: readDeviceSignals() });
+      const r = await joinAction(code, typed, level ?? undefined, undefined, { differentPerson: different || undefined, hint: await readDeviceSignals() });
       startTransition(() => {
         const asked = askOf(r, typed);
         setNameAsk(asked);

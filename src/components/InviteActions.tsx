@@ -47,7 +47,8 @@ export function InviteActions({
     e.preventDefault();
     if (!hasIdentity && !asRecord && !name.trim()) return setError(t("identity.nameRequired"));
     start(async () => {
-      const r = await confirmInviteAction(code, inviteCode, asRecord ? { hint: readDeviceSignals() } : { name: hasIdentity ? undefined : name, email: email || undefined, hint: readDeviceSignals() });
+      const hint = await readDeviceSignals();
+      const r = await confirmInviteAction(code, inviteCode, asRecord ? { hint } : { name: hasIdentity ? undefined : name, email: email || undefined, hint });
       // A place that keeps another record (a forwarded link): the server's own words for it.
       if (!r.ok) setError(r.detail === "held_record" ? t("errors.held_record") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
     });

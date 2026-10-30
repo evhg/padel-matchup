@@ -1371,6 +1371,41 @@ Everything in this list is live. The README describes each in detail.
   keyboard"). `src/actions/identity.ts` (`signOutAction`), `src/lib/deviceHint.ts` (`forgetKeyOf`),
   `src/components/SignOut.tsx`, `src/actions/passkeys.ts` (`PasskeySignInOptions`); proven in
   `tests/device-hint-doors.test.ts`, `tests/legal.test.ts` and `e2e/device-hints.mjs`.
+- **The device key, second version: a test picture, a 3D shape, a test sound and five settings, and a
+  report in counts (the owner, 30 October 2026; DECIDING rule 40; no migration).** The decision of 28
+  October 2026 stands: "Which design do you want for the sign-in in a browser that has never seen the
+  player?" The answer was: "I like A, obviously the fingerprint needs to include more than just iphone
+  model… is it really just the iphone model? Then it should be B." So the key still only leads to
+  "Welcome back, Tim?", never to a sign-in. On 30 October a session advised against more values: they add
+  little, and they change the key at every iOS update. The owner's answer was: "I want them anyway." The
+  browser now also sends a short SHA-256 hash of a small fixed drawing, of the WebGL renderer with a
+  small 3D drawing, and of a short sound rendered offline, never the picture or the sound. It also sends
+  the contrast, inverted colours, reduced transparency, hour cycle and locale settings. Each is
+  optional and "na" when the browser lacks it or a test throws. A test still running at the 150 ms
+  limit makes the whole read null, so the act sends no values and no key holds a timing. Every
+  platform runs the three tests, the iPhone, the iPad and Safari too. A review of 30 October found that
+  Safari may add noise that differs between the browsers of one iPhone, and a session first made the
+  iPhone run no test. The owner was asked: "On an iPhone, Safari may add random noise to the drawing,
+  3D and sound tests, so one iPhone could give a different key in Safari, Chrome and the home-screen
+  icon. What should the iPhone do with the three tests?" The owner answered: "On everywhere". The
+  known risk: one iPhone can then keep several keys, and the question, "Not me" and the sign-out's
+  forget can miss there. The report shows it: on `?label=iPhone`, keys near three for each player with
+  almost no shared key suggest noise (DECIDING rule 40). "It's me" and "Not me"
+  send exactly the question's values. A European browser still runs nothing. The key is `v2|…`;
+  production held no key, so none had to match. The read is asynchronous now, and every door waits
+  for it. The owner also asked: "check the digital footprints
+  for all current users, how many uniques and how many are indistinguishable?" On 30 October production
+  held 0 keys for 21 players, so the answer was "none yet". `GET /api/admin/hints-stats` answers it from
+  now on, in counts only: players, keys, distinct keys, unique and shared keys, the players who share a
+  key, and the group sizes, with `?label=iPhone` for one label. Its counts are exact: with few keys,
+  they and the read-only door together show which named players share a key, so the two are never
+  joined, and hiding small groups is the owner's decision. The privacy page names the test picture,
+  the 3D shape and its graphics chip, the test sound and the clock settings, says that they never
+  leave the browser, that every browser outside Europe runs the tests, an iPhone too, and none in a
+  European time zone, and that an update of the phone's system or browser can change the key; its date is 30 October 2026. `src/lib/deviceSignals.ts`, `src/lib/domain/hintSignals.ts`,
+  `src/lib/domain/deviceHints.ts` (`hintKeyStats`), `src/app/api/admin/hints-stats/route.ts`; proven in
+  `tests/device-hints.test.ts`, `tests/hints-stats.test.ts`, `tests/legal.test.ts` and
+  `e2e/device-hints.mjs` (an iPhone's words in Chromium send three hashes, the same in a second browser).
 
 ## The finish line
 

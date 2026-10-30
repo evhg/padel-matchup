@@ -127,7 +127,7 @@ export function JoinBar({
   const join = (withName?: string, withLevel?: number | null, withPartner?: string, different = false) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined, { differentPerson: different || undefined, hint: readDeviceSignals() });
+      const r = await joinAction(code, withName, withLevel ?? undefined, withPartner?.trim() || undefined, { differentPerson: different || undefined, hint: await readDeviceSignals() });
       startTransition(() => {
         const asked = askOf(r, withName);
         setNameAsk(asked);

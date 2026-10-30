@@ -644,6 +644,28 @@ learning can be a test, a gate step or a script, make it one and put the story i
   and so called them the same while the activity lines that share one timestamp had changed places.
   Store the fixture out of order (`tests/event-detail.test.ts` writes 6, 2, 5, 1, 4, 3 and fills
   place 1 afterwards), and compare pages as sequences (`difflib`), never as sorted lists or counts.
+- **Measure browser code in a browser, on a secure origin.** The device key's second version (30
+  October 2026) passed every unit test, and its first run in headless Chromium gave "na" for all
+  three hashes: the page came from `page.setContent`, and `crypto.subtle` exists only in a secure
+  context (https or localhost). The same run showed the second trap: its first read took 314 ms
+  against a limit of 150, because a timer cannot stop a synchronous drawing (a cold WebGL start).
+  With the limit's timer already due when the drawing ends, every hash that comes back after it
+  loses the race and turns "na", so one slow start would change the key. The fix is
+  `SIGNAL_GRACE_MS` and a unit test with a busy drawing; the measurement is a bundle of the module
+  (esbuild) on a routed `http://localhost` page, where the first read then took 50 to 75 ms.
+  A guard whose test stayed green when broken got a sharper test the same hour (the grace, the
+  cookie bound, the count of indistinguishable players): break each guard once before you trust it.
+- **A value that depends on the engine or the clock is not a value of the phone.** The same key's
+  review found two more. Safari 26 adds noise to canvas, WebGL and offline audio per site and
+  session, and every browser on an iPhone is WebKit, so the tests gave each browser of one phone
+  its own key; the Chromium suite cannot see this. And a "na" for a test that was merely late put
+  the page's load into the key. A late read now sends nothing, and the tap sends the question's own
+  values (`hintAnswerValues`). Before a new value goes into a key, ask: is it the same in every
+  browser of the phone, at every speed? If it is not, the owner decides, because the owner asked for
+  the values: a session turned the tests off on WebKit (`noisyTests`), and the owner answered "On
+  everywhere" the same day. So the gate went, and the risk is written down with the way to see it
+  (DECIDING rule 40, the report's `?label=iPhone`). A known risk the owner accepts is a sentence in
+  the rule and a reading in OPERATING, never a quiet guard in the code.
 
 ### Wall clock
 

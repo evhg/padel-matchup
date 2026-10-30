@@ -142,7 +142,7 @@ export function OpenSpot({
   const join = (withName?: string, different = false) =>
     start(async () => {
       setError(null);
-      const r = await joinAction(code, withName, level ?? undefined, undefined, { differentPerson: different || undefined, hint: readDeviceSignals() });
+      const r = await joinAction(code, withName, level ?? undefined, undefined, { differentPerson: different || undefined, hint: await readDeviceSignals() });
       startTransition(() => {
         const asked = askOf(r, withName);
         setNameAsk(asked);

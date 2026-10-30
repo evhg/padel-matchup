@@ -4,7 +4,7 @@ import type { Db } from "@/db";
 import { later } from "@/lib/later";
 import { sessionSecret } from "@/lib/env";
 import { saveDeviceHint, type HintScope } from "@/lib/domain/deviceHints";
-import { canonicalSignals, cleanSignals, hintDecision, hintModeOf, isEuropeanZone, type HintMode } from "@/lib/domain/hintSignals";
+import { canonicalSignals, cleanSignals, hintDecision, hintModeOf, isEuropeanZone, SIGNALS_COOKIE_MAX_CHARS, type HintMode } from "@/lib/domain/hintSignals";
 
 /**
  * The server's side of a device hint (design B, the owner's decision of 28 October 2026): the switch, the
@@ -70,9 +70,9 @@ export function forgetKeyOf(raw: unknown): string | null {
   return decision.save ? hintKey(canonicalSignals(decision.signals)) : null;
 }
 
-/** The values out of the Telegram return's cookie (`SIGNALS_COOKIE`), or null: at most 1 KB of JSON, and nothing else is read from it. */
+/** The values out of the Telegram return's cookie (`SIGNALS_COOKIE`), or null: at most `SIGNALS_COOKIE_MAX_CHARS` of encoded JSON, and nothing else is read from it. */
 export function signalsFromCookie(value: string | null | undefined): unknown {
-  if (typeof value !== "string" || !value || value.length > 1024) return null;
+  if (typeof value !== "string" || !value || value.length > SIGNALS_COOKIE_MAX_CHARS) return null;
   try {
     const parsed = JSON.parse(decodeURIComponent(value)) as unknown;
     const clean = cleanSignals(parsed);

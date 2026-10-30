@@ -46,7 +46,7 @@ const page = createAutofillPage<Options>({
     return r.ok ? { optionsJSON: r.data, expiresAt: Date.now() + OPTIONS_TTL_MS } : null;
   },
   // `via` names the counter; `hint`, the device values, keeps this phone as the record's device hint, as the button does.
-  signIn: (answer) => passkeySignInAction(answer, { via: "autofill", hint: readDeviceSignals() }),
+  signIn: async (answer) => passkeySignInAction(answer, { via: "autofill", hint: await readDeviceSignals() }),
 });
 
 /** The page's challenge as the machine holds it: the options for the phone, and their end, which stays in the browser. */

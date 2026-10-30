@@ -177,6 +177,69 @@ export async function forgetHintRow(db: Db, playerId: string, id: string): Promi
 }
 
 /**
+ * The counts-only report on the keys (`hintKeyStats`, GET /api/admin/hints-stats). Never a key, an id, a
+ * name or a label for one player. The counts are exact, so beside the read-only door's labels and players
+ * a small group shows who shares a key: the two are never joined (DECIDING rule 40).
+ */
+export type HintKeyStats = {
+  /** Players with at least one key. */
+  players: number;
+  /** Keys in all: one a player and phone (the rows). */
+  keys: number;
+  distinctKeys: number;
+  /** Keys that exactly one player holds. */
+  unique: number;
+  /** Keys that two players or more hold: their phones give the same values. */
+  shared: number;
+  /** Players who hold at least one shared key: for that phone, a key cannot tell them from somebody else. */
+  indistinguishablePlayers: number;
+  /** For each size of group (how many players hold one key), how many keys have that size, smallest first. */
+  groups: { size: number; keys: number }[];
+};
+
+/**
+ * The owner's question of 30 October 2026, "how many uniques and how many are indistinguishable?", as one
+ * statement with the app's own role (the read-only role never sees `key`, rule 40). It groups the keys and
+ * answers counts only: what goes out is numbers, and the label it was asked for. `label` counts the rows of
+ * one label; a key has one label, because the platform is part of what makes it. A whole read of the
+ * table, which holds three rows a player at most: an operator's report, never a page's.
+ */
+export async function hintKeyStats(db: Db, label: string | null = null): Promise<HintKeyStats> {
+  const only = label === null ? sql`true` : sql`d.label = ${label}::text`;
+  const r = await db.execute(sql`
+    with picked as (
+      select d.player_id, d.key from device_hints d where ${only}
+    ),
+    held as (
+      select key, count(*)::int as size from picked group by key
+    ),
+    sizes as (
+      select size, count(*)::int as keys from held group by size
+    )
+    select
+      (select count(distinct player_id) from picked)::int as players,
+      (select count(*) from picked)::int as keys,
+      (select count(*) from held)::int as distinct_keys,
+      (select count(*) from held where size = 1)::int as unique_keys,
+      (select count(*) from held where size >= 2)::int as shared_keys,
+      (select count(distinct r.player_id) from picked r join held h on h.key = r.key and h.size >= 2)::int as indistinguishable,
+      (select coalesce(json_agg(json_build_object('size', size, 'keys', keys) order by size), '[]'::json) from sizes) as groups
+  `);
+  const row = rowsOf(r)[0] ?? {};
+  const raw = typeof row.groups === "string" ? (JSON.parse(row.groups) as unknown) : row.groups;
+  const groups = (Array.isArray(raw) ? raw : []).map((g: { size?: unknown; keys?: unknown }) => ({ size: Number(g.size), keys: Number(g.keys) }));
+  return {
+    players: Number(row.players ?? 0),
+    keys: Number(row.keys ?? 0),
+    distinctKeys: Number(row.distinct_keys ?? 0),
+    unique: Number(row.unique_keys ?? 0),
+    shared: Number(row.shared_keys ?? 0),
+    indistinguishablePlayers: Number(row.indistinguishable ?? 0),
+    groups,
+  };
+}
+
+/**
  * The hourly job: rows last seen more than `HINT_KEEP_DAYS` ago go, at most `max` a run. The table holds
  * three rows a player at most, so the read of the old ones is small; it needs no index of its own.
  */

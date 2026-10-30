@@ -22,9 +22,11 @@ export function AdoptToken({ token, needsCookie }: { token: string; needsCookie:
     if (done.current) return;
     done.current = true;
     if (!needsCookie) return;
-    adoptPersonalToken(token, readDeviceSignals()).then((r) => {
-      if (r.ok && r.data) router.refresh();
-    });
+    readDeviceSignals()
+      .then((hint) => adoptPersonalToken(token, hint))
+      .then((r) => {
+        if (r.ok && r.data) router.refresh();
+      });
   }, [token, needsCookie, router]);
   return null;
 }

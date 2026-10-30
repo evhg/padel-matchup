@@ -119,7 +119,7 @@ export function EmailField({
         email={codeTo}
         verifyLabel={t("identity.confirmCode")}
         onVerify={async (c) => {
-          const r = await proveMyEmail(codeTo, c, code || undefined, { hint: readDeviceSignals() });
+          const r = await proveMyEmail(codeTo, c, code || undefined, { hint: await readDeviceSignals() });
           if (r.ok) setInvited(r.data.welcome === "invite");
           return r;
         }}

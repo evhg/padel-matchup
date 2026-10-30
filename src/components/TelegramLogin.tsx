@@ -33,8 +33,9 @@ export function useTelegramReturn(authUrl: string, onBack?: () => void): void {
       // reason to sign in, and a personal link, whose token must never travel in another URL.
       const keep = window.location.pathname !== "/" && !/^\/p(\/|$)/i.test(window.location.pathname);
       // The device hint's values ride to the login route in a one-minute cookie of its own: a plain navigation carries no argument.
-      writeSignalsCookie();
-      window.location.replace(`${authUrl}?${new URLSearchParams(keep ? { ...fields, next: here } : fields)}`);
+      // The read takes at most SIGNAL_BUDGET_MS, and the tab leaves whatever it gives.
+      const leave = () => window.location.replace(`${authUrl}?${new URLSearchParams(keep ? { ...fields, next: here } : fields)}`);
+      writeSignalsCookie().then(leave, leave);
     };
     back();
     window.addEventListener("hashchange", back);
