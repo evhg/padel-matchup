@@ -176,7 +176,7 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
             email={codeTo}
             verifyLabel={t("identity.confirmCode")}
             onVerify={async (c) => {
-              const r = await proveMyEmail(codeTo, c, code, { from: "stay", hint: readDeviceSignals() });
+              const r = await proveMyEmail(codeTo, c, code, { from: "stay", hint: await readDeviceSignals() });
               if (r.ok) {
                 setTyped(r.data.email ?? codeTo);
                 setWelcome(r.data.welcome);

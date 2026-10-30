@@ -32,9 +32,11 @@ export function SignOut({ notYou, label, confirmText, testId, compact = false }:
         disabled={pending}
         onClick={() => {
           if (!confirm(confirmText)) return;
-          const hint = readDeviceSignals();
+          // The read starts here, before the storage goes; its tests take a moment and the request waits for them.
+          const reading = readDeviceSignals();
           forgetBrowser();
           start(async () => {
+            const hint = await reading;
             const sub = await browserPushSubscription();
             await signOutAction(sub?.endpoint ?? null, { hint });
             // After the server's delete. Should that delete have failed, the push service now answers "gone" and the next send removes the row.

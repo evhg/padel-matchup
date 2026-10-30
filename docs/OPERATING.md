@@ -166,6 +166,19 @@ the invocations of anonymous match views; a European browser, a signed-in viewer
 the same tab and a match nobody is remembered on add none. One match takes 100 a day at most. If the
 invocations come near the 1M ceiling, set `DEVICE_HINTS=save`: the question and its call stop, and
 the keys stay. The table holds three rows a player at most, about 150 bytes each.
+The key's second version (30 October 2026, DECIDING rule 40) adds no request, no statement and no
+row: the new values ride in the act's own request, about 250 bytes more. It costs time in the
+browser instead. Before the act's request goes, the browser draws a small picture, a small WebGL
+triangle, and renders a short sound offline, once a page. The read waits for them 150 ms at most from
+its start (`SIGNAL_BUDGET_MS`). A test still running then makes the whole read null, and that act
+sends no values: it keeps no key, and the question is not asked. A drawing cannot be stopped,
+so when the drawings alone take longer, the read waits 25 ms more (`SIGNAL_GRACE_MS`). Headless
+Chromium on the build machine took 50 to 75 ms for the first read in a page and 1 ms for the next
+(30 October 2026; again 57 to 64 ms after the review); a phone has not been measured. Every
+platform runs the tests, the iPhone, the iPad and Safari too (the owner's "On everywhere", DECIDING
+rule 40), so a read on an iPhone waits for them as well; no real iPhone has been measured. A
+European browser runs none of it. No counter sees a late
+read: it sends nothing, so the server never hears of it.
 Supabase: 500 MB database, 5 GB egress a month. On 15 October 2026 the database used 32 MB
 (`pg_database_size`), and its largest relation was pg_cron's run log at 7.27 MB, which a weekly job
 now keeps to 14 to 21 days ("Cron jobs", below). Resend: 3,000 emails a month, 100 a day (book@ may
@@ -413,6 +426,15 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   players of this crowd apart: set `DEVICE_HINTS` to `save`, and the question stops. At one in ten or
   fewer, the question can go on.
   The operator's door reads the labels, the dates and the counts (`device_hints`), never the key.
+  How well the keys tell phones apart is `GET /api/admin/hints-stats` (below, beside the read-only
+  query door). Watch it after the key's second version, the iPhone first: every platform runs the
+  three tests (the owner's "On everywhere", DECIDING rule 40), and Safari may add noise that differs
+  between the browsers of one iPhone and between sessions. Read `?label=iPhone`: the keys divided by
+  the players are the keys for each player, and most players have one phone. If iPhone players hold
+  nearly three keys each and almost no iPhone key is shared, the noise changes the key, and the
+  question, "Not me" and the sign-out's forget miss there. The same picture on `?label=Android%20phone`
+  means a test changes between sessions there (a browser's own noise, or a timing). Either way, tell
+  the owner: to turn the tests off on the iPhone, or everywhere, is the owner's decision.
 - **The device hint's question.** "Welcome back, Tim?" on the match page (DECIDING rule 40), for a
   browser that knows nobody, once per match in a tab. `hint_asked`: the page showed the question, with
   "It's me" or with the record's own doors. `hint_doors`: of those, a question with the doors of a record
@@ -868,7 +890,8 @@ when waiting; end every batch with three lines: what shipped, what is next, what
 `/api/admin/answers` (answer pages, IndexNow on publish), `/api/admin/outreach` (the press desk:
 drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
 Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, below),
-`/api/admin/merge-players` (below), `/api/admin/cron` (the scheduled jobs, above).
+`/api/admin/hints-stats` (the device keys in counts, below), `/api/admin/merge-players` (below),
+`/api/admin/cron` (the scheduled jobs, above).
 
 ## What the session's environment must hold
 
@@ -918,6 +941,33 @@ in the database.
 `tests/readonly.test.ts` regenerates the grants from the live schema and fails when they differ from
 the migration, and fails again when a new column looks like a credential and is on neither the
 hidden list nor the reviewed-safe list. A new token cannot reach production ungranted or unnoticed.
+
+**The device keys in counts.** The read-only door cannot say how many device keys are unique,
+because its role never sees `device_hints.key`. `GET /api/admin/hints-stats` with the operator
+bearer answers it, the owner's question of 30 October 2026: "how many uniques and how many are
+indistinguishable?". It runs one statement with the app's own role (`hintKeyStats` in
+`src/lib/domain/deviceHints.ts`), and the keys stay inside that statement. The answer is counts only:
+
+```
+{ "ok": true, "label": null, "players": 7, "keys": 9, "distinctKeys": 6, "unique": 4, "shared": 2,
+  "indistinguishablePlayers": 5, "groups": [{ "size": 1, "keys": 4 }, { "size": 2, "keys": 1 }, { "size": 3, "keys": 1 }] }
+```
+
+`players` have at least one key; `keys` are the rows (one for each player and phone); `unique` keys
+belong to one player; `shared` keys belong to two players or more; `indistinguishablePlayers` hold at
+least one shared key; `groups` says how many keys each group size has. `?label=iPhone` (or `iPad`,
+`Android phone`, `other`) counts one label, and any other label is refused and never echoed. It never
+answers a key, a label for one player, a player id or a name (`tests/hints-stats.test.ts`). It reads
+the whole table, three rows a player at most: an operator's question, never a page's. On 30 October
+2026 production held no key, so every count was 0. Read `?label=iPhone` first: more keys than phones
+for each player suggests that Safari's noise splits one iPhone into several keys ("The device hint"
+above, DECIDING rule 40).
+
+The limit of that promise: the counts are exact, and the read-only door shows the label and the
+player of each row. With few keys, the two together show which named players share a key (two names
+under "iPad" at the door, and `shared: 1` for "iPad" here). Never join this answer with names from
+`/api/admin/sql`, and never put both in one note. Whether the report hides a population of fewer
+than five players is the owner's decision (DECIDING rule 40); until then the counts are exact.
 
 **A backup on a laptop.** Download one night's file (`backups/<day>.json.gz`) from the private
 backup repository, then `pnpm exec tsx scripts/restore-backup.ts <day>.json.gz` and

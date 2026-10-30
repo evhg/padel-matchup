@@ -1,4 +1,6 @@
 import { createHash, createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
@@ -234,6 +236,31 @@ describe("\"Sign out on this browser\" forgets this browser's key", () => {
     expect((await asAction(session, () => signOutAction(null, { hint: PHONE }))).result).toEqual({ ok: true, data: null });
     expect(await hintsOf(tim.id)).toHaveLength(0);
     expect(await metric("hint_signout")).toBe(forgotBefore + 1);
+  });
+
+  it("misses the key that this browser kept in an earlier session when its drawing changed since, as DECIDING rule 40's known risk says", async () => {
+    // Safari can add noise that changes with the session (DECIDING rule 40, "The known risk"). Bob taps
+    // "That's me" on Tim's seat, and Tim's record keeps the key of that session. On a later day the same
+    // browser draws another hash, so its sign-out makes another key. The earlier key stays and fills one of
+    // Tim's three places until "Forget this phone" or the yearly prune.
+    const earlier: SignalsWire = { ...PHONE, canvas: "RWFybGllci1j", webgl: "V2ViR0wtaGFz", audio: "QXVkaW8taGFz" };
+    const later: SignalsWire = { ...earlier, canvas: "TGF0ZXItY2Fu" };
+    // Both sets are valid and make two keys, so only the key stands between the later sign-out and the row.
+    expect(cleanSignals(earlier)).not.toBeNull();
+    expect(cleanSignals(later)).not.toBeNull();
+    expect(keyOf(later)).not.toBe(keyOf(earlier));
+    const tim = await createPlayer(db, { displayName: "Timothy", locale: "en" });
+    await keep(tim.id, earlier);
+    const forgotBefore = await metric("hint_signout");
+    const byName = { [PLAYER_COOKIE]: sealPlayerId(tim.id, { byName: true }) };
+    expect((await asAction(byName, () => signOutAction(null, { hint: later }))).result).toEqual({ ok: true, data: null });
+    expect((await hintsOf(tim.id)).map((h) => h.key)).toEqual([keyOf(earlier)]);
+    expect(await metric("hint_signout")).toBe(forgotBefore);
+    // The rule that names the risk says what this test shows: another browser, or this one in an earlier session.
+    const risk = readFileSync(path.resolve(process.cwd(), "docs/DECIDING.md"), "utf8")
+      .split("\n")
+      .find((line) => line.trim().startsWith("The known risk."));
+    expect(risk).toMatch(/can miss a key that another browser, or this browser in an earlier session, kept\./);
   });
 
   it("forgets the key with the deployment's switch off too: a key kept before the switch still names this phone", async () => {

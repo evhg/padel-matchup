@@ -500,7 +500,12 @@ try {
   check("a join from a phone in Phuket keeps one device hint, under the words \"iPhone\"", kept?.n === 1 && kept?.label === "iPhone", JSON.stringify(kept));
   const keyRead = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select key from device_hints")}`, { headers: CRON }).then((x) => x.json());
   check("the operator's read-only door is refused the key itself", keyRead.ok !== true && /permission denied/.test(String(keyRead.error)), JSON.stringify(keyRead).slice(0, 160));
-  await hp.goto(`${BASE}/me`);
+  // From here to the second join, Hana stays in the page of her first join, by client-side navigation ("My
+  // matches" in the header is a link): the reader runs its tests once in a page (`running`), so the second
+  // join takes the hashes the first one read, at once. A `goto` starts a new page, whose first read can be
+  // late on a busy machine, and a late read sends nothing, so that join would keep no key.
+  await hp.getByTestId("nav-play").click();
+  await hp.waitForURL((u) => u.pathname === "/me", { timeout: 20000 });
   const hints = hp.getByTestId("my-hints");
   await hints.waitFor({ timeout: 10000 });
   await hints.scrollIntoViewIfNeeded();
@@ -522,7 +527,8 @@ try {
   // "Don't recognise my phones" (Thai PDPA s.32; DECIDING rule 40): the player's lasting objection, under the
   // list. Another join keeps the key again; the switch then deletes it at once, and the block lists no phone.
   const code8 = await newMatch(hp, "Chalong Padel");
-  await hp.goto(`${BASE}/${code8}`);
+  await hp.evaluate((path) => window.next.router.push(path), `/${code8}`);
+  await hp.waitForURL((u) => u.pathname === `/${code8}`, { timeout: 20000 });
   await hp.getByRole("button", { name: "Join this match" }).click();
   await hp.locator("main li", { hasText: "Hana Hint" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
   await hp.waitForTimeout(1000);

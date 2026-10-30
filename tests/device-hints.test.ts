@@ -1,4 +1,6 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -9,13 +11,13 @@ import { anonymizePlayer } from "@/lib/domain/anonymize";
 import { deviceHintsOf, forgetDeviceHints, forgetHintRow, HINT_KEEP_DAYS, HINTS_PER_PLAYER, pruneDeviceHints, saveDeviceHint, setHintsOff } from "@/lib/domain/deviceHints";
 import { findDisposablePlayers, removeDisposablePlayers, DISPOSABLE_AFTER_DAYS } from "@/lib/domain/disposable";
 import { createEvent } from "@/lib/domain/events";
-import { canonicalSignals, cleanSignals, hintDecision, hintModeOf, isEuropeanZone, type SignalsWire } from "@/lib/domain/hintSignals";
+import { canonicalSignals, cleanSignals, hintDecision, hintModeOf, isEuropeanZone, platformOf, SIGNALS_COOKIE_MAX_CHARS, type SignalsWire } from "@/lib/domain/hintSignals";
 import { mergePlayers } from "@/lib/domain/merge";
 import { dayKey } from "@/lib/domain/metrics";
 import { exportPlayerData } from "@/lib/domain/profile";
 import { joinEvent } from "@/lib/domain/slots";
 import { HINT_PURPOSE, hintKey, saveHintLater, signalsFromCookie } from "@/lib/deviceHint";
-import { HINT_ASKED_KEY, hintAskOnce, readDeviceSignals } from "@/lib/deviceSignals";
+import { AUDIO_START_MS, HINT_ASKED_KEY, hashPrefix, hintAnswerValues, hintAskOnce, readDeviceSignals, SIGNAL_BUDGET_MS, SIGNAL_GRACE_MS, SIGNAL_PROBES, type SignalProbes } from "@/lib/deviceSignals";
 import { MyHints } from "@/components/MyHints";
 import { freezeClock } from "./helpers/clock";
 import { catalogue, renderIn } from "./helpers/render";
@@ -31,14 +33,27 @@ const NOW = new Date(Date.UTC(2026, 9, 28, 5, 0));
 freezeClock(NOW);
 const at = (days: number) => new Date(NOW.getTime() + days * DAY);
 
-/** An iPhone in Phuket, as `readDeviceSignals` sends it. */
+/** An iPhone in Phuket, as an older `readDeviceSignals` sends it: the v1 values, none of the 30 October 2026 ones. */
 const PHONE: SignalsWire = { w: 390, h: 844, dpr: 3, langs: ["en-US", "th-TH"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false };
+/** The same iPhone as the reader of 30 October 2026 sends it: the drawing, the 3D shape and the sound as short hashes, and five settings. */
+const PHONE_V2: SignalsWire = { ...PHONE, canvas: "Qm9vbS1jYW52", webgl: "V2ViR0wtaGFz", audio: "QXVkaW8taGFz", contrast: "none", inverted: "no", transparency: "no", hourCycle: "h23", locale: "en-GB" };
+/** What each new value is when the browser sends none of it. */
+const NONE_NEW = { canvas: "na", webgl: "na", audio: "na", contrast: "na", inverted: "na", transparency: "na", hourCycle: "na", locale: "na" } as const;
 
 // ------------------------------------------------------------------ the values, pure
 
 describe("the canonical string", () => {
   it("is the checked values in a fixed order, versioned", () => {
-    expect(canonicalSignals(cleanSignals(PHONE)!)).toBe("v1|390x844|3|en-us,th-th|Asia/Bangkok|iphone|5|17|0");
+    // v2 since the owner's "I want them anyway" (30 October 2026): the v1 values, then the drawing, the 3D
+    // shape, the sound, the contrast, the inverted colours, the reduced transparency, the hour cycle and the locale.
+    expect(canonicalSignals(cleanSignals(PHONE_V2)!)).toBe("v2|390x844|3|en-us,th-th|Asia/Bangkok|iphone|5|17|0|Qm9vbS1jYW52|V2ViR0wtaGFz|QXVkaW8taGFz|none|no|no|h23|en-gb");
+  });
+
+  it("is still a valid key from an older client or a browser with none of the new tests: each missing value is na", () => {
+    expect(canonicalSignals(cleanSignals(PHONE)!)).toBe("v2|390x844|3|en-us,th-th|Asia/Bangkok|iphone|5|17|0|na|na|na|na|na|na|na|na");
+    expect(cleanSignals(PHONE)).toEqual(cleanSignals({ ...PHONE, ...NONE_NEW }));
+    // A browser that ran out of time on the sound sends "na" for it, and that is another key, not a refusal.
+    expect(canonicalSignals(cleanSignals({ ...PHONE_V2, audio: "na" })!)).not.toBe(canonicalSignals(cleanSignals(PHONE_V2)!));
   });
 
   it("stays the same when the phone turns, and after rounding", () => {
@@ -55,10 +70,31 @@ describe("the canonical string", () => {
   });
 
   it("changes with every value it reads", () => {
-    const base = canonicalSignals(cleanSignals(PHONE)!);
-    for (const change of [{ w: 393 }, { dpr: 2 }, { langs: ["en-us"] }, { tz: "Asia/Singapore" }, { platform: "android" }, { touch: 0 }, { text: "na" }, { motion: true }] as Partial<SignalsWire>[]) {
-      expect(canonicalSignals(cleanSignals({ ...PHONE, ...change })!), JSON.stringify(change)).not.toBe(base);
-    }
+    const base = canonicalSignals(cleanSignals(PHONE_V2)!);
+    const changes: Partial<SignalsWire>[] = [
+      { w: 393 },
+      { dpr: 2 },
+      { langs: ["en-us"] },
+      { tz: "Asia/Singapore" },
+      { platform: "android" },
+      { touch: 0 },
+      { text: "na" },
+      { motion: true },
+      { canvas: "Q2FudmFzLXR3" },
+      { webgl: "na" },
+      { audio: "QXVkaW8tdHdv" },
+      { contrast: "more" },
+      { inverted: "yes" },
+      { transparency: "na" },
+      { hourCycle: "h12" },
+      { locale: "en-us" },
+    ];
+    for (const change of changes) expect(canonicalSignals(cleanSignals({ ...PHONE_V2, ...change })!), JSON.stringify(change)).not.toBe(base);
+  });
+
+  it("folds the locale's case, as it does the languages'", () => {
+    expect(cleanSignals({ ...PHONE_V2, locale: "EN-gb" })!.locale).toBe("en-gb");
+    expect(cleanSignals({ ...PHONE_V2, locale: "zh-Hant-TW" })!.locale).toBe("zh-hant-tw");
   });
 });
 
@@ -84,8 +120,14 @@ describe("the key", () => {
 
 describe("the server checks every value", () => {
   it("takes a good set", () => {
-    expect(cleanSignals(PHONE)).toEqual({ screen: [390, 844], dpr: 3, langs: ["en-us", "th-th"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false });
+    expect(cleanSignals(PHONE)).toEqual({ screen: [390, 844], dpr: 3, langs: ["en-us", "th-th"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false, ...NONE_NEW });
+    expect(cleanSignals(PHONE_V2)).toEqual({ screen: [390, 844], dpr: 3, langs: ["en-us", "th-th"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false, canvas: "Qm9vbS1jYW52", webgl: "V2ViR0wtaGFz", audio: "QXVkaW8taGFz", contrast: "none", inverted: "no", transparency: "no", hourCycle: "h23", locale: "en-gb" });
     expect(cleanSignals({ ...PHONE, text: "na", platform: "other", touch: 0 })).not.toBeNull();
+    // Every token of each new value, and "na" for each.
+    for (const contrast of ["none", "more", "less", "custom", "na"] as const) expect(cleanSignals({ ...PHONE_V2, contrast }), contrast).not.toBeNull();
+    for (const flag of ["yes", "no", "na"] as const) expect(cleanSignals({ ...PHONE_V2, inverted: flag, transparency: flag }), flag).not.toBeNull();
+    for (const hourCycle of ["h11", "h12", "h23", "h24", "na"] as const) expect(cleanSignals({ ...PHONE_V2, hourCycle }), hourCycle).not.toBeNull();
+    expect(cleanSignals({ ...PHONE_V2, ...NONE_NEW })).toEqual(cleanSignals(PHONE));
   });
 
   it.each([
@@ -116,6 +158,32 @@ describe("the server checks every value", () => {
     ["a text size too small", { ...PHONE, text: 3 }],
     ["a text size too big", { ...PHONE, text: 201 }],
     ["motion as a word", { ...PHONE, motion: "yes" }],
+    // The values of 30 October 2026: each one optional, and when it comes it must be good.
+    ["a drawing hash as a number", { ...PHONE_V2, canvas: 12345 }],
+    ["a drawing hash too long", { ...PHONE_V2, canvas: "Qm9vbS1jYW52X" }],
+    ["a drawing hash too short", { ...PHONE_V2, canvas: "Qm9vbS1jYW5" }],
+    ["a drawing hash that is not base64url", { ...PHONE_V2, canvas: "Qm9vbS1jYW+/" }],
+    ["a drawing sent as the picture", { ...PHONE_V2, canvas: `data:image/png;base64,${"A".repeat(200)}` }],
+    ["a drawing hash with the separator", { ...PHONE_V2, canvas: "Qm9vbS|jYW52" }],
+    ["a drawing hash of null", { ...PHONE_V2, canvas: null }],
+    ["a 3D shape hash as a list", { ...PHONE_V2, webgl: ["V2ViR0wtaGFz"] }],
+    ["a 3D shape hash too long", { ...PHONE_V2, webgl: "V2ViR0wtaGFzV2ViR0wtaGFz" }],
+    ["the renderer's words instead of a hash", { ...PHONE_V2, webgl: "Apple GPU" }],
+    ["a sound hash as a number", { ...PHONE_V2, audio: 124.04347527516074 }],
+    ["an empty sound hash", { ...PHONE_V2, audio: "" }],
+    ["a missing value spelled NA", { ...PHONE_V2, audio: "NA" }],
+    ["a contrast outside the tokens", { ...PHONE_V2, contrast: "high" }],
+    ["a contrast as the media query", { ...PHONE_V2, contrast: "prefers-contrast: more" }],
+    ["a contrast as a number", { ...PHONE_V2, contrast: 1 }],
+    ["inverted colours as a boolean", { ...PHONE_V2, inverted: true }],
+    ["inverted colours as the media value", { ...PHONE_V2, inverted: "inverted" }],
+    ["reduced transparency as the media value", { ...PHONE_V2, transparency: "reduce" }],
+    ["an hour cycle nobody has", { ...PHONE_V2, hourCycle: "h25" }],
+    ["an hour cycle as a number", { ...PHONE_V2, hourCycle: 24 }],
+    ["a locale that is not a tag", { ...PHONE_V2, locale: "en_GB" }],
+    ["a locale too long", { ...PHONE_V2, locale: `en-${"a".repeat(40)}` }],
+    ["a locale with the separator", { ...PHONE_V2, locale: "en|gb" }],
+    ["a locale as a number", { ...PHONE_V2, locale: 7 }],
   ] as const)("refuses %s", (_label, raw) => {
     expect(cleanSignals(raw)).toBeNull();
   });
@@ -150,54 +218,376 @@ describe("a browser in Europe keeps nothing", () => {
 
   it("the Telegram return's cookie gives the values back, never a European set or a bad one", () => {
     expect(signalsFromCookie(encodeURIComponent(JSON.stringify(PHONE)))).toEqual(PHONE);
+    expect(signalsFromCookie(encodeURIComponent(JSON.stringify(PHONE_V2)))).toEqual(PHONE_V2);
+    expect(signalsFromCookie(encodeURIComponent(JSON.stringify({ ...PHONE_V2, contrast: "high" })))).toBeNull();
+    // The largest set the server takes still fits the cookie: ten languages at the bound, the longest zone
+    // name Intl takes, the longest token of each setting and a locale at its bound.
+    const largest: SignalsWire = { ...PHONE_V2, w: 20000, h: 20000, dpr: 2.75, langs: Array.from({ length: 10 }, (_, i) => `e${"n".repeat(7)}-${String(i).repeat(8)}-${"a".repeat(8)}-${"b".repeat(8)}`), tz: "America/Argentina/ComodRivadavia", platform: "android", touch: 256, text: 17.5, contrast: "custom", inverted: "yes", transparency: "yes", hourCycle: "h23", locale: `${"l".repeat(8)}-${"m".repeat(8)}-${"n".repeat(8)}-${"o".repeat(8)}` };
+    expect(largest.langs.every((l) => l.length === 35) && largest.locale!.length === 35).toBe(true);
+    expect(cleanSignals(largest), "the largest set is a good set").not.toBeNull();
+    const cookie = encodeURIComponent(JSON.stringify(largest));
+    expect(cookie.length).toBeLessThanOrEqual(SIGNALS_COOKIE_MAX_CHARS);
+    expect(signalsFromCookie(cookie)).toEqual(largest);
     expect(signalsFromCookie(encodeURIComponent(JSON.stringify({ ...PHONE, tz: "Europe/Madrid" })))).toBeNull();
     expect(signalsFromCookie(encodeURIComponent(JSON.stringify({ ...PHONE, w: "390" })))).toBeNull();
     expect(signalsFromCookie("{not json")).toBeNull();
-    expect(signalsFromCookie("x".repeat(1025))).toBeNull();
+    expect(signalsFromCookie("x".repeat(SIGNALS_COOKIE_MAX_CHARS + 1))).toBeNull();
     expect(signalsFromCookie(undefined)).toBeNull();
   });
 });
 
 describe("the browser's own reader", () => {
+  /** Chrome on an Android phone. */
+  const ANDROID_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36";
+  /** Safari on an iPhone: the three tests run here too (the owner, 30 October 2026: "On everywhere"). */
+  const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
   /**
    * A phone, as the browser's globals: stubbed for one test and taken back after it (`vi.unstubAllGlobals`),
    * so the next file starts clean. The zone is the one value a test cannot set in a running process (a
-   * worker ignores TZ), so `Intl.DateTimeFormat()` with no zone answers the phone's; with a zone it is Intl's own.
+   * worker ignores TZ), so `Intl.DateTimeFormat()` with no zone answers the phone's, and the one with an
+   * hour answers the phone's clock (`clock`); with a zone it is Intl's own. `media` lists the media queries
+   * that match; `asked` logs every media query the page asks. The phone is Chrome on Android unless `ua`
+   * says otherwise; every platform runs the three tests.
    */
-  const asPhone = (zone: string, probes: string[], sessionStorage: unknown = undefined) => {
+  type Phone = { sessionStorage?: unknown; media?: string[]; asked?: string[]; clock?: { hourCycle?: string; locale?: string }; ua?: string; touch?: number };
+  const asPhone = (zone: string, probes: string[], { sessionStorage, media = [], asked = [], clock = { hourCycle: "h23", locale: "en-GB" }, ua = ANDROID_UA, touch = 5 }: Phone = {}) => {
     const Real = Intl.DateTimeFormat;
     const Fake = function (this: unknown, ...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
       if (args.length === 0) return { resolvedOptions: () => ({ timeZone: zone }) };
+      if (args[1]?.hour === "numeric" && !args[1]?.timeZone) return { resolvedOptions: () => ({ timeZone: zone, ...clock }) };
       return new Real(...args);
     } as unknown as typeof Intl.DateTimeFormat;
     vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: Fake });
-    vi.stubGlobal("window", { devicePixelRatio: 3, location: { protocol: "https:" }, matchMedia: (q: string) => ({ matches: q.includes("reduce") ? false : false }), sessionStorage });
-    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1", maxTouchPoints: 5, languages: ["en-US", "th-TH"], language: "en-US" });
+    vi.stubGlobal("window", { devicePixelRatio: 3, location: { protocol: "https:" }, matchMedia: (q: string) => (asked.push(q), { matches: media.includes(q) }), sessionStorage });
+    vi.stubGlobal("navigator", { userAgent: ua, maxTouchPoints: touch, languages: ["en-US", "th-TH"], language: "en-US" });
     vi.stubGlobal("screen", { width: 390, height: 844 });
     vi.stubGlobal("CSS", { supports: (p: string, v: string) => p === "font" && v === "-apple-system-body" });
     const span = { style: {} as Record<string, string>, remove: () => probes.push("removed") };
     vi.stubGlobal("document", { createElement: (tag: string) => (probes.push(`create:${tag}`), span), body: { appendChild: () => probes.push("append") } });
     vi.stubGlobal("getComputedStyle", () => ({ fontSize: span.style.font === "-apple-system-body" ? "17px" : "16px" }));
   };
+  /** The three tests as stubs that log their call and answer a fixed short hash: the page's own drawing, 3D shape and sound are below. */
+  const stubProbes = (probes: string[], answers: Partial<Record<keyof SignalProbes, () => Promise<string>>> = {}): SignalProbes => ({
+    audio: () => (probes.push("audio"), (answers.audio ?? (async () => "QXVkaW8taGFz"))()),
+    canvas: () => (probes.push("canvas"), (answers.canvas ?? (async () => "Qm9vbS1jYW52"))()),
+    webgl: () => (probes.push("webgl"), (answers.webgl ?? (async () => "V2ViR0wtaGFz"))()),
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("reads the values of a phone outside Europe, the text size through the phone's own font, and nothing else", () => {
+  it("reads the values of a phone outside Europe: the text size through the phone's own font, the five settings, and each test once", async () => {
+    const probes: string[] = [];
+    asPhone("Asia/Bangkok", probes, { media: ["(prefers-contrast: no-preference)", "(inverted-colors: none)", "(prefers-reduced-transparency: no-preference)"] });
+    const values = await readDeviceSignals(stubProbes(probes));
+    expect(values).toEqual({ w: 390, h: 844, dpr: 3, langs: ["en-us", "th-th"], tz: "Asia/Bangkok", platform: "android", touch: 5, text: 17, motion: false, canvas: "Qm9vbS1jYW52", webgl: "V2ViR0wtaGFz", audio: "QXVkaW8taGFz", contrast: "none", inverted: "no", transparency: "no", hourCycle: "h23", locale: "en-gb" });
+    // One span for the text size, put in and taken out; the sound starts first, so it renders while the page draws.
+    expect(probes).toEqual(["create:span", "append", "removed", "audio", "canvas", "webgl"]);
+    expect(cleanSignals(values)).not.toBeNull();
+    expect(canonicalSignals(cleanSignals(values)!)).toBe(canonicalSignals(cleanSignals({ ...PHONE_V2, platform: "android" })!));
+  });
+
+  it("runs the three tests on every platform, iPhones, iPads and Safari included: each sends its three hashes", async () => {
+    // The owner, 30 October 2026, asked "What should the iPhone do with the three tests?", answered "On
+    // everywhere". The known risk: Safari may add noise that differs between Safari, Chrome and the
+    // home-screen icon of one iPhone, so one phone can keep several keys (DECIDING rule 40). No engine and no
+    // platform skips a test: the values never go without the three answers.
+    const EVERY = [
+      ["Safari on an iPhone", IPHONE_UA, 5, "iphone"],
+      ["Chrome on an iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/129.0.6668.69 Mobile/15E148 Safari/604.1", 5, "iphone"],
+      ["Telegram's view on an iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", 5, "iphone"],
+      ["an iPad that asks for the desktop site", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", 5, "ipad"],
+      ["Safari on a Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15", 0, "other"],
+      ["Chrome on an Android phone", ANDROID_UA, 5, "android"],
+      ["Samsung Internet", "Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36", 5, "android"],
+      ["Chrome on a Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36", 0, "other"],
+      ["Edge on Windows", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0", 0, "other"],
+      ["Firefox on a Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:131.0) Gecko/20100101 Firefox/131.0", 0, "other"],
+    ] as const;
+    for (const [who, ua, touch, platform] of EVERY) {
+      // A new set of tests for each browser: one page, one set (`running`).
+      const probes: string[] = [];
+      asPhone("Asia/Bangkok", probes, { ua, touch, media: ["(prefers-contrast: no-preference)"] });
+      const values = await readDeviceSignals(stubProbes(probes));
+      expect(values, who).toMatchObject({ platform, canvas: "Qm9vbS1jYW52", webgl: "V2ViR0wtaGFz", audio: "QXVkaW8taGFz", contrast: "none", hourCycle: "h23" });
+      expect(probes.filter((p) => p === "audio" || p === "canvas" || p === "webgl"), who).toEqual(["audio", "canvas", "webgl"]);
+      expect(cleanSignals(values), who).not.toBeNull();
+      // The family only names the label: an iPad that asks for the desktop site says "Macintosh" and has touch points.
+      expect(platformOf(ua, touch), who).toBe(platform);
+      vi.unstubAllGlobals();
+    }
+    // On an iPhone too, the rules of every read hold: a test still running at the limit makes the read null,
+    // and a European zone runs no test at all.
+    asPhone("Asia/Bangkok", [], { ua: IPHONE_UA });
+    expect(await readDeviceSignals(stubProbes([], { canvas: () => new Promise<string>(() => undefined) }), 20)).toBeNull();
+    vi.unstubAllGlobals();
+    const spies = { audio: vi.fn(async () => "QXVkaW8taGFz"), canvas: vi.fn(async () => "Qm9vbS1jYW52"), webgl: vi.fn(async () => "V2ViR0wtaGFz") };
+    asPhone("Europe/Madrid", [], { ua: IPHONE_UA });
+    expect(await readDeviceSignals(spies)).toBeNull();
+    expect(spies.audio).not.toHaveBeenCalled();
+    expect(spies.canvas).not.toHaveBeenCalled();
+    expect(spies.webgl).not.toHaveBeenCalled();
+  });
+
+  it("reads each setting as a short token, and na where the browser knows no such setting", async () => {
+    const probes: string[] = [];
+    asPhone("Asia/Bangkok", probes, { media: ["(prefers-contrast: more)", "(inverted-colors: inverted)", "(prefers-reduced-transparency: reduce)", "(prefers-reduced-motion: reduce)"], clock: { hourCycle: "h12", locale: "th-TH" } });
+    expect(await readDeviceSignals(stubProbes(probes))).toMatchObject({ contrast: "more", inverted: "yes", transparency: "yes", motion: true, hourCycle: "h12", locale: "th-th" });
+    vi.unstubAllGlobals();
+    // A browser that matches no value of a feature does not know it (Chrome and inverted-colors): na, never "no".
+    asPhone("Asia/Bangkok", probes, { media: ["(prefers-contrast: custom)"], clock: {} });
+    expect(await readDeviceSignals(stubProbes(probes))).toMatchObject({ contrast: "custom", inverted: "na", transparency: "na", hourCycle: "na", locale: "na" });
+    vi.unstubAllGlobals();
+    asPhone("Asia/Bangkok", probes, { media: ["(prefers-contrast: less)"], clock: { hourCycle: "h24", locale: "en_GB" } });
+    const odd = await readDeviceSignals(stubProbes(probes));
+    // A locale the server would refuse goes as na, so one odd value never drops the whole hint.
+    expect(odd).toMatchObject({ contrast: "less", hourCycle: "h24", locale: "na" });
+    expect(cleanSignals(odd)).not.toBeNull();
+  });
+
+  it("reads nothing more, and sends nothing, in a European zone: no drawing, no 3D shape, no sound, no setting", async () => {
+    const probes: string[] = [];
+    const asked: string[] = [];
+    const spies = { audio: vi.fn(async () => "QXVkaW8taGFz"), canvas: vi.fn(async () => "Qm9vbS1jYW52"), webgl: vi.fn(async () => "V2ViR0wtaGFz") };
+    for (const zone of ["Europe/Madrid", "Atlantic/Canary", "Asia/Nicosia", "GB"]) {
+      asPhone(zone, probes, { asked });
+      expect(await readDeviceSignals(spies), zone).toBeNull();
+      vi.unstubAllGlobals();
+    }
+    expect(spies.audio).not.toHaveBeenCalled();
+    expect(spies.canvas).not.toHaveBeenCalled();
+    expect(spies.webgl).not.toHaveBeenCalled();
+    expect(probes).toEqual([]);
+    expect(asked).toEqual([]);
+  });
+
+  it("a browser without the APIs still sends a good set: each of the page's own tests gives na", async () => {
+    // The real tests, in a "browser" with no canvas context, no WebGL and no OfflineAudioContext.
     const probes: string[] = [];
     asPhone("Asia/Bangkok", probes);
-    const values = readDeviceSignals();
-    expect(values).toEqual({ w: 390, h: 844, dpr: 3, langs: ["en-us", "th-th"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false });
-    // One span for the text size, put in and taken out: no canvas, no WebGL, no audio.
-    expect(probes).toEqual(["create:span", "append", "removed"]);
+    const values = await readDeviceSignals({ ...SIGNAL_PROBES });
+    expect(values).toMatchObject({ canvas: "na", webgl: "na", audio: "na" });
     expect(cleanSignals(values)).not.toBeNull();
   });
 
-  it("reads nothing more, and sends nothing, in a European zone", () => {
+  it("a test that throws, fails, or answers anything but a short hash gives na", async () => {
     const probes: string[] = [];
-    asPhone("Europe/Madrid", probes);
-    expect(readDeviceSignals()).toBeNull();
-    expect(probes).toEqual([]);
+    asPhone("Asia/Bangkok", probes);
+    const values = await readDeviceSignals(
+      stubProbes(probes, {
+        canvas: () => {
+          throw new Error("SecurityError");
+        },
+        webgl: async () => {
+          throw new Error("context lost");
+        },
+        audio: async () => "Apple GPU",
+      }),
+    );
+    expect(values).toMatchObject({ canvas: "na", webgl: "na", audio: "na", w: 390 });
+    expect(cleanSignals(values)).not.toBeNull();
+  });
+
+  it(`finishes within ${SIGNAL_BUDGET_MS} ms: a test that hangs makes the read null at the limit, never a key with a late "na" in it`, async () => {
+    // A "na" for a late test would put a timing into the key: one phone would save a key at an idle tap and
+    // ask with another while the page was still busy (review of 30 October 2026). So a late read sends nothing.
+    expect(SIGNAL_BUDGET_MS).toBe(150);
+    const probes: string[] = [];
+    asPhone("Asia/Bangkok", probes);
+    const began = performance.now();
+    const values = await readDeviceSignals(stubProbes(probes, { audio: () => new Promise<string>(() => undefined) }));
+    const took = performance.now() - began;
+    expect(values).toBeNull();
+    expect(took).toBeGreaterThanOrEqual(SIGNAL_BUDGET_MS - 5);
+    expect(took).toBeLessThan(SIGNAL_BUDGET_MS + 150);
+    // A shorter budget, for a test that is late rather than stuck.
+    const slow = await readDeviceSignals(stubProbes(probes, { webgl: () => new Promise<string>((done) => setTimeout(() => done("V2ViR0wtaGFz"), 80)) }), 20);
+    expect(slow).toBeNull();
+  });
+
+  it(`a drawing that alone runs past the limit (a cold WebGL start) still gives its hash, and the others theirs, within ${SIGNAL_GRACE_MS} ms more`, async () => {
+    // No timer can stop a synchronous step. Without the grace, the limit's timer would fire before the hashes
+    // already asked for come back, and one slow start would turn every value into "na" and change the key.
+    const probes: string[] = [];
+    asPhone("Asia/Bangkok", probes);
+    const busy = (ms: number) => {
+      const until = performance.now() + ms;
+      while (performance.now() < until) {
+        // A drawing that takes the whole budget.
+      }
+    };
+    const began = performance.now();
+    const values = await readDeviceSignals(
+      stubProbes(probes, {
+        audio: () => hashPrefix("sound"),
+        canvas: () => hashPrefix("drawing"),
+        // The drawing takes the whole budget, and its hash comes back 10 ms later, as a digest does.
+        webgl: () => (busy(SIGNAL_BUDGET_MS + 20), new Promise<string>((done) => setTimeout(() => done("V2ViR0wtaGFz"), 10))),
+      }),
+    );
+    const took = performance.now() - began;
+    expect(values).toMatchObject({ audio: await hashPrefix("sound"), canvas: await hashPrefix("drawing"), webgl: "V2ViR0wtaGFz" });
+    expect(took).toBeLessThan(SIGNAL_BUDGET_MS + 20 + SIGNAL_GRACE_MS + 60);
+    // A test that hangs still ends the read then, at the grace, and the read is null.
+    const hungAt = performance.now();
+    const hung = await readDeviceSignals(stubProbes(probes, { audio: () => new Promise<string>(() => undefined), webgl: () => (busy(SIGNAL_BUDGET_MS + 5), hashPrefix("shape")) }));
+    expect(hung).toBeNull();
+    expect(performance.now() - hungAt).toBeLessThan(SIGNAL_BUDGET_MS + 5 + SIGNAL_GRACE_MS + 60);
+  });
+
+  it("a second read in the same page runs no test again: a read while a test is late is null, and every later read gets the same whole set", async () => {
+    const probes: string[] = [];
+    asPhone("Asia/Bangkok", probes);
+    const page = stubProbes(probes, { audio: () => new Promise<string>((done) => setTimeout(() => done("QXVkaW8taGFz"), 60)) });
+    expect(await readDeviceSignals(page, 20)).toBeNull();
+    await new Promise((done) => setTimeout(done, 80));
+    probes.length = 0;
+    const second = await readDeviceSignals(page, 20);
+    expect(second).toMatchObject({ audio: "QXVkaW8taGFz", canvas: "Qm9vbS1jYW52", webgl: "V2ViR0wtaGFz" });
+    expect(probes).toEqual(["create:span", "append", "removed"]);
+    // A test that gave "na" gives it at every read of the page, never a hash at one and "na" at another.
+    const missing = stubProbes(probes, { canvas: async () => "na" });
+    const one = await readDeviceSignals(missing);
+    expect(one).toMatchObject({ canvas: "na", audio: "QXVkaW8taGFz" });
+    expect(await readDeviceSignals(missing)).toEqual(one);
+    expect(await readDeviceSignals(page, 20)).toEqual(second);
+  });
+
+  it("hashes with SHA-256 and keeps a short base64url prefix, so only the hash ever leaves the browser", async () => {
+    expect(await hashPrefix("abc")).toBe(createHash("sha256").update("abc").digest("base64url").slice(0, 12));
+    const bytes = new Uint8Array([1, 2, 3, 250]);
+    expect(await hashPrefix(bytes)).toBe(createHash("sha256").update(bytes).digest("base64url").slice(0, 12));
+    expect(await hashPrefix("abc")).toMatch(/^[A-Za-z0-9_-]{12}$/);
+  });
+
+  /** A context of any kind as a stub: every call is logged and answers nothing, but what `answers` names. */
+  const fakeContext = (log: string[], answers: Record<string, (...a: unknown[]) => unknown>) =>
+    new Proxy({} as Record<string, unknown>, {
+      get: (_t, k) => (typeof k !== "string" ? undefined : k in answers ? answers[k] : /^[A-Z_0-9]+$/.test(k) ? k : (...a: unknown[]) => void log.push(`${k}(${a.length})`)),
+      set: () => true,
+    });
+  const withCanvas = (probes: string[], contexts: Record<string, unknown>) => {
+    vi.stubGlobal("document", {
+      createElement: (tag: string) => (probes.push(`create:${tag}`), { width: 0, height: 0, getContext: (kind: string) => contexts[kind] ?? null }),
+    });
+  };
+
+  it("the drawing: a fixed scene in two fonts with an emoji, a gradient and arcs, hashed from its pixels", async () => {
+    const probes: string[] = [];
+    const drawn: string[] = [];
+    const pixels = new Uint8ClampedArray(240 * 60 * 4).map((_, i) => i % 251);
+    const fonts: string[] = [];
+    const texts: string[] = [];
+    const g = fakeContext(drawn, {
+      createLinearGradient: () => ({ addColorStop: () => drawn.push("stop") }),
+      getImageData: () => ({ data: pixels }),
+      fillText: (text: unknown) => void texts.push(String(text)),
+    });
+    const setFont = new Proxy(g, { set: (_t, k, v) => (k === "font" && fonts.push(String(v)), true) });
+    withCanvas(probes, { "2d": setFont });
+    const hash = await SIGNAL_PROBES.canvas();
+    expect(hash).toBe(await hashPrefix(pixels));
+    expect(hash).toHaveLength(12);
+    expect(new Set(fonts.map((f) => f.split(" ").at(-1))).size).toBe(2);
+    expect(texts.some((t) => /\p{Extended_Pictographic}/u.test(t))).toBe(true);
+    expect(drawn.filter((d) => d.startsWith("arc(")).length).toBeGreaterThanOrEqual(2);
+    expect(drawn).toContain("stop");
+    // No context: na.
+    withCanvas(probes, {});
+    expect(await SIGNAL_PROBES.canvas()).toBe("na");
+  });
+
+  it("the 3D shape: the renderer, four limits, the extensions and a small drawing in one hash, and the context is let go", async () => {
+    const probes: string[] = [];
+    const log: string[] = [];
+    const released: string[] = [];
+    const glOf = (renderer: string) =>
+      fakeContext(log, {
+        getParameter: (p: unknown) => (p === "MAX_VIEWPORT_DIMS" ? new Int32Array([16384, 16384]) : p === "ALIASED_LINE_WIDTH_RANGE" ? new Float32Array([1, 1]) : p === "RENDERER" ? "WebKit WebGL" : p === "UNMASKED_RENDERER_WEBGL" ? renderer : p === "UNMASKED_VENDOR_WEBGL" ? "Apple Inc." : p === "MAX_TEXTURE_SIZE" || p === "MAX_RENDERBUFFER_SIZE" ? 16384 : null),
+        getSupportedExtensions: () => ["OES_texture_float", "WEBGL_lose_context", "ANGLE_instanced_arrays"],
+        getExtension: (name: unknown) => (name === "WEBGL_lose_context" ? { loseContext: () => released.push("lost") } : name === "WEBGL_debug_renderer_info" ? { UNMASKED_RENDERER_WEBGL: "UNMASKED_RENDERER_WEBGL", UNMASKED_VENDOR_WEBGL: "UNMASKED_VENDOR_WEBGL" } : null),
+        createShader: () => ({}),
+        createProgram: () => ({}),
+        createBuffer: () => ({}),
+        getAttribLocation: () => 0,
+        getShaderParameter: () => true,
+        getProgramParameter: () => true,
+        readPixels: (...a: unknown[]) => void (a[6] as Uint8Array).fill(7),
+      });
+    withCanvas(probes, { webgl: glOf("Apple GPU") });
+    const one = await SIGNAL_PROBES.webgl();
+    expect(one).toMatch(/^[A-Za-z0-9_-]{12}$/);
+    expect(log).toContain("drawArrays(3)");
+    expect(released).toEqual(["lost"]);
+    withCanvas(probes, { webgl: glOf("Apple GPU") });
+    expect(await SIGNAL_PROBES.webgl()).toBe(one);
+    withCanvas(probes, { webgl: glOf("Adreno (TM) 740") });
+    expect(await SIGNAL_PROBES.webgl()).not.toBe(one);
+    withCanvas(probes, {});
+    expect(await SIGNAL_PROBES.webgl()).toBe("na");
+  });
+
+  it("the sound: a fixed oscillator through a compressor, rendered offline with no gesture, its samples summed into one hash", async () => {
+    const samples = Float32Array.from({ length: 5000 }, (_, i) => Math.sin(i / 7) / 3);
+    const nodes: string[] = [];
+    class FakeOffline {
+      destination = { name: "out" };
+      constructor(channels: number, length: number, rate: number) {
+        nodes.push(`ctx(${channels},${length},${rate})`);
+      }
+      createOscillator() {
+        return { type: "", frequency: { value: 0 }, connect: () => nodes.push("osc>"), start: () => nodes.push("start") };
+      }
+      createDynamicsCompressor() {
+        const p = () => ({ value: 0 });
+        return { threshold: p(), knee: p(), ratio: p(), attack: p(), release: p(), connect: () => nodes.push("comp>") };
+      }
+      startRendering() {
+        return Promise.resolve({ getChannelData: () => samples });
+      }
+    }
+    vi.stubGlobal("window", { OfflineAudioContext: FakeOffline });
+    let sum = 0;
+    for (let i = 4500; i < 5000; i++) sum += Math.abs(samples[i]);
+    expect(await SIGNAL_PROBES.audio()).toBe(await hashPrefix(sum.toString()));
+    expect(nodes).toEqual(["ctx(1,5000,44100)", "osc>", "comp>", "start"]);
+    vi.stubGlobal("window", {});
+    expect(await SIGNAL_PROBES.audio()).toBe("na");
+  });
+
+  it(`the sound: a browser that never renders without a tap gives na after ${AUDIO_START_MS} ms, every time, and a slow render that began still gives its hash`, async () => {
+    // Such a browser leaves the context suspended and the sound never comes. As a late test it would make
+    // every read null and turn the hints off for that browser; as "na" it is a value like any other.
+    const samples = Float32Array.from({ length: 5000 }, (_, i) => Math.cos(i / 5) / 4);
+    const offline = (render: (ctx: { state: string; currentTime: number }) => Promise<{ getChannelData: () => Float32Array }>) =>
+      class {
+        state = "suspended";
+        currentTime = 0;
+        destination = {};
+        createOscillator() {
+          return { type: "", frequency: { value: 0 }, connect: () => undefined, start: () => undefined };
+        }
+        createDynamicsCompressor() {
+          const p = () => ({ value: 0 });
+          return { threshold: p(), knee: p(), ratio: p(), attack: p(), release: p(), connect: () => undefined };
+        }
+        startRendering() {
+          return render(this);
+        }
+      };
+    const within = (p: Promise<string>, ms: number) => Promise.race([p, new Promise<string>((done) => setTimeout(() => done("still waiting"), ms))]);
+    vi.stubGlobal("window", { OfflineAudioContext: offline(() => new Promise(() => undefined)) });
+    for (let i = 0; i < 2; i++) expect(await within(SIGNAL_PROBES.audio(), AUDIO_START_MS + 100)).toBe("na");
+    // Begun on the audio thread (its clock moved), though the page has not yet heard so: it waits for the sound.
+    vi.stubGlobal("window", {
+      OfflineAudioContext: offline((ctx) => {
+        ctx.currentTime = 0.01;
+        return new Promise((done) => setTimeout(() => done({ getChannelData: () => samples }), AUDIO_START_MS + 30));
+      }),
+    });
+    let sum = 0;
+    for (let i = 4500; i < 5000; i++) sum += Math.abs(samples[i]);
+    expect(await within(SIGNAL_PROBES.audio(), AUDIO_START_MS + 200)).toBe(await hashPrefix(sum.toString()));
   });
 
   /** The tab's storage, as a log of what the page asked of it: a read is `get:`, a write is `set:`. */
@@ -208,48 +598,92 @@ describe("the browser's own reader", () => {
       storage: {
         getItem: (k: string) => (probes.push(`get:${k}`), kept.get(k) ?? null),
         setItem: (k: string, v: string) => void (probes.push(`set:${k}`), kept.set(k, v)),
+        removeItem: (k: string) => void (probes.push(`remove:${k}`), kept.delete(k)),
       },
     };
   };
 
-  it("the question writes nothing to the tab and sends nothing in a European zone, though the page mounts it there", () => {
+  it("the question writes nothing to the tab and sends nothing in a European zone, though the page mounts it there", async () => {
     // The server cannot know a browser's zone, so a European browser mounts `WelcomeBack` on a match with a
     // remembered player. EU and UK law asks consent for any storage on the device, personal data or not: the
     // zone comes before the tab's note (review, 28 October 2026).
     const probes: string[] = [];
     const tab = tabStorage(probes);
     for (const zone of ["Europe/Madrid", "Europe/London", "Atlantic/Canary", "Asia/Nicosia"]) {
-      asPhone(zone, probes, tab.storage);
-      expect(hintAskOnce("ABC234"), zone).toBeNull();
+      asPhone(zone, probes, { sessionStorage: tab.storage });
+      expect(await hintAskOnce("ABC234", stubProbes(probes)), zone).toBeNull();
       vi.unstubAllGlobals();
     }
     expect(probes).toEqual([]);
     expect(tab.kept.size).toBe(0);
   });
 
-  it("elsewhere the question writes one note a match in the tab, then reads the values; a second mount reads nothing", () => {
+  it("elsewhere the question writes one note a match in the tab, then reads the values; a second mount reads nothing", async () => {
     const probes: string[] = [];
     const tab = tabStorage(probes);
-    asPhone("Asia/Bangkok", probes, tab.storage);
-    expect(hintAskOnce("ABC234")).toMatchObject({ tz: "Asia/Bangkok", w: 390 });
-    expect(probes).toEqual([`get:${HINT_ASKED_KEY}ABC234`, `set:${HINT_ASKED_KEY}ABC234`, "create:span", "append", "removed"]);
+    asPhone("Asia/Bangkok", probes, { sessionStorage: tab.storage });
+    const page = stubProbes(probes);
+    expect(await hintAskOnce("ABC234", page)).toMatchObject({ tz: "Asia/Bangkok", w: 390, canvas: "Qm9vbS1jYW52" });
+    expect(probes).toEqual([`get:${HINT_ASKED_KEY}ABC234`, `set:${HINT_ASKED_KEY}ABC234`, "create:span", "append", "removed", "audio", "canvas", "webgl"]);
     probes.length = 0;
-    expect(hintAskOnce("ABC234")).toBeNull();
+    expect(await hintAskOnce("ABC234", page)).toBeNull();
     expect(probes).toEqual([`get:${HINT_ASKED_KEY}ABC234`]);
     // Another match in the same tab is asked once too.
-    expect(hintAskOnce("XYZ789")).not.toBeNull();
+    expect(await hintAskOnce("XYZ789", page)).not.toBeNull();
     expect([...tab.kept.keys()]).toEqual([`${HINT_ASKED_KEY}ABC234`, `${HINT_ASKED_KEY}XYZ789`]);
   });
 
-  it("a tab whose storage refuses asks nothing, rather than once per view", () => {
+  it("\"It's me\" and \"Not me\" send exactly the values that the question sent, and read nothing again", async () => {
+    // A question and the tap that answers it send the same input: a tap that read again could make another
+    // key, find no question, and cost the player a "That's me" attempt (review of 30 October 2026).
+    const probes: string[] = [];
+    const tab = tabStorage(probes);
+    asPhone("Asia/Bangkok", probes, { sessionStorage: tab.storage, media: ["(prefers-contrast: no-preference)"] });
+    const page = stubProbes(probes);
+    expect(hintAnswerValues("TAP234", page)).toBeNull();
+    const asked = await hintAskOnce("TAP234", page);
+    expect(asked).toMatchObject({ contrast: "none", w: 390 });
+    // The page changes under the question: another setting, another window. The taps still send the question's values.
+    vi.stubGlobal("screen", { width: 412, height: 915 });
+    vi.stubGlobal("window", { devicePixelRatio: 2, location: { protocol: "https:" }, matchMedia: (q: string) => ({ matches: q === "(prefers-contrast: more)" }), sessionStorage: tab.storage });
+    probes.length = 0;
+    expect(hintAnswerValues("TAP234", page)).toBe(asked);
+    expect(probes).toEqual([]);
+    // Another match in the page, and the same match in another page, have values of their own.
+    expect(hintAnswerValues("XYZ789", page)).toBeNull();
+    expect(hintAnswerValues("TAP234", stubProbes([]))).toBeNull();
+    // And the question's two buttons send these, not a new read (a node test cannot tap, so it reads the component).
+    const welcome = readFileSync(path.resolve(process.cwd(), "src/components/WelcomeBack.tsx"), "utf8");
+    expect(welcome).toContain("deviceHintYesAction(code, hintAnswerValues(code))");
+    expect(welcome).toContain("deviceHintNotMeAction(code, hintAnswerValues(code))");
+    expect(welcome).not.toContain("readDeviceSignals");
+  });
+
+  it("a question whose read is late sends nothing and takes its note back, so a later view of the match may ask", async () => {
+    const probes: string[] = [];
+    const tab = tabStorage(probes);
+    asPhone("Asia/Bangkok", probes, { sessionStorage: tab.storage });
+    const slow = stubProbes(probes, { audio: () => new Promise<string>(() => undefined) });
+    expect(await hintAskOnce("LATE34", slow)).toBeNull();
+    expect(probes).toContain(`remove:${HINT_ASKED_KEY}LATE34`);
+    expect(tab.kept.has(`${HINT_ASKED_KEY}LATE34`)).toBe(false);
+    expect(hintAnswerValues("LATE34", slow)).toBeNull();
+    // The next view, with every test in time, asks.
+    expect(await hintAskOnce("LATE34", stubProbes(probes))).not.toBeNull();
+    expect(tab.kept.has(`${HINT_ASKED_KEY}LATE34`)).toBe(true);
+  });
+
+  it("a tab whose storage refuses asks nothing, rather than once per view", async () => {
     const probes: string[] = [];
     asPhone("Asia/Bangkok", probes, {
-      getItem: () => null,
-      setItem: () => {
-        throw new Error("QuotaExceededError");
+      sessionStorage: {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error("QuotaExceededError");
+        },
       },
     });
-    expect(hintAskOnce("ABC234")).toBeNull();
+    expect(await hintAskOnce("ABC234", stubProbes(probes))).toBeNull();
     expect(probes).toEqual([]);
   });
 });

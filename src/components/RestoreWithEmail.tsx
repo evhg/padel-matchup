@@ -100,7 +100,7 @@ export function RestoreWithEmail({ initialEmail = "", title, compact = false, on
           email={email}
           verifyLabel={t("identity.verify")}
           onVerify={async (code) => {
-            const r = await verifyRestoreCode(email, code, readDeviceSignals());
+            const r = await verifyRestoreCode(email, code, await readDeviceSignals());
             if (r.ok) setName(r.data.name);
             return r;
           }}

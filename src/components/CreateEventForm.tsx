@@ -257,7 +257,7 @@ export function CreateEventForm({
         payNote: values.payNote || undefined,
         booked: booking ? bookedByMe : undefined,
         invite: invite?.url,
-      }, { hint: readDeviceSignals() });
+      }, { hint: await readDeviceSignals() });
       // On success the action redirects to the share screen.
       if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
     });

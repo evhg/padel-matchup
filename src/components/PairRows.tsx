@@ -37,7 +37,7 @@ export function BePartnerButton({ code, slotId, hasIdentity }: { code: string; s
   const go = (withName?: string) =>
     start(async () => {
       setError(null);
-      const r = await bePartnerAction(code, slotId, withName, readDeviceSignals());
+      const r = await bePartnerAction(code, slotId, withName, await readDeviceSignals());
       startTransition(() => {
         if (!r.ok) setError(errorText(r));
       });

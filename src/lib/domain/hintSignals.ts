@@ -13,8 +13,22 @@
  * gives the same pair), the pixel ratio to a quarter, every language the browser asks for, the time zone,
  * the platform family (iPhone, iPad, Android or other), the touch points, the text size the phone's own
  * setting gives (`font: -apple-system-body`, where a browser knows it; else "na") and whether the person
- * asked for reduced motion. Never a canvas, WebGL, audio or font read, never the IP address, never the
- * system's version, and never dark mode, which flips by itself with "Automatic".
+ * asked for reduced motion.
+ *
+ * Since 30 October 2026 (v2), also three tests and five settings. The owner was told that a drawing test
+ * and more settings add little and change the key at every iOS update, and was advised not to add them.
+ * The owner answered: "I want them anyway." So the browser also sends a short hash of a small fixed
+ * drawing (`canvas`), one of the WebGL renderer, four of its limits, its extensions and a small 3D drawing
+ * (`webgl`), and one of a short sound rendered offline (`audio`); the hash, never the picture or the
+ * sound. And the contrast, inverted colours and reduced transparency settings, the hour cycle and the
+ * locale that Intl gives. Each is optional: an older client, a browser without the API, or a test that
+ * throws gives "na", and that is still a good set. A test that is still running at the reader's limit
+ * gives no "na": that read sends no values at all (src/lib/deviceSignals.ts), because a value that
+ * depends on how busy the phone was would change the key. Every platform runs the three tests, iPhones,
+ * iPads and Safari too: on 30 October 2026 the owner answered "On everywhere", and the known risk is
+ * that Safari's noise differs between the browsers of one iPhone (DECIDING rule 40). Never a font list,
+ * never the IP address, never the system's version, and never dark mode, which flips by itself with
+ * "Automatic".
  *
  * The server checks every value here (`cleanSignals`): a type, a bound and an allowed set for each, and
  * the whole hint goes when one value fails. It keeps none of them: `canonicalSignals` is what the key is
@@ -27,6 +41,31 @@ export type HintPlatform = (typeof HINT_PLATFORMS)[number];
 /** The words a remembered phone is kept under, and listed under on My matches. Never more than the family. */
 export const HINT_LABELS = { iphone: "iPhone", ipad: "iPad", android: "Android phone", other: "other" } as const satisfies Record<HintPlatform, string>;
 export type HintLabel = (typeof HINT_LABELS)[HintPlatform];
+/** Every label, in the order of the platforms. */
+export const HINT_LABEL_LIST: readonly HintLabel[] = HINT_PLATFORMS.map((p) => HINT_LABELS[p]);
+/** A label as an operator typed it, or null for anything that is not one of the four. Pure. */
+export const hintLabelOf = (raw: unknown): HintLabel | null => (HINT_LABEL_LIST as readonly unknown[]).includes(raw) ? (raw as HintLabel) : null;
+
+/** A value the browser cannot give: an older client, a missing API, or a test that threw. Never a test that was late. */
+export const SIGNAL_NA = "na";
+export type SignalNa = typeof SIGNAL_NA;
+
+/** `prefers-contrast`: no-preference, more, less or custom. */
+export const HINT_CONTRASTS = ["none", "more", "less", "custom"] as const;
+export type HintContrast = (typeof HINT_CONTRASTS)[number];
+/** `inverted-colors: inverted` and `prefers-reduced-transparency: reduce`: yes or no. */
+export const HINT_FLAGS = ["yes", "no"] as const;
+export type HintFlag = (typeof HINT_FLAGS)[number];
+/** The hour cycle that `Intl.DateTimeFormat` resolves for an hour: the phone's 12- or 24-hour setting. */
+export const HINT_HOUR_CYCLES = ["h11", "h12", "h23", "h24"] as const;
+export type HintHourCycle = (typeof HINT_HOUR_CYCLES)[number];
+
+/** The platform family from the browser's own words: an iPad that asks for the desktop site says "Macintosh" and has touch points. Pure. */
+export function platformOf(ua: string, touch: number): HintPlatform {
+  if (/iPhone|iPod/.test(ua)) return "iphone";
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && touch > 1)) return "ipad";
+  return /Android/.test(ua) ? "android" : "other";
+}
 
 /** The values, checked and in their canonical form. */
 export type DeviceSignals = {
@@ -45,14 +84,65 @@ export type DeviceSignals = {
   text: number | "na";
   /** `prefers-reduced-motion: reduce`. */
   motion: boolean;
+  /** v2: a short hash of the pixels of a small fixed 2D drawing, or "na". */
+  canvas: string;
+  /** v2: a short hash of the WebGL renderer and vendor, four limits, the extensions and a small 3D drawing, or "na". */
+  webgl: string;
+  /** v2: a short hash of a fixed oscillator through a compressor, rendered offline, or "na". */
+  audio: string;
+  contrast: HintContrast | SignalNa;
+  inverted: HintFlag | SignalNa;
+  transparency: HintFlag | SignalNa;
+  hourCycle: HintHourCycle | SignalNa;
+  /** The locale `Intl` resolves for a date, in lower case, or "na". */
+  locale: string;
 };
 
-/** What the browser sends: `readDeviceSignals` in src/lib/deviceSignals.ts writes this shape. */
-export type SignalsWire = { w: number; h: number; dpr: number; langs: string[]; tz: string; platform: HintPlatform; touch: number; text: number | "na"; motion: boolean };
+/**
+ * What the browser sends: `readDeviceSignals` in src/lib/deviceSignals.ts writes this shape. The v2 values
+ * are optional, so a client from before 30 October 2026 still sends a good set; a missing one is "na".
+ */
+export type SignalsWire = {
+  w: number;
+  h: number;
+  dpr: number;
+  langs: string[];
+  tz: string;
+  platform: HintPlatform;
+  touch: number;
+  text: number | "na";
+  motion: boolean;
+  canvas?: string;
+  webgl?: string;
+  audio?: string;
+  contrast?: HintContrast | SignalNa;
+  inverted?: HintFlag | SignalNa;
+  transparency?: HintFlag | SignalNa;
+  hourCycle?: HintHourCycle | SignalNa;
+  locale?: string;
+};
 
-export const SIGNAL_BOUNDS = { side: 20000, langs: 10, lang: 35, tz: 64, touch: 256, textMin: 4, textMax: 200, dprMin: 0.25, dprMax: 10 } as const;
+/** `hash`: the exact length of each test's hash (base64url, 72 bits of SHA-256), as `hashPrefix` in src/lib/deviceSignals.ts keeps it. */
+export const SIGNAL_BOUNDS = { side: 20000, langs: 10, lang: 35, tz: 64, touch: 256, textMin: 4, textMax: 200, dprMin: 0.25, dprMax: 10, hash: 12, locale: 35 } as const;
 
 const LANG = /^[a-z]{1,8}(-[a-z0-9]{1,8}){0,4}$/;
+/** A locale can carry a little more than a language (`zh-hant-tw`, a `-u-hc-h23` extension). */
+const LOCALE = /^[a-z]{1,8}(-[a-z0-9]{1,8}){0,6}$/;
+const HASH = new RegExp(`^[A-Za-z0-9_-]{${SIGNAL_BOUNDS.hash}}$`);
+
+/** A short hash a test made, as the server takes it: exactly `SIGNAL_BOUNDS.hash` base64url characters, or "na". Pure. */
+export const isSignalHash = (v: unknown): v is string => v === SIGNAL_NA || (typeof v === "string" && HASH.test(v));
+
+/** A locale as the server takes it: a lower-case tag inside its bound, or "na"; null for anything else. Pure. */
+export function cleanLocale(v: unknown): string | null {
+  if (v === SIGNAL_NA) return SIGNAL_NA;
+  if (typeof v !== "string" || v.length < 1 || v.length > SIGNAL_BOUNDS.locale) return null;
+  const lower = v.toLowerCase();
+  return LOCALE.test(lower) ? lower : null;
+}
+
+/** One optional value: missing is "na", one of `allowed` or "na" is itself, anything else is null. */
+const tokenOf = <T extends string>(v: unknown, allowed: readonly T[]): T | SignalNa | null => (v === undefined || v === SIGNAL_NA ? SIGNAL_NA : typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : null);
 const ZONE = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+){0,2}$/;
 
 const isInt = (v: unknown, min: number, max: number): v is number => typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
@@ -149,15 +239,27 @@ export function cleanSignals(raw: unknown): DeviceSignals | null {
   else if (typeof r.text === "number" && Number.isFinite(r.text) && r.text >= SIGNAL_BOUNDS.textMin && r.text <= SIGNAL_BOUNDS.textMax) text = Math.round(r.text * 2) / 2;
   else return null;
   if (typeof r.motion !== "boolean") return null;
-  return { screen: [Math.min(r.w, r.h), Math.max(r.w, r.h)], dpr, langs, tz, platform: r.platform as HintPlatform, touch: r.touch, text, motion: r.motion };
+  // v2 (30 October 2026): each optional, each "na" when missing, and the whole hint goes when one comes bad.
+  const hash = (v: unknown) => (v === undefined ? SIGNAL_NA : isSignalHash(v) ? v : null);
+  const canvas = hash(r.canvas);
+  const webgl = hash(r.webgl);
+  const audio = hash(r.audio);
+  const contrast = tokenOf(r.contrast, HINT_CONTRASTS);
+  const inverted = tokenOf(r.inverted, HINT_FLAGS);
+  const transparency = tokenOf(r.transparency, HINT_FLAGS);
+  const hourCycle = tokenOf(r.hourCycle, HINT_HOUR_CYCLES);
+  const locale = r.locale === undefined ? SIGNAL_NA : cleanLocale(r.locale);
+  if (canvas === null || webgl === null || audio === null || contrast === null || inverted === null || transparency === null || hourCycle === null || locale === null) return null;
+  return { screen: [Math.min(r.w, r.h), Math.max(r.w, r.h)], dpr, langs, tz, platform: r.platform as HintPlatform, touch: r.touch, text, motion: r.motion, canvas, webgl, audio, contrast, inverted, transparency, hourCycle, locale };
 }
 
 /**
- * The one string the key is made from. Versioned (`v1`), so a change of what is read is a new string and
- * the old keys simply stop matching. Pure.
+ * The one string the key is made from. Versioned, so a change of what is read is a new string and the old
+ * keys simply stop matching: `v2` since 30 October 2026, the v1 values and then the new ones in a fixed
+ * order (production held no key that day, so none had to match). No value can hold the "|". Pure.
  */
 export function canonicalSignals(s: DeviceSignals): string {
-  return ["v1", `${s.screen[0]}x${s.screen[1]}`, String(s.dpr), s.langs.join(","), s.tz, s.platform, String(s.touch), String(s.text), s.motion ? "1" : "0"].join("|");
+  return ["v2", `${s.screen[0]}x${s.screen[1]}`, String(s.dpr), s.langs.join(","), s.tz, s.platform, String(s.touch), String(s.text), s.motion ? "1" : "0", s.canvas, s.webgl, s.audio, s.contrast, s.inverted, s.transparency, s.hourCycle, s.locale].join("|");
 }
 
 /** The switch, `DEVICE_HINTS`: `off` saves nothing, `save` saves and asks nothing, `ask` saves and (part 2) asks. */
@@ -190,3 +292,5 @@ export function hintDecision(raw: unknown, mode: HintMode): HintDecision {
 export const SIGNALS_COOKIE = "km_signals";
 export const SIGNALS_COOKIE_PATH = "/api/telegram/login";
 export const SIGNALS_COOKIE_MAX_AGE = 60;
+/** The longest cookie value `signalsFromCookie` reads: the largest good set of v2, encoded, is about 960 and fits (`tests/device-hints.test.ts`). */
+export const SIGNALS_COOKIE_MAX_CHARS = 1024;

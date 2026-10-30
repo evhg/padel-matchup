@@ -48,7 +48,7 @@ export function PasskeySignIn({ className = "btn-ghost w-full whitespace-normal 
         // Cancelled, or no passkey of ours on this phone: the phone said so already, so the line stays plain.
         return startTransition(() => setError(t("identity.passkeyNo")));
       }
-      const r = await passkeySignInAction(answer, { hint: readDeviceSignals() });
+      const r = await passkeySignInAction(answer, { hint: await readDeviceSignals() });
       startTransition(() => {
         if (!r.ok) return setError(r.error === "too_many" ? t("errors.too_many") : t("identity.passkeyNo"));
         setWelcome(r.data.name);

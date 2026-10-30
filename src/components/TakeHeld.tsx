@@ -38,7 +38,7 @@ export function TakeHeldButton({
     }
     setArmed(false);
     start(async () => {
-      const r = await takeHeldPlaceAction(code, name, readDeviceSignals());
+      const r = await takeHeldPlaceAction(code, name, await readDeviceSignals());
       startTransition(() => {
         if (!r.ok) setError(r.error === "too_many" ? t("errors.too_many") : t("identity.takeHeldNo", { name }));
       });

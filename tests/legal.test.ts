@@ -1,13 +1,14 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import ts from "typescript";
+import { describe, expect, it, vi } from "vitest";
 import { createTranslator } from "next-intl";
 import { LOCALE_COOKIE } from "@/i18n/config";
 import { BACKUP_KEEP_DAYS } from "@/lib/backup";
 import { DISPOSABLE_AFTER_DAYS } from "@/lib/domain/disposable";
 import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { PARTNER_WINDOW_MS } from "@/lib/domain/refill";
-import { LEGAL_OPERATOR, legalDate, legalValues } from "@/lib/legal";
+import { LEGAL_OPERATOR, LEGAL_UPDATED, legalDate, legalValues } from "@/lib/legal";
 import { hintCookieOptions } from "@/lib/hintCookie";
 import { BY_NAME_COOKIE, HAS_ID_COOKIE, manageCookieName, ONE_YEAR, PLAYER_COOKIE, SIGNED_OUT_COOKIE } from "@/lib/session";
 import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
@@ -15,9 +16,11 @@ import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 import { CHALLENGE_COOKIE, challengeCookie } from "@/lib/passkeys/webauthn";
 import { HINT_KEEP_DAYS } from "@/lib/domain/deviceHints";
-import { isEuropeanZone, SIGNALS_COOKIE, SIGNALS_COOKIE_MAX_AGE } from "@/lib/domain/hintSignals";
+import { cleanSignals, isEuropeanZone, SIGNAL_BOUNDS, SIGNALS_COOKIE, SIGNALS_COOKIE_MAX_AGE } from "@/lib/domain/hintSignals";
+import { getTableColumns } from "drizzle-orm";
+import { deviceHints } from "@/db/schema";
 import { HINT_SCOPE_STATUSES } from "@/lib/domain/deviceHintAsk";
-import { HINT_ASKED_KEY } from "@/lib/deviceSignals";
+import { HINT_ASKED_KEY, readDeviceSignals } from "@/lib/deviceSignals";
 import { KIND_DEFAULTS, SENDERS } from "@/lib/domain/noticeKinds";
 
 /**
@@ -147,6 +150,106 @@ describe("the privacy page tells the truth about the code", () => {
       for (const words of WORDS[l]) expect(line, `${l}: ${words}`).toContain(words);
       expect(line, l).not.toMatch(FINGER[l]);
       expect(render(l, "identity.hintsHelp" as never), l).not.toMatch(FINGER[l]);
+    }
+  });
+
+  it("names the test picture, the 3D shape and its graphics chip, the test sound and the clock settings in the key's bullet, says that they never leave the browser, that every browser outside Europe runs them, and that an update can change the key", () => {
+    // The key's v2 (the owner, 30 October 2026: "I want them anyway"). The browser sends a short hash of each
+    // test (`hashPrefix`, SIGNAL_BOUNDS.hash characters) and `cleanSignals` refuses anything else, so the
+    // picture, the sound and the chip's name (in the 3D shape's hash) cannot reach the server; the table has
+    // no column for any value. A new system or browser on the phone draws and plays differently, so the key
+    // can change, and the next door keeps the new one. Every browser outside Europe runs the tests, an iPhone
+    // too (the owner, 30 October 2026: "On everywhere"); the next test proves it in the reader.
+    const WORDS = {
+      en: ["how your browser draws a small test picture and a 3D shape and which graphics chip draws them", "how it plays a short test sound that nobody hears", "a few display and clock settings", "Never those details themselves", "The test picture, the test sound and the name of the chip never leave your browser", "Every browser outside Europe runs these tests, on an iPhone too; a browser set to a European time zone runs none of them", "The key can change when your phone's system or browser is updated", "your next join or sign-in then keeps the new one"],
+      ru: ["как ваш браузер рисует небольшую тестовую картинку и объёмную фигуру и какой графический чип их рисует", "как он воспроизводит короткий тестовый звук, которого никто не слышит", "несколько настроек экрана и часов", "Никогда — сами эти данные", "Тестовая картинка, тестовый звук и название чипа никогда не покидают ваш браузер", "Эти тесты проводит любой браузер за пределами Европы, в том числе на iPhone; браузер с европейским часовым поясом не проводит ни одного из них", "Ключ может измениться после обновления системы или браузера на телефоне", "при следующей записи на матч или входе мы сохраним новый"],
+      es: ["cómo tu navegador dibuja una pequeña imagen de prueba y una figura en 3D y qué chip gráfico las dibuja", "cómo reproduce un breve sonido de prueba que nadie oye", "algunos ajustes de pantalla y de reloj", "Nunca esos datos", "La imagen de prueba, el sonido de prueba y el nombre del chip nunca salen de tu navegador", "Todos los navegadores fuera de Europa hacen estas pruebas, también en un iPhone; un navegador con una zona horaria europea no hace ninguna", "La clave puede cambiar cuando se actualiza el sistema o el navegador de tu teléfono", "la próxima vez que te apuntes o inicies sesión, guardamos la nueva"],
+    } as const;
+    const NO_TEST_ON_IPHONE = { en: "On an iPhone or an iPad, and in Safari", ru: "На iPhone и iPad, а также в Safari", es: "En un iPhone o un iPad, y en Safari" } as const;
+    const KEY = { en: "a key that we make with a secret", ru: "ключ, который мы делаем с секретом", es: "una clave que hacemos con un secreto" } as const;
+    const FINGER = { en: /fingerprint/i, ru: /отпечат/i, es: /huella/i } as const;
+    for (const l of LOCALES) {
+      const line = render(l, "privacy.storeBody").split("\n").find((x) => x.includes(KEY[l]));
+      expect(line, l).toBeDefined();
+      for (const words of WORDS[l]) expect(line, `${l}: ${words}`).toContain(words);
+      expect(line, l).not.toMatch(FINGER[l]);
+      // The page no longer says that an iPhone, an iPad or Safari runs no test: since "On everywhere" they all do.
+      expect(line, l).not.toContain(NO_TEST_ON_IPHONE[l]);
+    }
+    // Only a short hash of each test leaves the browser: every answer of the three tests is a hash or "na".
+    // Read with the compiler, so a helper's own return inside a test is not taken for the test's answer.
+    const reader = readFileSync(path.resolve(process.cwd(), "src/lib/deviceSignals.ts"), "utf8");
+    const file = ts.createSourceFile("deviceSignals.ts", reader, ts.ScriptTarget.Latest, true);
+    const answers: Record<string, string[]> = {};
+    const own = (node: ts.Node, into: string[]) =>
+      node.forEachChild((child) => {
+        if (ts.isFunctionLike(child)) return;
+        if (ts.isReturnStatement(child) && child.expression) into.push(child.expression.getText(file));
+        own(child, into);
+      });
+    file.forEachChild((n) => {
+      if (ts.isFunctionDeclaration(n) && n.name && ["canvasProbe", "webglProbe", "audioProbe"].includes(n.name.text) && n.body) own(n.body, (answers[n.name.text] = []));
+    });
+    expect(Object.keys(answers).sort()).toEqual(["audioProbe", "canvasProbe", "webglProbe"]);
+    for (const [probe, list] of Object.entries(answers)) {
+      expect(list.length, probe).toBeGreaterThanOrEqual(2);
+      for (const a of list) expect(a, `${probe}: ${a}`).toMatch(/^(SIGNAL_NA|hashPrefix\()/);
+    }
+    expect(SIGNAL_BOUNDS.hash).toBe(12);
+    const phone = { w: 390, h: 844, dpr: 3, langs: ["en-us"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false };
+    expect(cleanSignals({ ...phone, canvas: "Qm9vbS1jYW52" })).not.toBeNull();
+    expect(cleanSignals({ ...phone, canvas: `data:image/png;base64,${"A".repeat(64)}` })).toBeNull();
+    expect(cleanSignals({ ...phone, audio: 124.04347527516074 })).toBeNull();
+    // Never stored: the table has a key, a label and two dates, and no column for a value.
+    expect(Object.keys(getTableColumns(deviceHints)).sort()).toEqual(["createdAt", "id", "key", "label", "lastSeenAt", "playerId"]);
+    // The chip the page names is what the 3D shape's hash holds: the unmasked renderer and vendor, inside the one hash.
+    expect(reader).toMatch(/UNMASKED_RENDERER_WEBGL[\s\S]*UNMASKED_VENDOR_WEBGL[\s\S]*return hashPrefix\(\[renderer, vendor/);
+    // And never a font list, the system's version or dark mode, which the page does not promise either.
+    for (const never of ["prefers-color-scheme", "document.fonts", "queryLocalFonts", "userAgentData", "getHighEntropyValues"]) expect(reader, never).not.toContain(never);
+    expect(LEGAL_UPDATED >= "2026-10-30").toBe(true);
+  });
+
+  it("runs the three tests in every browser outside Europe, on an iPhone, an iPad and in Safari too, and none in a European zone, as the key's bullet says", async () => {
+    // The owner, 30 October 2026: "On everywhere". The page says that every browser outside Europe runs the
+    // tests and that a browser set to a European zone runs none. Here the reader itself, with the browser's
+    // globals stubbed for each browser and taken back at the end, so no other test sees them.
+    const SAFARI_MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
+    const BROWSERS = [
+      ["Safari on an iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1", 5],
+      ["Chrome on an iPad", "Mozilla/5.0 (iPad; CPU OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/129.0 Mobile/15E148 Safari/604.1", 5],
+      ["an iPad that asks for the desktop site", SAFARI_MAC, 5],
+      ["Safari on a Mac", SAFARI_MAC, 0],
+      ["Chrome on an Android phone", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36", 5],
+    ] as const;
+    const asBrowser = (zone: string, ua: string, touch: number) => {
+      const Real = Intl.DateTimeFormat;
+      const Fake = function (...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+        return args.length === 0 ? { resolvedOptions: () => ({ timeZone: zone }) } : new Real(...args);
+      } as unknown as typeof Intl.DateTimeFormat;
+      vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: Fake });
+      vi.stubGlobal("window", { devicePixelRatio: 3, matchMedia: () => ({ matches: false }) });
+      vi.stubGlobal("navigator", { userAgent: ua, maxTouchPoints: touch, languages: ["en-US"], language: "en-US" });
+      vi.stubGlobal("screen", { width: 390, height: 844 });
+    };
+    try {
+      for (const [who, ua, touch] of BROWSERS) {
+        for (const zone of ["Asia/Bangkok", "Europe/Madrid"]) {
+          const ran: string[] = [];
+          const probes = { audio: async () => (ran.push("audio"), "QXVkaW8taGFz"), canvas: async () => (ran.push("canvas"), "Qm9vbS1jYW52"), webgl: async () => (ran.push("webgl"), "V2ViR0wtaGFz") };
+          asBrowser(zone, ua, touch);
+          const values = await readDeviceSignals(probes);
+          vi.unstubAllGlobals();
+          if (isEuropeanZone(zone)) {
+            expect(values, `${who} in ${zone}`).toBeNull();
+            expect(ran, `${who} in ${zone}`).toEqual([]);
+          } else {
+            expect(ran, `${who} in ${zone}`).toEqual(["audio", "canvas", "webgl"]);
+            expect(values, `${who} in ${zone}`).toMatchObject({ audio: "QXVkaW8taGFz", canvas: "Qm9vbS1jYW52", webgl: "V2ViR0wtaGFz" });
+          }
+        }
+      }
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 
