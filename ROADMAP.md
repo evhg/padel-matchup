@@ -1010,15 +1010,19 @@ Everything in this list is live. The README describes each in detail.
   was "Yes, two taps" (DECIDING rule 34). An organiser holds a place for a name with no record, for
   example with "Paste the names". A person who types that name on the plain match link gets "Take
   Danny's held place". The first tap asks, and the second tap confirms the place with the personal
-  link's own write, so the organiser hears "Danny confirmed". The place has no email and no phone, and
-  no other record of the name sits in the match (`src/lib/domain/heldByName.ts`). The personal link
+  link's own write, so the organiser hears "Danny confirmed". Since 6 November 2026 the row itself
+  shows "I'm Danny", and one tap takes the place; the typed name stays as the second way, with its two
+  taps. The place has no email and no phone, and no other record of the name sits in the match
+  (`src/lib/domain/heldByName.ts`). The personal link
   changed the same day: a viewer who is in the match already gets no "I'm in" on another person's
   place. After the audit of 11 October 2026, the offer also shows on a full match with a waiting list,
   in the name field of the waiting list, and to a browser that knows a record of the name, in place of
-  its one-tap Join. A full match with a closed waiting list shows no join, so only the personal link
-  fills the place there. The Go key sends no join while the offer is on the screen. The web's join
-  (`joinAction`) refuses a join that puts a second record of the name beside the place. Under the
-  offer, a different person of the same name reads how to get in: a last name on My matches.
+  its one-tap Join. A full match with a closed waiting list shows no join; since 6 November 2026 the
+  row's "I'm Danny" and the personal link fill the place there, and the line under the line-up says
+  "Tap your name above" in place of "Ask the organizer". The Go key sends no join while the offer is
+  on the screen. The web's join (`joinAction`) refuses a join that puts a second record of the name
+  beside the place. Under the offer, a different person of the same name reads how to get in: a last
+  name on My matches.
   Since 12 October 2026 every other door keeps the place too, through the rule every door asks
   (`joinWithPolicy`, `tests/held-name-doors.test.ts`). `join_match` in the API and MCP refuses, as
   the web does, and writes nothing. A chat takes the place for the account's own record: the Telegram
@@ -1406,6 +1410,22 @@ Everything in this list is live. The README describes each in detail.
   `src/lib/domain/deviceHints.ts` (`hintKeyStats`), `src/app/api/admin/hints-stats/route.ts`; proven in
   `tests/device-hints.test.ts`, `tests/hints-stats.test.ts`, `tests/legal.test.ts` and
   `e2e/device-hints.mjs` (an iPhone's words in Chromium send three hashes, the same in a second browser).
+- **One message for the crew, and a button on each held row (6 November 2026, no migration).** Erik
+  held three places one at a time and sent three WhatsApp messages, because the page opened a
+  personal link after each hold. The owner answered "Build A and C" (DECIDING rule 34). "Played with
+  you" in the open spot now picks several names, and one button holds them in one request. Nothing
+  opens by itself after a hold. Under the line-up, and on the share page after a new match, the
+  organiser gets one message with the plain match link for every held player who can take the place
+  from it. A quiet WhatsApp link sends it through WhatsApp's own picker, and "Copy this message" copies all
+  of it. "Send all invites in one message" stays, and its Copy now copies the whole message too. Each
+  held row shows "I'm Danny" to a browser that may take it, and one tap does it: a place held by name;
+  a record with nothing to prove, which also signs in by name; the record's own browser. A record that
+  proves itself shows its own doors first. A place with a typed email or phone, and one of two held
+  places of a name, keep their personal link only. The typed name stays as the second way. A session
+  by name that proved nothing gets no "Played with you", and its holds keep no record. The small share
+  buttons are two columns now, so WhatsApp and Telegram fit a 390 px phone. `src/lib/domain/heldRow.ts`;
+  proven in `tests/held-row.test.ts`, `tests/held-record.test.ts`, `tests/past-players.test.ts`,
+  `e2e/core.mjs` and `e2e/player-states.mjs`.
 
 ## The finish line
 

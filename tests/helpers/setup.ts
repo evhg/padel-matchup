@@ -20,6 +20,11 @@ process.env.PGLITE_DATA_DIR = dir;
 delete process.env.DATABASE_URL;
 delete process.env.POSTGRES_URL;
 delete process.env.SUPABASE_DB_URL;
+// A test never sends real mail. A shell that holds the live mail key (an operator's, or a cloud session's)
+// made every unit run, the gate's included, send each notification a test triggers through the real
+// service: found on 6 November 2026. CI has no key, so the suite already passes without it, and a test
+// that wants mail on sets its own key and a sink (EMAIL_SINK_FILE).
+delete process.env.RESEND_API_KEY;
 
 // Files share a worker (`isolate: false`), so one file's environment is the next one's. Whatever a
 // test sets, adds or deletes is undone when the file ends, and a file therefore starts from the same

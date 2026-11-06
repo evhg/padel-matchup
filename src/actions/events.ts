@@ -141,7 +141,8 @@ export async function createEventAction(raw: CreateEventInput, o: { hint?: unkno
     const { settleNewMatch } = await import("@/lib/domain/newMatch");
     // A held name keeps a past player's record only where the organiser answered for it, and only a
     // record the organiser played with: the past players are read only when an answer came (three bounded reads).
-    const picks = cleanPicks(input.picks);
+    // A session by name that proved nothing holds every name by name (`nameOnly`, since 6 November 2026).
+    const picks = (await nameOnly(me)) ? [] : cleanPicks(input.picks);
     const records = input.names?.length && picks.length ? heldRecordsFor(await pastPlayerRows(db, me.id, new Date()), input.names, picks) : undefined;
     const settled = await settleNewMatch(db, { event: ev, organiser: me, joinSelf: input.joinSelf, names: input.names, records, booked: input.booked });
     // The organiser's own seat is a join of their own record: this browser's device hint is kept for it. A new match holds nobody else, so it has no scope.
@@ -173,12 +174,14 @@ export async function createEventAction(raw: CreateEventInput, o: { hint?: unkno
  * organizer before and after creating the match should be able to select from players they played with
  * before"): the session's past players as names, days and clubs, never an id. The form asks once, when
  * its names open, so the landing page itself reads nothing more (rule 12): three bounded reads
- * (`pastPlayerRows`) for an organiser who opens the names, none for anybody else.
+ * (`pastPlayerRows`) for an organiser who opens the names, none for anybody else. Nothing for a session
+ * by name that proved nothing (since 6 November 2026): the past players of the record it signed in as
+ * are not its to pick.
  */
 export async function pastPlayersAction(): Promise<{ chips: string[]; past: PastView[] }> {
   const db = await getDb();
   const me = await getSessionPlayer(db);
-  if (!me) return { chips: [], past: [] };
+  if (!me || (await nameOnly(me))) return { chips: [], past: [] };
   const list = await pastPlayerRows(db, me.id, new Date());
   return { chips: pickable(list, { ids: new Set(), names: [] }), past: pastViews(list, new Set()) };
 }

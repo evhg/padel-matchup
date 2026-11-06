@@ -52,10 +52,11 @@ export const askStanding = (ask: NameAsk | null, typed: string): NameAsk | null 
  * A record's own doors, the email code first (the owner's decision of 16 October 2026, D4): never the
  * deployment's whole set. The email code where the record has an address and the deployment sends mail,
  * Telegram where it has a linked Telegram and the deployment runs the sign-in, Face ID or a fingerprint
- * where it has a passkey. "Sign in as Danny?" shows them for a seated record, and "Welcome back, Tim?"
- * (the device hint, DECIDING rule 40) for the one record its key names (`testid` "hint").
+ * where it has a passkey. "Sign in as Danny?" shows them for a seated record, "Welcome back, Tim?"
+ * (the device hint, DECIDING rule 40) for the one record its key names (`testid` "hint"), and "I'm
+ * Danny" on a held row for the held record that proves itself (`testid` "held", 6 November 2026).
  */
-export function OwnDoorList({ own, doors, testid = "seated" }: { own: OwnDoors; doors: BackInDoors | null; testid?: "seated" | "hint" }) {
+export function OwnDoorList({ own, doors, testid = "seated" }: { own: OwnDoors; doors: BackInDoors | null; testid?: "seated" | "hint" | "held" }) {
   const t = useTranslations();
   const email = Boolean(own.email && doors?.email);
   const telegram = own.telegram && doors?.telegram ? doors.telegram : null;

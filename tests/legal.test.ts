@@ -442,12 +442,13 @@ describe("the privacy page tells the truth about the code", () => {
   });
 
   it("names every door that signs in by a name alone on the km_by_name line, in every language", () => {
-    // Four calls set the mark (`markSignedInByName`): "That's me" (`thatsMeAction`), "I'm in" on an
+    // Five calls set the mark (`markSignedInByName`): "That's me" (`thatsMeAction`), "I'm in" on an
     // invitation to a place kept for a past player's record (`confirmInviteAction`, the owner's decision
     // of 11 October 2026), "It's me" under "Welcome back, Tim?" (`deviceHintYesAction`, the device hint's
-    // question, 28 October 2026), and `restoreIdentity`, which brings the same session back and makes no new
-    // door. Until 16 October 2026 the line named only "That's me". A new door is named on the page in
-    // three languages first, then added here.
+    // question, 28 October 2026), "I'm Danny" on the row of a held place that keeps a record
+    // (`takeHeldRecordAction`, the owner's decision C of 6 November 2026), and `restoreIdentity`, which
+    // brings the same session back and makes no new door. Until 16 October 2026 the line named only
+    // "That's me". A new door is named on the page in three languages first, then added here.
     const callers = readdirSync(path.resolve(process.cwd(), "src"), { recursive: true, encoding: "utf8" })
       .filter((f) => /\.tsx?$/.test(f))
       .filter((f) => /\bmarkSignedInByName\(/.test(readFileSync(path.resolve(process.cwd(), "src", f), "utf8").replace(/export (async )?function markSignedInByName\(/, "")))
@@ -458,6 +459,12 @@ describe("the privacy page tells the truth about the code", () => {
       const m = messagesOf(l);
       const line = render(l, "privacy.cookiesBody").split("\n").find((x) => x.includes(BY_NAME_COOKIE));
       for (const button of [m.identity.thatsMeIn, m.identity.hintYes, m.invitePage.confirm]) expect(line, `${l}: ${button}`).toContain(button);
+      // The held row's button is "I'm {name}", so the line names its fixed part: "I'm", "Я —", "Soy". The three
+      // buttons above come out of the line first, so "I'm in" or "Soy yo" cannot stand in for it.
+      const rest = [m.identity.thatsMeIn, m.identity.hintYes, m.invitePage.confirm].reduce((s: string, b: string) => s.split(b).join(""), line!);
+      const rowFace = (m.identity.heldRowMe as string).replace("{name}", "").trim();
+      expect(rowFace, l).toMatch(/^(I'm|Я —|Soy)$/);
+      expect(rest, `${l}: ${rowFace}`).toContain(rowFace);
     }
   });
 

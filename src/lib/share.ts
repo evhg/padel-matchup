@@ -32,6 +32,14 @@ export const tagForWhatsapp = (text: string, url: string) => tagMatchLinks(text,
 export const tagMatchUrl = (url: string, tag: string) => (MATCH_LINK.test(url) ? taggedUrl(url, tag) : url);
 
 /**
+ * What a Copy button puts on the clipboard: the link alone (`?s=link` on a bare match link), or the
+ * whole message with its match link tagged the same way. "Send all invites in one message" copied the
+ * match link alone until 6 November 2026, while its text held every personal link (the owner: "I also
+ * fix the Copy bug"). A personal link (`/7KQ2/i/…`) in the text stays as it is.
+ */
+export const copiedValue = (url: string, text: string, what: "link" | "message"): string => (what === "message" ? tagMatchLinks(text, url, "link") : tagMatchUrl(url, "link"));
+
+/**
  * What the phone's own share sheet gets: the link tagged `?s=share`, and the text without it. With a
  * picture the sheet takes text only, so `textWithLink` carries the tagged link.
  */

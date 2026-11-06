@@ -87,3 +87,45 @@ export function cleanPicks(raw: unknown): PastPick[] {
 
 /** The answer a pick stands for: a day means "Yes, that's Danny" with that day and club; none means a chip. */
 export const answerOfPick = (p: PastPick): PastAnswer => (p.day ? { day: p.day, club: p.club ?? null } : true);
+
+/** At most this many "Played with you" chips in the open spot: the create form's `CHIPS_SHOWN`. */
+export const PICK_CHIPS = 8;
+
+/**
+ * At most this many picked names in one hold: the page sends at most `PAST_PLAYERS_SHOWN` names, and
+ * `tests/past-players.test.ts` proves the two agree. This file is safe in a browser, so it does not
+ * import `heldRecord.ts`.
+ */
+export const PICKED_MAX = 20;
+
+/**
+ * One tap on a "Played with you" chip in the open spot (the owner's decision A of 6 November 2026):
+ * a picked name comes off, any other name goes on while the picks are fewer than `room`, the open
+ * places. Names compare as the server compares them (`normalName`). Pure.
+ */
+export function togglePick(picks: readonly string[], name: string, room: number): string[] {
+  const key = normalName(name);
+  if (picks.some((p) => normalName(p) === key)) return picks.filter((p) => normalName(p) !== key);
+  return picks.length < room ? [...picks, name] : [...picks];
+}
+
+/**
+ * The picked names a request carries, held to their shape: strings only, trimmed, none empty and none
+ * longer than 60 (as `cleanPicks`), one of each name by `normalName`, the first `max`. A server action is
+ * a public endpoint, so whatever else the request carries is dropped.
+ */
+export function cleanPickedNames(input: unknown, max = PICKED_MAX): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of input.slice(0, PICKS_MAX)) {
+    if (out.length >= max) break;
+    if (typeof raw !== "string") continue;
+    const name = raw.trim();
+    const key = normalName(name);
+    if (!key || name.length > 60 || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}

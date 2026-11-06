@@ -15,8 +15,9 @@ import { confirmLocked, liveRefusal, lockEvent } from "./slots";
  * one the group chat carries, could not: "That's me" works on records, the held row could not be
  * tapped, and a Danny who typed his name and joined made a second Danny on an empty seat while his
  * held place stayed empty. Now the "already in this match" line under a typed name offers "Take
- * Danny's held place", in two taps, inside these limits, each one checked again on the server. The held
- * row itself offers nothing: the owner chose the typed name.
+ * Danny's held place", in two taps, inside these limits, each one checked again on the server. Since 6
+ * November 2026 the held row itself also offers "I'm Danny", one tap, inside the same limits (the
+ * owner's decision C; `heldRowOffers` in `heldRow.ts`). The typed name stays as the second way.
  *
  *   - a reserved place that nobody took: no record on it (a tournament's placeholder is a record),
  *     no email and no phone, because a place held for an address belongs to that address;
@@ -75,12 +76,18 @@ export type HeldRefusal =
 
 export type HeldVerdict = { ok: true; slotId: string; name: string } | { ok: false; reason: HeldRefusal };
 
-const placeOf = (s: Pick<Slot, "status" | "playerId">) => Boolean(s.playerId) && (s.status === "joined" || s.status === "confirmed");
+/** A record that holds a seat or a waiting place here: a record on the row, and the row taken (joined or confirmed). */
+export const placeOf = (s: Pick<Slot, "status" | "playerId">) => Boolean(s.playerId) && (s.status === "joined" || s.status === "confirmed");
 
 /**
  * May this browser take the place held for `name` in this match? The first limit that refuses, or the
- * place. Pure: the match page asks it for every held row (`heldOffers`) and the tap asks it twice, once
- * before anything is made and once more under the match's lock, so the page offers what the tap does.
+ * place. Pure: the match page asks it for every held row (`heldOffers`, `heldRowOffers`) and the tap asks
+ * it twice, once before anything is made and once more under the match's lock, so the page offers what
+ * the tap does.
+ *
+ * A held place of the name is a place held by that typed name, or a held place that keeps a record of
+ * that name (since 6 November 2026). So a held record that its player renamed to "Danny" makes the place
+ * held by name for "Danny" one of two, and neither the row, the typed name nor a chat takes it by name.
  */
 export function heldVerdict(m: HeldMatch, seats: readonly HeldSeat[], name: string, viewer: HeldViewer, now: Date): HeldVerdict {
   const live = liveRefusal(m, now);
@@ -88,7 +95,7 @@ export function heldVerdict(m: HeldMatch, seats: readonly HeldSeat[], name: stri
   if (m.fixedPairs) return { ok: false, reason: "fixed_pairs" };
   const key = normalName(name);
   if (key.length < 2) return { ok: false, reason: "nobody" };
-  const held = seats.filter((s) => s.status === "invited" && normalName(s.invitedName) === key);
+  const held = seats.filter((s) => s.status === "invited" && (normalName(s.invitedName) === key || (Boolean(s.playerId) && normalName(s.playerName) === key)));
   if (held.length === 0) return { ok: false, reason: "nobody" };
   if (held.length > 1) return { ok: false, reason: "namesake" };
   const [place] = held;
@@ -133,7 +140,7 @@ export function heldNameFor(m: HeldMatch, seats: readonly HeldSeat[], viewer: He
 /**
  * What holds a refused name (`whoJoins`): `by_name`, a place held for the name with no record on it,
  * which the name takes ("Take Danny's held place"); `record`, a place that keeps a past player's
- * record, which that player takes with "That's me" or the place's own link.
+ * record, which that player takes with "I'm Danny" on its row, "That's me" or the place's own link.
  */
 export type HeldKind = "by_name" | "record";
 
@@ -190,8 +197,9 @@ export function seatedRecordsNamed<S extends Pick<JoinSeat, "status" | "playerId
  * nobody, typing the name of a place that keeps a record (a past player picked for it, or "Keep
  * Danny's matches"), is refused the same way when `keepsRecord` says the record is a real player's,
  * because the join would make a second Danny and seat him beside the place (review of 11 October
- * 2026). That one (`kind: "record"`) is "That's me" for the record, which the open spot offers under
- * the typed name, or the place's own link; the API's hint says so (`NameHeldError`). `keepsRecord` costs two lookups that stop at their first row, and only for such
+ * 2026). That one (`kind: "record"`) is "I'm Danny" on the place's row, "That's me" for the record,
+ * which the open spot offers under the typed name, or the place's own link; the API's hint says so
+ * (`NameHeldError`). `keepsRecord` costs two lookups that stop at their first row, and only for such
  * a name; a tournament's placeholder is no player, so its name joins as before. Last, a browser that
  * knows nobody, typing the name of a record that holds a seat or a waiting place here, gets
  * `{ seated }` and no record (`seatedNamed`, the owner's decision of 15 October 2026), unless the person

@@ -1,10 +1,10 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { joinAction, reserveAction } from "@/actions/slots";
+import { joinAction, reserveAction, reservePickedAction } from "@/actions/slots";
 import type { LevelRange } from "@/lib/domain/levels";
-import { answerKey, askFor, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
+import { answerKey, askFor, PICK_CHIPS, togglePick, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
 import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { useOwnNameAutofill } from "./PasskeyAutofill";
 import { formState, registerJoinHandler, sendForm } from "./joinBus";
@@ -33,6 +33,7 @@ export function OpenSpot({
   rolodex,
   played = [],
   past = [],
+  spots = 1,
   emailEnabled,
   namesHere = [],
   claimable = [],
@@ -55,6 +56,12 @@ export function OpenSpot({
    * record appears; typing over the name drops the pick. Names only: the server finds the record again.
    */
   played?: readonly string[];
+  /**
+   * The open places on the line-up (the page's `spotsLeft`). With two or more, "Played with you" picks
+   * several names, and one tap holds them all in one request (the owner's decision A of 6 November 2026);
+   * with one, the open spot works as before.
+   */
+  spots?: number;
   /**
    * The organiser's past players as names, days and clubs (`pastViews`): a typed name one of them carries
    * asks "Is this Danny, who played with you on Sep 13 at Kross Padel?" before the place is held (the
@@ -79,6 +86,7 @@ export function OpenSpot({
   backIn?: BackInDoors | null;
 }) {
   const t = useTranslations();
+  const locale = useLocale();
   const errText = (error: string) =>
     error === "name_required" ? t("identity.nameRequired") : error === "level_required" ? t("errors.level_required") : error === "invalid" ? t("errors.slot_taken") : error === "full" ? t("creator.noSpots") : t(`errors.${error === "no_identity" ? "generic" : error}` as "errors.generic");
   const [open, setOpen] = useState(false);
@@ -86,15 +94,22 @@ export function OpenSpot({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [level, setLevel] = useState<number | null>(myLevel);
-  /** The past player picked from "Played with you", while the name still reads as picked. */
-  const [picked, setPicked] = useState<string | null>(null);
+  /**
+   * The past players picked from "Played with you": one while the name still reads as picked, or several
+   * for one hold (`many`). Typing over the name drops a single pick.
+   */
+  const [picks, setPicks] = useState<string[]>([]);
+  const many = mode === "reserve" && picks.length >= 2;
+  const picked = picks.length === 1 ? picks[0] : null;
   // A place held for a phone is that number's, and keeps no record (`reserveLocked`): a phone typed after
   // the pick turns it back into a place held by name, and the line under the name says no more than that.
-  const keepsPick = picked !== null && picked === name && !phone.trim();
+  const keepsPick = !many && picked !== null && picked === name && !phone.trim();
+  // With two open places or more, a pick keeps the other chips in view, and a second pick holds several at once.
+  const multi = mode === "reserve" && spots >= 2 && (many || keepsPick);
   /** The answer to "Is this Danny…?", for the name it was given for. */
   const [answer, setAnswer] = useState<{ key: string; answer: PastAnswer } | null>(null);
   // A typed name a past player carries asks first; a pick from the chips, or a phone (the number's own place), asks nothing.
-  const asked = mode === "reserve" && !keepsPick && !phone.trim() ? askFor(past, name) : [];
+  const asked = mode === "reserve" && !many && !keepsPick && !phone.trim() ? askFor(past, name) : [];
   const answered = answer && answer.key === answerKey(name) ? answer.answer : undefined;
   const [error, setError] = useState<string | null>(null);
   /** The server's answer for a typed name (`name_seated`, `name_unreached`): "Sign in as Danny?" stands while the field still holds it. */
@@ -109,7 +124,7 @@ export function OpenSpot({
     setName("");
     setPhone("");
     setEmail("");
-    setPicked(null);
+    setPicks([]);
     setAnswer(null);
     setError(null);
   };
@@ -170,6 +185,44 @@ export function OpenSpot({
     });
   };
 
+  const list = (names: readonly string[]) => new Intl.ListFormat(locale, { type: "conjunction" }).format(names);
+
+  /**
+   * Several picks in one request (`reservePickedAction`): each takes the lowest open place, as "Paste the
+   * names" does, and keeps its record. Names that found no place stay picked, and the line says so.
+   */
+  const reservePicked = () =>
+    start(async () => {
+      setError(null);
+      const r = await reservePickedAction(code, picks);
+      startTransition(() => {
+        if (!r.ok) return setError(errText(r.error));
+        const { held, noSpot } = r.data;
+        // Every pick held, or already here (the line-up shows them): done.
+        if (noSpot.length === 0) {
+          reset();
+          setOpen(false);
+        } else if (held.length === 0) setError(t("creator.noSpots"));
+        else {
+          setPicks(noSpot);
+          setName(noSpot.length === 1 ? noSpot[0] : "");
+          setError(t("creator.picksNoSpot", { names: list(noSpot) }));
+        }
+      });
+    });
+
+  /** A tap on a "Played with you" chip. A chip clears the typed contact: a phone or an email is one person's. */
+  const pickChip = (n: string) => {
+    const next = spots >= 2 ? togglePick(many || keepsPick ? picks : [], n, spots) : [n];
+    setPicks(next);
+    setName(next.length === 1 ? next[0] : "");
+    setPhone("");
+    setEmail("");
+    setAnswer(null);
+    setError(null);
+    if (next.length === 1) input.current?.focus({ preventScroll: true });
+  };
+
   const suggestions = useMemo(() => {
     if (mode !== "reserve") return [];
     const q = name.trim().toLowerCase();
@@ -177,9 +230,14 @@ export function OpenSpot({
   }, [rolodex, name, mode]);
   const pastChips = useMemo(() => {
     if (mode !== "reserve") return [];
+    // Picking: the picked names first, then the rest, unfiltered, so a second name is one tap away.
+    if (multi) {
+      const keys = new Set(picks.map(normalName));
+      return [...picks, ...played.filter((n) => !keys.has(normalName(n))).slice(0, Math.max(0, PICK_CHIPS - picks.length))];
+    }
     const q = name.trim().toLowerCase();
-    return (q ? played.filter((n) => n.toLowerCase().includes(q) && n.toLowerCase() !== q) : played).slice(0, 5);
-  }, [played, name, mode]);
+    return (q ? played.filter((n) => n.toLowerCase().includes(q) && n.toLowerCase() !== q) : played).slice(0, PICK_CHIPS);
+  }, [played, name, mode, multi, picks]);
 
   // Same email or phone as someone the organizer has played with: offer that name.
   const digits = (v: string) => v.replace(/\D/g, "");
@@ -288,7 +346,10 @@ export function OpenSpot({
           e.preventDefault();
           // A typed name and Join, as before: the passkey's request waiting in the field ends first.
           if (mode === "join") own.stop();
-          if (mode === "reserve") reserve();
+          if (mode === "reserve") {
+            if (many) reservePicked();
+            else reserve();
+          }
           else if (!hasIdentity && !hasNames) setError(t("identity.nameRequired"));
           // The Go key and Join while "Take Danny's held place" is on screen: a second Danny would close the place for good.
           else if (heldName) setError(t("errors.name_held"));
@@ -296,8 +357,9 @@ export function OpenSpot({
           else join(hasIdentity ? undefined : name);
         }}
       >
-        <div className="flex gap-2">
-          {(mode === "reserve" || !hasIdentity) && (
+        {/* Several picks: the line takes its own row and the button sits under it, so a phone shows the line whole. */}
+        <div className={`flex gap-2${many ? " flex-wrap" : ""}`}>
+          {((mode === "reserve" && !many) || (mode === "join" && !hasIdentity)) && (
             <input
               ref={input}
               data-testid="open-spot-name"
@@ -310,13 +372,19 @@ export function OpenSpot({
               enterKeyHint={mode === "reserve" ? "done" : "go"}
               onChange={(e) => {
                 setName(e.target.value);
-                if (picked !== null && e.target.value !== picked) setPicked(null);
+                if (picked !== null && e.target.value !== picked) setPicks([]);
               }}
             />
           )}
+          {/* Several picks: the name, the contact and the question step aside, because a typed contact is one person's. */}
+          {many && (
+            <p className="basis-full text-sm font-semibold text-ok" data-testid="picked-past-players">
+              ✓ {t("creator.keepsRecords", { names: list(picks) })}
+            </p>
+          )}
           {mode === "join" && levelRange && <LevelSelect value={level} onChange={setLevel} />}
-          <button type="submit" className="btn-primary shrink-0" disabled={pending}>
-            {pending ? t("common.working") : mode === "reserve" ? t("creator.reserveDone") : t("event.joinShort")}
+          <button type="submit" className="btn-primary shrink-0" disabled={pending} data-testid={many ? "hold-picks" : undefined}>
+            {pending ? t("common.working") : many ? t("creator.pasteHold", { count: picks.length }) : mode === "reserve" ? t("creator.reserveDone") : t("event.joinShort")}
           </button>
         </div>
         {/*
@@ -351,25 +419,30 @@ export function OpenSpot({
         {mode === "reserve" && pastChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5" data-testid="played-with-you">
             <span className="text-xs font-bold uppercase tracking-wider text-faint">{t("creator.playedWithYou")}</span>
-            {pastChips.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className="chip-muted min-h-9 px-3 text-sm"
-                onClick={() => {
-                  setName(n);
-                  setPhone("");
-                  setEmail("");
-                  setPicked(n);
-                  input.current?.focus({ preventScroll: true });
-                }}
-              >
-                {n}
-              </button>
-            ))}
+            {pastChips.map((n) => {
+              const on = multi && picks.some((p) => normalName(p) === normalName(n));
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={multi ? on : undefined}
+                  // Every open place picked: the other names wait until one comes off.
+                  disabled={pending || (many && !on && picks.length >= spots)}
+                  className={`${on ? "chip bg-ink text-on-ink" : "chip-muted"} min-h-9 px-3 text-sm disabled:opacity-50`}
+                  onClick={() => pickChip(n)}
+                >
+                  {n}
+                </button>
+              );
+            })}
           </div>
         )}
-        {mode === "reserve" && suggestions.length > 0 && (
+        {multi && (
+          <p className="text-xs text-faint" data-testid={picks.length >= spots ? "picks-full" : "pick-more"}>
+            {picks.length >= spots ? t("creator.picksFull") : t("creator.pickMore")}
+          </p>
+        )}
+        {mode === "reserve" && !many && suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((r) => (
               <button
@@ -378,7 +451,7 @@ export function OpenSpot({
                 className="chip-muted min-h-9 px-3 text-sm"
                 onClick={() => {
                   setName(r.name);
-                  setPicked(null);
+                  setPicks([]);
                   setPhone(r.phone ?? "");
                   setEmail(r.email ?? "");
                   input.current?.focus({ preventScroll: true });
@@ -391,19 +464,20 @@ export function OpenSpot({
             ))}
           </div>
         )}
-        {mode === "reserve" && (
+        {mode === "reserve" && !many && (
           <div className="grid grid-cols-2 gap-2">
             <input className="input min-h-11 text-sm" type="tel" inputMode="tel" autoComplete="off" placeholder={`${t("creator.phone")} (${t("common.optional")})`} value={phone} onChange={(e) => setPhone(e.target.value)} />
             {emailEnabled && <input className="input min-h-11 text-sm" type="email" inputMode="email" autoComplete="off" placeholder={`${t("creator.email")} (${t("common.optional")})`} value={email} onChange={(e) => setEmail(e.target.value)} />}
           </div>
         )}
-        {contactHint && (
+        {contactHint && !many && (
           <button type="button" className="self-start rounded-xl bg-accent-soft px-3 py-2 text-left text-sm font-semibold" onClick={() => setName(contactHint.name)}>
             {t("creator.sameContact", { kind: contactHint.email && contactHint.email.toLowerCase() === email.trim().toLowerCase() ? t("creator.email").toLowerCase() : t("creator.phone").toLowerCase(), name: contactHint.name })}
           </button>
         )}
         <div className="flex items-center justify-between gap-2">
-          {error ? <span className="text-sm font-semibold text-danger">{error}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</span>}
+          {/* Several picks: the one message covers the link, so the help about one personal link goes. */}
+          {error ? <span className="text-sm font-semibold text-danger">{error}</span> : many ? <span /> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</span>}
           {cancel}
         </div>
       </form>

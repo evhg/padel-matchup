@@ -15,7 +15,6 @@ export function SlotActions({
   forwardText,
   nudgeText,
   stale,
-  defaultOpen = false,
   emailedTo = null,
   keepRecord = null,
 }: {
@@ -28,8 +27,6 @@ export function SlotActions({
   forwardText?: string;
   nudgeText?: string;
   stale?: boolean;
-  /** Just reserved: show the forward buttons right away, no extra tap. */
-  defaultOpen?: boolean;
   /** The invite went out by email to this address. */
   emailedTo?: string | null;
   /**
@@ -40,7 +37,9 @@ export function SlotActions({
   keepRecord?: string | null;
 }) {
   const t = useTranslations();
-  const [open, setOpen] = useState(defaultOpen);
+  // Closed until "Invite now" or "Nudge again": a hold opens nothing by itself (the owner's decision A of 6
+  // November 2026). The one message under the line-up names the places a player takes from the match link.
+  const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
 
   const remove = () => {

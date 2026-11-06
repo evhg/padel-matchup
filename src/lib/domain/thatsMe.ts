@@ -6,6 +6,7 @@ import { recomputeStatus } from "./events";
 import { recordFact } from "./facts";
 import { wasComplete } from "./joining";
 import { mergePlayers } from "./merge";
+import { anyDoor, rowDoors } from "./seatedDoors";
 import type { MergeCounter } from "./signins";
 import { bumpMetric } from "./metrics";
 import { LIMITS, takeRate } from "./ratelimit";
@@ -264,6 +265,10 @@ const keyOf = (expr: SQL) => sql`lower(regexp_replace(btrim(regexp_replace(norma
  * decision of 16 October 2026, D6; `unreachedNamed`). It counts as in context and in the namesake count,
  * and every other limit reads it as it reads any record.
  *
+ * `only`: with no name, the records with a place here that are on this list, and no others (the held
+ * records of the organiser's one message, `heldRecordFacts`, since 6 November 2026). The context and the
+ * counts are the whole match's and crew's, so each row is the row the full read gives.
+ *
  * One statement. `thatsMeRowsMany` sends several of these reads as one statement, each with its own
  * context, counts and limit; both build their SQL with `thatsMeSql`.
  */
@@ -273,8 +278,17 @@ export async function thatsMeRows(db: Db, m: ThatsMeMatch, o: ThatsMeProbe & { n
   return rowsOf(await db.execute(thatsMeSql(m, o, nowIso))).map(thatsMeRowOf);
 }
 
-/** What one read of `thatsMeRows` asks for: a name, the browser's own record, one more record in context. */
-export type ThatsMeProbe = { name?: string | null; viewerId?: string | null; extra?: string | null };
+/**
+ * What one read of `thatsMeRows` asks for: a name, the browser's own record, one more record in context.
+ * `only`: with no name, the records with a place here are narrowed to these ids (the organiser's one
+ * message reads the held records alone, `heldRecordFacts`). The context and the namesake counts stay
+ * whole, so each verdict is the one the full read gives.
+ */
+export type ThatsMeProbe = { name?: string | null; viewerId?: string | null; extra?: string | null; only?: readonly string[] | null };
+
+/** The most ids `only` takes: more than a match's places. */
+export const THATS_ME_ONLY_MAX = 64;
+const UUID = /^[0-9a-f-]{36}$/i;
 
 /**
  * Several reads of `thatsMeRows` in one statement, `(read 1) union all (read 2) …`, so a page that needs
@@ -305,8 +319,11 @@ export async function thatsMeRowsMany(db: Db, m: ThatsMeMatch, probes: readonly 
  */
 function thatsMeSql(m: ThatsMeMatch, o: ThatsMeProbe, nowIso: string, probe: number | null = null): SQL {
   const name = o.name?.trim() ? o.name : null;
-  const extra = o.extra && /^[0-9a-f-]{36}$/i.test(o.extra) ? o.extra : null;
-  const viewerId = o.viewerId && /^[0-9a-f-]{36}$/i.test(o.viewerId) ? o.viewerId : null;
+  const extra = o.extra && UUID.test(o.extra) ? o.extra : null;
+  const viewerId = o.viewerId && UUID.test(o.viewerId) ? o.viewerId : null;
+  // `only`: ids of the uuid shape, at most `THATS_ME_ONLY_MAX`; anything else is dropped. None left reads no place.
+  const only = o.only ? o.only.filter((id) => typeof id === "string" && UUID.test(id)).slice(0, THATS_ME_ONLY_MAX) : null;
+  const narrow = only === null ? sql.empty() : only.length ? sql` and id in (${sql.join(only.map((id) => sql`${id}`), sql`, `)})` : sql` and false`;
   const tag = probe === null ? sql.empty() : sql`${probe}::int as probe, (row_number() over (order by p.created_at))::int as ord, `;
   return sql`
     with seats as (
@@ -328,7 +345,7 @@ function thatsMeSql(m: ThatsMeMatch, o: ThatsMeProbe, nowIso: string, probe: num
       select key, count(*) as n from keys group by key
     ),
     pool as (
-      select id from seats where ${name}::text is null
+      select id from seats where ${name}::text is null${narrow}
       union
       select k.id from keys k where ${name}::text is not null and k.key = ${keyOf(sql`${name}::text`)}
       union
@@ -580,23 +597,53 @@ export async function thatsMe(db: Db, input: { code: string; name: string; viewe
   return d.ok ? commitThatsMe(db, d, input) : d;
 }
 
-/** What a match page offers: the records on this line-up a browser that knows nobody may tap, or the one its own new record folds into. */
-export type ThatsMeOffer = { ids: Set<string>; names: string[]; fold: { id: string; name: string } | null };
-export const NO_OFFER: ThatsMeOffer = { ids: new Set(), names: [], fold: null };
+/** Which doors this deployment runs: the email code where mail goes out, Telegram where the bot runs (rule 4). */
+export type DoorsRun = { email: boolean; telegram: boolean };
+
+/**
+ * What a browser that knows nobody may do with each record of these rows: the records "That's me" signs
+ * in (`claimable`, as `claimableRows` gives them, and their names), and the records it refuses that prove
+ * themselves through a door this deployment runs (`doors`: an address where mail goes out, a Telegram
+ * where the bot runs, a passkey). Ids only: the held row turns them into one kind per row, and the three
+ * answers themselves go only to the tap (`heldRowDoorsAction`, the owner's decision D4 of 16 October
+ * 2026). Pure.
+ */
+export function offerFacts(rows: readonly ThatsMeRow[], runs: DoorsRun): { claimable: Set<string>; names: string[]; doors: Set<string> } {
+  const ok = claimableRows(rows);
+  const doors = rows.filter((r) => whyNot(r) !== null && anyDoor(rowDoors(r, runs))).map((r) => r.id);
+  return { claimable: new Set(ok.map((r) => r.id)), names: ok.map((r) => r.name), doors: new Set(doors) };
+}
+
+/**
+ * What a match page offers: the records on this line-up a browser that knows nobody may tap (`ids`), the
+ * ones that prove themselves through their own doors (`doors`, ids only), or the one its own new record
+ * folds into.
+ */
+export type ThatsMeOffer = { ids: Set<string>; names: string[]; doors: ReadonlySet<string>; fold: { id: string; name: string } | null };
+export const NO_OFFER: ThatsMeOffer = { ids: new Set(), names: [], doors: new Set(), fold: null };
 
 /**
  * The page's side of the rule, in at most one read. A browser that knows nobody reads only the records
  * with a place in this match: every one the rule allows wears "That's me" on its row, and the open spot
- * knows those same names for the person who types theirs. Nothing about the crew's other members is
- * read for it or sent to it: a crew member not on this line-up types their name, joins, and is offered
- * the fold into their old record (below). A browser signed in as a record with nothing to prove it reads
- * only its own name, and only when that name is in the match twice or the match has a crew; anybody
- * else, and every record that can be reached, costs no read at all.
+ * knows those same names for the person who types theirs; the ones that prove themselves through a door
+ * the deployment runs (`runs`) are named in `doors`, for a held row's "I'm Danny" (since 6 November 2026),
+ * from the same rows. Nothing about the crew's other members is read for it or sent to it: a crew member
+ * not on this line-up types their name, joins, and is offered the fold into their old record (below). A
+ * browser signed in as a record with nothing to prove it reads only its own name, and only when that name
+ * is in the match twice or the match has a crew; anybody else, and every record that can be reached,
+ * costs no read at all.
  */
-export async function thatsMeOffer(db: Db, m: ThatsMeMatch, viewer: Pick<Player, "id" | "displayName" | "email" | "recoveryEmail" | "phone" | "telegramId" | "discordId" | "lineId" | "publicProfile"> | null, namesHere: readonly string[], now = new Date()): Promise<ThatsMeOffer> {
+export async function thatsMeOffer(
+  db: Db,
+  m: ThatsMeMatch,
+  viewer: Pick<Player, "id" | "displayName" | "email" | "recoveryEmail" | "phone" | "telegramId" | "discordId" | "lineId" | "publicProfile"> | null,
+  namesHere: readonly string[],
+  now = new Date(),
+  runs: DoorsRun = { email: false, telegram: false },
+): Promise<ThatsMeOffer> {
   if (!viewer) {
-    const ok = claimableRows(await thatsMeRows(db, m, { now }));
-    return { ids: new Set(ok.map((r) => r.id)), names: ok.map((r) => r.name), fold: null };
+    const f = offerFacts(await thatsMeRows(db, m, { now }), runs);
+    return { ids: f.claimable, names: f.names, doors: f.doors, fold: null };
   }
   const bare = !viewer.email && !viewer.recoveryEmail && !viewer.phone && !viewer.telegramId && !viewer.discordId && !viewer.lineId && !viewer.publicProfile;
   const twice = namesHere.filter((n) => normalName(n) === normalName(viewer.displayName)).length >= 2;
@@ -604,5 +651,17 @@ export async function thatsMeOffer(db: Db, m: ThatsMeMatch, viewer: Pick<Player,
   const rows = await thatsMeRows(db, m, { name: viewer.displayName, viewerId: viewer.id, now });
   const v = thatsMeVerdict(rows, viewer.id);
   const target = v.ok ? rows.find((r) => r.id === v.id) : undefined;
-  return target ? { ids: new Set(), names: [], fold: { id: target.id, name: target.name } } : NO_OFFER;
+  return target ? { ids: new Set(), names: [], doors: new Set(), fold: { id: target.id, name: target.name } } : NO_OFFER;
+}
+
+/**
+ * The organiser's one message (`heldMessageOf` in `heldRow.ts`): for these held records, the ones a
+ * browser that knows nobody may take from the plain link, by "That's me" (`claimable`) or through their
+ * own doors (`doors`). One bounded read, `thatsMeRows` narrowed to these ids (`only`), with the whole
+ * context and counts, so each answer is the one the page gives a stranger. No ids, no read.
+ */
+export async function heldRecordFacts(db: Db, m: ThatsMeMatch, ids: readonly string[], now: Date, runs: DoorsRun): Promise<{ claimable: Set<string>; doors: Set<string> }> {
+  if (ids.length === 0) return { claimable: new Set(), doors: new Set() };
+  const f = offerFacts(await thatsMeRows(db, m, { now, only: ids }), runs);
+  return { claimable: f.claimable, doors: f.doors };
 }

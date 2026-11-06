@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
 import { countedSource, SOURCE_COOKIE } from "@/lib/source";
-import { bumpMetric } from "@/lib/domain/metrics";
+import { bumpMetric, bumpMetrics } from "@/lib/domain/metrics";
 import { cookies } from "next/headers";
 import { after } from "next/server";
 import { getDb } from "@/db";
+import { events } from "@/db/schema";
 import { baseUrl, emailEnabled } from "@/lib/config";
 import { getEventDetail, getSlotByInviteCode } from "@/lib/domain/queries";
 import { isClaimable } from "@/lib/domain/events";
@@ -31,9 +33,11 @@ import { formatLevel } from "@/lib/domain/levels";
 import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
-import { decideHeldByName, seatedNamed, seatedRecordsNamed, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
-import { doorsDetail, seatedDoors } from "@/lib/domain/seatedDoors";
-import { savedPasskey, unreachedOffer } from "@/lib/domain/thatsMe";
+import { decideHeldByName, heldSeatsOf, seatedNamed, seatedRecordsNamed, takeHeldByName, whoJoins } from "@/lib/domain/heldByName";
+import { heldRowOffers } from "@/lib/domain/heldRow";
+import { doorsDetail, rowDoors, seatedDoors } from "@/lib/domain/seatedDoors";
+import { decideThatsMe, offerFacts, savedPasskey, thatsMeRows, unreachedOffer } from "@/lib/domain/thatsMe";
+import { normalName } from "@/lib/domain/dupes";
 import { firstName, unreachedNamed } from "@/lib/domain/unreached";
 import { channelsOffered } from "@/lib/coach/reach";
 import { telegramBotId } from "@/lib/telegram/api";
@@ -44,14 +48,14 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { notifyCreator, notifyLineupChange, notifyPromotion, notifyRefill, notifyRemoved, notifyRequestDecided, sendInviteEmail } from "@/lib/notify";
 import { inviteUrl } from "@/lib/share";
 import { getSessionPlayer, markSignedInByName, setSessionPlayer } from "@/lib/session";
-import { attachHeldRecord, decideHeldLink, heldRecordsFor, pastPlayerRows, recordForAnswer, takeHeldLink } from "@/lib/domain/heldRecord";
-import { answerOfPick, cleanPicks } from "@/lib/domain/pastAsk";
+import { attachHeldRecord, decideHeldLink, heldRecordsFor, pastPlayerRows, recordForAnswer, takeHeldLink, takeHeldRecord } from "@/lib/domain/heldRecord";
+import { answerOfPick, cleanPickedNames, cleanPicks, type PastPick } from "@/lib/domain/pastAsk";
 import { countSignIn } from "@/lib/domain/signins";
 import { saveHintLater } from "@/lib/deviceHint";
 import { getPlayer } from "@/lib/domain/players";
 import { DomainError } from "@/lib/domain/errors";
 import { ActionFailure, assertRate, clientKey, loadEvent, nameOnly, requireCreator, requirePlayer, runA, userAgent, type ActionResult } from "./shared";
-import { LIMITS } from "@/lib/domain/ratelimit";
+import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { mergesLater } from "@/lib/mergeCount";
 import { stayUpdated } from "@/lib/domain/stayUpdated";
 import { stayChannels } from "@/lib/calendarFeed";
@@ -286,7 +290,9 @@ export async function removeAction(code: string, slotId: string): Promise<Action
  * record"; 12 October 2026: "if manually typed and it matches a previously played person it should ask").
  * The browser sends the name and the answer, never a player id: the record is found again here, among
  * the organiser's own past players (`recordForAnswer`), and with none, or with an answer that names
- * nobody there, the place is held by name only.
+ * nobody there, the place is held by name only. A session by name that proved nothing (`nameOnly`)
+ * holds by name whatever it sends (since 6 November 2026): otherwise it could hold the past players of
+ * the record it signed in as, and take each place from its row.
  */
 export async function reserveAction(
   code: string,
@@ -296,7 +302,8 @@ export async function reserveAction(
     const { db, detail, viewer } = await requireCreator(code);
     await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay);
     const before = wasComplete(detail);
-    const [pick] = typeof input.name !== "string" ? [] : input.pick === true ? [{ name: input.name }] : input.pick && typeof input.pick === "object" ? cleanPicks([{ ...input.pick, name: input.name }]) : [];
+    const proved = !(await nameOnly(viewer.player));
+    const [pick] = !proved || typeof input.name !== "string" ? [] : input.pick === true ? [{ name: input.name }] : input.pick && typeof input.pick === "object" ? cleanPicks([{ ...input.pick, name: input.name }]) : [];
     const record = pick ? recordForAnswer(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), pick.name, answerOfPick(pick)) : null;
     const { slot, event } = await reserveSlot(db, {
       eventId: detail.event.id,
@@ -318,43 +325,82 @@ export async function reserveAction(
   });
 }
 
+type HeldNames = { held: string[]; already: string[]; noSpot: string[] };
+
+/**
+ * Several names held in one request and one transaction, for "Paste the names" and the open spot's
+ * several "Played with you" picks alike: each name not already in the match takes the lowest free place
+ * (`planPaste`, `reserveNames`), one rate check for all of them against the daily limit every held place
+ * counts towards, one line-up notice, one page render. Rule 12: a list is one request, never one per
+ * name. A pick keeps its record, found again among the organiser's own past players (`heldRecordsFor`),
+ * except for a session by name that proved nothing (`nameOnly`): its picks are dropped, and every name
+ * is held by name.
+ */
+async function holdNames(code: string, names: string[], picks: readonly PastPick[]): Promise<HeldNames> {
+  const { db, detail, viewer } = await requireCreator(code);
+  const usable = (await nameOnly(viewer.player)) ? [] : picks;
+  const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
+  const plan = planPaste(names, namesHere, detail.roster.filter(isClaimable).length);
+  if (plan.hold.length === 0) return { held: [], already: plan.already, noSpot: plan.noSpot };
+  await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay, "day", plan.hold.length);
+  const before = wasComplete(detail);
+  const records = usable.length ? heldRecordsFor(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), plan.hold, usable) : undefined;
+  const { held, event } = await reserveNames(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, names: plan.hold, records });
+  after(async () => {
+    await notifyLineupChange(db, event, before);
+  });
+  revalidatePath(`/${code}`);
+  return { held: held.map((s) => s.invitedName ?? ""), already: plan.already, noSpot: [...plan.hold.slice(held.length), ...plan.noSpot] };
+}
+
 /**
  * "Paste the names from the group" (src/components/PasteNames.tsx): the organiser's pasted chat, read
- * again here (`namesFromChat`), each name not already in the match held as a reserved spot, in one
- * request and one transaction (`reserveNames`): one rate check for the whole list against the same
- * daily limit every reserved spot counts towards, one line-up notice, one page render. Rule 12: a
- * list is one request, never one per name.
+ * again here (`namesFromChat`), each name not already in the match held (`holdNames`). A name the
+ * organiser answered "Yes, that's Danny" for keeps that record.
  */
-export async function reserveManyAction(code: string, pasted: string, picks?: unknown): Promise<ActionResult<{ held: string[]; already: string[]; noSpot: string[] }>> {
+export async function reserveManyAction(code: string, pasted: string, picks?: unknown): Promise<ActionResult<HeldNames>> {
   return runA(async () => {
     if (typeof pasted !== "string") throw new ActionFailure("invalid");
-    const { db, detail, viewer } = await requireCreator(code);
-    const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName ?? "").filter(Boolean);
-    const plan = planPaste(namesFromChat(pasted.slice(0, 20000)), namesHere, detail.roster.filter(isClaimable).length);
-    if (plan.hold.length === 0) return { held: [], already: plan.already, noSpot: plan.noSpot };
-    await assertRate(db, "reserve", detail.event.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay, "day", plan.hold.length);
-    const before = wasComplete(detail);
-    // A name the organiser answered "Yes, that's Danny" for keeps that record, found again among the organiser's own past players.
-    const answers = cleanPicks(picks);
-    const records = answers.length ? heldRecordsFor(await pastPlayerRows(db, detail.event.creatorPlayerId, new Date()), plan.hold, answers) : undefined;
-    const { held, event } = await reserveNames(db, { eventId: detail.event.id, actorPlayerId: viewer.player?.id ?? null, names: plan.hold, records });
-    after(async () => {
-      await notifyLineupChange(db, event, before);
-    });
-    revalidatePath(`/${code}`);
-    const names = held.map((s) => s.invitedName ?? "");
-    return { held: names, already: plan.already, noSpot: [...plan.hold.slice(held.length), ...plan.noSpot] };
+    return holdNames(code, namesFromChat(pasted.slice(0, 20000)), cleanPicks(picks));
+  });
+}
+
+/**
+ * Several "Played with you" names picked in the open spot, held in one tap (the owner's decision A of 6
+ * November 2026: "'Played with you' lets Erik pick several names and hold them with one tap"). Each name
+ * is a chip pick: its place keeps the record of the one past player of that name (`pastPlayerNamed`),
+ * found again here; a name two past players carry, a name nobody played with, or anything else is held
+ * by name. The names go as given (`cleanPickedNames`), never through `namesFromChat`, which drops a name
+ * with a chat word in it ("Ana de la Cruz", "Jo 2"). Past the open places the rest come back in `noSpot`.
+ * Counted after the answer, only when a place was held: `hold_picks` once, `hold_picked` for each place held.
+ */
+export async function reservePickedAction(code: string, names: unknown): Promise<ActionResult<HeldNames>> {
+  return runA(async () => {
+    if (typeof code !== "string") throw new ActionFailure("invalid");
+    const picked = cleanPickedNames(names);
+    if (picked.length === 0) throw new ActionFailure("invalid");
+    const result = await holdNames(
+      code,
+      picked,
+      picked.map((name) => ({ name })),
+    );
+    const db = await getDb();
+    if (result.held.length > 0) await later(() => bumpMetrics(db, ["hold_picks", ...result.held.map(() => "hold_picked")]));
+    return result;
   });
 }
 
 /**
  * "Keep Danny's matches": a place already held by name takes the record of the one past player of that
- * name (`attachHeldRecord`), so the personal link signs Danny in as the record he played under.
+ * name (`attachHeldRecord`), so the personal link signs Danny in as the record he played under. A
+ * session by name that proved nothing is refused (`proof_required`, since 6 November 2026), as at every
+ * door that turns a pick into a record.
  */
 export async function attachHeldRecordAction(code: string, slotId: string): Promise<ActionResult<{ name: string }>> {
   return runA(async () => {
     if (typeof slotId !== "string" || !/^[0-9a-f-]{36}$/i.test(slotId)) throw new ActionFailure("invalid");
-    const { db, detail } = await requireCreator(code);
+    const { db, detail, viewer } = await requireCreator(code);
+    if (await nameOnly(viewer.player)) throw new ActionFailure("proof_required");
     const done = await attachHeldRecord(db, { eventId: detail.event.id, slotId, organiserId: detail.event.creatorPlayerId });
     revalidatePath(`/${code}`);
     return done;
@@ -426,8 +472,10 @@ export async function confirmInviteAction(
  * and the place is filled by the personal link's own write under the match's lock, the rule asked
  * once more (`takeHeldByName`). The organiser hears "Danny confirmed", as from the personal link.
  * The session is not marked as signed in by name: a record made here has no history to hold back.
+ * Since 6 November 2026 the held row's "I'm Danny" sends the same request in one tap (`via: "row"`),
+ * which only adds `held_row_by_name` beside `held_by_name`.
  */
-export async function takeHeldPlaceAction(code: string, name: string, hint?: unknown): Promise<ActionResult<{ outcome: "confirmed" }>> {
+export async function takeHeldPlaceAction(code: string, name: string, hint?: unknown, via?: unknown): Promise<ActionResult<{ outcome: "confirmed" }>> {
   return runA(async () => {
     if (typeof code !== "string" || typeof name !== "string" || !name.trim() || name.length > 80) throw new ActionFailure("invalid");
     const db = await getDb();
@@ -438,11 +486,95 @@ export async function takeHeldPlaceAction(code: string, name: string, hint?: unk
     const res = await takeHeldByName(db, d, { id: me.id, name: me.displayName });
     if (!res.ok) throw new ActionFailure("invalid");
     if (res.event.groupId) await joinGroup(db, res.event.groupId, me.id, "match").catch(() => undefined);
-    await later(() => bumpMetric(db, "held_by_name"));
+    await later(() => bumpMetrics(db, via === "row" ? ["held_by_name", "held_row_by_name"] : ["held_by_name"]));
     await saveHintLater(db, me.id, hint, { eventId: res.event.id });
     after(async () => void (await afterConfirm(db, res, me, { wasComplete: res.wasComplete })));
     revalidatePath(`/${code}`);
     return { outcome: "confirmed" as const };
+  });
+}
+
+/** A held row's name as a tap sends it: a string of 1 to 80 characters once trimmed, or null. */
+const rowName = (code: unknown, name: unknown): string | null => {
+  if (typeof code !== "string" || typeof name !== "string") return null;
+  const clean = name.trim();
+  return clean && clean.length <= 80 ? clean : null;
+};
+
+/**
+ * "I'm Danny" on a held row that keeps a record "That's me" signs in (the owner's decision C of 6
+ * November 2026: "Every player confirms with one tap, also in a new browser"). One request signs this
+ * browser in as the record, marked by name, and confirms the record's own held place, so the organiser
+ * hears "Danny confirmed" and the page renders once. `thatsMeAction` signs in and never takes a place,
+ * and the held link needs the invite code, which the page gives nobody but the organiser.
+ *
+ * The page offers it only to a browser that knows nobody, so the action refuses any other. Then "That's
+ * me"'s own first half (`decideThatsMe`: the address's rate, refused taps too, every limit of rule 34,
+ * three sign-ins a day into one record), and the place's own checks under the match's lock
+ * (`takeHeldRecord`). Refused as `invalid` whatever the reason, so the answer says nothing about the
+ * record; `too_many` past a rate. Counted: `signin_held_row`, or `held_row_refused` when the place step
+ * turns down a tap the rule let through.
+ */
+export async function takeHeldRecordAction(code: string, name: string, hint?: unknown): Promise<ActionResult<{ outcome: "confirmed" }>> {
+  return runA(async () => {
+    const typed = rowName(code, name);
+    if (!typed) throw new ActionFailure("invalid");
+    const db = await getDb();
+    if (await getSessionPlayer(db)) throw new ActionFailure("invalid");
+    const d = await decideThatsMe(db, { code, name: typed, viewerId: null, rateKey: await clientKey() });
+    if (!d.ok) throw new ActionFailure(d.reason === "too_many" ? "too_many" : "invalid");
+    const res = await takeHeldRecord(db, d);
+    if (!res.ok) {
+      await later(() => bumpMetric(db, "held_row_refused"));
+      throw new ActionFailure("invalid");
+    }
+    await setSessionPlayer(d.id);
+    // Marked until the record proves something: no personal link for a sign-in by name.
+    await markSignedInByName(d.id);
+    const ua = await userAgent();
+    await later(() => countSignIn(db, "held_row", ua));
+    // A sign-in by name keeps this browser's device hint, as "That's me" does.
+    await saveHintLater(db, d.id, hint, { eventId: res.event.id });
+    if (res.event.groupId) await joinGroup(db, res.event.groupId, d.id, "match").catch(() => undefined);
+    const record = await getPlayer(db, d.id);
+    if (record) after(async () => void (await afterConfirm(db, res, record, { wasComplete: res.wasComplete })));
+    revalidatePath(`/${code}`);
+    return { outcome: "confirmed" as const };
+  });
+}
+
+/**
+ * The doors of a held record that proves itself, at the tap on its row's "I'm Danny" (the owner's
+ * decision D4 of 16 October 2026: "Only Danny's doors"; decision C of 6 November 2026). The page sends
+ * only the kind `doors`; the three yes-or-no answers come here, for the one name tapped, as the join's
+ * refusal gives them for a typed name: an address where mail goes out, a linked Telegram where the bot
+ * runs, a passkey. Never an address, an id or anything about another record.
+ *
+ * Only a browser that knows nobody, the address's "That's me" rate (refused taps too), a match not
+ * called off, and the row's own rule over this tap's read (`heldRowOffers` must give this name the kind
+ * `doors`). Every refusal answers `invalid`, so it says nothing about the record; `too_many` past the rate.
+ * Two bounded reads: the match's places and one `thatsMeRows` for the name.
+ */
+export async function heldRowDoorsAction(code: string, name: string): Promise<ActionResult<{ doors: string }>> {
+  return runA(async () => {
+    const typed = rowName(code, name);
+    if (!typed) throw new ActionFailure("invalid");
+    const db = await getDb();
+    if (await getSessionPlayer(db)) throw new ActionFailure("invalid");
+    if (!(await takeRate(db, "thatsme", await clientKey(), LIMITS.thatsMePerIpPerDay, "day"))) throw new ActionFailure("too_many");
+    const [ev] = await db.select().from(events).where(eq(events.code, code)).limit(1);
+    if (!ev || ev.status === "cancelled") throw new ActionFailure("invalid");
+    const now = new Date();
+    const runs = { email: emailEnabled(), telegram: Boolean(telegramBotId()) };
+    const seats = await heldSeatsOf(db, ev.id);
+    const rows = await thatsMeRows(db, ev, { name: typed, now });
+    const facts = offerFacts(rows, runs);
+    const offer = heldRowOffers(ev, seats, null, { claimable: facts.claimable, doors: facts.doors, fold: null }, now).find((o) => o.kind === "doors" && normalName(o.name) === normalName(typed));
+    const recordId = offer ? seats.find((s) => s.id === offer.slotId)?.playerId : null;
+    const row = recordId ? rows.find((r) => r.id === recordId) : undefined;
+    if (!row) throw new ActionFailure("invalid");
+    await later(() => bumpMetric(db, "held_row_doors"));
+    return { doors: doorsDetail(rowDoors(row, runs)) };
   });
 }
 

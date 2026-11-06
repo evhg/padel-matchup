@@ -338,9 +338,36 @@ try {
   await a.getByPlaceholder("Name").fill("Jordi");
   await a.getByRole("button", { name: "Done", exact: true }).click();
   await a.getByText("Reserved for Jordi").first().waitFor({ timeout: 20000 });
-  check("reserved row shows forward buttons right away", (await a.getByText("Send them their personal link").count()) > 0 && (await a.locator('a[href^="https://wa.me"]').count()) > 0);
+  // The owner's decision A of 6 November 2026: a hold opens nothing by itself. Erik sent three WhatsApp
+  // messages one at a time, because the personal link opened after each hold. Under the line-up, one
+  // message with the plain match link names every held player who can take the place from it.
+  check("after the hold nothing opens by itself: no \"Send them their personal link\"", (await a.getByText("Send them their personal link").count()) === 0);
+  const heldMessage = a.getByTestId("held-message");
+  await heldMessage.waitFor({ timeout: 10000 });
+  const heldMessageHref = decodeURIComponent((await heldMessage.getByTestId("held-message-send").getAttribute("href")) ?? "");
+  check(
+    "under the line-up, \"One message for Jordi\": its WhatsApp link carries the plain match link tagged ?s=wa, \"tap your name\", and no personal link",
+    ((await heldMessage.textContent()) ?? "").includes("One message for Jordi") && heldMessageHref.includes(`/${code}?s=wa`) && heldMessageHref.includes("tap your name") && !heldMessageHref.includes("/i/"),
+    heldMessageHref,
+  );
+  await heldMessage.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await shot(a, "08b-held-message");
+  // The personal link is still on Jordi's row: "Invite now" opens it, WhatsApp and Telegram on one line.
+  const jordiHeld = a.locator("main li", { hasText: "Reserved for Jordi" });
+  await jordiHeld.getByRole("button", { name: "Invite now", exact: true }).click();
+  await jordiHeld.getByText("Send them their personal link").waitFor({ timeout: 10000 });
+  const rowShare = jordiHeld.locator('a[href^="https://wa.me"], a[href^="https://t.me/share"]');
+  // On one line, and whole: each icon at least 18 px wide (it measured 11 px before `btn-brand`) and each label inside its button (the box is the narrowest place they go).
+  const rowFit = await rowShare.evaluateAll((els) => els.map((e) => ({ top: Math.round(e.getBoundingClientRect().top), icon: Math.round(e.querySelector("svg")?.getBoundingClientRect().width ?? 0), inside: e.scrollWidth <= e.clientWidth + 1 })));
+  check(
+    "\"Invite now\" opens the personal link on Jordi's row: WhatsApp and Telegram on one line, each icon and label whole",
+    rowFit.length === 2 && rowFit[0].top === rowFit[1].top && rowFit.every((b) => b.icon >= 18 && b.inside),
+    JSON.stringify(rowFit),
+  );
+  // The box pops in over 0.18 s: a picture taken at once catches it faded.
+  await a.waitForTimeout(400);
   await shot(a, "08-reserved");
-  const hrefs = await a.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  const hrefs = await jordiHeld.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
   const inviteUrl = hrefs.map(decodeURIComponent).map((h) => h.match(new RegExp(`(${BASE_RE}/[^/\\s]{4}/i/[^\\s]{6})`))?.[1]).find(Boolean);
   check("invite url extracted from forward button", !!inviteUrl, inviteUrl);
   // Rolodex suggestions never include people already in the match
@@ -552,6 +579,18 @@ try {
   // field has an open seat to sit in, and that seat must still be open at the end.
   await a.locator("main li", { hasText: "Reserved for Bo" }).getByRole("button", { name: "Remove player" }).click();
   await a.getByText("Reserved for Bo", { exact: true }).waitFor({ state: "detached", timeout: 20000 });
+  // The organiser link, opened in a browser that knows nobody, runs the match: no "I'm …" on a held row
+  // there. The rule sees a browser that knows nobody, so the page's own check is the only one here.
+  const manageUrl2 = ((await a.locator("main code", { hasText: `/${code2}/manage/` }).first().textContent().catch(() => "")) ?? "").trim();
+  const manager = await newPage();
+  await manager.goto(manageUrl2 || `${BASE}/${code2}`);
+  await manager.getByText("Reserved for Cy", { exact: true }).waitFor({ timeout: 20000 });
+  check(
+    "the organiser link in a browser that knows nobody shows the organiser's tools and no \"I'm …\" on any held row",
+    manageUrl2.includes(`/${code2}/manage/`) && (await manager.getByText("Organizer tools").count()) > 0 && (await manager.getByTestId("held-row").count()) === 0,
+    manageUrl2,
+  );
+  await manager.close();
   const cyp = await newPage();
   let heldSends = 0;
   cyp.on("request", (r) => {
@@ -559,10 +598,18 @@ try {
   });
   await cyp.goto(`${BASE}/${code2}`);
   await cyp.getByText("Reserved for Cy", { exact: true }).waitFor({ timeout: 20000 });
-  // The owner chose the typed name, not the row: a stranger who has typed nothing is offered no held
-  // place, whoever's row it is.
-  const heldOnRows = await cyp.getByTestId("take-held").count();
-  check("a held row offers nothing until the name is typed", heldOnRows === 0, `take-held buttons=${heldOnRows}`);
+  // The owner chose the row on 6 November 2026 (option C, one tap); the typed name stays as the second way,
+  // with its two taps. Before anything is typed, each place held by name wears "I'm Cy" and "I'm Ana".
+  const cyRowButton = cyp.locator("main li", { hasText: "Reserved for Cy" }).getByTestId("held-row");
+  const anaRowButton = cyp.locator("main li", { hasText: "Reserved for Ana" }).getByTestId("held-row");
+  const heldRowFaces = { cy: ((await cyRowButton.textContent().catch(() => "")) ?? "").trim(), cyKind: await cyRowButton.getAttribute("data-kind").catch(() => null), ana: ((await anaRowButton.textContent().catch(() => "")) ?? "").trim(), anaKind: await anaRowButton.getAttribute("data-kind").catch(() => null) };
+  check(
+    "before a name is typed, each held row wears its own button: \"I'm Cy\" and \"I'm Ana\", taken by name, and no typed offer yet",
+    heldRowFaces.cy === "I'm Cy" && heldRowFaces.cyKind === "by_name" && heldRowFaces.ana === "I'm Ana" && heldRowFaces.anaKind === "by_name" && (await cyp.getByTestId("take-held").count()) === 0,
+    JSON.stringify(heldRowFaces),
+  );
+  await cyp.locator("main li", { hasText: "Reserved for Cy" }).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await shot(cyp, "12d00-held-row");
   await cyp.getByRole("button", { name: "Join this match" }).click();
   await cyp.getByTestId("open-spot-name").first().fill("cy");
   const alreadyCy = cyp.getByTestId("already-here");
@@ -695,16 +742,22 @@ try {
     eveSends === 0 && (notWaiting.waitlist ?? 0) === 0 && (await takeEve.count()) === 1,
     JSON.stringify({ sends: eveSends, waitlist: notWaiting.waitlist }),
   );
-  await takeEve.click();
-  await alreadyEve.getByRole("button", { name: "Take Eve's held place?", exact: true }).click();
+  // The typed way stays; the row's own button is one tap (the owner's decision C of 6 November 2026).
+  // On a full match it is the way in from the plain link: Eve takes her place from her row.
+  const eveRow = evp.locator("main li", { hasText: "Reserved for Eve" }).getByTestId("held-row");
+  const eveFace = ((await eveRow.textContent().catch(() => "")) ?? "").trim();
+  eveSends = 0;
+  await evp.getByRole("button", { name: "I'm Eve", exact: true }).click();
   await evp.locator("main li", { hasText: "Eve" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  await evp.waitForTimeout(500);
   const afterEve = await evp.request.get(`${BASE}/api/v1/matches/${code2}`).then((r) => r.json());
   const eves = (afterEve.players ?? []).filter((p) => /^eve$/i.test(p.name));
   check(
-    "two taps fill Eve's held place on the full match: one Eve, confirmed, and nobody waiting",
-    eves.length === 1 && eves[0].status === "confirmed" && (afterEve.waitlist ?? 0) === 0 && (await evp.getByText("Reserved for Eve", { exact: true }).count()) === 0,
-    JSON.stringify({ players: (afterEve.players ?? []).map((p) => `${p.name}:${p.status}`), waitlist: afterEve.waitlist }),
+    "one tap on \"I'm Eve\" on her row fills Eve's held place on the full match: one request, one Eve, confirmed, and nobody waiting",
+    eveFace === "I'm Eve" && eveSends === 1 && eves.length === 1 && eves[0].status === "confirmed" && (afterEve.waitlist ?? 0) === 0 && (await evp.getByText("Reserved for Eve", { exact: true }).count()) === 0,
+    JSON.stringify({ face: eveFace, sends: eveSends, players: (afterEve.players ?? []).map((p) => `${p.name}:${p.status}`), waitlist: afterEve.waitlist }),
   );
+  await shot(evp, "12e-held-row-taken-full");
   await evp.close();
 
   // A browser that already knows a record called Ana, with no place in the match: before this, "Join the
@@ -722,6 +775,13 @@ try {
   });
   await anp.goto(`${BASE}/${code2}`);
   await anp.getByText("Reserved for Ana", { exact: true }).waitFor({ timeout: 20000 });
+  // Her row wears "I'm Ana" for this browser too: its record of the name has no place in the match.
+  const anaRowHere = anp.locator("main li", { hasText: "Reserved for Ana" }).getByTestId("held-row");
+  check(
+    "a browser that knows an Ana with no place here sees \"I'm Ana\" on Ana's held row, taken by name",
+    ((await anaRowHere.textContent().catch(() => "")) ?? "").trim() === "I'm Ana" && (await anaRowHere.getAttribute("data-kind").catch(() => null)) === "by_name",
+    `${await anaRowHere.count()} buttons`,
+  );
   anaSends = 0;
   await anp.getByRole("button", { name: "Join the waitlist", exact: true }).click();
   const heldForAna = anp.getByTestId("held-for-you");
@@ -1104,6 +1164,28 @@ try {
   await sofia.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const code4 = sofia.url().split("/").slice(-2)[0];
   await sofia.goto(`${BASE}/${code4}`);
+  // Sofia came back by name, and a session by name that proved nothing holds no past player's record
+  // (DECIDING rule 34, 6 November 2026): no "Played with you". Otherwise a stranger who tapped "That's me"
+  // could hold the old partners of that record and take each place from its row.
+  await sofia.getByRole("button", { name: /Open spot/ }).first().click();
+  await sofia.getByText("Reserve this spot for…").waitFor({ timeout: 10000 });
+  await sofia.waitForTimeout(800);
+  check("a session by name gets no \"Played with you\" in the open spot", (await sofia.getByTestId("played-with-you").count()) === 0);
+  await sofia.locator("main form").filter({ has: sofia.getByPlaceholder("Name") }).getByRole("button", { name: "Cancel" }).click();
+  // She proves her address with the 6-digit code on the "Stay updated" card (D3): the session is a full one.
+  const sofiaCard = sofia.getByTestId("stay-updated");
+  await sofiaCard.waitFor({ timeout: 20000 });
+  if ((await sofiaCard.getByTestId("stay-email").count()) > 0) await sofiaCard.getByTestId("stay-email").click();
+  await sofiaCard.getByPlaceholder("you@example.com").fill("sofia-e2e@example.com");
+  await sofiaCard.getByRole("button", { name: "Send code", exact: true }).click();
+  const sofiaCodeBox = sofiaCard.getByTestId("email-code");
+  await sofiaCodeBox.waitFor({ timeout: 20000 });
+  // The seeded Sofia speaks Russian, so her code comes as "291156 — ваш код Kicksmash": the six digits lead in every language.
+  const sofiaCode = await waitUntil(() => mails().filter((m) => m.to === "sofia-e2e@example.com").map((m) => m.subject?.match(/^(\d{6})\b/)?.[1]).filter(Boolean).at(-1));
+  await sofiaCodeBox.getByLabel("6-digit code").fill(sofiaCode ?? "");
+  await sofiaCodeBox.getByRole("button", { name: "Confirm", exact: true }).click();
+  await sofiaCard.getByText("Calendar invite sent to sofia-e2e@example.com", { exact: false }).waitFor({ timeout: 20000 });
+  await sofia.reload();
   await sofia.getByRole("button", { name: /Open spot/ }).first().click();
   await sofia.getByText("Reserve this spot for…").waitFor({ timeout: 10000 });
   const playedChips = sofia.getByTestId("played-with-you");
@@ -1119,7 +1201,11 @@ try {
   await sofia.getByRole("button", { name: "Done", exact: true }).click();
   await sofia.getByText("Reserved for Maria").first().waitFor({ timeout: 20000 });
   check("the held row says it keeps Maria's matches", (await sofia.getByTestId("keeps-record").count()) === 1);
-  const mariaHrefs = await sofia.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+  // Nothing opens by itself after the hold: "Invite now" on Maria's row opens her personal link.
+  const mariaHeld = sofia.locator("main li", { hasText: "Reserved for Maria" });
+  await mariaHeld.getByRole("button", { name: "Invite now", exact: true }).click();
+  await mariaHeld.getByText("Send them their personal link").waitFor({ timeout: 10000 });
+  const mariaHrefs = await mariaHeld.locator('a[href^="https://wa.me"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")));
   const mariaLink = mariaHrefs.map(decodeURIComponent).map((h) => h.match(new RegExp(`(${BASE_RE}/${code4}/i/[^\\s]{6})`))?.[1]).find(Boolean);
   check("Maria's personal link is on her row", Boolean(mariaLink), String(mariaLink));
   const mariaPage = await newPage();
@@ -1262,6 +1348,185 @@ try {
   const count5 = (await sofia.getByTestId("count-line").innerText()).trim();
   check("and its count line names the three held places", count5 === "3 places held for Maria, Jordi, Alex", count5);
   await shot(sofia, "12m-created-with-records");
+
+  // ---- Several past players at once, and a button on each held row (the owner, 6 November 2026: "Build A and C") ----
+  // Erik held three places one at a time with "Played with you", and the page opened a personal link after
+  // each hold, so he sent three WhatsApp messages. Sofia makes a match of four with the waiting list closed,
+  // picks Maria and Jordi in one hold, and Alex in the last spot. Then one message goes to the crew.
+  /** What a 390 px phone shows around the element the walk just scrolled to (a full-page shot is a strip). */
+  const viewShot = (p, name) => (process.env.SHOTS ? p.screenshot({ path: `${process.env.SHOTS}/${name}.png` }) : Promise.resolve());
+  const posts = (p) => {
+    const sent = { n: 0 };
+    p.on("request", (r) => void (r.method() === "POST" && r.headers()["next-action"] && (sent.n += 1)));
+    return sent;
+  };
+  await sofia.goto(BASE + "/new");
+  const later6 = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
+  const lp6 = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(later6);
+  const lg6 = (t) => lp6.find((p) => p.type === t).value;
+  await sofia.locator("input[type=date]").fill(`${lg6("year")}-${lg6("month")}-${lg6("day")}`);
+  await sofia.locator("input[type=time]").fill("20:00");
+  await sofia.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  await sofia.getByRole("button", { name: /More options/ }).click();
+  await sofia.locator(".segment", { hasText: "Waitlist" }).getByRole("button", { name: "Close", exact: true }).click();
+  await sofia.getByRole("button", { name: "Create & get the link" }).click();
+  await sofia.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const code6 = sofia.url().split("/").slice(-2)[0];
+  check("a match with nobody held shows no one message on the share page", (await sofia.getByTestId("held-message").count()) === 0, code6);
+  await sofia.goto(`${BASE}/${code6}`);
+  await sofia.getByRole("button", { name: /Open spot/ }).first().click();
+  const chips6 = sofia.getByTestId("played-with-you");
+  await chips6.waitFor({ timeout: 10000 });
+  const chipNames6 = (await chips6.getByRole("button").allTextContents()).map((x) => x.trim());
+  check("the open spot offers Maria, Jordi and Alex from \"Played with you\"", ["Maria", "Jordi", "Alex"].every((n) => chipNames6.includes(n)), JSON.stringify(chipNames6));
+  await chips6.getByRole("button", { name: "Maria", exact: true }).click();
+  check(
+    "one pick with three open spots: the name reads Maria, the other names stay, and a line says more can be picked",
+    (await sofia.getByTestId("open-spot-name").inputValue()) === "Maria" && (await sofia.getByTestId("pick-more").count()) === 1 && (await chips6.getByRole("button", { name: "Jordi", exact: true }).count()) === 1 && ((await sofia.getByTestId("picked-past-player").textContent()) ?? "").includes("Keeps Maria's matches"),
+  );
+  await chips6.getByRole("button", { name: "Jordi", exact: true }).click();
+  const holdPicks = sofia.getByTestId("hold-picks");
+  const picked6 = ((await sofia.getByTestId("picked-past-players").textContent().catch(() => "")) ?? "").trim();
+  check(
+    "a second pick holds both: \"✓ Keeps the matches of Maria and Jordi\" and \"Reserve 2 spots\", with no name field and no help about one personal link",
+    picked6 === "✓ Keeps the matches of Maria and Jordi" && ((await holdPicks.textContent()) ?? "").trim() === "Reserve 2 spots" && (await sofia.getByTestId("open-spot-name").count()) === 0 && (await chips6.locator('[aria-pressed="true"]').count()) === 2 && (await sofia.getByText("Hold this spot for someone.").count()) === 0,
+    picked6,
+  );
+  await chips6.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await viewShot(sofia, "12m-multi-pick");
+  const holdSends = posts(sofia);
+  await holdPicks.click();
+  await sofia.getByText("Reserved for Jordi", { exact: true }).waitFor({ timeout: 20000 });
+  await sofia.waitForTimeout(500);
+  const kept6 = await Promise.all(["Maria", "Jordi"].map((x) => sofia.locator("main li", { hasText: `Reserved for ${x}` }).getByTestId("keeps-record").count()));
+  check(
+    "\"Reserve 2 spots\" is one request: Maria and Jordi are held, each keeps the matches, and nothing opens by itself",
+    holdSends.n === 1 && JSON.stringify(kept6) === "[1,1]" && (await sofia.getByText("Send them their personal link").count()) === 0,
+    JSON.stringify({ sends: holdSends.n, kept6 }),
+  );
+  // The last open spot: one place, so the open spot works as it always did.
+  await sofia.getByRole("button", { name: /Open spot/ }).first().click();
+  await chips6.waitFor({ timeout: 10000 });
+  await chips6.getByRole("button", { name: "Alex", exact: true }).click();
+  check(
+    "with one spot open a chip is one pick, as before: no line about more names",
+    (await sofia.getByTestId("open-spot-name").inputValue()) === "Alex" && (await sofia.getByTestId("pick-more").count()) === 0 && (await sofia.getByTestId("picks-full").count()) === 0 && ((await sofia.getByTestId("picked-past-player").textContent()) ?? "").includes("Keeps Alex's matches"),
+  );
+  await sofia.getByRole("button", { name: "Done", exact: true }).click();
+  await sofia.getByText("Reserved for Alex", { exact: true }).waitFor({ timeout: 20000 });
+  // Alex organises PLAY, so "That's me" refuses him, and he has no door of his own: his personal link only.
+  const msg6 = sofia.getByTestId("held-message");
+  await msg6.waitFor({ timeout: 10000 });
+  const href6 = decodeURIComponent((await msg6.getByTestId("held-message-send").getAttribute("href")) ?? "");
+  const not6 = ((await msg6.getByTestId("held-message-not").textContent().catch(() => "")) ?? "").trim();
+  check(
+    "\"One message for Maria and Jordi\", and the line under it names Alex as one person: the WhatsApp link has both names, the plain match link tagged ?s=wa, and no personal link",
+    ((await msg6.textContent()) ?? "").includes("One message for Maria and Jordi") && ((await msg6.textContent()) ?? "").includes("Send it to the group, or to each of them.") && not6 === "Not in this message: Alex. Send them their personal link from their row." && href6.includes("Maria and Jordi") && !href6.includes("Alex") && href6.includes(`/${code6}?s=wa`) && !href6.includes("/i/"),
+    `${not6} | ${href6}`,
+  );
+  check("the organiser sees no \"I'm …\" on any held row", (await sofia.getByTestId("held-row").count()) === 0);
+  await msg6.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await viewShot(sofia, "12n-held-message");
+  // "Copy this message" copies the whole message, its match link tagged ?s=link. Its name is its own:
+  // "Send all invites in one message" on the same page keeps "Copy message", which copies other words.
+  check(
+    "the one message's Copy is \"Copy this message\", and the page has one \"Copy message\" (Send all invites)",
+    (await msg6.getByRole("button", { name: "Copy this message", exact: true }).count()) === 1 && (await sofia.getByRole("button", { name: "Copy message", exact: true }).count()) === 1,
+  );
+  await sofia.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (v) => void (window.__copied = v) } }));
+  await msg6.getByRole("button", { name: "Copy this message", exact: true }).click();
+  await sofia.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
+  const copied6 = String(await sofia.evaluate(() => window.__copied));
+  check("\"Copy this message\" puts the whole message on the clipboard, with the match link tagged ?s=link", copied6.includes("I'm holding places for Maria and Jordi") && copied6.includes(`/${code6}?s=link`) && !copied6.includes("/i/"), copied6);
+  // The Copy fix: "Send all invites in one message" copies its whole message, every personal link in it.
+  await sofia.evaluate(() => void delete window.__copied);
+  const inviteAll = sofia.getByText("Send all invites in one message", { exact: true }).locator("..");
+  await inviteAll.getByRole("button", { name: "Copy message", exact: true }).click();
+  await sofia.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
+  const copiedAll = String(await sofia.evaluate(() => window.__copied));
+  check(
+    "\"Send all invites in one message\" copies the whole message: \"Confirm with your personal link\" and three personal links",
+    copiedAll.includes("Confirm with your personal link") && (copiedAll.match(new RegExp(`/${code6}/i/`, "g")) ?? []).length === 3,
+    copiedAll,
+  );
+  await sofia.goto(`${BASE}/${code6}/share`);
+  const shareMsg6 = sofia.getByTestId("held-message");
+  await shareMsg6.waitFor({ timeout: 10000 });
+  check("the share page shows the same one message for Maria and Jordi", ((await shareMsg6.textContent()) ?? "").includes("One message for Maria and Jordi"));
+  // The share page has no rows: its line for Alex says to open the match first.
+  const shareNot6 = ((await shareMsg6.getByTestId("held-message-not").textContent().catch(() => "")) ?? "").trim();
+  check("the share page's line for Alex says to open the match, then send the personal link from the row", shareNot6 === "Not in this message: Alex. Open the match and send them their personal link from their row.", shareNot6);
+  await shareMsg6.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await viewShot(sofia, "12q-share-held-message");
+
+  // A browser that knows nobody opens the one message's link. The match is full and its waiting list
+  // closed, so there is no join form: the row's own button is the way in.
+  const crew = await newPage();
+  await crew.goto(`${BASE}/${code6}?s=wa`);
+  await crew.getByText("Reserved for Jordi", { exact: true }).waitFor({ timeout: 20000 });
+  const rowOf6 = (n) => crew.locator("main li", { hasText: `Reserved for ${n}` }).getByTestId("held-row");
+  const kinds6 = { maria: await rowOf6("Maria").getAttribute("data-kind").catch(() => null), jordi: await rowOf6("Jordi").getAttribute("data-kind").catch(() => null), alex: await rowOf6("Alex").count() };
+  check(
+    "a stranger sees \"I'm Maria\" and \"I'm Jordi\", records that sign in by name, and nothing on Alex's row; no waiting list, no name field",
+    kinds6.maria === "record" && kinds6.jordi === "record" && kinds6.alex === 0 &&
+      (await crew.getByRole("button", { name: "I'm Maria", exact: true }).count()) === 1 &&
+      (await crew.getByRole("button", { name: "I'm Jordi", exact: true }).count()) === 1 &&
+      (await crew.getByRole("button", { name: "Join the waitlist" }).count()) === 0 &&
+      (await crew.getByTestId("open-spot-name").count()) === 0 &&
+      (await crew.getByTestId("waitlist-name").count()) === 0,
+    JSON.stringify(kinds6),
+  );
+  // The match is full and closed: the line under the line-up points a held player to the row, not to the organiser.
+  check(
+    "a full match closed when full says \"Is a place held for you? Tap your name above.\" to a browser with a row button, not \"Ask the organizer\"",
+    (await crew.getByText("All spots are taken. Is a place held for you? Tap your name above.", { exact: true }).count()) === 1 && (await crew.getByText("Ask the organizer", { exact: false }).count()) === 0,
+  );
+  // A long name (40 letters, the open spot's limit, in wide Cyrillic) wraps inside "I'm …" and stays inside its row.
+  const longFit = await rowOf6("Maria").evaluate((btn) => {
+    const wrap = btn.parentElement;
+    const copy = wrap.cloneNode(true);
+    copy.querySelector("button").textContent = "I'm Александра Константиновна Преображенская";
+    wrap.after(copy);
+    const row = btn.closest("li").getBoundingClientRect();
+    const box = copy.querySelector("button").getBoundingClientRect();
+    const out = { left: Math.round(box.left - row.left), right: Math.round(row.right - box.right), page: document.documentElement.scrollWidth <= window.innerWidth };
+    copy.remove();
+    return out;
+  });
+  check("a held name of 40 letters wraps inside its \"I'm …\" button and stays inside the row at 390 px", longFit.left >= -1 && longFit.right >= -1 && longFit.page, JSON.stringify(longFit));
+  await crew.locator("main li", { hasText: "Reserved for Jordi" }).evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await viewShot(crew, "12o-held-row-buttons");
+  const crewSends = posts(crew);
+  await crew.getByRole("button", { name: "I'm Jordi", exact: true }).click();
+  await crew.locator("main li", { hasText: "Jordi" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  await crew.waitForTimeout(500);
+  const after6 = await crew.request.get(`${BASE}/api/v1/matches/${code6}`).then((r) => r.json());
+  const jordis6 = (after6.players ?? []).filter((p) => p.name === "Jordi");
+  check(
+    "one tap on \"I'm Jordi\" is one request: this browser is Jordi, the place is confirmed, the match holds one Jordi, and Maria's row offers this browser nothing",
+    crewSends.n === 1 && jordis6.length === 1 && jordis6[0].status === "confirmed" && (await crew.getByTestId("held-row").count()) === 0,
+    JSON.stringify({ sends: crewSends.n, players: (after6.players ?? []).map((p) => `${p.name}:${p.status}`) }),
+  );
+  await crew.locator("main li", { hasText: "Jordi" }).first().evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await viewShot(crew, "12p-held-row-taken");
+  await crew.close();
+  await sofia.goto(`${BASE}/${code6}`);
+  const msgAfter = ((await sofia.getByTestId("held-message").locator("div").first().textContent().catch(() => "")) ?? "").trim();
+  check("Sofia's one message now names Maria alone", msgAfter === "One message for Maria", msgAfter);
+  const helpAfter = ((await sofia.getByTestId("held-message").locator("p").first().textContent().catch(() => "")) ?? "").trim();
+  check("with one name the help speaks of one person", helpAfter === "Send it to them, or to the group. They open the match link and tap their name.", helpAfter);
+  // The same in Russian, with the organiser panel's "Send all invites" grid in view.
+  await sofia.context().addCookies([{ name: "NEXT_LOCALE", value: "ru", url: BASE }]);
+  await sofia.reload();
+  const msgRu = sofia.getByTestId("held-message");
+  await msgRu.waitFor({ timeout: 15000 });
+  const ruFits = await sofia.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  check("in Russian the one message reads \"Одно сообщение: Maria\", and the page does not scroll sideways", ((await msgRu.textContent()) ?? "").includes("Одно сообщение: Maria") && ruFits, ((await msgRu.textContent()) ?? "").slice(0, 120));
+  await msgRu.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await viewShot(sofia, "12r-held-message-ru");
+  await sofia.getByText("Отправить все приглашения одним сообщением", { exact: true }).evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => undefined);
+  await viewShot(sofia, "12r2-invite-all-ru");
+  await sofia.context().addCookies([{ name: "NEXT_LOCALE", value: "en", url: BASE }]);
   await sofia.close();
 
   // ---- Desktop landing for good measure ----

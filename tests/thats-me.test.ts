@@ -6,7 +6,7 @@ import { facts, groupMembers, groups, players, slots } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
 import { LIMITS } from "@/lib/domain/ratelimit";
-import { commitThatsMe, decideThatsMe, nameOnlySession, placeRank, thatsMe, thatsMeOffer, thatsMeRows, thatsMeVerdict, whyNot, type ThatsMeRefusal, type ThatsMeRow } from "@/lib/domain/thatsMe";
+import { commitThatsMe, decideThatsMe, nameOnlySession, offerFacts, placeRank, thatsMe, thatsMeOffer, thatsMeRows, thatsMeVerdict, whyNot, type ThatsMeRefusal, type ThatsMeRow } from "@/lib/domain/thatsMe";
 import { normalName } from "@/lib/domain/dupes";
 import { normalizeName } from "@/lib/domain/players";
 import { freezeClock } from "./helpers/clock";
@@ -146,6 +146,42 @@ describe("who 'That's me' may sign in", () => {
 
   it("treats a cookie whose record is gone as a browser that knows nobody", () => {
     expect(thatsMeVerdict([bare], "00000000-0000-4000-8000-0000000000ee")).toEqual({ ok: true, id: bare.id, fold: false });
+  });
+});
+
+// The held row (the owner's decision C of 6 November 2026): a record "That's me" refuses shows its own
+// doors on the row when it proves itself through a door this deployment runs (decision D4). The page
+// gets ids only; the three answers go to the tap.
+describe("which records prove themselves through their own doors", () => {
+  const BOTH = { email: true, telegram: true };
+  const NONE = { email: false, telegram: false };
+  const row = (n: number, change: Partial<ThatsMeRow>): ThatsMeRow => ({ ...bare, id: `00000000-0000-4000-8000-0000000001${String(n).padStart(2, "0")}`, ...change });
+
+  it("names no claimable record among the doors: \"That's me\" signs it in", () => {
+    const f = offerFacts([bare], BOTH);
+    expect([...f.claimable]).toEqual([bare.id]);
+    expect(f.names).toEqual(["Ana"]);
+    expect(f.doors.size).toBe(0);
+  });
+
+  it("an address only where mail goes out, a Telegram only where the bot runs, a passkey always", () => {
+    const email = row(1, { email: true });
+    const recovery = row(2, { recoveryEmail: true });
+    const telegram = row(3, { telegram: true });
+    const passkey = row(4, { passkey: true });
+    const rows = [email, recovery, telegram, passkey];
+    expect([...offerFacts(rows, BOTH).doors].sort()).toEqual(rows.map((r) => r.id).sort());
+    expect([...offerFacts(rows, NONE).doors]).toEqual([passkey.id]);
+    expect([...offerFacts(rows, { email: true, telegram: false }).doors].sort()).toEqual([email.id, recovery.id, passkey.id].sort());
+    expect([...offerFacts(rows, { email: false, telegram: true }).doors].sort()).toEqual([telegram.id, passkey.id].sort());
+    for (const f of [offerFacts(rows, BOTH), offerFacts(rows, NONE)]) expect(f.claimable.size).toBe(0);
+  });
+
+  it("names no record that is refused and has no door here: a phone, an upcoming match it organises, a namesake", () => {
+    expect(offerFacts([row(5, { phone: true }), row(6, { organisesMatches: true }), row(7, { sameName: 2 })], BOTH).doors.size).toBe(0);
+    // A door wins over the other limits: a record with an address that also organises a match proves itself first.
+    const both = row(8, { email: true, organisesMatches: true });
+    expect([...offerFacts([both], BOTH).doors]).toEqual([both.id]);
   });
 });
 
@@ -524,5 +560,27 @@ describe("'That's me' on a real match", () => {
     expect(mineOffer.fold).toEqual({ id: jo.id, name: "Jo" });
     // A browser signed in as a record with an address is offered nothing, and costs no read.
     expect(await thatsMeOffer(db, ev, ivy, ["Ivy"])).toMatchObject({ fold: null, names: [] });
+  });
+
+  it("names the records that prove themselves among the page's doors, from the same read, for a browser that knows nobody only", async () => {
+    const kim = await makePlayer(db, "Kim");
+    const lea = await makePlayer(db, "Lea", { email: `lea${++n}@example.com` });
+    const max = await makePlayer(db, "Max", { telegramId: 7_000_000 + n });
+    const ned = await makePlayer(db, "Ned");
+    await db.insert(schema.passkeys).values({ id: `cred-offer-${ned.id}`, playerId: ned.id, publicKey: "pk", deviceType: "multiDevice" });
+    const ola = await makePlayer(db, "Ola", { phone: `+6681${String(5_000_000 + n).padStart(7, "0")}` });
+    const { ev, org } = await match([kim, lea, max, ned, ola]);
+    // The organiser has an address too: "That's me" refuses the organiser first, and the address is a door.
+    const off = await thatsMeOffer(db, ev, null, [], NOW);
+    expect([...off.ids]).toEqual([kim.id]);
+    expect([...off.doors].sort(), "with neither mail nor the bot, a passkey alone").toEqual([ned.id]);
+    const on = await thatsMeOffer(db, ev, null, [], NOW, { email: true, telegram: true });
+    expect([...on.ids]).toEqual([kim.id]);
+    expect([...on.doors].sort()).toEqual([org.id, lea.id, max.id, ned.id].sort());
+    expect(on.doors.has(ola.id), "a phone is no door here").toBe(false);
+    // A browser that knows a record gets no doors, whatever runs.
+    const myKim = await makePlayer(db, "Kim");
+    await joinEvent(db, { eventId: ev.id, playerId: myKim.id, now: NOW });
+    expect((await thatsMeOffer(db, ev, myKim, ["Kim", "Kim"], NOW, { email: true, telegram: true })).doors.size).toBe(0);
   });
 });

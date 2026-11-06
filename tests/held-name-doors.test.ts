@@ -276,7 +276,7 @@ describe("a place held for a name, on every door", () => {
       expect(await dannys(ev.id)).toEqual([{ status: "invited", invitedName: "Danny", name: null }]);
     });
 
-    it("a place that keeps a past player's record gets its own hint: That's me or the place's link, never the held-place button", async () => {
+    it("a place that keeps a past player's record gets its own hint: \"I'm Danny\" on the row or the place's link, never the typed take", async () => {
       const { ev, org } = await match([]);
       // Danny played here before (a seat in another match), and the organiser kept his record on a place, as attachHeldRecord writes it.
       const past = await makePlayer(db, "Danny");
@@ -287,10 +287,14 @@ describe("a place held for a name, on every door", () => {
       const err = await joinMatch(db, { code: ev.code, name: "Danny" }, NO_SIDE_EFFECTS).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(NameHeldError);
       expect(err).toMatchObject({ status: 409, code: "name_held", held: "Danny", kind: "record" });
-      expect((err as NameHeldError).hint).toContain(`"That's me"`);
-      expect((err as NameHeldError).hint).not.toContain("held place");
+      // The owner's decision C of 6 November 2026: the row's "I'm Danny" for both kinds. A record that can prove
+      // itself signs in on the row first, so the hint says so; the typed take is for a place held by name only.
+      expect((err as NameHeldError).hint).toContain(`"I'm Danny"`);
+      expect((err as NameHeldError).hint).toContain("prove who they are");
+      expect((err as NameHeldError).hint).not.toContain(`"Take Danny's held place"`);
       expect(await playerCount()).toBe(before);
-      // A place held by name keeps the by-name hint.
+      // A place held by name gets the row and keeps the typed take.
+      expect(new NameHeldError("Danny").hint).toContain(`"I'm Danny"`);
       expect(new NameHeldError("Danny").hint).toContain(`"Take Danny's held place"`);
     });
 

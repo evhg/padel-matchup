@@ -14,6 +14,9 @@ import { bumpMetric, bumpMetrics } from "./metrics";
  *     `thats_me_fold` as well when it folded the new record this browser had made into the old one.
  *   - `held_link`: the personal link of a held place that keeps a past player's record, in a browser
  *     that knew nobody; marked by name, as "That's me" is (the owner, 11 October 2026).
+ *   - `held_row`: "I'm Danny" on the row of a held place that keeps a past player's record, in a
+ *     browser that knew nobody: signed in by name and the place taken in one request (the owner's
+ *     decision C of 6 November 2026, `takeHeldRecordAction`).
  *   - `restore`: a lost cookie brought back from the seal the browser kept (`restoreIdentity`). The
  *     person proves nothing; the browser gives back what the server signed for it. Until 11 October
  *     2026 it took a bare player id, which anybody could read off a match page.
@@ -31,7 +34,7 @@ import { bumpMetric, bumpMetrics } from "./metrics";
  * phone counters (`uaClass`: a computer is `other`), once a sign-in however many ways it names (the
  * owner's questions of 28 October 2026). The door hands in the user agent it read before the answer.
  */
-export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp", "passkey", "passkey_fold", "passkey_autofill"] as const;
+export const SIGNIN_WAYS = ["thats_me", "thats_me_fold", "held_link", "held_row", "restore", "personal_link", "email_code", "telegram", "telegram_miniapp", "passkey", "passkey_fold", "passkey_autofill"] as const;
 export type SignInWay = (typeof SIGNIN_WAYS)[number];
 
 /**
