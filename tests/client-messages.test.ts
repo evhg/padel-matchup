@@ -87,6 +87,10 @@ const DYNAMIC: DynamicTable = {
   "src/components/OpenSpot.tsx": {
     '`errors.${error === "no_identity" ? "generic" : error}`': ["errors.*"],
   },
+  // The held row's "I'm Danny" for the browser's own record runs `joinAction`, so it says a join's refusal as the open spot does.
+  "src/components/TakeHeld.tsx": {
+    '`errors.${error === "no_identity" ? "generic" : error}`': ["errors.*"],
+  },
   "src/components/PairRows.tsx": {
     "`errors.${key}`": ["errors.*"],
   },

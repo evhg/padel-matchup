@@ -1,13 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
-import { attachHeldRecordAction, confirmInviteAction, declineInviteAction, joinAction, reserveAction } from "@/actions/slots";
+import { attachHeldRecordAction, confirmInviteAction, declineInviteAction, heldRowDoorsAction, joinAction, reserveAction, takeHeldRecordAction } from "@/actions/slots";
+import { thatsMeAction } from "@/actions/identity";
 import { matchToPublic } from "@/lib/api/serialize";
 import { handleWhatsappMessage } from "@/lib/whatsapp/bot";
 import { personalTokenFor } from "@/actions/shared";
-import { metricsDaily } from "@/db/schema";
+import { deviceHints, groupMembers, groups, metricsDaily, passkeys } from "@/db/schema";
 import { dayKey } from "@/lib/domain/metrics";
-import { PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
+import { BY_NAME_COOKIE, PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
+import { ipKey } from "@/lib/ipKey";
+import { heldSeatsOf } from "@/lib/domain/heldByName";
+import { heldRowOffers } from "@/lib/domain/heldRow";
 import { asAction } from "./helpers/action";
 import { events, facts, notices, players, slots, tournamentRounds, type Player, type Slot } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
@@ -25,6 +29,7 @@ import {
   pickable,
   provableHere,
   takeHeldLink,
+  takeHeldRecord,
   type PastPlayer,
 } from "@/lib/domain/heldRecord";
 import { joinWithPolicy } from "@/lib/domain/joining";
@@ -32,7 +37,7 @@ import { getEventByCode, playedIn } from "@/lib/domain/queries";
 import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 import { DELETED_PLAYER_NAME } from "@/lib/domain/result";
 import { claimSlotPaid, confirmInvite, isHeldPlace, joinEvent, paymentsFor, removeFromSlot, reserveSlot } from "@/lib/domain/slots";
-import type { ThatsMeRow } from "@/lib/domain/thatsMe";
+import { decideThatsMe, thatsMeOffer, type ThatsMeRow } from "@/lib/domain/thatsMe";
 import { generateRound } from "@/lib/domain/tournament";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, makePlayer } from "./helpers/db";
@@ -603,5 +608,282 @@ describe("the picker and the personal link, called as a browser calls them", () 
     expect(await whatsapp(number, `JOIN ${tdsv.code}`)).toBe("wa:held_record");
     expect((await takenIn(tdsv.id)).map((s) => s.playerId)).toEqual([erik.id]);
     expect(await held(tdsv.id)).toMatchObject({ id: place.id, playerId: danny.id, status: "invited" });
+  });
+});
+
+// ------------------------------------------------------------------ the held row's tap, called as a browser calls it
+
+/**
+ * The owner, 6 November 2026, option C: "A 'That's me' button on each held row, in place of the typed
+ * name. Every player confirms with one tap, also in a new browser." For a place that keeps a record that
+ * "That's me" signs in, one request signs the browser in as the record, by name, and takes the place
+ * (`takeHeldRecordAction`, `takeHeldRecord`). A record that proves itself shows its own doors at the tap
+ * (`heldRowDoorsAction`).
+ */
+describe("\"I'm Danny\" on a held row that keeps a record", () => {
+  let app: Db;
+  // No mail goes out in these tests unless one says so (`withMail`): the machine's own key never sends a test's notice.
+  const mailKey = process.env.RESEND_API_KEY;
+  beforeAll(async () => {
+    app = await getDb();
+    delete process.env.RESEND_API_KEY;
+  });
+  afterAll(() => {
+    if (mailKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = mailKey;
+  });
+  let n = 0;
+  const PHONE = { w: 390, h: 844, dpr: 3, langs: ["en-US"], tz: "Asia/Bangkok", platform: "iphone", touch: 5, text: 17, motion: false };
+  const as = (p: Player): Record<string, string> => ({ [PLAYER_COOKIE]: sealPlayerId(p.id) });
+  /** Each tap from its own address, unless a test names one. */
+  const from = (address = `row-${++n}`) => ({ headers: { "x-forwarded-for": address } });
+  const metric = async (key: string) => Number((await app.select().from(metricsDaily).where(and(eq(metricsDaily.day, dayKey()), eq(metricsDaily.key, key))))[0]?.value ?? 0);
+  /** Old Danny's September match, which Erik joined; then Erik's new match, Erik seated, and old Danny picked from "Played with you". */
+  const picked = async (record: Partial<typeof players.$inferInsert> = {}, o: { email?: string; capacity?: number; type?: "match" | "tournament" } = {}) => {
+    const erik = await makePlayer(app, `Erik ${++n}`);
+    const danny = await makePlayer(app, "Danny", record);
+    const past = await createEvent(app, { creatorPlayerId: danny.id, type: "match", startsAt: at(1), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Kross Padel" });
+    for (const p of [danny, erik]) await joinEvent(app, { eventId: past.id, playerId: p.id, now: NOW });
+    await app.update(events).set({ startsAt: at(-28), status: "past" }).where(eq(events.id, past.id));
+    const tdsv = await createEvent(app, { creatorPlayerId: erik.id, type: o.type ?? "match", capacity: o.capacity, startsAt: at(6), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Warehaus" });
+    await joinEvent(app, { eventId: tdsv.id, playerId: erik.id, now: NOW });
+    const res = await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny", pick: true, ...(o.email ? { email: o.email } : {}) }));
+    if (!res.result.ok) throw new Error(JSON.stringify(res.result));
+    const [place] = await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.invitedName, "Danny")));
+    return { erik, danny, tdsv, place };
+  };
+  const placeNow = async (id: string) => (await app.select().from(slots).where(eq(slots.id, id)))[0];
+  const dannys = async () => (await app.select({ id: players.id }).from(players).where(eq(players.displayName, "Danny"))).length;
+
+  it("the owner's case: Erik picks old Danny; a browser that knows nobody taps \"I'm Danny\": signed in as old Danny by name, his place confirmed, one Danny, and Erik hears \"Danny confirmed\"", async () => {
+    const { erik, danny, tdsv, place } = await picked();
+    expect(place).toMatchObject({ playerId: danny.id, status: "invited", invitedEmail: null, invitedPhone: null });
+    const before = await dannys();
+    const counted = await metric("signin_held_row");
+    const { result, cookies } = await asAction({}, () => takeHeldRecordAction(tdsv.code, "Danny", PHONE), from());
+    expect(result).toEqual({ ok: true, data: { outcome: "confirmed" } });
+    expect(cookies[PLAYER_COOKIE], "signed in as old Danny, marked by name").toBe(sealPlayerId(danny.id, { byName: true }));
+    expect(cookies[BY_NAME_COOKIE]).toBeTruthy();
+    expect(await placeNow(place.id)).toMatchObject({ playerId: danny.id, status: "confirmed" });
+    expect(await dannys(), "no second Danny").toBe(before);
+    const [line] = await app.select().from(notices).where(and(eq(notices.playerId, erik.id), eq(notices.key, "noticeItem.organizerFeed")));
+    expect(line?.params).toMatchObject({ what: "confirmed", name: "Danny" });
+    const [fact] = await app.select().from(facts).where(and(eq(facts.kind, "player.thats_me"), eq(facts.subjectId, danny.id)));
+    expect(fact?.data).toEqual({ folded: false, via: "row" });
+    expect(await metric("signin_held_row")).toBe(counted + 1);
+    expect(await app.select().from(deviceHints).where(eq(deviceHints.playerId, danny.id)), "this browser's device hint is kept").toHaveLength(1);
+  });
+
+  /** A refused tap: `invalid`, no cookie, the place as it was, and the counter `counts` names (or none) moved by one. */
+  const refused = async (code: string, name: string, placeId: string | null, counts: "held_row_refused" | "thats_me_refused" | null, jar: Record<string, string> = {}) => {
+    const keys = ["held_row_refused", "thats_me_refused", "signin_held_row"] as const;
+    const before = await Promise.all(keys.map(metric));
+    const was = placeId ? await placeNow(placeId) : null;
+    const { result, cookies } = await asAction(jar, () => takeHeldRecordAction(code, name), from());
+    expect(result, name).toEqual({ ok: false, error: "invalid" });
+    expect(cookies[PLAYER_COOKIE], "the browser is as it was").toBe(jar[PLAYER_COOKIE]);
+    expect(cookies[BY_NAME_COOKIE]).toBeUndefined();
+    if (placeId) expect(await placeNow(placeId)).toEqual(was);
+    const after = await Promise.all(keys.map(metric));
+    expect(after, `counted: ${counts ?? "nothing"}`).toEqual(keys.map((k, i) => before[i] + (k === counts ? 1 : 0)));
+  };
+
+  it("refuses a browser that knows another record, before any rule: nothing read, nothing counted", async () => {
+    const { tdsv, place } = await picked();
+    const victor = await makePlayer(app, `Victor ${n}`);
+    await refused(tdsv.code, "Danny", place.id, null, as(victor));
+  });
+
+  it("refuses the name of a seated record \"That's me\" signs in: the row takes only the record's own held place", async () => {
+    const { tdsv, place } = await picked();
+    const sam = await makePlayer(app, "Sam");
+    await joinEvent(app, { eventId: tdsv.id, playerId: sam.id, now: NOW });
+    const seat = (await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.playerId, sam.id))))[0];
+    await refused(tdsv.code, "Sam", seat.id, "held_row_refused");
+    expect(await placeNow(place.id)).toMatchObject({ status: "invited" });
+  });
+
+  it("refuses a record with an email: the rule says no", async () => {
+    const { tdsv, place } = await picked({ email: `danny-row${n + 1}@example.com` });
+    await refused(tdsv.code, "Danny", place.id, "thats_me_refused");
+  });
+
+  it("reads the record again: a record that got an email between the decision and the write is refused", async () => {
+    const { danny, tdsv, place } = await picked();
+    const d = await decideThatsMe(app, { code: tdsv.code, name: "Danny", viewerId: null, rateKey: `row-${++n}`, now: NOW });
+    if (!d.ok) throw new Error(d.reason);
+    await app.update(players).set({ email: `danny-late-row${n}@example.com` }).where(eq(players.id, danny.id));
+    expect(await takeHeldRecord(app, d, NOW)).toEqual({ ok: false, reason: "nobody" });
+    expect(await placeNow(place.id)).toMatchObject({ playerId: danny.id, status: "invited" });
+  });
+
+  it("refuses a chip pick with an email typed after it: the place is the address's", async () => {
+    const { danny, tdsv, place } = await picked({}, { email: `typed-row${n + 1}@example.com` });
+    expect(place).toMatchObject({ playerId: danny.id, invitedEmail: expect.stringContaining("typed-row") });
+    await refused(tdsv.code, "Danny", place.id, "held_row_refused");
+  });
+
+  it("refuses a tournament's placeholder on a place held for a phone or an email, after round 1", async () => {
+    const erik = await makePlayer(app, `Erik ${++n}`);
+    const ev = await createEvent(app, { creatorPlayerId: erik.id, type: "tournament", capacity: 8, startsAt: at(2), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Rawai Padel" });
+    await joinEvent(app, { eventId: ev.id, playerId: erik.id, now: NOW });
+    await reserveSlot(app, { eventId: ev.id, actorPlayerId: erik.id, name: "Pat", phone: `+6681${String(4_000_000 + n).padStart(7, "0")}`, now: NOW });
+    await reserveSlot(app, { eventId: ev.id, actorPlayerId: erik.id, name: "Quin", email: `quin-row${n}@example.com`, now: NOW });
+    await reserveSlot(app, { eventId: ev.id, actorPlayerId: erik.id, name: "Rui", now: NOW });
+    await generateRound(app, { eventId: ev.id, actorPlayerId: erik.id, now: NOW });
+    const placeOf = async (name: string) => (await app.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.invitedName, name))))[0];
+    expect((await placeOf("Pat")).playerId, "round 1 gave the phone's place a placeholder").toBeTruthy();
+    await refused(ev.code, "Pat", (await placeOf("Pat")).id, "held_row_refused");
+    await refused(ev.code, "Quin", (await placeOf("Quin")).id, "held_row_refused");
+  });
+
+  it("refuses \"Keep Danny's matches\" on a place held for an email", async () => {
+    const { erik, tdsv } = await picked();
+    await app.delete(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.invitedName, "Danny")));
+    const held = await asAction(as(erik), () => reserveAction(tdsv.code, { name: "Danny", email: `keep-row${n}@example.com` }));
+    expect(held.result).toMatchObject({ ok: true });
+    const [place] = await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.invitedName, "Danny")));
+    expect((await asAction(as(erik), () => attachHeldRecordAction(tdsv.code, place.id))).result).toEqual({ ok: true, data: { name: "Danny" } });
+    await refused(tdsv.code, "Danny", place.id, "held_row_refused");
+  });
+
+  it("refuses a picked record beside a place held by name of the same name: one of two of the name", async () => {
+    const { erik, tdsv, place } = await picked();
+    expect((await asAction(as(erik), () => reserveAction(tdsv.code, { name: "danny" }))).result).toMatchObject({ ok: true });
+    await refused(tdsv.code, "Danny", place.id, "held_row_refused");
+  });
+
+  it("refuses on a fixed-pairs night", async () => {
+    const { tdsv, place } = await picked({}, { type: "tournament", capacity: 8 });
+    await app.update(events).set({ fixedPairs: true }).where(eq(events.id, tdsv.id));
+    await refused(tdsv.code, "Danny", place.id, "held_row_refused");
+  });
+
+  it("refuses on a match that is over, and on a cancelled one", async () => {
+    const over = await picked();
+    await app.update(events).set({ startsAt: at(-1), status: "past" }).where(eq(events.id, over.tdsv.id));
+    await refused(over.tdsv.code, "Danny", over.place.id, "held_row_refused");
+    const off = await picked();
+    await app.update(events).set({ status: "cancelled" }).where(eq(events.id, off.tdsv.id));
+    await refused(off.tdsv.code, "Danny", off.place.id, null);
+  });
+
+  it("refuses a record with a namesake in the match's crew", async () => {
+    const { erik, tdsv, place } = await picked();
+    const [crew] = await app.insert(groups).values({ code: `K${String(++n).padStart(5, "0")}`, name: `Crew ${n}`, creatorPlayerId: erik.id, tz: "Asia/Bangkok" }).returning();
+    await app.insert(groupMembers).values({ groupId: crew.id, playerId: (await makePlayer(app, "Danny")).id, role: "member" });
+    await app.update(events).set({ groupId: crew.id }).where(eq(events.id, tdsv.id));
+    await refused(tdsv.code, "Danny", place.id, "thats_me_refused");
+  });
+
+  it("refuses a held record past the capacity", async () => {
+    const { tdsv, place } = await picked();
+    await app.update(slots).set({ position: 99 }).where(eq(slots.id, place.id));
+    await refused(tdsv.code, "Danny", place.id, "held_row_refused");
+  });
+
+  it("shares the \"That's me\" rates: the address's twenty taps a day, refused ones too, and three sign-ins a day into one record", async () => {
+    const { danny, tdsv, place } = await picked();
+    const address = `row-rate-${++n}`;
+    for (let i = 0; i < LIMITS.thatsMePerIpPerDay - 2; i++) await takeRate(app, "thatsme", ipKey(address), LIMITS.thatsMePerIpPerDay, "day", NOW);
+    // One refused "That's me" and one refused row tap from the same address use the last two.
+    expect((await asAction({}, () => thatsMeAction(tdsv.code, "Nobody"), from(address))).result).toEqual({ ok: false, error: "invalid" });
+    expect((await asAction({}, () => takeHeldRecordAction(tdsv.code, "Nobody"), from(address))).result).toEqual({ ok: false, error: "invalid" });
+    expect((await asAction({}, () => takeHeldRecordAction(tdsv.code, "Danny"), from(address))).result).toEqual({ ok: false, error: "too_many" });
+    expect(await placeNow(place.id)).toMatchObject({ status: "invited" });
+    // The record's own limit, from other addresses.
+    for (let i = 0; i < LIMITS.thatsMePerRecordPerDay; i++) await takeRate(app, "thatsme_record", danny.id, LIMITS.thatsMePerRecordPerDay, "day", NOW);
+    expect((await asAction({}, () => takeHeldRecordAction(tdsv.code, "Danny"), from())).result).toEqual({ ok: false, error: "too_many" });
+    expect(await placeNow(place.id)).toMatchObject({ status: "invited" });
+  });
+
+  it("the fold from a seat: a bare Danny seated beside held old Danny taps \"I'm Danny\" (\"That's me\"): one Danny, in the seat, and the held place freed", async () => {
+    const { danny, tdsv, place } = await picked();
+    const mine = await makePlayer(app, "Danny");
+    await joinEvent(app, { eventId: tdsv.id, playerId: mine.id, now: NOW });
+    const seatOfMine = (await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.playerId, mine.id))))[0];
+    // The page: the fold's target, and the row offers the fold to this browser.
+    const detail = (await getEventByCode(app, tdsv.code))!;
+    const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty").map((s) => s.player?.displayName ?? s.invitedName ?? "");
+    const offer = await thatsMeOffer(app, tdsv, mine, namesHere, NOW);
+    expect(offer.fold?.id).toBe(danny.id);
+    const seats = await heldSeatsOf(app, tdsv.id);
+    expect(heldRowOffers(detail.event, seats, { id: mine.id, name: "Danny" }, { claimable: offer.ids, doors: offer.doors, fold: offer.fold?.id ?? null }, NOW)).toEqual([{ slotId: place.id, name: "Danny", kind: "fold" }]);
+    const { result, cookies } = await asAction(as(mine), () => thatsMeAction(tdsv.code, "Danny"), from());
+    expect(result).toMatchObject({ ok: true, data: { folded: true } });
+    expect(cookies[PLAYER_COOKIE]).toBe(sealPlayerId(danny.id, { byName: true }));
+    expect((await app.select().from(players).where(eq(players.id, mine.id))).length, "the browser's Danny folded into old Danny").toBe(0);
+    expect(await placeNow(seatOfMine.id)).toMatchObject({ playerId: danny.id, status: "joined" });
+    expect(await placeNow(place.id), "the held place went the way a leave goes").toMatchObject({ playerId: null, status: "empty" });
+  });
+
+  it("the fold from the waiting list: old Danny keeps his held place, the waiting place goes, and one more tap (\"I'm Danny\", mine) confirms it", async () => {
+    const { danny, tdsv, place } = await picked();
+    // Erik, Bea and Cal take seats: with Danny's held place, the match of four is full.
+    for (const x of ["Bea", "Cal"]) await joinEvent(app, { eventId: tdsv.id, playerId: (await makePlayer(app, `${x} ${n}`)).id, now: NOW });
+    const mine = await makePlayer(app, "Danny");
+    await joinEvent(app, { eventId: tdsv.id, playerId: mine.id, now: NOW });
+    const waiting = (await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.playerId, mine.id))))[0];
+    expect(waiting.position, "the browser's Danny waits").toBe(5);
+    const { result, cookies } = await asAction(as(mine), () => thatsMeAction(tdsv.code, "Danny"), from());
+    expect(result).toMatchObject({ ok: true, data: { folded: true } });
+    expect(cookies[PLAYER_COOKIE]).toBe(sealPlayerId(danny.id, { byName: true }));
+    expect((await app.select().from(players).where(eq(players.id, mine.id))).length, "the browser's Danny folded into old Danny").toBe(0);
+    expect(await placeNow(waiting.id), "the waiting place went").toBeUndefined();
+    expect(await placeNow(place.id), "the held place is still held for old Danny").toMatchObject({ playerId: danny.id, status: "invited" });
+    // The browser knows old Danny now: the row offers "mine", and its tap is the Join.
+    const detail = (await getEventByCode(app, tdsv.code))!;
+    expect(heldRowOffers(detail.event, await heldSeatsOf(app, tdsv.id), { id: danny.id, name: "Danny" }, { claimable: new Set(), doors: new Set(), fold: null }, NOW)).toEqual([{ slotId: place.id, name: "Danny", kind: "mine" }]);
+    const joined = await asAction(cookies, () => joinAction(tdsv.code, undefined, undefined, undefined, { hint: PHONE }), from());
+    expect(joined.result).toEqual({ ok: true, data: { outcome: "joined", partner: undefined } });
+    expect(await placeNow(place.id)).toMatchObject({ playerId: danny.id, status: "confirmed" });
+    const inMatch = await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), inArray(slots.playerId, [danny.id, mine.id])));
+    expect(inMatch.map((s) => s.playerId), "one Danny in the match").toEqual([danny.id]);
+  });
+
+  describe("the doors of a record that proves itself, read at the tap", () => {
+    /** Mail goes out while the tap reads, as on the deployment; the key is taken away again after. */
+    const withMail = async <T,>(fn: () => Promise<T>): Promise<T> => {
+      process.env.RESEND_API_KEY = "re_test_held_row";
+      try {
+        return await fn();
+      } finally {
+        delete process.env.RESEND_API_KEY;
+      }
+    };
+
+    it("a record with an email, where mail goes out: the email code; with a passkey: Face ID; counted, and nothing signed in", async () => {
+      const { tdsv } = await picked({ email: `doors-row${n + 1}@example.com` });
+      const counted = await metric("held_row_doors");
+      const read = await withMail(() => asAction({}, () => heldRowDoorsAction(tdsv.code, "Danny"), from()));
+      expect(read.result).toEqual({ ok: true, data: { doors: "doors:email" } });
+      expect(read.cookies[PLAYER_COOKIE]).toBeUndefined();
+      expect(await metric("held_row_doors")).toBe(counted + 1);
+      // Where no mail goes out, an address is no door: the row offers nothing, and the tap reads nothing.
+      expect((await asAction({}, () => heldRowDoorsAction(tdsv.code, "Danny"), from())).result).toEqual({ ok: false, error: "invalid" });
+      const keyed = await picked();
+      await app.insert(passkeys).values({ id: `cred-row-${keyed.danny.id}`, playerId: keyed.danny.id, publicKey: "pk", deviceType: "multiDevice" });
+      expect((await asAction({}, () => heldRowDoorsAction(keyed.tdsv.code, "Danny"), from())).result).toEqual({ ok: true, data: { doors: "doors:passkey" } });
+    });
+
+    it("answers invalid for a record \"That's me\" signs in, for a browser that knows somebody, and for a place with an address", async () => {
+      const bare = await picked();
+      expect((await withMail(() => asAction({}, () => heldRowDoorsAction(bare.tdsv.code, "Danny"), from()))).result).toEqual({ ok: false, error: "invalid" });
+      const mailed = await picked({ email: `doors-known${n + 1}@example.com` });
+      const victor = await makePlayer(app, `Victor ${n}`);
+      expect((await withMail(() => asAction(as(victor), () => heldRowDoorsAction(mailed.tdsv.code, "Danny"), from()))).result).toEqual({ ok: false, error: "invalid" });
+      const addressedPlace = await picked({ email: `doors-addr${n + 1}@example.com` }, { email: `doors-typed${n + 1}@example.com` });
+      expect(addressedPlace.place.invitedEmail).toBeTruthy();
+      expect((await withMail(() => asAction({}, () => heldRowDoorsAction(addressedPlace.tdsv.code, "Danny"), from()))).result).toEqual({ ok: false, error: "invalid" });
+    });
+
+    it("shares the address's twenty taps a day with \"That's me\"", async () => {
+      const { tdsv } = await picked({ email: `doors-rate${n + 1}@example.com` });
+      const address = `row-doors-rate-${++n}`;
+      for (let i = 0; i < LIMITS.thatsMePerIpPerDay - 1; i++) await takeRate(app, "thatsme", ipKey(address), LIMITS.thatsMePerIpPerDay, "day", NOW);
+      expect((await withMail(() => asAction({}, () => heldRowDoorsAction(tdsv.code, "Danny"), from(address)))).result).toEqual({ ok: true, data: { doors: "doors:email" } });
+      expect((await asAction({}, () => thatsMeAction(tdsv.code, "Danny"), from(address))).result).toEqual({ ok: false, error: "too_many" });
+      expect((await withMail(() => asAction({}, () => heldRowDoorsAction(tdsv.code, "Danny"), from(address)))).result).toEqual({ ok: false, error: "too_many" });
+    });
   });
 });

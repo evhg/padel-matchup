@@ -1,16 +1,19 @@
 import { and, desc, eq, inArray, lte, ne } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, slots, type Slot } from "@/db/schema";
+import { events, players, slots, type Event, type Slot } from "@/db/schema";
 import { utcToZonedParts } from "@/lib/dates";
+import { lineupComplete } from "@/lib/lineup";
 import { normalName } from "./dupes";
 import { answerOfPick, type PastAnswer, type PastPick, type PastView } from "./pastAsk";
 import { DomainError } from "./errors";
 import { recordFact } from "./facts";
+import { heldSeatsOf } from "./heldByName";
+import { addressed, heldTwin } from "./heldRow";
 import { bumpMetric } from "./metrics";
 import { LIMITS, takeRate } from "./ratelimit";
 import { DELETED_PLAYER_NAME } from "./result";
-import { confirmInvite, hasLifeOutside, liveRefusal, lockEvent, type ConfirmOutcome } from "./slots";
-import { reachedSince, savedPasskey, thatsMeRows, whyNot, type ThatsMeMatch, type ThatsMeRefusal, type ThatsMeRow } from "./thatsMe";
+import { confirmInvite, confirmLocked, hasLifeOutside, liveRefusal, lockEvent, type ConfirmOutcome } from "./slots";
+import { reachedSince, savedPasskey, thatsMeRows, whyNot, type ThatsMeDecision, type ThatsMeMatch, type ThatsMeRefusal, type ThatsMeRow } from "./thatsMe";
 
 /**
  * A held place that keeps a past player's record (the owner, 11 October 2026). The question was:
@@ -277,6 +280,48 @@ export async function takeHeldLink(db: Db, d: Extract<HeldLinkDecision, { ok: tr
   if (res.outcome === "confirmed") {
     await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: d.playerId, subject: { type: "player", id: d.playerId }, code: d.event.code, data: { folded: false, via: "link" }, at: now });
   }
+  return res;
+}
+
+/** The held row's take for a record: the place confirmed, or the first thing that closed it. */
+export type HeldRowTaken =
+  | { ok: true; slot: Slot; event: Event; wasComplete: boolean }
+  | { ok: false; reason: "nobody" | "not_held" | "addressed" | "namesake" | "fixed_pairs" | "cancelled" | "past" };
+
+/**
+ * "I'm Danny" on a held row that keeps a record "That's me" signs in (the owner's decision C of 6
+ * November 2026), after `decideThatsMe` said yes for a browser that knows nobody: the record's own held
+ * place, confirmed by the personal link's own write (`confirmLocked`), so the organiser hears "Danny
+ * confirmed". The caller signs the browser in as the record, marked by name.
+ *
+ * The record is read again first, before the transaction (a read on the pool inside it waits for ever on
+ * PGlite): a record that got an address, an account or a passkey since the decision proves itself now.
+ * Then, under the match's lock: a match not called off and not over (`liveRefusal`, the check
+ * `confirmInvite` makes), not a fixed-pairs night, and the record's own place reserved, nobody took it,
+ * inside the capacity, with no typed email or phone (`addressed`) and no other held place of its name
+ * (`heldTwin`). The fact `player.thats_me` with `via: "row"`, with no name in it, after the commit.
+ */
+export async function takeHeldRecord(db: Db, d: ThatsMeDecision, now = new Date()): Promise<HeldRowTaken> {
+  if (d.fold) return { ok: false, reason: "nobody" };
+  const [record] = await db.select().from(players).where(eq(players.id, d.id)).limit(1);
+  if (!record || reachedSince(record) || (await savedPasskey(db, record.id))) return { ok: false, reason: "nobody" };
+  const res = await db.transaction(async (tx): Promise<HeldRowTaken> => {
+    const ev = await lockEvent(tx, d.event.id);
+    const live = liveRefusal(ev, now);
+    if (live) return { ok: false, reason: live };
+    if (ev.fixedPairs) return { ok: false, reason: "fixed_pairs" };
+    const seats = await heldSeatsOf(tx, ev.id);
+    const place = seats.find((s) => s.playerId === d.id);
+    if (!place || place.kind !== "reserved" || place.status !== "invited" || place.position > ev.capacity) return { ok: false, reason: "not_held" };
+    if (addressed(place)) return { ok: false, reason: "addressed" };
+    if (heldTwin(seats, place)) return { ok: false, reason: "namesake" };
+    const [slot] = await tx.select().from(slots).where(and(eq(slots.id, place.id), eq(slots.eventId, ev.id))).limit(1);
+    if (!slot) return { ok: false, reason: "not_held" };
+    const wasComplete = lineupComplete(seats, ev.capacity);
+    const done = await confirmLocked(tx, ev, slot, { playerId: d.id, now });
+    return { ok: true, ...done, wasComplete };
+  });
+  if (res.ok) await recordFact(db, { kind: "player.thats_me", channel: "web", actorPlayerId: d.id, subject: { type: "player", id: d.id }, code: d.event.code, data: { folded: false, via: "row" }, at: now });
   return res;
 }
 

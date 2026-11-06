@@ -87,7 +87,7 @@ export function CreatorPanel({
         <div className="mt-4 border-t border-line pt-4">
           <div className="font-bold">{t("creator.inviteAll")}</div>
           <p className="mb-2 text-sm text-muted">{t("creator.inviteAllHelp")}</p>
-          <ShareButtons url={groupInvite.url} text={groupInvite.text} size="sm" />
+          <ShareButtons url={groupInvite.url} text={groupInvite.text} size="sm" copy="message" />
         </div>
       )}
 

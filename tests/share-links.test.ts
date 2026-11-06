@@ -6,6 +6,7 @@ import { madeToShare } from "@/lib/booking/platforms";
 import { bookingHref, readBooking } from "@/lib/domain/bookingPaste";
 import { readCreateLink } from "@/lib/domain/createPrefill";
 import { bookingLinkFor, copiedBookingLink, createEvent, duplicateEvent } from "@/lib/domain/events";
+import { copiedValue } from "@/lib/share";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer } from "./helpers/db";
 
@@ -142,5 +143,28 @@ describe("the create keeps an invitation only after the same check", () => {
     expect(next.bookingUrl).toBeNull();
     const typed = await make({ bookingUrl: "https://example.com/my-booking" });
     expect((await duplicateEvent(db, { sourceEventId: typed.row.id, creatorPlayerId: typed.cath.id, now: NOW })).bookingUrl).toBe("https://example.com/my-booking");
+  });
+});
+
+/**
+ * What a Copy button puts on the clipboard (the owner, 6 November 2026: "I also fix the Copy bug"). "Send
+ * all invites in one message" copied the bare match link while its text held every personal link; now a
+ * message's Copy takes the whole text, its match link tagged `?s=link` as the copied link always was.
+ */
+describe("what Copy copies", () => {
+  const url = "https://kicksma.sh/7KQ2";
+  const text = `🎾 Padel Mon 12 Oct at 18:00 — Rawai Padel. Open the link and tap your name: ${url}`;
+
+  it("copies the whole message with the match link tagged ?s=link", () => {
+    expect(copiedValue(url, text, "message")).toBe(`🎾 Padel Mon 12 Oct at 18:00 — Rawai Padel. Open the link and tap your name: ${url}?s=link`);
+  });
+
+  it("copies the link alone as before", () => {
+    expect(copiedValue(url, text, "link")).toBe(`${url}?s=link`);
+  });
+
+  it("leaves a personal link in the text as it is", () => {
+    const invites = `Confirm with your personal link:\nDanny: ${url}/i/AbCdEf\nMaria: ${url}/i/GhIjKl\n${url}`;
+    expect(copiedValue(url, invites, "message")).toBe(`Confirm with your personal link:\nDanny: ${url}/i/AbCdEf\nMaria: ${url}/i/GhIjKl\n${url}?s=link`);
   });
 });

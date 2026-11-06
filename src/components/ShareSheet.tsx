@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { copiedValue, nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
 
 export function CopyButton({ value, label, className = "btn-ghost", copiedLabel }: { value: string; label: string; className?: string; copiedLabel?: string }) {
   const t = useTranslations();
@@ -29,13 +29,20 @@ export function CopyButton({ value, label, className = "btn-ghost", copiedLabel 
   );
 }
 
-export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url: string; text: string; phone?: string | null; size?: "lg" | "sm"; /** A picture to attach in the phone's share sheet (Instagram Stories, WhatsApp, Telegram all take it). */ imageUrl?: string }) {
+/**
+ * WhatsApp and Telegram on one line, Copy under them at full width, at both sizes: three small buttons on one
+ * line put the labels and icons outside the buttons at 390 px (`.btn` does not wrap). `copy` says what Copy
+ * puts on the clipboard (`copiedValue`): the link alone, or the whole message, for a text that carries
+ * links of its own ("Send all invites in one message", the owner's "I also fix the Copy bug", 6 November 2026).
+ */
+export function ShareButtons({ url, text, phone, size = "lg", imageUrl, copy = "link" }: { url: string; text: string; phone?: string | null; size?: "lg" | "sm"; /** A picture to attach in the phone's share sheet (Instagram Stories, WhatsApp, Telegram all take it). */ imageUrl?: string; copy?: "link" | "message" }) {
   const t = useTranslations();
   const [canShare, setCanShare] = useState(false);
   useEffect(() => {
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
   }, []);
-  const sm = size === "sm" ? " btn-sm" : "";
+  // The narrowest place is the personal-link box at 390 px: 126 px a button, so "WhatsApp" and its icon need the tighter padding.
+  const sm = size === "sm" ? " btn-sm px-3 gap-1.5" : "";
   const shareNative = async () => {
     // The phone's own sheet tags its link `?s=share`, as every other button tags its own.
     const shared = nativeShareData(url, text);
@@ -54,13 +61,13 @@ export function ShareButtons({ url, text, phone, size = "lg", imageUrl }: { url:
     }
   };
   return (
-    <div className={`grid gap-2 ${size === "sm" ? "grid-cols-3" : "grid-cols-2"}`}>
+    <div className="grid grid-cols-2 gap-2">
       {/* A match link says which button sent it (`?s=wa`, `?s=tg`, `?s=link`, `?s=share`), so what starts from a tap in a group is counted as such. */}
       <WhatsAppShare url={url} text={text} phone={phone} className={sm} />
-      <a href={telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(text, url, "tg"))} target="_blank" rel="noopener noreferrer" className={`btn${sm} bg-[#229ED9] text-white hover:brightness-95`}>
+      <a href={telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(text, url, "tg"))} target="_blank" rel="noopener noreferrer" className={`btn-brand${sm} bg-[#229ED9] text-white hover:brightness-95`}>
         <TelegramIcon /> {t("share.telegram")}
       </a>
-      <CopyButton value={tagMatchUrl(url, "link")} label={t("share.copyLink")} className={`btn-ghost${sm}${size === "sm" ? "" : " col-span-2"}`} />
+      <CopyButton value={copiedValue(url, text, copy)} label={copy === "message" ? t("share.copyMessage") : t("share.copyLink")} className={`btn-ghost${sm} col-span-2`} />
       {canShare && size === "lg" && (
         <button type="button" className="btn-ghost col-span-2" onClick={shareNative} data-testid="native-share">
           {imageUrl ? t("share.nativeShareImage") : t("share.nativeShare")}
@@ -86,7 +93,7 @@ export function WhatsAppShare({ url, text, phone, label, className = "", testId,
       </a>
     );
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={`btn${className} bg-[#25D366] text-white hover:brightness-95`} data-testid={testId}>
+    <a href={href} target="_blank" rel="noopener noreferrer" className={`btn-brand${className} bg-[#25D366] text-white hover:brightness-95`} data-testid={testId}>
       <WhatsAppIcon /> {label ?? t("share.whatsapp")}
     </a>
   );
@@ -136,7 +143,7 @@ export function LinkBox({ url, display }: { url: string; display: string }) {
 
 function WhatsAppIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden className="shrink-0">
       <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2m0 1.67c4.54 0 8.24 3.7 8.24 8.24 0 4.54-3.7 8.24-8.24 8.24-1.55 0-3.06-.43-4.37-1.25l-.31-.18-3.12.82.83-3.04-.2-.32a8.2 8.2 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24m-3.3 4.3c-.18 0-.47.07-.72.34-.25.27-.95.93-.95 2.26s.97 2.62 1.11 2.8c.14.18 1.92 2.93 4.66 4.11 2.27.9 2.74.72 3.23.67.5-.05 1.6-.65 1.83-1.29.22-.63.22-1.17.16-1.29-.07-.11-.25-.18-.52-.32-.27-.13-1.6-.79-1.85-.88-.25-.09-.43-.13-.61.14-.18.27-.7.88-.86 1.06-.16.18-.32.2-.59.07-.27-.14-1.14-.42-2.17-1.34-.8-.72-1.34-1.6-1.5-1.87-.16-.27-.02-.42.12-.55.12-.12.27-.32.4-.48.14-.16.18-.27.27-.45.09-.18.05-.34-.02-.48-.07-.13-.61-1.47-.83-2.01-.22-.53-.44-.46-.61-.47h-.55Z" />
     </svg>
   );
@@ -144,7 +151,7 @@ function WhatsAppIcon() {
 
 function TelegramIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden className="shrink-0">
       <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
     </svg>
   );

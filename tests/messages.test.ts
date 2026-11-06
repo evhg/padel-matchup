@@ -83,6 +83,21 @@ describe("what a notification may say", () => {
     }
   });
 
+  // The organiser's one message (DECIDING rule 34, 6 November 2026) shows for one held place too, the
+  // common case: its help and the line for the places it leaves out then speak of one person.
+  it("the one message's help and its line for the others read as one person when one name is in them", () => {
+    const plural: Record<(typeof LOCALES)[number], RegExp> = { en: /each of them/, ru: /каждому/, es: /cada uno/ };
+    for (const l of LOCALES) {
+      const t = createTranslator({ locale: l, messages: raw[l] as never }) as unknown as (key: string, values?: Record<string, string | number>) => string;
+      for (const key of ["creator.heldMessageHelp", "creator.heldMessageNot", "creator.heldMessageNotShare"]) {
+        const [one, two, many] = [1, 2, 21].map((count) => t(key, { count, names: "Alex" }));
+        expect(one, `${l} ${key}: one name`).not.toMatch(plural[l]);
+        expect(two, `${l} ${key}: two names`).toMatch(plural[l]);
+        expect(many, `${l} ${key}: 21 names`).toMatch(plural[l]);
+      }
+    }
+  });
+
   it("renders to real words in every language, never to its own key", () => {
     for (const l of LOCALES) {
       const t = createTranslator({ locale: l, messages: raw[l] as never, onError: () => undefined });

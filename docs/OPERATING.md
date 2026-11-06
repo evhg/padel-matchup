@@ -258,7 +258,7 @@ Which of these makes the second record is a question for the numbers, so these d
 `/api/admin/sql` in one query, for example `select key, sum(value) from metrics_daily where day >=
 current_date - 28 and (key like 'newid_%' or key like 'signin_%' or key like 'merge_%' or key like
 'join_src_%' or key like 'passkey_%' or key like 'thats_me_%' or key like 'join_name_%' or key = 'email_proved_by_name' or key like 'held_by_name%'
-or key like 'view_known_%' or key like 'view_anon_%' or key like 'session_%' or key = 'signout' or key like 'hint%') group by 1 order by 1`.
+or key like 'held_row%' or key like 'hold_pick%' or key like 'view_known_%' or key like 'view_anon_%' or key like 'session_%' or key = 'signout' or key like 'hint%') group by 1 order by 1`.
 A page render's counters go in one statement after the answer: the layout's `pageviews`, the match
 page's view counters and `card_views` share one upsert through `countAfter` (`src/lib/countLater.ts`,
 over `bumpMetrics` in `src/lib/domain/metrics.ts`; `tests/rules.test.ts` holds every page to it). A
@@ -291,6 +291,10 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   `signin_held_link` (the personal link of a held place that keeps a past player's record, in a
   browser that knew nobody, marked by name; `held_link_refused` counts such a tap the limits turned
   down, the owner's decision of 11 October 2026);
+  `signin_held_row` ("I'm Danny" on the row of a held place that keeps a past player's record, in a
+  browser that knew nobody: signed in by name and the place taken in one request, DECIDING rule 34,
+  6 November 2026; `held_row_refused` counts such a tap that the place step turned down after the rule
+  said yes; a tap that the rule turns down counts `thats_me_refused`);
   `signin_restore` (a lost cookie brought back from the restore seal that the browser kept; since
   11 October 2026 only the seal, never a bare player id); `signin_personal_link`;
   `signin_email_code`; `signin_telegram` (the login widget) and `signin_telegram_miniapp`;
@@ -316,11 +320,28 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   `merge_passkey` (a sign-in by passkey folds the new record its browser made, DECIDING rule 39). Many merges at
   one door say where duplicates come from. Each is written after the answer, as the sign-in counters.
 - **A held place taken by name.** `held_by_name`: somebody took the place the organiser held for
-  their name from the plain match link, in two taps (DECIDING rule 34, 11 October 2026), or a chat
+  their name from the plain match link, from its row with one tap or from the typed name with two
+  (DECIDING rule 34, 11 October 2026 and 6 November 2026), or a chat
   account of that name joined and took it (the Telegram ✅ or "+1", Discord, LINE, the WhatsApp JOIN;
   12 October 2026). `held_by_name_refused`: a web tap the rule turned down. Both web taps share the
   address's 20 a day with "That's me". A browser that knew nobody also counts its new record under `newid_ua_*`; it is not a
-  sign-in, so no `signin_*` counter moves.
+  sign-in, so no `signin_*` counter moves. `held_row_by_name`: the part of `held_by_name` that came
+  from the row's "I'm Danny". `held_row_doors`: a held row showed a record's own doors, read at the tap.
+- **Several past players at once.** `hold_picks`: one request of several "Played with you" picks that
+  held one place or more. A request that held nothing is not counted, and a second request for the
+  names that found no place counts again. `hold_picked`: the places those requests made (the owner's
+  decision A, 6 November 2026). A picked place keeps its past player's record, so `held_row_by_name`
+  counts almost none of them. A player takes a picked place in one of four ways:
+  - In a browser that knows nobody: with `signin_held_row`.
+  - In a browser that knows nobody: with `held_row_doors`, then a proof (`signin_email_code`,
+    `signin_passkey` or `signin_telegram`), then a join.
+  - In a browser that knows the player: with a join (`join_src_wa` or `join_src_link`).
+  - With `signin_thats_me`, when the player's browser made a new record.
+
+  Compare `hold_picked` with `signin_held_row` plus `held_row_doors` plus the `join_src_wa` and
+  `join_src_link` joins. When `hold_picked` is high and that sum is low, players do not take their
+  places from the one message. The message's link carries `?s=wa` or `?s=link`, so `view_src_*` counts
+  the arrivals as for every match link.
 - **A typed name that is already in the match.** `join_name_seated`: a web join from a browser that
   knew nobody typed the name of a record seated or waiting in the match, and the page asked "Danny is
   in this match. Sign in as Danny?" (DECIDING rule 34, the owner's decision of 15 October 2026).
@@ -404,7 +425,7 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   `hint_collide`: such a save in a match found the same key on another record of that match, seen in
   the last year. "Another record of that match" is a place of any status, or the organiser. A save with
   a match is a join, the create form, "That's me", "I'm in" on a held place or an invitation, "Take
-  Danny's held place", "Be their partner", or an email code typed on a match page. The email code on My
+  Danny's held place", "I'm Danny" on a held row, "Be their partner", or an email code typed on a match page. The email code on My
   matches, Telegram, a passkey and the personal link save with no match, so they never collide.
   `hints_pruned`: the rows that the hourly job deleted one year after their last use, at most 500 a run.
   `hint_signout`: "Sign out on this browser" took this browser's key off the record it left ("Not you?" above).

@@ -112,6 +112,10 @@ learning can be a test, a gate step or a script, make it one and put the story i
 
 ### Check the thing, not the description of the thing
 
+- **A test never reaches a real outside service.** The unit suite never cleared `RESEND_API_KEY`, so in a
+  shell that held the live key every unit run, the gate's included, sent the notifications its tests
+  trigger through the real mail service. CI has no key, so nothing ever went red. `tests/helpers/setup.ts`
+  now deletes it; a new outward key gets the same line there before its first test.
 - **Read the build output, never the build config.** 18 MB of `@electric-sql/pglite` — the test
   database, which `createPgliteDb()` throws before importing when `onVercel()` — shipped inside every
   route while `next.config.ts` looked correct. It went unnoticed until Vercel's function storage hit
@@ -1267,6 +1271,12 @@ Wall clock first, credits second. What actually moved it, measured:
 
 ### Screens the owner's tester tripped on
 
+- **A size class loses to the bare `btn` utility.** `btn` is an `@utility`, and `btn-sm` lives in
+  `@layer components`, so on `class="btn btn-sm"` the utility wins: the WhatsApp and Telegram links of
+  every "small" share grid were full size. In the narrow personal-link box at 390 px their icons shrank
+  to nothing while the labels still fit (6 November 2026). The shot showed it; the class list read
+  right. A button that takes a size goes through a component class (`btn-ghost`, `btn-brand`), never
+  the bare `btn`. `e2e/core.mjs` measures the icon and the label in that box.
 - **Dim the text, never the row.** A paused student's row was `opacity-60` end to end, and the one
   button on it that undoes the pause looked disabled — Erik asked whether it was. The same fault sat
   on a no-show lesson row the moment it gained an undo button. Whatever is dimmed to say "inactive"

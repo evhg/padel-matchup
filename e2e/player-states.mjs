@@ -605,6 +605,86 @@ try {
   await rafaCard.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await view(rafa, "player-request-stay-saved-390");
   await rafa.close();
+
+  // ------------------------------------------------- "I'm Ines" on a held row whose record proves itself (the owner's decision C of 6 November 2026, with D4)
+  // Nora played a match with Ines, who gave an email. Nora holds Ines's place with "Played with you" in her
+  // next match. A browser that knows nobody sees "I'm Ines" on the row, and a tap shows Ines's own door,
+  // read at the tap for that name: the email code, and no "That's me". After the code one more tap confirms.
+  const noraPlayed = await keyed("/api/v1/matches", { startsAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(), tz: "Europe/Madrid", venue: "Kata Padel Center", organizer: { name: "Nora" } });
+  const inesIn = await keyed(`/api/v1/matches/${noraPlayed.match?.code}/join`, { name: "Ines", email: "ines-e2e@example.com" });
+  check("Nora's match started 20 minutes ago with Ines in it, Ines with an email", inesIn.outcome === "joined" && (await recordsNamed("Ines")) === 1, JSON.stringify(inesIn).slice(0, 200));
+  const nora = await page(iphone);
+  await nora.goto(`${noraPlayed.organizer?.personalUrl}?next=/${noraPlayed.match?.code}`);
+  await nora.waitForURL(new RegExp(`/${noraPlayed.match?.code}$`), { timeout: 20000 });
+  await nora.goto(BASE + "/new");
+  const noraDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
+  await nora.locator("input[type=date]").fill(noraDay);
+  await nora.locator("input[type=time]").fill("18:00");
+  await nora.getByRole("button", { name: "Create & get the link" }).click();
+  await nora.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+  const nCode = nora.url().split("/").slice(-2)[0];
+  await nora.goto(`${BASE}/${nCode}`);
+  await nora.getByRole("button", { name: /Open spot/ }).first().click();
+  const noraChips = nora.getByTestId("played-with-you");
+  await noraChips.waitFor({ timeout: 10000 });
+  await noraChips.getByRole("button", { name: "Ines", exact: true }).click();
+  await nora.getByRole("button", { name: "Done", exact: true }).click();
+  await nora.getByText("Reserved for Ines", { exact: true }).waitFor({ timeout: 20000 });
+  // A record that proves itself is in the one message: the link opens her row, and her row opens her own door.
+  check(
+    "Nora holds Ines's place with her record, and the one message names Ines",
+    (await nora.locator("main li", { hasText: "Reserved for Ines" }).getByTestId("keeps-record").count()) === 1 && ((await nora.getByTestId("held-message").textContent().catch(() => "")) ?? "").includes("One message for Ines"),
+  );
+  await nora.close();
+
+  const ines = await page(iphone);
+  let inesSends = 0;
+  ines.on("request", (r) => {
+    if (r.method() === "POST" && r.headers()["next-action"]) inesSends += 1;
+  });
+  await ines.goto(`${BASE}/${nCode}`);
+  const inesRow = ines.locator("main li", { hasText: "Reserved for Ines" });
+  const inesButton = inesRow.getByTestId("held-row");
+  await inesButton.waitFor({ timeout: 20000 });
+  check(
+    "a browser that knows nobody sees \"I'm Ines\" on her held row, a record that proves itself, and no \"That's me\" anywhere",
+    ((await inesButton.textContent()) ?? "").trim() === "I'm Ines" && (await inesButton.getAttribute("data-kind")) === "doors" && (await ines.getByRole("button", { name: "That's me", exact: true }).count()) === 0,
+  );
+  inesSends = 0;
+  await inesButton.click();
+  const inesProve = ines.getByTestId("held-prove");
+  await inesProve.waitFor({ timeout: 20000 });
+  await ines.waitForTimeout(500);
+  check(
+    "the tap is one read, and it opens Ines's own door under the row: \"Is this you, Ines?\", the email code, no Telegram, no Face ID, no \"That's me\"",
+    inesSends === 1 &&
+      ((await inesProve.innerText()) ?? "").includes("Is this you, Ines? Sign in first, then tap your name again.") &&
+      (await inesProve.getByTestId("held-doors").count()) === 1 &&
+      (await inesProve.getByTestId("held-door-email").count()) === 1 &&
+      (await inesProve.getByTestId("held-door-telegram").count()) === 0 &&
+      (await inesProve.getByTestId("held-door-passkey").count()) === 0 &&
+      (await inesProve.getByRole("button", { name: "That's me", exact: true }).count()) === 0,
+    `sends=${inesSends} ${((await inesProve.innerText()) ?? "").replace(/\s+/g, " ")}`,
+  );
+  check("the page itself carries no word of Ines's email", !(await ines.content()).includes("ines-e2e"));
+  await shot(ines, "held-row-doors");
+  await inesRow.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await view(ines, "held-row-doors-390");
+  await inesProve.getByPlaceholder("you@example.com").fill("ines-e2e@example.com");
+  await inesProve.getByRole("button", { name: "Send code", exact: true }).click();
+  const inesCodeBox = inesProve.getByTestId("email-code");
+  await inesCodeBox.waitFor({ timeout: 20000 });
+  await inesCodeBox.getByLabel("6-digit code").fill(await codeFor("ines-e2e@example.com"));
+  await inesCodeBox.getByRole("button", { name: "Restore", exact: true }).click();
+  const inesMine = inesRow.locator('[data-testid="held-row"][data-kind="mine"]');
+  await inesMine.waitFor({ timeout: 20000 });
+  check("after the code this browser is Ines, and her row offers her own place: \"I'm Ines\", hers", ((await inesMine.textContent()) ?? "").trim() === "I'm Ines");
+  await inesMine.click();
+  await ines.locator("main li", { hasText: "Ines" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+  const inesAfter = await fetch(`${BASE}/api/v1/matches/${nCode}`).then((r) => r.json());
+  const inesSeats = (inesAfter.players ?? []).filter((p) => p.name === "Ines");
+  check("one more tap confirms Ines's held place: one Ines, confirmed, and one record of her", inesSeats.length === 1 && inesSeats[0].status === "confirmed" && (await recordsNamed("Ines")) === 1, JSON.stringify((inesAfter.players ?? []).map((p) => `${p.name}:${p.status}`)));
+  await ines.close();
 } catch (e) {
   await crashed(browser, results, e, "player-states");
 }

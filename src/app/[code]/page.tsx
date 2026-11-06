@@ -47,6 +47,8 @@ import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
+import { HeldMessage } from "@/components/HeldMessage";
+import { HeldRowButton } from "@/components/TakeHeld";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
 import { StayUpdated } from "@/components/StayUpdated";
@@ -98,6 +100,7 @@ import { NO_OFFER, thatsMeOffer, unreachedSignsIn } from "@/lib/domain/thatsMe";
 import { anyHintAmong, hintOpen, hintScopeIds } from "@/lib/domain/deviceHintAsk";
 import { deviceHintMode } from "@/lib/deviceHint";
 import { heldOffers } from "@/lib/domain/heldByName";
+import { heldMessageOf, heldRowOffers, type HeldRowOffer } from "@/lib/domain/heldRow";
 import { withClientMessages } from "@/i18n/withClientMessages";
 import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
 
@@ -447,8 +450,10 @@ async function EventPage({ params, searchParams }: Props) {
   // "Played with you" (the owner, 11 October 2026: "Yes, keep the record"): the records that sat in a
   // taken seat beside the organiser, or in the organiser's matches, names only. A pick keeps the record
   // on the held place, found again on the server from the name. Three bounded reads, for the organiser
-  // only and only while a spot can still be reserved (`pastPlayerRows`).
-  const pastPlayers = reserving ? await pastPlayerRows(db, ev.creatorPlayerId, now) : [];
+  // only and only while a spot can still be reserved (`pastPlayerRows`). None for a session by name that
+  // proved nothing (since 6 November 2026): its holds keep no record at any door (`nameOnly`), so it gets
+  // no chips, no "Is this Danny…?" and no "Keep Danny's matches", and three reads fewer.
+  const pastPlayers = reserving && !namesAlone ? await pastPlayerRows(db, ev.creatorPlayerId, now) : [];
   // Every record with a row here, a declined place included: one record holds one place per match.
   const idsHere = new Set([...roster, ...waitlist].flatMap((s) => (s.playerId ? [s.playerId] : [])));
   const playedWithYou = pickable(pastPlayers, { ids: idsHere, names: namesHere });
@@ -485,16 +490,33 @@ async function EventPage({ params, searchParams }: Props) {
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
   // organiser, a manage link included, has their own way in).
-  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere, now);
+  // What this deployment runs, for the doors a held record proves itself with (the email code, Telegram).
+  const runs = { email: emailEnabled(), telegram: Boolean(telegramBotId()) };
+  const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere, now, runs);
   const offerOnRoster = (id: string | null) => Boolean(id) && (offer.ids.has(id!) || offer.fold?.id === id);
+  // Every place with the name its row shows, once: the held rules read these (`heldVerdict`, `heldRowOffers`).
+  const seatsWithNames = [...roster, ...waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
   // The held place by name (DECIDING rule 34, the owner, 11 October 2026): "Take Danny's held place"
-  // for the typed name only, never on the row, wherever `heldVerdict` says yes. Over the rows this page
-  // read already, so it costs no read; never for the organiser, a manage link included.
-  const held = viewer.isCreator ? [] : heldOffers(ev, [...roster, ...waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null })), me ? { id: me.id, name: me.displayName } : null, now);
+  // under a typed name, wherever `heldVerdict` says yes. Over the rows this page read already, so it costs
+  // no read; never for the organiser, a manage link included. Since 6 November 2026 the row itself shows
+  // "I'm Danny" too (`heldRows`, the owner's decision C), and the typed name stays as the second way.
+  const held = viewer.isCreator ? [] : heldOffers(ev, seatsWithNames, me ? { id: me.id, name: me.displayName } : null, now);
   const heldNames = held.map((h) => h.name);
   // A browser that knows a record of a held place's name, with no place here: the rule offers it that
   // place alone (`heldVerdict`: its own name, one place of it), and Join offers the place, never a second Danny.
   const heldForMe = me && held.length > 0 ? held[0].name : null;
+  // "I'm Danny" on each held row this browser may take, one tap (the owner's decision C of 6 November 2026):
+  // the kind only, from the rows and `thatsMeOffer` read already (`heldRowOffers`), so it costs no read.
+  // Never for the organiser or a manage link, and none on a match called off or over.
+  const heldRows: Map<string, HeldRowOffer> =
+    viewer.isCreator || cancelled || over
+      ? new Map()
+      : new Map(heldRowOffers(ev, seatsWithNames, me ? { id: me.id, name: me.displayName } : null, { claimable: offer.ids, doors: offer.doors, fold: offer.fold?.id ?? null }, now).map((o) => [o.slotId, o]));
+  // The organiser's one message under the line-up (the owner's decision A of 6 November 2026): the held
+  // places a browser that knows nobody can take from the plain link, and the others. One bounded read,
+  // only while a held place keeps a record with no typed address and no twin (`heldMessageOf`). All the
+  // places go in, the waiting list too, so a waiting namesake closes a place here as it does at the tap.
+  const heldMsg = reserving && !fixedPairs ? await heldMessageOf(db, ev, seatsWithNames, now, runs) : null;
   // "Remind me 1 hour before", for a seated player of a match still to come. Never for a session by name
   // that proved nothing: every notification carries the personal link, a full sign-in (DECIDING rule 34;
   // `subscribePushAction` refuses it too). Two cookie reads, then one lookup, only for a viewer it shows to.
@@ -591,11 +613,11 @@ async function EventPage({ params, searchParams }: Props) {
     const occupiedSlot = isOccupied(s);
     const inviteHref = s.inviteCode ? inviteUrl(base, code, s.inviteCode) : undefined;
     const stale = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000;
-    const justInvited = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() < 90 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
     return (
       <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-card" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
-        <div className="flex items-center gap-3">
+        {/* Wraps, so a held row's doors panel (`basis-full`) drops under the name and its button. */}
+        <div className="flex flex-wrap items-center gap-3">
           {!tappable && (
             <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-on-ink" : "bg-line text-muted"}`}>
               {occupiedSlot ? name.slice(0, 1).toUpperCase() : isWaitlist ? index + 1 : "·"}
@@ -646,6 +668,7 @@ async function EventPage({ params, searchParams }: Props) {
                 rolodex={viewer.isCreator ? rolodexForBrowser(rolodex, { namesAlone }) : []}
                 played={viewer.isCreator ? playedWithYou : []}
                 past={viewer.isCreator ? pastAsk : []}
+                spots={spotsLeft}
                 emailEnabled={emailEnabled()}
                 namesHere={namesHere}
                 claimable={offer.names}
@@ -663,6 +686,8 @@ async function EventPage({ params, searchParams }: Props) {
               <ThatsMeButton code={code} name={name} />
             </div>
           )}
+          {/* Keyed by its kind: after a proof the row offers `mine`, and the doors panel and its answer go. */}
+          {!occupiedSlot && heldRows.get(s.id) && <HeldRowButton key={heldRows.get(s.id)!.kind} code={code} offer={heldRows.get(s.id)!} doors={backIn} />}
         </div>
         {viewer.isCreator && !cancelled && !over && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
           <SlotActions
@@ -675,7 +700,6 @@ async function EventPage({ params, searchParams }: Props) {
             forwardText={inviteHref ? inviteTextTemplate.replace("__NAME__", name).replace("__URL__", inviteHref) : undefined}
             nudgeText={inviteHref ? nudgeTextTemplate.replace("__NAME__", name).replace("__URL__", inviteHref) : undefined}
             stale={stale}
-            defaultOpen={justInvited}
             emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
             keepRecord={keepRecordFor(pastPlayers, s, idsHere)}
           />
@@ -989,8 +1013,12 @@ async function EventPage({ params, searchParams }: Props) {
             )}
           </div>
           <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
+          {/* Pending approvals first, then the one message for the held places (the owner's decision A of 6 November 2026). */}
           {pendingRequests.length > 0 && (
             <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now, ev.tz) }))} />
+          )}
+          {heldMsg && heldMsg.names.length > 0 && (
+            <HeldMessage where="page" url={url} text={t("shareText.heldGroup", { day, time, venue, count: heldMsg.names.length, names: new Intl.ListFormat(locale, { type: "conjunction" }).format(heldMsg.names), url })} names={heldMsg.names} others={heldMsg.others} />
           )}
           {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && (
             <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} namesHere={namesHere} claimable={offer.names} held={heldNames} backIn={backIn} />
@@ -1001,7 +1029,8 @@ async function EventPage({ params, searchParams }: Props) {
               <ul className="mt-2 flex flex-col gap-2">{fixedPairs ? seatUnits(waitlist).map((u) => unitRow(u, true)) : waitlist.map((s, i) => slotRow(s, i, true))}</ul>
             </>
           )}
-          {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t("event.fullHelp")}</p>}
+          {/* A held player on a full match reads the way in that is theirs, the button on their row, not "Ask the organizer". */}
+          {joinState === "full" && !viewer.isCreator && <p className="mt-4 text-sm text-muted">{t(heldRows.size > 0 ? "event.fullHeldHelp" : "event.fullHelp")}</p>}
           {offer.fold && ![...roster, ...waitlist].some((s) => s.playerId === offer.fold!.id) && <ThatsMeLine code={code} name={offer.fold.name} />}
           {/*
             A friend's link in a chat opens in the phone's default browser (WhatsApp's own browser is

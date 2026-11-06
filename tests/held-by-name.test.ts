@@ -15,9 +15,10 @@ import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 
 /**
  * The owner, 11 October 2026: "Yes, two taps (Recommended)". A held place with no email and no phone
- * ("Danny") can be taken on the plain match link by typing the name (never from its row): the first tap
- * asks, the second confirms, and the organiser hears "Danny confirmed" (DECIDING rule 34, extended). And
- * the three invite fixes the trace found beside it.
+ * ("Danny") can be taken on the plain match link by typing the name: the first tap asks, the second
+ * confirms, and the organiser hears "Danny confirmed" (DECIDING rule 34, extended). Since 6 November 2026
+ * its row's "I'm Danny" takes it too, with one tap and the same rule (the owner's decision C;
+ * `tests/held-row.test.ts`). And the three invite fixes the trace found beside it.
  */
 
 // A fixed clock (rule 11): every match starts a day or more after NOW.
@@ -44,6 +45,8 @@ const LIMIT_TABLE: [string, { m?: Partial<HeldMatch>; seats?: HeldSeat[]; name?:
   ["a fixed-pairs night, where the player who named a partner holds that link", { m: { fixedPairs: true } }, "fixed_pairs"],
   ["a name nobody holds a place for", { name: "Dan" }, "nobody"],
   ["two held places of that name", { seats: [organiser, danny, seat({ ...danny, id: "s4", invitedName: "danny", position: 3 })] }, "namesake"],
+  // Since 6 November 2026: a held place keeps a record that its player renamed to Danny. It is held for "Dan", so only the record's own name makes it one of two.
+  ["a held record of that name, renamed from the name it was held for", { seats: [organiser, danny, seat({ id: "s4", kind: "reserved", status: "invited", invitedName: "Dan", playerId: "p4", playerName: "Danny", position: 3 })] }, "namesake"],
   ["a held place with an email", { seats: [organiser, { ...danny, invitedEmail: "danny@example.com" }, empty] }, "email"],
   ["a held place with a phone", { seats: [organiser, { ...danny, invitedPhone: "+66810000000" }, empty] }, "phone"],
   ["a held place a tournament gave a placeholder record", { seats: [organiser, { ...danny, playerId: "p9", playerName: "Danny" }, empty] }, "placeholder"],

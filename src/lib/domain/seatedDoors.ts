@@ -17,6 +17,10 @@
  * The browser gets three booleans, and only for the name it typed, in the join's own refusal
  * (`name_seated`, `doorsDetail`): never an address, an id or anything about another record. Pure, and
  * safe in a browser.
+ *
+ * Since 6 November 2026 the same three booleans go to one more place: the tap on "I'm Danny" on a held
+ * row whose record proves itself (`heldRowDoorsAction`, `rowDoors`). They go at the tap, for the one name
+ * tapped, never in the page.
  */
 export type OwnDoors = { email: boolean; telegram: boolean; passkey: boolean };
 
@@ -30,6 +34,16 @@ export function seatedDoors(records: readonly { email: string | null; recoveryEm
     passkey: records.some((r) => r.passkey),
   };
 }
+
+/**
+ * The doors of one record as "That's me" reads it (a `ThatsMeRow`): the same three answers `seatedDoors`
+ * gives a seated record, here for a held record that proves itself (the held row's "I'm Danny"). Pure.
+ */
+export const rowDoors = (r: { email: boolean; recoveryEmail: boolean; telegram: boolean; passkey: boolean }, runs: { email: boolean; telegram: boolean }): OwnDoors => ({
+  email: runs.email && (r.email || r.recoveryEmail),
+  telegram: runs.telegram && r.telegram,
+  passkey: r.passkey,
+});
 
 const PREFIX = "doors:";
 

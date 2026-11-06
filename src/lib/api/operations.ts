@@ -248,9 +248,11 @@ export class NameHeldError extends ApiError {
       409,
       "name_held",
       `A place in this match is held for ${held}, so a second ${held} cannot join beside it.`,
+      // Since the owner's decision C of 6 November 2026 the held place's row on the match page has
+      // "I'm Danny", one tap, for both kinds. A record that can prove itself shows its own doors there first.
       kind === "record"
-        ? `If this is ${held}, use "That's me" on the match page, or the place's own invite link from the organizer. If it is somebody else, join with a fuller name, such as a last name.`
-        : `If this is ${held}, take the held place on the match page (type the name, then tap "Take ${held}'s held place") or through the place's own invite link from the organizer. If it is somebody else: without a token, join with a fuller name, such as a last name; with a token, the player adds a last name on My matches (their personal link), then joins again.`,
+        ? `If this is ${held}, tap "I'm ${held}" on the held place's row on the match page (a player who can prove who they are signs in there first), or use the place's own invite link from the organizer. If it is somebody else, join with a fuller name, such as a last name.`
+        : `If this is ${held}, tap "I'm ${held}" on the held place's row on the match page, or type the name there and tap "Take ${held}'s held place", or use the place's own invite link from the organizer. If it is somebody else: without a token, join with a fuller name, such as a last name; with a token, the player adds a last name on My matches (their personal link), then joins again.`,
     );
   }
 }

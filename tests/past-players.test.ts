@@ -3,11 +3,12 @@ import { and, asc, eq } from "drizzle-orm";
 import { createElement } from "react";
 import { getDb, type Db } from "@/db";
 import { createEventAction, pastPlayersAction } from "@/actions/events";
-import { reserveAction, reserveManyAction } from "@/actions/slots";
-import { events, players, slots, type Player } from "@/db/schema";
+import { attachHeldRecordAction, reserveAction, reserveManyAction, reservePickedAction } from "@/actions/slots";
+import { events, metricsDaily, players, slots, type Player } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
-import { pastPlayerRows, pastViews, recordForAnswer, type PastPlayer } from "@/lib/domain/heldRecord";
-import { askFor, namesTyped, type PastView } from "@/lib/domain/pastAsk";
+import { PAST_PLAYERS_SHOWN, pastPlayerRows, pastViews, recordForAnswer, type PastPlayer } from "@/lib/domain/heldRecord";
+import { dayKey } from "@/lib/domain/metrics";
+import { askFor, cleanPickedNames, namesTyped, PICK_CHIPS, PICKED_MAX, togglePick, type PastView } from "@/lib/domain/pastAsk";
 import { joinEvent } from "@/lib/domain/slots";
 import { PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
 import { PastAsk } from "@/components/PastAsk";
@@ -243,5 +244,181 @@ describe("the create form, the open spot and the pasted names, called as a brows
     const { erik, danny } = await owners();
     const list = await pastPlayerRows(app, erik.id, NOW);
     expect(list.find((p) => p.id === danny.id)).toMatchObject({ name: "Danny", club: "Kross Padel", tz: "Asia/Bangkok" });
+  });
+});
+
+// ------------------------------------------------------------------ several past players in one hold
+
+/**
+ * The owner, 6 November 2026, option A: "'Played with you' lets Erik pick several names and hold them
+ * with one tap." Each tap on a chip adds a name, a second tap takes it away (`togglePick`), and one
+ * request holds them all (`reservePickedAction`, `holdNames`): one rate check for all, one transaction.
+ */
+describe("picking several past players", () => {
+  it("a tap adds a name, a tap on a picked name takes it away, and the open places cap the picks", () => {
+    expect(togglePick([], "Maria", 3)).toEqual(["Maria"]);
+    expect(togglePick(["Maria"], "Jordi", 3)).toEqual(["Maria", "Jordi"]);
+    expect(togglePick(["Maria", "Jordi"], " maria ", 3)).toEqual(["Jordi"]);
+    expect(togglePick(["Maria", "Jordi"], "Alex", 2), "no room for a third").toEqual(["Maria", "Jordi"]);
+    // Taking one away always works, also at the cap.
+    expect(togglePick(["Maria", "Jordi"], "JORDI", 2)).toEqual(["Maria"]);
+    expect(PICK_CHIPS).toBe(8);
+  });
+
+  it("keeps strings only, trimmed, each name once, none empty or longer than 60, and twenty at most: the names the page sends", () => {
+    expect(cleanPickedNames([" Maria ", "maria", 7, null, { name: "Bo" }, "", "   ", "x".repeat(61), "Ana de la Cruz", "Jo 2"])).toEqual(["Maria", "Ana de la Cruz", "Jo 2"]);
+    expect(cleanPickedNames("Maria")).toEqual([]);
+    expect(cleanPickedNames(undefined)).toEqual([]);
+    const many = Array.from({ length: 30 }, (_, i) => `Player ${i + 1}`);
+    expect(cleanPickedNames(many)).toEqual(many.slice(0, PAST_PLAYERS_SHOWN));
+    // The browser-safe file keeps its own twenty: it must stay the page's twenty.
+    expect(PICKED_MAX).toBe(PAST_PLAYERS_SHOWN);
+  });
+});
+
+describe("several \"Played with you\" names held in one tap, called as a browser calls it", () => {
+  let app: Db;
+  const mailKey = process.env.RESEND_API_KEY;
+  beforeAll(async () => {
+    app = await getDb();
+    // No mail goes out in these tests: the machine's own key never sends a test's notice.
+    delete process.env.RESEND_API_KEY;
+  });
+  afterAll(() => {
+    if (mailKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = mailKey;
+  });
+  let n = 0;
+  const as = (p: Player): Record<string, string> => ({ [PLAYER_COOKIE]: sealPlayerId(p.id) });
+  const byName = (p: Player): Record<string, string> => ({ [PLAYER_COOKIE]: sealPlayerId(p.id, { byName: true }) });
+  const metric = async (key: string) => Number((await app.select().from(metricsDaily).where(and(eq(metricsDaily.day, dayKey()), eq(metricsDaily.key, key))))[0]?.value ?? 0);
+  /**
+   * Erik's crew of 13 September at Kross Padel: Maria, Jordi and Danny played with Erik there. Then
+   * Erik's new match of four, Erik seated, three places open. `organiser`: Erik's record, bare unless given.
+   */
+  const crew = async (organiser: Partial<typeof players.$inferInsert> = {}) => {
+    const erik = await makePlayer(app, `Erik ${++n}`, organiser);
+    const [maria, jordi, danny] = [await makePlayer(app, "Maria"), await makePlayer(app, "Jordi"), await makePlayer(app, "Danny")];
+    const sept = await createEvent(app, { creatorPlayerId: erik.id, type: "match", startsAt: at(1), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Kross Padel" });
+    for (const p of [erik, maria, jordi, danny]) await joinEvent(app, { eventId: sept.id, playerId: p.id, now: NOW });
+    await app.update(events).set({ startsAt: at(-28), status: "past" }).where(eq(events.id, sept.id));
+    const tdsv = await createEvent(app, { creatorPlayerId: erik.id, type: "match", startsAt: at(6), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Warehaus" });
+    await joinEvent(app, { eventId: tdsv.id, playerId: erik.id, now: NOW });
+    return { erik, maria, jordi, danny, tdsv };
+  };
+  const heldIn = async (eventId: string) => (await app.select().from(slots).where(and(eq(slots.eventId, eventId), eq(slots.kind, "reserved"))).orderBy(asc(slots.position))).map((s) => [s.invitedName, s.playerId]);
+  const reserveRate = (erikId: string) => metric(`rl:reserve:${erikId}`);
+
+  it("the owner's case: three picks hold three places in one request, each keeps its record, the rate counts three, and the hold is counted", async () => {
+    const { erik, maria, jordi, danny, tdsv } = await crew();
+    const [holds, places] = [await metric("hold_picks"), await metric("hold_picked")];
+    const { result } = await asAction(as(erik), () => reservePickedAction(tdsv.code, ["Maria", "Jordi", "Danny"]));
+    expect(result).toEqual({ ok: true, data: { held: ["Maria", "Jordi", "Danny"], already: [], noSpot: [] } });
+    expect(await heldIn(tdsv.id)).toEqual([
+      ["Maria", maria.id],
+      ["Jordi", jordi.id],
+      ["Danny", danny.id],
+    ]);
+    expect(await reserveRate(erik.id), "one rate check that counts every place").toBe(3);
+    expect([await metric("hold_picks"), await metric("hold_picked")]).toEqual([holds + 1, places + 3]);
+  });
+
+  it("three picks on two open places: the first two are held in pick order, the third comes back in noSpot, and the rate counts two", async () => {
+    const { erik, maria, jordi, tdsv } = await crew();
+    await joinEvent(app, { eventId: tdsv.id, playerId: (await makePlayer(app, `Sam ${n}`)).id, now: NOW });
+    const { result } = await asAction(as(erik), () => reservePickedAction(tdsv.code, ["Jordi", "Maria", "Danny"]));
+    expect(result).toEqual({ ok: true, data: { held: ["Jordi", "Maria"], already: [], noSpot: ["Danny"] } });
+    expect(await heldIn(tdsv.id)).toEqual([
+      ["Jordi", jordi.id],
+      ["Maria", maria.id],
+    ]);
+    expect(await reserveRate(erik.id)).toBe(2);
+  });
+
+  it("a pick already in the match comes back in already, and nothing is held: never a second Maria", async () => {
+    const { erik, maria, tdsv } = await crew();
+    await asAction(as(erik), () => reservePickedAction(tdsv.code, ["Maria"]));
+    const holds = await metric("hold_picks");
+    const { result } = await asAction(as(erik), () => reservePickedAction(tdsv.code, [" maria "]));
+    expect(result).toEqual({ ok: true, data: { held: [], already: ["maria"], noSpot: [] } });
+    expect(await metric("hold_picks"), "a request that held nothing is no hold").toBe(holds);
+    expect(await heldIn(tdsv.id)).toEqual([["Maria", maria.id]]);
+  });
+
+  it("holds a name with a chat word in it as given: \"Ana de la Cruz\" and \"Jo 2\"", async () => {
+    const { erik, tdsv } = await crew();
+    const { result } = await asAction(as(erik), () => reservePickedAction(tdsv.code, ["Ana de la Cruz", "Jo 2"]));
+    expect(result).toEqual({ ok: true, data: { held: ["Ana de la Cruz", "Jo 2"], already: [], noSpot: [] } });
+    expect(await heldIn(tdsv.id)).toEqual([
+      ["Ana de la Cruz", null],
+      ["Jo 2", null],
+    ]);
+  });
+
+  it("holds by name a name nobody played with, a name two past players carry, and an id-shaped string", async () => {
+    const { erik, danny, tdsv } = await crew();
+    const sept2 = await createEvent(app, { creatorPlayerId: erik.id, type: "match", startsAt: at(1), tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Warehaus" });
+    const otherJordi = await makePlayer(app, "jordi");
+    for (const p of [erik, otherJordi]) await joinEvent(app, { eventId: sept2.id, playerId: p.id, now: NOW });
+    await app.update(events).set({ startsAt: at(-9), status: "past" }).where(eq(events.id, sept2.id));
+    const { result } = await asAction(as(erik), () => reservePickedAction(tdsv.code, ["Alberto", "Jordi", danny.id]));
+    expect(result).toMatchObject({ ok: true, data: { held: ["Alberto", "Jordi", danny.id] } });
+    expect(await heldIn(tdsv.id)).toEqual([
+      ["Alberto", null],
+      ["Jordi", null],
+      [danny.id, null],
+    ]);
+  });
+
+  it("one of each name, and twenty names at most: the rest of a long list is neither held nor answered", async () => {
+    const { erik, maria, tdsv } = await crew();
+    const { result } = await asAction(as(erik), () => reservePickedAction(tdsv.code, ["Maria", "maria", " MARIA "]));
+    expect(result).toEqual({ ok: true, data: { held: ["Maria"], already: [], noSpot: [] } });
+    expect(await heldIn(tdsv.id)).toEqual([["Maria", maria.id]]);
+    const second = await crew();
+    const many = Array.from({ length: 25 }, (_, i) => `Player ${i + 1}`);
+    const long = await asAction(as(second.erik), () => reservePickedAction(second.tdsv.code, many));
+    expect(long.result).toEqual({ ok: true, data: { held: many.slice(0, 3), already: [], noSpot: many.slice(3, PAST_PLAYERS_SHOWN) } });
+    expect(await reserveRate(second.erik.id)).toBe(3);
+  });
+
+  it("refuses a browser that does not organise the match, and a request with no name", async () => {
+    const { erik, tdsv } = await crew();
+    const stranger = await makePlayer(app, `Stranger ${n}`);
+    expect((await asAction(as(stranger), () => reservePickedAction(tdsv.code, ["Maria"]))).result).toEqual({ ok: false, error: "forbidden" });
+    expect((await asAction(as(erik), () => reservePickedAction(tdsv.code, []))).result).toEqual({ ok: false, error: "invalid" });
+    expect((await asAction(as(erik), () => reservePickedAction(tdsv.code, "Maria"))).result).toEqual({ ok: false, error: "invalid" });
+    expect(await heldIn(tdsv.id)).toEqual([]);
+  });
+
+  // A session by name that proved nothing (DECIDING rule 34, since 6 November 2026) holds no record at
+  // any door that turns a pick into a record: otherwise "That's me" as an old organiser, then a pick of
+  // each of that record's past players, then "I'm Maria" on each row, signs a stranger in as each of them.
+  it("a session by name that proved nothing holds every name with no record, at every door, and gets no past players", async () => {
+    const { erik, tdsv } = await crew();
+    const jar = byName(erik);
+    // The open spot's several picks, one pick, "Paste the names" with an answer, and the create form with a pick.
+    expect((await asAction(jar, () => reservePickedAction(tdsv.code, ["Maria"]))).result).toMatchObject({ ok: true, data: { held: ["Maria"] } });
+    expect((await asAction(jar, () => reserveAction(tdsv.code, { name: "Jordi", pick: true }))).result).toMatchObject({ ok: true });
+    expect((await asAction(jar, () => reserveManyAction(tdsv.code, "Danny", [{ name: "Danny", day: "2026-09-13", club: "Kross Padel" }]))).result).toMatchObject({ ok: true, data: { held: ["Danny"] } });
+    expect(await heldIn(tdsv.id)).toEqual([
+      ["Maria", null],
+      ["Jordi", null],
+      ["Danny", null],
+    ]);
+    const made = await asAction(jar, () =>
+      createEventAction({ type: "match", date: new Date(NOW.getTime() + 7 * DAY).toISOString().slice(0, 10), time: "18:00", tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Warehaus", names: ["Maria"], picks: [{ name: "Maria" }] } as never).catch((e: unknown) => e),
+    );
+    const code = String((made.result as { digest?: string })?.digest ?? "").match(/\/([^/;]+)\/share/)?.[1];
+    expect(code, JSON.stringify(made.result)).toBeTruthy();
+    const [ev] = await app.select().from(events).where(eq(events.code, code!));
+    expect(await heldIn(ev.id)).toEqual([["Maria", null]]);
+    // "Keep Danny's matches" and the create form's "Played with you".
+    const [danny] = await app.select().from(slots).where(and(eq(slots.eventId, tdsv.id), eq(slots.invitedName, "Danny")));
+    expect((await asAction(jar, () => attachHeldRecordAction(tdsv.code, danny.id))).result).toEqual({ ok: false, error: "proof_required" });
+    expect((await asAction(jar, () => pastPlayersAction())).result).toEqual({ chips: [], past: [] });
+    // The same record, signed in with proof, keeps its picks: only the session by name is held back.
+    expect((await asAction(as(erik), () => attachHeldRecordAction(tdsv.code, danny.id))).result).toEqual({ ok: true, data: { name: "Danny" } });
+    expect((await asAction(as(erik), () => pastPlayersAction())).result.chips.length).toBeGreaterThan(0);
   });
 });

@@ -149,6 +149,11 @@
   .btn-danger {
     @apply btn bg-danger-soft text-danger hover:brightness-95;
   }
+  /* A button in a brand's own colour (WhatsApp, Telegram). As a component, so `btn-sm` after it wins: the bare
+     `btn` utility beat `btn-sm`, and in the narrow personal-link box at 390 px the icon shrank to nothing. */
+  .btn-brand {
+    @apply btn;
+  }
   .btn-sm {
     @apply min-h-11 px-4 text-sm rounded-xl;
   }

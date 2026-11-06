@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer, manageUrlFor, personalTokenFor } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
+import { HeldMessage } from "@/components/HeldMessage";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
 import { KeepTogether } from "@/components/KeepTogether";
@@ -15,8 +16,10 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
 import { formatEventDay, formatEventTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
+import { heldMessageOf } from "@/lib/domain/heldRow";
 import { playerHasPush } from "@/lib/domain/push";
 import { pushEnabled, vapidPublicKey } from "@/lib/pushConfig";
+import { telegramBotId } from "@/lib/telegram/api";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";
@@ -54,6 +57,13 @@ async function SharePage({ params }: Props) {
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
   const text = t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
+  // The one message for the held places, as under the organiser's line-up (the owner's decision A of 6
+  // November 2026): a new match with Erik and three held places read "No spots left. Tap to join" here,
+  // and nothing told the three what to do. One bounded read, only while a held place keeps a record with
+  // no typed address and no twin; nothing on a fixed-pairs night or a match called off or over.
+  const now = new Date();
+  const heldMsg = await heldMessageOf(db, ev, [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null })), now, { email: emailEnabled(), telegram: Boolean(telegramBotId()) });
+  const heldText = heldMsg.names.length > 0 ? t("shareText.heldGroup", { day, time, venue, count: heldMsg.names.length, names: new Intl.ListFormat(locale, { type: "conjunction" }).format(heldMsg.names), url }) : null;
   // No manage link for a session by name either: it never expires and works in any browser (`manageUrlFor`).
   const mUrl = await manageUrlFor(viewer.player, ev);
   // No personal link for a session by name that proved nothing (DECIDING rule 34): it would be a full sign-in.
@@ -79,6 +89,7 @@ async function SharePage({ params }: Props) {
         </section>
         <LinkBox url={url} display={`${shortHost()}/${code}`} />
         <ShareButtons url={url} text={text} />
+        {heldText && <HeldMessage where="share" url={url} text={heldText} names={heldMsg.names} others={heldMsg.others} />}
         <section className="card">
           <QrFold url={url} label={t("share.qrHint")} />
         </section>
