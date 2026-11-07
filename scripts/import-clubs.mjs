@@ -24,10 +24,21 @@ const token = () => randomBytes(18).toString("base64url").slice(0, 24);
 /** A slug the app will accept: lowercase, digits and hyphens, the same shape venueSlug() makes. */
 const valid = (s) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) && s.length <= 80;
 
-const bad = clubs.filter((c) => !valid(c.slug) || !c.name || !c.country || !c.province || (c.bookingUrl && !/^https:\/\//.test(c.bookingUrl)) || (c.bookingPlatform && !/^[a-z]{2,20}$/.test(c.bookingPlatform)));
+/** A zone name or none: the reader of free court times takes `clubs.tz` as it is (`dayHours` in src/lib/booking/scrape.ts). */
+const zoneOk = (tz) => {
+  if (tz === null || tz === undefined) return true;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const bad = clubs.filter((c) => !valid(c.slug) || !c.name || !c.country || !c.province || !zoneOk(c.tz) || (c.bookingUrl && !/^https:\/\//.test(c.bookingUrl)) || (c.bookingPlatform && !/^[a-z]{2,20}$/.test(c.bookingPlatform)));
 if (bad.length) {
   console.error(`✗ ${bad.length} row(s) in data/clubs.json are not usable:`);
-  for (const c of bad) console.error(`  ${c.slug ?? "(no slug)"} — a slug, a name, a country and a province are all required; a booking link is https, a platform an id`);
+  for (const c of bad) console.error(`  ${c.slug ?? "(no slug)"} — a slug, a name, a country and a province are all required; a zone is a real zone name, a booking link is https, a platform an id`);
   process.exit(1);
 }
 

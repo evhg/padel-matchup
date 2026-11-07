@@ -26,10 +26,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * The free court times on the booking platforms' public pages, on every tick (DECIDING rule 35): each
- * tick reads the clubs whose read is 14 minutes old, about a third of them, after the tick's own work,
- * with what is left of the route's sixty seconds and never more than forty-five. It rides this job so it
- * costs no invocation of its own (docs/OPERATING.md).
+ * The free court times on the booking platforms' public pages (DECIDING rule 35): every 15 minutes a run
+ * reads the clubs whose read is 29 minutes old, about half of them, and none from 23:00 to 06:00 in the
+ * club's own zone (the owner's decision of 7 November 2026). It comes after the tick's own work, with
+ * what is left of the route's sixty seconds and never more than forty-five. It rides this job so it
+ * costs no invocation of its own, and its turn is one of the things `kicksmash_push_due` asks about
+ * (docs/OPERATING.md).
  */
 async function readCourtTimes(db: Awaited<ReturnType<typeof getDb>>, now: Date, started: number) {
   try {
@@ -47,8 +49,11 @@ async function readCourtTimes(db: Awaited<ReturnType<typeof getDb>>, now: Date, 
 }
 
 /**
- * Every 5 minutes (Supabase pg_cron → pg_net; Vercel Hobby cron is daily):
- * one push reminder per player inside the last hour before each match.
+ * Supabase pg_cron ticks every 5 minutes (Vercel Hobby cron is daily) and calls this through pg_net
+ * only when `kicksmash_push_due()` says something is due (migration 0104, src/lib/ops/cronJobs.ts):
+ * one push reminder per player inside the last hour before each match, the chat cards, the coach's
+ * book, the tournament's matches, and the court reader's turn. A new kind of work here needs a clause
+ * there, or it waits for the next tick that something else wakes (`tests/push-gate.test.ts`).
  * Guarded by CRON_SECRET when set. Idempotent: the event is claimed first.
  */
 export async function GET(req: Request) {
@@ -58,7 +63,7 @@ export async function GET(req: Request) {
   if (secret && auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const now = new Date();
   const db = await getDb();
-  // "About an hour before" reminders on every card channel share this 5-minute tick; cards of matches that just started grow their Result button.
+  // "About an hour before" reminders on every card channel share this tick; cards of matches that just started grow their Result button.
   const reminded: Record<string, number> = { telegram: 0, discord: 0 };
   for (const ch of channels()) {
     reminded[ch.name] = await sendReminders(ch, db, now).catch(async (e) => {

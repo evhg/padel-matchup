@@ -52,7 +52,7 @@ export const CHECKOUT: Record<string, { on: boolean; observed: string; builder: 
   playtomic: { on: true, observed: "2026-10-11", builder: "/_next/static/chunks/7105-b679921c03870a3f.js" },
 };
 export const checkoutOn = (platform: string): boolean => Boolean(CHECKOUT[platform]?.on);
-/** A listed start is trusted this long after the read that saw it: today's read is 15 minutes old at most, a later day's about 88. */
+/** A listed start is trusted this long after the read that saw it: today's read is 30 minutes old at most in the club's day hours, a later day's about 90. */
 export const CHECKOUT_FRESH_MS = 90 * 60_000;
 const SKEW_MS = 5 * 60_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

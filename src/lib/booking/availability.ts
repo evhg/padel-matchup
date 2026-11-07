@@ -13,8 +13,9 @@ import { platformById } from "./platforms";
  *     Google Calendar export one). Free courts = courts − overlapping bookings,
  *     hour by hour, inside opening hours.
  *   - json_free: a JSON document of free slots, {"slots":[{"start","end","free"}]}.
- * 2. The free court times a booking platform shows on its public club page, today read every fifteen
- *    minutes and the next two days about hourly by `scrape.ts`, through one reader per platform
+ * 2. The free court times a booking platform shows on its public club page, today read every 30
+ *    minutes from 06:00 to 23:00 in the club's zone and the next two days about hourly by `scrape.ts`,
+ *    through one reader per platform
  *    (`adapters/`). A feed the club shared always wins over a read for that club.
  *
  * This header said "No scraping, no credentials, nothing a club did not hand us" from 7 September

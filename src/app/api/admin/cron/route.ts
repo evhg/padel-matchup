@@ -33,8 +33,9 @@ export async function POST(req: Request) {
   if (!(await cronAvailable(db))) return NextResponse.json({ ok: false, error: "pg_cron, pg_net or Vault is not installed on this database" }, { status: 409 });
   try {
     const secretStored = await storeCronSecret(db, secret);
-    await scheduleCronJobs(db, baseUrl());
-    return NextResponse.json({ ok: true, secret: secretStored, jobs: await listCronJobs(db) });
+    const { pushGated } = await scheduleCronJobs(db, baseUrl());
+    // Without migration 0104 the push job keeps calling the app every five minutes: say so, so nobody reads it as gated.
+    return NextResponse.json({ ok: true, secret: secretStored, pushGated, ...(pushGated ? {} : { note: "kicksmash_push_due is not in this database (migration 0104): the push job calls the app on every tick until the Migrate workflow applies 0104" }), jobs: await listCronJobs(db) });
   } catch (e) {
     return NextResponse.json({ ok: false, error: refusalOf(e) }, { status: 500 });
   }

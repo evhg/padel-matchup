@@ -4,7 +4,7 @@ import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
 import { estimateCostUsd, fetchCostReport } from "@/lib/ops/anthropic";
-import { boardHighlights, highlightWords, serviceBoard, stateForPct } from "@/lib/ops/services";
+import { boardHighlights, highlightWords, pushJobHealth, serviceBoard, stateForPct } from "@/lib/ops/services";
 import { createTestDb } from "./helpers/db";
 
 let db: Db;
@@ -60,6 +60,7 @@ describe("the service board", () => {
     await setMetric(db, "db_bytes", 120 * 1024 * 1024, today);
     await setMetric(db, "cron_hourly_at", Math.floor(now.getTime() / 1000) - 600, today);
     await setMetric(db, "cron_push_at", Math.floor(now.getTime() / 1000) - 120, today);
+    await setMetric(db, "cron_push_tick_at", Math.floor(now.getTime() / 1000) - 120, today);
     await setMetric(db, "backup_done", 1, "2026-09-07");
     await setMetric(db, "backup_history_rebuilt", 1, "2026-09-07");
     await setMetric(db, "domain_expires_at", Math.floor(new Date("2027-09-03T07:11:06Z").getTime() / 1000), today);
@@ -195,5 +196,67 @@ describe("the service board", () => {
     expect(analytics.pct).toBe(4);
     expect(analytics.state).toBe("ok");
     expect(boardHighlights(board).map((r) => r.key)).not.toContain("vercel_analytics");
+  });
+
+  /**
+   * The push job ticks every five minutes and calls the app only when something is due (migration 0104,
+   * the owner's decision of 7 November 2026). pg_cron writes its tick on every run, and its call when it
+   * calls; the app writes `cron_push_at` when it runs. Times are epoch seconds against a fixed clock:
+   * 2026-12-20, 05:00 Bangkok (22:00 UTC the day before) is the end of a quiet night.
+   */
+  describe("the push job's health: a quiet night stays green, a stopped job or an app that fails turns red", () => {
+    const now = new Date("2026-12-19T22:00:00Z");
+    const ago = (min: number) => Math.floor(now.getTime() / 1000) - min * 60;
+
+    it("is green through a night when nothing calls the app, while pg_cron ticks", () => {
+      // The last call at 22:45 Bangkok, answered; six hours and a quarter of quiet ticks since.
+      expect(pushJobHealth({ tickAt: ago(3), runAt: ago(375), calledAt: ago(375) }, now)).toMatchObject({ ok: true, tickAge: 3, runAge: 375, unanswered: false });
+    });
+
+    it("turns red when the tick stops, whatever the app did", () => {
+      expect(pushJobHealth({ tickAt: ago(20), runAt: ago(5), calledAt: ago(5) }, now).ok).toBe(false);
+      expect(pushJobHealth({ tickAt: ago(19), runAt: ago(5), calledAt: ago(5) }, now).ok).toBe(true);
+    });
+
+    it("turns red when the app has not run for eight hours, called or not", () => {
+      expect(pushJobHealth({ tickAt: ago(2), runAt: ago(8 * 60), calledAt: ago(8 * 60) }, now).ok).toBe(false);
+      expect(pushJobHealth({ tickAt: ago(2), runAt: ago(8 * 60 - 1), calledAt: ago(8 * 60 - 1) }, now).ok).toBe(true);
+      expect(pushJobHealth({ tickAt: ago(2), runAt: 0, calledAt: 0 }, now).ok).toBe(false);
+    });
+
+    it("turns red when the app does not answer: two failed calls in the day, or the first after a quiet night", () => {
+      // One failed call 15 minutes after the last good run: still green.
+      expect(pushJobHealth({ tickAt: ago(2), runAt: ago(20), calledAt: ago(5) }, now)).toMatchObject({ ok: true, unanswered: false });
+      // Two in a row: the last call came 30 minutes after the app's last run.
+      expect(pushJobHealth({ tickAt: ago(2), runAt: ago(35), calledAt: ago(5) }, now)).toMatchObject({ ok: false, unanswered: true });
+      // The morning's first call, after six hours of quiet, gets two minutes to answer, then it is red.
+      expect(pushJobHealth({ tickAt: ago(1), runAt: ago(361), calledAt: ago(1) }, now).ok).toBe(true);
+      expect(pushJobHealth({ tickAt: ago(2), runAt: ago(362), calledAt: ago(2) }, now)).toMatchObject({ ok: false, unanswered: true });
+      // Answered: the app's run is newer than the call.
+      expect(pushJobHealth({ tickAt: ago(2), runAt: ago(2), calledAt: ago(2) }, now).ok).toBe(true);
+    });
+
+    it("with no tick at all (the job from before 0104 still runs), judges the app's last run by the old 20 minutes", () => {
+      // A deploy before the Migrate workflow applies 0104, or a migration that failed: no tick row, and the
+      // old job calls the app every five minutes. Green while it does, red when it stops.
+      expect(pushJobHealth({ tickAt: 0, runAt: ago(4), calledAt: 0 }, now)).toMatchObject({ ok: true, noTick: true });
+      expect(pushJobHealth({ tickAt: 0, runAt: ago(19), calledAt: 0 }, now).ok).toBe(true);
+      expect(pushJobHealth({ tickAt: 0, runAt: ago(20), calledAt: 0 }, now)).toMatchObject({ ok: false, noTick: true });
+      expect(pushJobHealth({ tickAt: 0, runAt: 0, calledAt: 0 }, now).ok).toBe(false);
+    });
+
+    it("the board's pg_cron row reads it, and says both ages", async () => {
+      const day = dayKey(now);
+      await setMetric(db, "cron_hourly_at", ago(30), day);
+      await setMetric(db, "cron_push_tick_at", ago(3), day);
+      await setMetric(db, "cron_push_at", ago(375), day);
+      await setMetric(db, "cron_push_called_at", ago(375), day);
+      const row = (await serviceBoard(db, now)).rows.find((r) => r.key === "pg_cron")!;
+      expect(row.state).toBe("ok");
+      expect(row.usage).toContain("push tick 3 min ago, app 375 min ago");
+      expect(row.ceiling).toContain("push tick < 20 min, app < 8 h");
+      // pg_cron stops: the tick ages, and the row turns red.
+      expect((await serviceBoard(db, new Date(now.getTime() + 18 * 60_000))).rows.find((r) => r.key === "pg_cron")!.state).toBe("alert");
+    });
   });
 });

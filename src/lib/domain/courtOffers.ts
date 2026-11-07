@@ -160,10 +160,11 @@ export function planCourtOffers(input: {
  * covers is a directory row, so no platform's read ever reached a want.
  *
  * The run takes only the clubs that a want can hear about now: a clean read, and at the club a live want
- * out of its cooldown (on `demand_venue_idx`). The read of 15 minutes writes every platform's club, a
- * failed one too, and production had 27 such rows on 11 October 2026. Until then the 30 newest writes
- * went in, whatever they held. At 31 the oldest of the three 15-minute groups fell out of every hourly
- * run, and a want at one of those clubs never heard.
+ * out of its cooldown (on `demand_venue_idx`). The reader of free court times writes every platform's
+ * club, a failed one too, and production had 27 such rows on 11 October 2026. Until then the 30 newest
+ * writes went in, whatever they held. At 31 the oldest of the reader's groups (three then, every 15
+ * minutes; two since 7 November 2026, every 30) fell out of every hourly run, and a want at one of
+ * those clubs never heard.
  */
 export async function courtOffersDue(db: Db, now: Date, reach: { telegram: boolean; email: boolean; push: boolean }): Promise<(CourtOffer & { player: Player })[]> {
   // Only the slots an offer can use (two to six hours ahead, and the hour after): a read from a platform keeps three days on the row (rule 12).

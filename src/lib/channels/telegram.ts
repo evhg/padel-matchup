@@ -106,7 +106,15 @@ export const telegramChannel: CardChannel<TelegramPayload, TelegramChat, Telegra
     }
     return edits;
   },
-  /** Cards of matches that started in the last day and have no confirmed result are re-rendered, so the Result button shows up. The hash keeps it to one edit per card. */
+  /**
+   * Cards of matches that started in the last day and have no confirmed result are re-rendered, so the
+   * Result button shows up. Only a card last rendered before the start (`updated_at < starts_at`): a good
+   * edit moves `updated_at` (`markRendered`, and `syncExtra` for an inline card), so after the first render
+   * past the start nothing picks the match again and the push job's gate stops waking for it
+   * (`kicksmash_push_due`, migration 0104); a failed edit leaves it, so it is tried again. A card's render
+   * turns on the start alone (`renderCard`'s `started`); anything that changes later edits it through
+   * `syncCards` at once.
+   */
   async refreshStarted(db, now) {
     const rows = await db
       .selectDistinct({ code: events.code })
@@ -118,7 +126,7 @@ export const telegramChannel: CardChannel<TelegramPayload, TelegramChat, Telegra
           gt(events.startsAt, new Date(now.getTime() - DAY_MS)),
           eq(events.scoreLockedByCreator, false),
           inArray(events.status, ["open", "full", "past"]),
-          sql`(exists (select 1 from ${telegramCards} c where c.event_id = ${events.id} and c.kind = 'card') or exists (select 1 from ${telegramInlineCards} i where i.event_id = ${events.id}))`,
+          sql`(exists (select 1 from ${telegramCards} c where c.event_id = ${events.id} and c.kind = 'card' and c.updated_at < ${events.startsAt}) or exists (select 1 from ${telegramInlineCards} i where i.event_id = ${events.id} and i.updated_at < ${events.startsAt}))`,
         ),
       )
       .limit(100);

@@ -5,7 +5,8 @@ import { getDb } from "@/db";
 import { APP_NAME, emailEnabled } from "@/lib/config";
 import { activitySeries, metricSeries, totals } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
-import { serviceBoard, type ServiceState } from "@/lib/ops/services";
+import { pushJobHealth, serviceBoard, type ServiceState } from "@/lib/ops/services";
+import { PUSH_CALLED_KEY, PUSH_TICK_KEY } from "@/lib/ops/cronJobs";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin", robots: { index: false, follow: false } };
@@ -86,7 +87,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const now = new Date();
   // Sequential on purpose: see metrics.ts (pooler + pipelining).
   const tot = await totals(db, now);
-  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at", "errors_server", "errors_client", "errors_cron", "api_calls", "mcp_calls"], range, now);
+  const metrics = await metricSeries(db, ["emails_sent", "push_sent", "db_bytes", "players_total", "events_total", "push_subs", "cron_hourly_at", "cron_push_at", PUSH_TICK_KEY, PUSH_CALLED_KEY, "errors_server", "errors_client", "errors_cron", "api_calls", "mcp_calls"], range, now);
   const act = await activitySeries(db, range, now);
   const board = await serviceBoard(db, now);
   const month = await metricSeries(db, ["emails_sent"], now.getUTCDate(), now);
@@ -96,6 +97,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     const v = Math.max(0, ...metrics.values[k]);
     return v ? new Date(v * 1000) : null;
   };
+  const epoch = (k: string) => Math.floor((lastCron(k)?.getTime() ?? 0) / 1000);
+  const pushJob = pushJobHealth({ tickAt: epoch(PUSH_TICK_KEY), runAt: epoch("cron_push_at"), calledAt: epoch(PUSH_CALLED_KEY) }, now);
   const ago = (d: Date | null) => (d ? `${Math.max(0, Math.round((now.getTime() - d.getTime()) / 60000))} min ago` : "never");
   const dbSeries = metrics.values.db_bytes.map((b, i, arr) => (b ? b : i > 0 ? arr[i - 1] : 0));
   const errorsToday = (metrics.values.errors_server.at(-1) ?? 0) + (metrics.values.errors_cron.at(-1) ?? 0);
@@ -106,7 +109,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     { label: "Email (Resend)", ok: emailEnabled(), text: emailEnabled() ? "enabled" : "off" },
     { label: "Push (VAPID)", ok: pushEnabled(), text: pushEnabled() ? "enabled" : "off" },
     { label: "Hourly cron", ok: Boolean(lastCron("cron_hourly_at")) && now.getTime() - (lastCron("cron_hourly_at")?.getTime() ?? 0) < 2 * 3600e3, text: ago(lastCron("cron_hourly_at")) },
-    { label: "Push cron (5 min)", ok: Boolean(lastCron("cron_push_at")) && now.getTime() - (lastCron("cron_push_at")?.getTime() ?? 0) < 20 * 60e3, text: ago(lastCron("cron_push_at")) },
+    // The push job ticks every five minutes and calls the app only when something is due (migration 0104): the board's own judgement.
+    { label: "Push cron (5 min tick)", ok: pushJob.ok, text: `tick ${ago(lastCron(PUSH_TICK_KEY))} · app ${ago(lastCron("cron_push_at"))}` },
   ];
 
   return (

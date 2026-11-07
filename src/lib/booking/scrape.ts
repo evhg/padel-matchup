@@ -12,8 +12,9 @@ import { PLATFORMS, detectPlatform, platformById } from "./platforms";
 import { CHECKOUT } from "./prepare";
 
 /**
- * Free court times read from the booking platforms' public club pages: today every fifteen minutes for
- * every club a reader can read, the next two days about once an hour.
+ * Free court times read from the booking platforms' public club pages: today every 30 minutes for
+ * every club a reader can read, the next two days about once an hour, and nothing from 23:00 to 06:00
+ * in the club's own zone.
  *
  * The owner's decision of 10 October 2026 (DECIDING rule 35): "platforms forbid scraping in their terms
  * but we are just testing, and on top every app scrapes every other app ... So scraping at risk of being
@@ -31,38 +32,60 @@ import { CHECKOUT } from "./prepare";
  *   - the club's zone as the row has it: a reader that cannot know the zone says so, never guesses.
  *
  * robots.txt does not bind a reader under rule 35 (the owner accepted the risk of a block); the frame
- * keeps the load low instead: each platform's own slice of at most eight clubs a run, today every 15
+ * keeps the load low instead: each platform's own slice of at most twelve clubs a run, today every 30
  * minutes for every club, the next two days about once an hour, and at most three of those longer
- * reads in a lane a run. `/about#bot` says who we are.
+ * reads in a lane a run (past them only for a read that would otherwise wait too long). `/about#bot`
+ * says who we are.
  *
- * The owner asked for a read "every 15min" of all courts (10 October 2026). Until 11 October 2026 only
- * a club people used was read that often, and production had none on a platform, so every club was
- * read once an hour. Now every push tick runs, and each takes the clubs whose read is 14 minutes old:
- * a club read on one tick comes due three ticks later, so the clubs fall into three groups and no tick
- * reads them all.
+ * The owner asked for a read "every 15min" of all courts (10 October 2026), and on 7 November 2026
+ * chose a slower one to save the Vercel plan's function time: "Run the court reader less often. Run it
+ * every 30 minutes, and only from 06:00 to 23:00 Thailand time." The clubs are in Bangkok and
+ * Singapore, so the hours apply in each club's own zone (`SCRAPE.dayFrom`, `SCRAPE.dayTo`). A run
+ * starts on every third push tick (every 15 minutes) and takes the clubs whose read is 29 minutes old:
+ * a club read on one run comes due two runs later, so the clubs fall into two groups and no run reads
+ * them all. The first runs after 06:00 catch up on the night, `perLane` clubs a run.
  *
- * The job rides the five-minute push job (`/api/cron/push`), which calls `scrapeIfDue`: it costs no
- * invocation of its own and no migration. It runs on every tick, when the last run is four minutes old
- * or more.
+ * The job rides the push job (`/api/cron/push`), which calls `scrapeIfDue`: it costs no invocation of
+ * its own. Since migration 0104 pg_cron calls that job only when something is due
+ * (`kicksmash_push_due`), and the court reader's turn is one of those things, so the same
+ * thresholds live in that function too (`tests/push-gate.test.ts` holds the two together).
  */
 /** What the thresholds allow for a run that lands late on its tick (`fullDueMs`, `fullLateMs`). */
 const DUE_SLACK_MS = 2 * 60_000;
 
 export const SCRAPE = {
-  /** A run starts when the last one began this long ago or more: every push tick, with a minute of slack for a late one. */
-  dueMs: 4 * 60_000,
   /**
-   * A club is read again after this long: every third tick, so every 15 minutes. A run's `now` lands a
-   * little after its tick, by a different amount each time, so the threshold sits a minute under the 15:
-   * a club read on one tick is never due on the next two, and always due on the third.
+   * A run starts when the last one began this long ago or more: every third push tick, so every 15
+   * minutes, with a minute of slack for a run that landed late on its tick.
    */
-  clubDueMs: 14 * 60_000,
-  /** The clubs one platform's lane takes in a run: with three groups, 24 clubs a platform every 15 minutes. Each lane has its own 45 seconds, so one platform never crowds out another. */
-  perLane: 8,
+  dueMs: 14 * 60_000,
+  /**
+   * A club is read again after this long: every second run, so every 30 minutes (the owner's decision
+   * of 7 November 2026). A run's `now` lands a little after its tick, by a different amount each time,
+   * so the threshold sits a minute under the 30: a club read on one run is never due on the next, and
+   * always due on the one after.
+   */
+  clubDueMs: 29 * 60_000,
+  /**
+   * The clubs one platform's lane takes in a run: with two groups, 24 clubs a platform every 30 minutes
+   * (Playtomic has 20 on 7 November 2026). Each lane has its own 45 seconds, so one platform never
+   * crowds out another.
+   */
+  perLane: 12,
+  /**
+   * The quiet hours, in each club's own zone: a club is read from `dayFrom`:00 to just before
+   * `dayTo`:00, never at night (the owner, 7 November 2026: "only from 06:00 to 23:00 Thailand time").
+   * A club with no zone keeps the hours of `nightTz` (every door that writes `clubs.tz` checks the name).
+   */
+  dayFrom: 6,
+  dayTo: 23,
+  nightTz: "Asia/Bangkok",
   /**
    * The full reads (all three days) one lane makes in a run; a due club past them has today alone read
-   * while its last full read is under `fullLateMs` old. So the hourly reads spread over the ticks
-   * instead of landing on one, and a tick stays far inside its 45 seconds.
+   * while its last full read is under `fullLateMs` old. So the hourly reads spread over the runs
+   * instead of landing on one. With a club read every 30 minutes, a club whose full read waits comes
+   * back at 90 minutes, past `fullLateMs`, so it then gets its full read past the cap: the cap delays a
+   * full read by one visit, never more.
    */
   fullPerLane: 3,
   budgetMs: 45_000,
@@ -83,7 +106,7 @@ export const SCRAPE = {
    * The next two days are read at most this often. In between, a club has today alone read, and keeps
    * the later days of its last full read (the decision of 10 October 2026 on this reader's review, to
    * lower the load on a platform). The hour less `DUE_SLACK_MS`: a read written at 0:00:00.812 was not
-   * an hour old at 1:00:00.301, so the full read came on the fifth visit until 11 October 2026.
+   * an hour old at 1:00:00.301, so the full read came on the fifth 15-minute visit until 11 October 2026.
    */
   fullDueMs: 60 * 60_000 - DUE_SLACK_MS,
   /**
@@ -149,6 +172,8 @@ export const SCRAPE_CLUBS_FRESH = "scrape_clubs_fresh";
 /** The error a club whose link no reader can read is written with. */
 const UNREADABLE = "unreadable link";
 export const SCRAPE_RUN_AT = "cron_scrape_at";
+/** When `SCRAPE_DISABLED=all` last skipped a run: `kicksmash_push_due` counts it as a run (migration 0104). */
+export const SCRAPE_SKIPPED_AT = "cron_scrape_skipped_at";
 
 /**
  * `SCRAPE_DISABLED`: a comma list of platform ids, or "all". Vercel gives a running deployment the
@@ -352,11 +377,32 @@ function hostPattern(platform: string): string | null {
 const listedForRead = () => and(isNull(clubs.rejectedAt), or(isNotNull(clubs.approvedAt), inArray(clubs.source, [...LISTED_SOURCES])), noFeed());
 
 /**
- * The clubs one platform's lane reads in this run: listed, not refused, no feed of their own, and a link
- * on that platform: the booking link, or, with none, the website. Every such club is due after 14
- * minutes, and the oldest cache goes first. Until 11 October 2026 only a club people used was due that
- * soon and every other one waited an hour. One query a platform, bounded; `clubs` is small. It selects
- * six columns and the cache's header, never the slots.
+ * `SCRAPE_QUIET_HOURS=off` reads at every hour. The browser suites pin it (e2e/run.mjs), because they run
+ * at any hour and their club must be read; production leaves it unset. The push job's gate
+ * (`kicksmash_push_due`) keeps the hours either way, so in production a read at night would come only on
+ * a tick that something else wakes.
+ */
+export const quietHoursOn = (value: string | undefined = process.env.SCRAPE_QUIET_HOURS): boolean => (value ?? "").trim().toLowerCase() !== "off";
+
+/**
+ * The club is in its day hours at `now` (`SCRAPE.dayFrom` to `dayTo`, in its own zone), as SQL. The hour
+ * is Postgres's own: `now` goes in as a timestamptz parameter (AGENTS.md rule 1). A club with no zone
+ * keeps Bangkok's hours (`SCRAPE.nightTz`), because most clubs are there. Every door that writes
+ * `clubs.tz` checks the name first (`isValidTimeZone`: the claim, the club a player adds, the manage
+ * page, `scripts/import-clubs.mjs`), so the query takes the column as it is: asking Postgres's list of
+ * names (`pg_timezone_names`) cost about 73 ms a query in production on 7 November 2026.
+ * `kicksmash_push_due` (migration 0104) asks the same.
+ */
+const dayHours = (now: Date): SQL | undefined =>
+  !quietHoursOn() ? undefined : sql`extract(hour from (${now.toISOString()}::timestamptz at time zone coalesce(nullif(${clubs.tz}, ''), ${SCRAPE.nightTz}))) between ${SCRAPE.dayFrom} and ${SCRAPE.dayTo - 1}`;
+
+/**
+ * The clubs one platform's lane reads in this run: listed, not refused, no feed of their own, a link
+ * on that platform (the booking link, or, with none, the website), and in its day hours. Every such
+ * club is due after 29 minutes, and the oldest cache goes first. Until 11 October 2026 only a club
+ * people used was due after 14 minutes and every other one waited an hour; from 11 October to
+ * 7 November 2026 every club was due after 14 minutes, day and night. One query a platform, bounded;
+ * `clubs` is small. It selects six columns and the cache's header, never the slots.
  */
 export async function dueClubs(db: Db, now: Date, platform: string, limit: number): Promise<DueClub[]> {
   if (limit <= 0) return [];
@@ -377,7 +423,7 @@ export async function dueClubs(db: Db, now: Date, platform: string, limit: numbe
       prev: sql<Omit<ClubAvailability, "slots" | "why"> | null>`(${clubs.availability} - 'slots' - 'why' - 'offers')`.mapWith(clubs.availability),
     })
     .from(clubs)
-    .where(and(listedForRead(), onPlatform, or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs)))))
+    .where(and(listedForRead(), onPlatform, or(isNull(clubs.availabilityAt), lt(clubs.availabilityAt, new Date(now.getTime() - SCRAPE.clubDueMs))), dayHours(now)))
     .orderBy(sql`${clubs.availabilityAt} asc nulls first`, clubs.slug)
     .limit(limit);
   return rows.map((r) => ({ ...r, prev: (r.prev as Omit<ClubAvailability, "slots" | "why"> | null) ?? null }));
@@ -510,7 +556,8 @@ export function todayOnlyRead(prev: DueClub["prev"], platform: string, now: Date
  * full read is due gets one while the lane has fewer than `fullPerLane`; past that, a club whose full
  * read is under `fullLateMs` old has today alone read and its full read waits for its next visit. A
  * club that has nothing to keep (never read, a failed read, a midnight since) is always read in full.
- * So each club's hourly read lands on its own tick, and the ticks stay even. Pure.
+ * So a full read waits one visit at most: with a visit every 30 minutes, the next one is past
+ * `fullLateMs`. Pure.
  */
 export function planReads(prevs: readonly DueClub["prev"][], platform: string, now: Date, fullPerLane: number = SCRAPE.fullPerLane): boolean[] {
   let full = 0;
@@ -607,7 +654,7 @@ export type PlatformRun = { requests: number; ok: number; errors: number; blocke
 export type FailedClub = { slug: string; platform: string; error: string; why: string | null };
 /**
  * `writeErrors`: club rows the database refused; the run goes on, and the push job reports the count.
- * `failed`: every club written as failed, at most a lane's eight a platform. The push job answers with
+ * `failed`: every club written as failed, at most a lane's twelve a platform. The push job answers with
  * the run, and pg_net keeps that answer for about six hours (`net._http_response`), which is longer
  * than Vercel keeps a log; that is where a failure's cause is read afterwards.
  */
@@ -880,12 +927,34 @@ export function unreadableToCount(prev: DueClub["prev"], now: Date): boolean {
 }
 
 /**
- * Called by every push tick. Nothing at all while no reader exists or every platform is switched off;
- * one read of `metrics_daily` otherwise, and a run when the last one began four minutes ago or more.
+ * Is any club that a lane could pick in its day hours? A superset of `dueClubs` over every platform:
+ * listed, a booking link or a website on a platform's host, and the hours. One bounded read. The push
+ * job's gate asks the same in SQL (`kicksmash_push_due`, migration 0104; `tests/push-gate.test.ts` holds
+ * the two together), so it never wakes the job for a club this would not read.
  */
-export async function scrapeIfDue(db: Db, now = new Date(), o: ScrapeOptions = {}): Promise<ScrapeRun | { skipped: "no_reader" | "off" | "not_due" }> {
+export async function anyClubAwake(db: Db, now: Date): Promise<boolean> {
+  const [hit] = await db
+    .select({ slug: clubs.slug })
+    .from(clubs)
+    .where(and(listedForRead(), or(isNotNull(clubs.bookingUrl), sql`${clubs.website} ~* ${anyPlatformHost}`), dayHours(now)))
+    .limit(1);
+  return Boolean(hit);
+}
+
+/**
+ * Called by the push job. Nothing at all while no reader exists; one write (`SCRAPE_SKIPPED_AT`) while
+ * `SCRAPE_DISABLED` switches every platform off; one
+ * read of `metrics_daily` otherwise, and when the last run began 14 minutes ago or more, one read of
+ * `clubs`: no club in its day hours is `night` (and nothing is written, so the first run after 06:00
+ * finds the read due), else a run.
+ */
+export async function scrapeIfDue(db: Db, now = new Date(), o: ScrapeOptions = {}): Promise<ScrapeRun | { skipped: "no_reader" | "off" | "not_due" | "night" }> {
   if (!(o.adapters ?? ADAPTERS).length) return { skipped: "no_reader" };
-  if (disabledPlatforms(o.disabled ?? process.env.SCRAPE_DISABLED) === "all") return { skipped: "off" };
+  if (disabledPlatforms(o.disabled ?? process.env.SCRAPE_DISABLED) === "all") {
+    // The push job's gate counts this as a run, so a reader switched off does not wake the job every tick.
+    await setMetric(db, SCRAPE_SKIPPED_AT, Math.floor(now.getTime() / 1000), dayKey(now));
+    return { skipped: "off" };
+  }
   const [last] = await db
     .select({ value: metricsDaily.value })
     .from(metricsDaily)
@@ -893,6 +962,7 @@ export async function scrapeIfDue(db: Db, now = new Date(), o: ScrapeOptions = {
     .orderBy(desc(metricsDaily.day))
     .limit(1);
   if (last && now.getTime() - Number(last.value) * 1000 < SCRAPE.dueMs) return { skipped: "not_due" };
+  if (!(await anyClubAwake(db, now))) return { skipped: "night" };
   return runScrape(db, now, o);
 }
 
@@ -923,7 +993,7 @@ export function coverageOf(c: Pick<Club, "bookingUrl" | "bookingPlatform" | "web
 }
 
 /** Any platform's host, as a Postgres regular expression: the website side of the board's one read. */
-const anyPlatformHost = `^https?://([^/?#]*\\.)?(${PLATFORMS.flatMap((p) => p.hosts).map((h) => h.replace(/\./g, "\\.")).join("|")})([/?#:]|$)`;
+export const anyPlatformHost = `^https?://([^/?#]*\\.)?(${PLATFORMS.flatMap((p) => p.hosts).map((h) => h.replace(/\./g, "\\.")).join("|")})([/?#:]|$)`;
 
 /**
  * The listed clubs on each platform that the run never reads, by `Coverage`: one bounded read of three
@@ -951,12 +1021,13 @@ export async function scrapeCoverage(db: Db, adapters: readonly AvailabilityAdap
  * reader at all). A platform with no reader has a line of its own (`no_reader`) while a listed club names it.
  */
 /** `checkout`: for a platform whose checkout "Book this court" fills, where it stands (DECIDING rule 36): on, switched off by its row, or its builder lost. */
-export type PlatformLine = { platform: string; state: "fresh" | "resting" | "off" | "stopped" | "no_reader"; fresh: number; restUntil: Date | null; requestsToday: number; blockedToday: number; unread: number; checkout?: "on" | "off" | "lost" };
+/** `quiet`: no club is in its day hours now, so a line that read nobody in the last hour is no fault. */
+export type PlatformLine = { platform: string; state: "fresh" | "resting" | "off" | "stopped" | "no_reader"; fresh: number; restUntil: Date | null; requestsToday: number; blockedToday: number; unread: number; quiet: boolean; checkout?: "on" | "off" | "lost" };
 
 /**
  * The service board's line per platform: fresh (clubs read clean in the last hour, by the read's own
  * time, so a good read a timeout kept is not counted again), resting until, stopped, or off, and the
- * listed clubs it never reads; then a line for each platform with listed clubs and no reader. Three queries.
+ * listed clubs it never reads; then a line for each platform with listed clubs and no reader. Four queries.
  */
 export async function scrapeBoard(db: Db, now: Date, adapters: readonly AvailabilityAdapter[] = ADAPTERS): Promise<PlatformLine[]> {
   const ids = [...new Set(adapters.map((a) => a.platform))];
@@ -973,6 +1044,7 @@ export async function scrapeBoard(db: Db, now: Date, adapters: readonly Availabi
     .from(metricsDaily)
     .where(and(eq(metricsDaily.day, dayKey(now)), inArray(metricsDaily.key, ids.flatMap((p) => [scrapeCounter("requests", p), scrapeCounter("blocked", p)]))));
   const coverage = await scrapeCoverage(db, adapters);
+  const quiet = !(await anyClubAwake(db, now));
   const count = (k: string) => Number(today.find((r) => r.key === k)?.value ?? 0);
   const unread = (p: string) => {
     const c = coverage.get(p);
@@ -986,8 +1058,9 @@ export async function scrapeBoard(db: Db, now: Date, adapters: readonly Availabi
     requestsToday: count(scrapeCounter("requests", s.platform)),
     blockedToday: count(scrapeCounter("blocked", s.platform)),
     unread: unread(s.platform),
+    quiet,
     ...(s.checkout ? { checkout: s.checkout.off ? ("off" as const) : s.checkout.lost ? ("lost" as const) : ("on" as const) } : {}),
   }));
   const unreadPlatforms = [...coverage.keys()].filter((p) => !ids.includes(p)).sort();
-  return [...read, ...unreadPlatforms.map((p): PlatformLine => ({ platform: p, state: "no_reader", fresh: 0, restUntil: null, requestsToday: 0, blockedToday: 0, unread: unread(p) }))];
+  return [...read, ...unreadPlatforms.map((p): PlatformLine => ({ platform: p, state: "no_reader", fresh: 0, restUntil: null, requestsToday: 0, blockedToday: 0, unread: unread(p), quiet }))];
 }

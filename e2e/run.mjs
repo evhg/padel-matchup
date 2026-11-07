@@ -62,6 +62,9 @@ const env = {
   // proves the paste box's "Add screenshot" says its plain line when reading a screenshot is off.
   ANTHROPIC_API_KEY: "",
   NEXT_TELEMETRY_DISABLED: "1",
+  // The reader of free court times sleeps from 23:00 to 06:00 in each club's zone (DECIDING rule 35), and
+  // a suite runs at any hour: e2e/clubs.mjs must see its club read whenever CI runs it.
+  SCRAPE_QUIET_HOURS: "off",
   // A fake Playtomic for clubs whose slug starts with "e2e-" (e2e/fakes/playtomic.mjs): the reader of
   // free court times reads it, and no suite calls the real platform or opens a checkout.
   NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import ${path.join(path.dirname(new URL(import.meta.url).pathname), "fakes/playtomic.mjs")}`].filter(Boolean).join(" "),

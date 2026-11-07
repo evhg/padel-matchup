@@ -12,7 +12,7 @@ import { playtomicAdapter, resetPlaytomicState } from "@/lib/booking/adapters/pl
 import { createBookandgoAdapter } from "@/lib/booking/adapters/bookandgo";
 import { clubToPublic } from "@/lib/api/serialize";
 import { freeCourtsCardShown, freeCourtsState } from "@/lib/booking/availability";
-import { freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs } from "@/lib/domain/clubs";
+import { addClub, claimClub, freeCourtHours, listClubsForPicking, listLiveClubs, listShownClubs, setClubTimezone } from "@/lib/domain/clubs";
 import { createEvent } from "@/lib/domain/events";
 import { setMetric } from "@/lib/domain/metrics";
 import { SCRAPE, coverageOf, disabledPlatforms, dueClubs, failureWhy, freeSlotsFromScrape, linkKey, planReads, readPlatformStates, runScrape, scrapeBoard, scrapeIfDue, type Clock, type DueClub } from "@/lib/booking/scrape";
@@ -20,7 +20,8 @@ import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 import { freezeClock } from "./helpers/clock";
 
 /**
- * The fifteen-minute read of free court times (DECIDING rule 35), on a reader that exists only here.
+ * The read of free court times (DECIDING rule 35): every 30 minutes from 06:00 to 23:00 in each club's
+ * zone since 7 November 2026, every 15 minutes before that. On a reader that exists only here.
  *
  * NOW is Saturday 10 October 2026, 03:00 UTC — 10:00 in Bangkok (UTC+7). Every time below comes off
  * NOW (rule 11):
@@ -92,6 +93,7 @@ beforeEach(async () => {
   ({ db } = await createTestDb());
   delete process.env.SCRAPE_DISABLED;
   delete process.env.VERCEL_GIT_COMMIT_SHA;
+  delete process.env.SCRAPE_QUIET_HOURS;
 });
 
 let n = 0;
@@ -110,10 +112,10 @@ describe("the slice: which clubs a run reads", () => {
     const org = await makePlayer(db, "Org");
     await club("old-cache", { availabilityAt: at(-2 * HOUR) });
     await club("never-read");
-    await club("used-club", { availabilityAt: at(-20 * 60_000) }); // due: read 14 minutes ago or more
+    await club("used-club", { availabilityAt: at(-30 * 60_000) }); // due: read 29 minutes ago or more
     await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(2 * DAY), tz: "Asia/Bangkok", venueName: "used club", whenFull: "waitlist" });
     await club("quiet-club", { availabilityAt: at(-30 * 60_000) }); // nobody uses it, and it is due all the same
-    await club("read-just-now", { availabilityAt: at(-5 * 60_000) }); // not due
+    await club("read-just-now", { availabilityAt: at(-20 * 60_000) }); // not due: read under 29 minutes ago
     await club("own-feed", { availabilityUrl: "https://own-feed.example/b.ics", availabilityKind: "ics_bookings" }); // its feed wins
     await club("refused", { rejectedAt: at(-DAY) });
     await club("pending-claim", { source: "claim" }); // a claim nobody approved yet is not listed
@@ -127,16 +129,19 @@ describe("the slice: which clubs a run reads", () => {
     expect(w.calls[1].at - w.calls[0].at).toBeGreaterThanOrEqual(SCRAPE.gapMs);
     expect(w.calls[0].headers.get("user-agent")).toBe("KicksmashBot/1.0 (+https://kicksma.sh/about)");
 
-    // The rest at the default cap; the clubs just read wait, and every club read 14 minutes ago or
-    // more is due, whether anybody plays there or not (the owner: "every 15min", 10 October 2026).
+    // The rest at the default cap; the clubs just read wait, and every club read 29 minutes ago or
+    // more is due, whether anybody plays there or not (the owner: "every 15min", 10 October 2026, and
+    // "every 30 minutes", 7 November 2026).
     const w2 = world();
     await runScrape(db, at(60_000), { adapters: [reader()], fetchImpl: w2.fetchImpl, clock: w2.clock });
     expect(w2.calls.map((c) => c.url)).toEqual(["https://playtomic.io/quiet-club", "https://playtomic.io/used-club"]);
   });
 
-  it("reads every club every 15 minutes, whether anybody plays there or not", async () => {
+  it("reads every club every 30 minutes, whether anybody plays there or not", async () => {
     // Until 11 October 2026 only a club people used was read every 15 minutes, and production had no
-    // used club on a platform, so every club was read once an hour.
+    // used club on a platform, so every club was read once an hour. From then until 7 November 2026
+    // every club was read every 15 minutes; the owner then chose every 30 minutes. A run comes every
+    // 15 minutes (`SCRAPE.dueMs`), and a club is due on every second one (`SCRAPE.clubDueMs`).
     const org = await makePlayer(db, "Org");
     await club("busy-club");
     await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(DAY), tz: "Asia/Bangkok", venueName: "busy club", whenFull: "waitlist" });
@@ -147,19 +152,20 @@ describe("the slice: which clubs a run reads", () => {
       return w.calls.map((c) => new URL(c.url).pathname).sort();
     };
     expect(await urls(0)).toEqual(["/busy-club", "/quiet-club"]);
-    // The next two ticks: not due yet.
-    expect(await urls(5 * 60_000)).toEqual([]);
-    expect(await urls(10 * 60_000)).toEqual([]);
-    expect(await urls(15 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
+    // The next run: not due yet.
+    expect(await urls(15 * 60_000)).toEqual([]);
     expect(await urls(30 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
-    expect(await urls(45 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
+    expect(await urls(45 * 60_000)).toEqual([]);
+    expect(await urls(60 * 60_000)).toEqual(["/busy-club", "/quiet-club"]);
   });
 
-  it("reads a club in full every fourth visit and today alone in between, on ticks that drift", async () => {
-    // Every club is due every 15 minutes; its next two days are read about once an hour. The ticks
-    // drift a second earlier each time, as real ones do. Run k is at k × 15 minutes − k seconds:
+  it("reads a club on every second run, in full every second visit and today alone in between, on runs that drift", async () => {
+    // A run comes every 15 minutes and every club is due every 30; its next two days are read about
+    // once an hour. The runs drift a second earlier each time, as real ones do. Run k is at
+    // k × 15 minutes − k seconds:
     //   k = 0   0:00:00   full read
-    //   k = 1-3           today alone (the full read is under 58 minutes old)
+    //   k = 1             not due (read 14:59 ago, under 29 minutes)
+    //   k = 2   0:29:58   today alone (the full read is under 58 minutes old)
     //   k = 4   0:59:56   58 minutes and more since 0:00:00: a full read
     //   k = 8   1:59:52   a full read
     await club("quiet-club");
@@ -171,18 +177,19 @@ describe("the slice: which clubs a run reads", () => {
       await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
       if (w.calls.length) readAt.push(k);
     }
-    expect(readAt).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(seen.map((s) => s.days)).toEqual([3, 1, 1, 1, 3, 1, 1, 1, 3, 1, 1]);
+    expect(readAt).toEqual([0, 2, 4, 6, 8, 10]);
+    expect(seen.map((s) => s.days)).toEqual([3, 1, 3, 1, 3, 1]);
   });
 
-  it("on a clock with fractions, the full read comes on the 4th visit, never the 5th", async () => {
+  it("on a clock with fractions, the full read comes on the 2nd visit, never the 3rd", async () => {
     // pg_cron ticks every five minutes and the push job's `now` lands a little after each tick, by a
     // different amount each time; the run's own clock (performance.now()) carries fractions. A read
     // written at 0:00:00.812 was not an hour old at 1:00:00.301, so the next two days came every 75
-    // minutes (11 October 2026). Run k lands at k × 15 minutes plus `late[k]`:
+    // minutes (11 October 2026). Run k lands at k × 15 minutes plus `late[k]`, and a club is visited on
+    // every second run (7 November 2026):
     //   k = 0   0:00:00.812   both clubs: full read
-    //   k = 1-3               both clubs: today alone
-    //   k = 4   1:00:00.301   both clubs: full read (the 4th visit, never the 5th)
+    //   k = 2                 both clubs: today alone
+    //   k = 4   1:00:00.301   both clubs: full read (the 2nd visit, never the 3rd)
     //   k = 8   2:00:00.004   both clubs: full read
     const org = await makePlayer(db, "Org");
     await club("busy-club");
@@ -197,13 +204,13 @@ describe("the slice: which clubs a run reads", () => {
       for (const t of seen) reads[t.clubSlug].push({ run: k, days: t.days });
     }
     for (const slug of ["busy-club", "quiet-club"]) {
-      expect(reads[slug].map((r) => r.run)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(reads[slug].map((r) => r.run)).toEqual([0, 2, 4, 6, 8]);
       expect(reads[slug].filter((r) => r.days === SCRAPE.days).map((r) => r.run)).toEqual([0, 4, 8]);
     }
   });
 
   it("gives each platform its own slice, so one platform's clubs never crowd out another's", async () => {
-    for (let i = 0; i < 10; i++) await club(`pt-${i}`, { availabilityAt: at(-DAY + i * 60_000) });
+    for (let i = 0; i < SCRAPE.perLane + 2; i++) await club(`pt-${i}`, { availabilityAt: at(-DAY + i * 60_000) });
     await club("mt-a", { bookingUrl: "https://matchi.se/mt-a", bookingPlatform: "matchi" });
     await club("mt-b", { bookingUrl: "https://matchi.se/mt-b", bookingPlatform: "matchi", availabilityAt: at(-HOUR * 3) });
     const w = world(undefined, 10);
@@ -608,20 +615,98 @@ describe("back-off and switches", () => {
     expect(r2.platforms.matchi.restUntil).toBe(iso(6 * HOUR));
   });
 
-  it("runs on every push tick, never twice inside one, and costs nothing while no reader exists", async () => {
+  it("runs on every third push tick, never twice inside 15 minutes, and costs nothing while no reader exists", async () => {
     await club("ticks");
     const w = world();
     expect(await scrapeIfDue(db, NOW, { adapters: [], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "no_reader" });
     expect(await metric("cron_scrape_at")).toBe(0); // not even a write
     const first = await scrapeIfDue(db, NOW, { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
     expect("clubs" in first && first.clubs).toBe(1);
-    // A second call inside the same tick (a retry) runs nothing.
-    expect(await scrapeIfDue(db, at(2 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "not_due" });
-    // The next tick, a little early, runs; the club itself is not due until the third.
-    const next = await scrapeIfDue(db, at(5 * 60_000 - 700.5), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    // A second call inside the same tick (a retry) runs nothing, and nor do the next two ticks.
+    for (const t of [2 * 60_000, 5 * 60_000 - 700.5, 10 * 60_000]) expect(await scrapeIfDue(db, at(t), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock })).toEqual({ skipped: "not_due" });
+    // The third tick, a little early, runs; the club itself is not due until the run after.
+    const next = await scrapeIfDue(db, at(15 * 60_000 - 700.5), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
     expect("clubs" in next && next.clubs).toBe(0);
-    const third = await scrapeIfDue(db, at(15 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
+    const third = await scrapeIfDue(db, at(30 * 60_000), { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock });
     expect("clubs" in third && third.clubs).toBe(1);
+  });
+
+  it("reads no club from 23:00 to 06:00 in its own zone, a club with no zone in Bangkok's", async () => {
+    // The owner, 7 November 2026: "only from 06:00 to 23:00 Thailand time". The clubs are in Bangkok
+    // (UTC+7) and Singapore (UTC+8), so the hours are each club's own. On 10 October 2026:
+    //   14:59 UTC  Bangkok 21:59, Singapore 22:59   all four
+    //   15:00 UTC  Singapore 23:00                  Singapore sleeps
+    //   15:59 UTC  Bangkok 22:59                    the Bangkok hours still read
+    //   16:00 UTC  Bangkok 23:00                    none
+    //   21:59 UTC  Singapore 05:59                  none
+    //   22:00 UTC  Singapore 06:00                  Singapore only
+    //   22:59 UTC  Bangkok 05:59                    Singapore only
+    //   23:00 UTC  Bangkok 06:00                    all four
+    await club("bkk");
+    await club("sgp", { tz: "Asia/Singapore" });
+    await club("no-zone", { tz: null });
+    await club("odd-zone", { tz: "" }); // an empty zone is no zone
+    const picked = async (iso: string) => (await dueClubs(db, new Date(iso), "playtomic", 10)).map((c) => c.slug).sort();
+    const all = ["bkk", "no-zone", "odd-zone", "sgp"];
+    const bangkok = ["bkk", "no-zone", "odd-zone"];
+    expect(await picked("2026-10-10T14:59:00Z")).toEqual(all);
+    expect(await picked("2026-10-10T15:00:00Z")).toEqual(bangkok);
+    expect(await picked("2026-10-10T15:59:00Z")).toEqual(bangkok);
+    expect(await picked("2026-10-10T16:00:00Z")).toEqual([]);
+    expect(await picked("2026-10-10T21:59:00Z")).toEqual([]);
+    expect(await picked("2026-10-10T22:00:00Z")).toEqual(["sgp"]);
+    expect(await picked("2026-10-10T22:59:00Z")).toEqual(["sgp"]);
+    expect(await picked("2026-10-10T23:00:00Z")).toEqual(all);
+    // The browser suites run at any hour, and switch the hours off (SCRAPE_QUIET_HOURS, e2e/run.mjs).
+    process.env.SCRAPE_QUIET_HOURS = "off";
+    expect(await picked("2026-10-10T18:00:00Z")).toEqual(all);
+    delete process.env.SCRAPE_QUIET_HOURS;
+    expect(await picked("2026-10-10T18:00:00Z")).toEqual([]);
+  });
+
+  it("keeps a zone nobody can read out of clubs.tz at every door, because the reader takes the column as it is", async () => {
+    // The hour is Postgres's own (`dayHours`), and an unknown name would stop the whole query: asking
+    // Postgres's list of names instead cost about 73 ms a query in production (7 November 2026).
+    const p = await makePlayer(db, "Lee");
+    const added = await addClub(db, { name: "Odd Zone Padel", playerId: p.id, tz: "Mars/Olympus" });
+    expect((await row(added.slug)).tz).toBeNull();
+    const claimed = await claimClub(db, { name: "Odd Claim Padel", playerId: p.id, tz: "Mars/Olympus", claimRole: "owner", claimContact: "+66 81 234 5678" });
+    expect((await row(claimed.slug)).tz).toBeNull();
+    await expect(setClubTimezone(db, added.slug, "Mars/Olympus")).rejects.toThrow();
+    // The directory's import refuses one before it writes SQL, and every zone the file names is one Postgres knows.
+    const zones = [...new Set((JSON.parse(readFileSync("data/clubs.json", "utf8")) as { clubs: { tz: string | null }[] }).clubs.map((c) => c.tz).filter((z): z is string => Boolean(z)))];
+    for (const z of zones) await db.execute(sql`select ${NOW.toISOString()}::timestamptz at time zone ${z} as local`);
+    expect(zones.length).toBeGreaterThan(0);
+  });
+
+  it("SCRAPE_DISABLED=all writes no run, only the skip the push job's gate counts as one", async () => {
+    await club("off-club");
+    expect(await scrapeIfDue(db, NOW, { adapters: [reader()], disabled: "all" })).toEqual({ skipped: "off" });
+    expect(await metric("cron_scrape_at")).toBe(0);
+    expect(await metric("cron_scrape_skipped_at")).toBe(Math.floor(NOW.getTime() / 1000));
+  });
+
+  it("at night the run is 'night', writes nothing, and the first run after 06:00 is due", async () => {
+    await club("bkk");
+    await club("sgp", { tz: "Asia/Singapore" });
+    const w = world();
+    const o = { adapters: [reader()], fetchImpl: w.fetchImpl, clock: w.clock };
+    // 22:45 Bangkok, the last run of the evening.
+    const evening = await scrapeIfDue(db, new Date("2026-10-10T15:45:00Z"), o);
+    expect("clubs" in evening && evening.clubs).toBe(1);
+    const lastRun = await metric("cron_scrape_at");
+    // 23:00 to 05:59 in both zones: nothing read, nothing written, however often the job asks.
+    for (const iso of ["2026-10-10T16:00:00Z", "2026-10-10T18:30:00Z", "2026-10-10T21:59:00Z"]) expect(await scrapeIfDue(db, new Date(iso), o)).toEqual({ skipped: "night" });
+    expect(await metric("cron_scrape_at")).toBe(lastRun);
+    expect(w.calls).toHaveLength(1);
+    // The service board's line stays green through the night, and says why nothing was read.
+    const night = (await scrapeBoard(db, new Date("2026-10-10T19:00:00Z"), [reader()]))[0];
+    expect(night).toMatchObject({ platform: "playtomic", state: "fresh", fresh: 0, quiet: true });
+    // 06:00 in Singapore: due at once, and Singapore's club alone is read.
+    const morning = await scrapeIfDue(db, new Date("2026-10-10T22:00:00Z"), o);
+    expect("clubs" in morning && morning.clubs).toBe(1);
+    expect(w.calls.map((c) => new URL(c.url).pathname)).toEqual(["/bkk", "/sgp"]);
+    expect((await scrapeBoard(db, new Date("2026-10-10T22:10:00Z"), [reader()]))[0]).toMatchObject({ state: "fresh", fresh: 1, quiet: false });
   });
 });
 
@@ -766,23 +851,23 @@ describe("a clock with fractions, as performance.now() gives it", () => {
       expect(w.calls.map((c) => new URL(c.url).pathname)).toEqual(["/clubs/the-padel-co", "/api/clubs/availability", "/api/clubs/availability", "/api/clubs/availability"]);
       const first = (await row("the-padel-co")).availability!;
       expect(first.ref).toMatch(/^b692a586-2e22-4fca-add7-[0-9a-f]{12}$/);
-      // Fifteen minutes on, in a new function instance (nothing in memory): one request, today alone.
+      // Thirty minutes on, in a new function instance (nothing in memory): one request, today alone.
       resetPlaytomicState();
       const w2 = world(playtomic, 200.123, 0.25);
-      const next = await runScrape(db, at(15 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w2.fetchImpl, clock: w2.clock });
+      const next = await runScrape(db, at(30 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w2.fetchImpl, clock: w2.clock });
       expect(next.platforms.playtomic).toMatchObject({ ok: 1, requests: 1 });
       expect(w2.calls.map((c) => new URL(c.url).pathname)).toEqual(["/api/clubs/availability"]);
       expect(new URL(w2.calls[0].url).searchParams.get("tenant_id")).toBe(first.ref);
       expect((await row("the-padel-co")).availability).toMatchObject({ error: null, ref: first.ref, fullAt: first.fullAt });
       // No list carries it: only the reader reads it.
-      const listed = (await listShownClubs(db, null, 400, at(15 * 60_000))).find((c) => c.slug === "the-padel-co")!;
+      const listed = (await listShownClubs(db, null, 400, at(30 * 60_000))).find((c) => c.slug === "the-padel-co")!;
       expect(listed.availability).not.toHaveProperty("ref");
       expect(listed.availability).not.toHaveProperty("linkKey");
       // A ref of the wrong shape is never sent: the club page is read instead.
       await db.update(clubs).set({ availability: { ...first, ref: "https://evil.example/x" }, availabilityAt: at(-20 * 60_000) }).where(eq(clubs.slug, "the-padel-co"));
       resetPlaytomicState();
       const w3 = world(playtomic, 200.123, 0.25);
-      await runScrape(db, at(16 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w3.fetchImpl, clock: w3.clock });
+      await runScrape(db, at(31 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w3.fetchImpl, clock: w3.clock });
       expect(w3.calls.map((c) => new URL(c.url).pathname)).toEqual(["/clubs/the-padel-co", "/api/clubs/availability"]);
     } finally {
       spy.mockRestore();
@@ -803,18 +888,18 @@ describe("a clock with fractions, as performance.now() gives it", () => {
       const first = (await row("the-padel-co")).availability!;
       const moved = "https://playtomic.com/clubs/the-cage-padel-tribe";
       await db.update(clubs).set({ bookingUrl: moved, website: moved }).where(eq(clubs.slug, "the-padel-co"));
-      // Fifteen minutes on, in the same function instance: the new club page, then three days at its id.
+      // Thirty minutes on, in the same function instance: the new club page, then three days at its id.
       const w2 = world(playtomic, 200.123, 0.25);
-      await runScrape(db, at(15 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w2.fetchImpl, clock: w2.clock });
+      await runScrape(db, at(30 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w2.fetchImpl, clock: w2.clock });
       expect(w2.calls.map((c) => new URL(c.url).pathname)).toEqual(["/clubs/the-cage-padel-tribe", "/api/clubs/availability", "/api/clubs/availability", "/api/clubs/availability"]);
       const ids = new Set(w2.calls.slice(1).map((c) => new URL(c.url).searchParams.get("tenant_id")));
       const after = (await row("the-padel-co")).availability!;
       expect([...ids]).toEqual([after.ref]);
       expect(after.ref).not.toBe(first.ref);
-      expect(after).toMatchObject({ error: null, fullAt: iso(15 * 60_000) });
+      expect(after).toMatchObject({ error: null, fullAt: iso(30 * 60_000) });
       // The next read of today sends the new id alone.
       const w3 = world(playtomic, 200.123, 0.25);
-      await runScrape(db, at(30 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w3.fetchImpl, clock: w3.clock });
+      await runScrape(db, at(60 * 60_000), { adapters: [playtomicAdapter], fetchImpl: w3.fetchImpl, clock: w3.clock });
       expect(w3.calls.map((c) => [new URL(c.url).pathname, new URL(c.url).searchParams.get("tenant_id")])).toEqual([["/api/clubs/availability", after.ref]]);
     } finally {
       spy.mockRestore();
@@ -1011,8 +1096,8 @@ describe("a failed read says why, in a few words that are safe to keep", () => {
   });
 });
 
-describe("every club every 15 minutes, spread over the push ticks", () => {
-  const prev = (fullAgoMin: number): DueClub["prev"] => ({ fetchedAt: at(-15 * 60_000).toISOString(), day: "2026-10-10", days: ["2026-10-10", "2026-10-11", "2026-10-12"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", error: null, fullAt: at(-fullAgoMin * 60_000).toISOString() });
+describe("every club every 30 minutes in its day hours, spread over the runs", () => {
+  const prev = (fullAgoMin: number): DueClub["prev"] => ({ fetchedAt: at(-30 * 60_000).toISOString(), day: "2026-10-10", days: ["2026-10-10", "2026-10-11", "2026-10-12"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", error: null, fullAt: at(-fullAgoMin * 60_000).toISOString() });
 
   it("makes at most three full reads in a lane a run, and puts none off past 88 minutes", () => {
     // Oldest first: the first three full reads due get them; the next two wait for their next visit;
@@ -1025,12 +1110,12 @@ describe("every club every 15 minutes, spread over the push ticks", () => {
   });
 
   /**
-   * Production's 20 Playtomic clubs, and Mandala once its link is there, read on `ticks` push ticks from
-   * `fromMs` after NOW. A full read is four requests (the club page and three days) and a read of today
-   * one (the tenant id kept, above). Run k is the push tick at k × 5 minutes. Returns the requests each
-   * tick sent and each club's reads.
+   * Production's 20 Playtomic clubs, and Mandala once its link is there, all in Bangkok, read on `runs`
+   * runs from `fromMs` after NOW. A full read is four requests (the club page and three days) and a read
+   * of today one (the tenant id kept, above). Run k is the push tick at k × 15 minutes, a little late by
+   * a different amount each time. Returns the requests each run sent and each club's reads.
    */
-  const twentyOneClubs = async (fromMs: number, ticks: number) => {
+  const twentyOneClubs = async (fromMs: number, runs: number) => {
     const slugs = Array.from({ length: 21 }, (_, i) => `pt-${String(i).padStart(2, "0")}`);
     for (const s of slugs) await club(s);
     const costed: AvailabilityAdapter = {
@@ -1042,47 +1127,54 @@ describe("every club every 15 minutes, spread over the push ticks", () => {
       },
     };
     const reads: Record<string, { t: number; days: number }[]> = Object.fromEntries(slugs.map((s) => [s, []]));
-    const perTick: number[] = [];
-    for (let k = 0; k < ticks; k++) {
-      const t = fromMs + k * 5 * 60_000 + (k % 3) * 401.7;
+    const perRun: number[] = [];
+    for (let k = 0; k < runs; k++) {
+      const t = fromMs + k * 15 * 60_000 + (k % 3) * 401.7;
       const seen: ScrapeTarget[] = [];
       const w = world(undefined, 5, 0.5);
       const wrapped: AvailabilityAdapter = { ...costed, scrape: async (target, f, now) => (seen.push(target), costed.scrape(target, f, now)) };
       await runScrape(db, at(t), { adapters: [wrapped], fetchImpl: w.fetchImpl, clock: w.clock });
-      perTick.push(w.calls.length);
+      perRun.push(w.calls.length);
       for (const s of seen) reads[s.clubSlug].push({ t, days: s.days });
     }
-    return { slugs, perTick, reads };
+    return { slugs, perRun, reads };
   };
 
-  it("21 clubs: each read every 15 minutes, in full about hourly, and no tick over 17 requests once the first hour is over", async () => {
+  it("21 clubs: each read every 30 minutes, in full every 60 to 90 minutes, and no run over 35 requests once the first hour is over", async () => {
     //   Before 11 October 2026: every club once an hour in full, about 21 × 4 × 24 = 2,016 requests a day.
-    //   Now: each club 4 + 3 × 1 = 7 an hour, 21 × 7 × 24 = 3,528 a day, at most 17 in one tick.
-    const { slugs, perTick, reads } = await twentyOneClubs(0, 36); // three hours
-    // The first hour reads every club in full once: three ticks of eight, eight and five clubs.
-    expect(perTick.slice(0, 3)).toEqual([32, 32, 20]);
-    // After it, no tick sends more than three full reads and five of today: 3 × 4 + 5.
-    expect(Math.max(...perTick.slice(12))).toBeLessThanOrEqual(17);
+    //   11 October to 7 November 2026: every 15 minutes, 21 × (4 + 3 × 1) = 147 an hour, day and night,
+    //   3,528 a day, at most 17 in one run.
+    //   Now: a club every 30 minutes, and its full read every second visit while the lane has fewer than
+    //   three, else on the third (`fullLateMs`). The runs settle into a cycle of six (90 minutes) that
+    //   sends 144 requests, 96 an hour, only in the day hours: about 1,630 a day for 17 hours.
+    const { slugs, perRun, reads } = await twentyOneClubs(0, 16); // four hours, from 10:00 Bangkok
+    // The first half hour reads every club in full once: twelve clubs (45 requests fit the 45 seconds,
+    // so the twelfth club is cut short and stays due), then the other ten and that one.
+    expect(perRun.slice(0, 2)).toEqual([45, 40]);
+    expect(Math.max(...perRun.slice(4))).toBeLessThanOrEqual(35);
+    expect(perRun.slice(4, 10)).toEqual(perRun.slice(10, 16));
+    expect(perRun.slice(4, 10).reduce((a, b) => a + b, 0)).toBe(144);
     for (const s of slugs) {
       const gaps = reads[s].slice(1).map((r, i) => Math.round((r.t - reads[s][i].t) / 60_000));
-      expect([s, gaps.every((g) => g === 15)]).toEqual([s, true]);
+      // The club the first run cut short is read on the next run, then every 30 minutes.
+      expect([s, gaps.slice(1).every((g) => g === 30)]).toEqual([s, true]);
       const fulls = reads[s].filter((r) => r.days === SCRAPE.days).map((r) => r.t);
-      const fullGaps = fulls.slice(1).map((x, i) => (x - fulls[i]) / 60_000);
-      expect([s, fullGaps.every((g) => g >= 58 && g <= 90)]).toEqual([s, true]);
+      const fullGaps = fulls.slice(1).map((x, i) => Math.round((x - fulls[i]) / 60_000));
+      expect([s, fullGaps.every((g) => g >= 15 && g <= 90)]).toEqual([s, true]);
+      expect([s, fullGaps.slice(1).every((g) => g >= 58)]).toEqual([s, true]);
     }
-    // The second and third hours: 21 clubs × (4 + 3) requests an hour.
-    expect(perTick.slice(12).reduce((a, b) => a + b, 0)).toBe(2 * 21 * 7);
   });
 
-  it("the three ticks after the clubs' midnight read every club in full once, up to 32 requests a tick", async () => {
-    // From 23:00 Bangkok (NOW + 13 hours). At midnight each club's kept days miss the new third day, so
-    // each gets a full read past the cap of three (`planReads`): eight, eight and five clubs. The line
-    // "at most 17 a tick" in docs/OPERATING.md and AGENTS.md names this exception.
-    const { perTick } = await twentyOneClubs(13 * HOUR, 36);
-    expect(perTick.slice(0, 3)).toEqual([32, 32, 20]);
-    expect(Math.max(...perTick.slice(3, 12))).toBeLessThanOrEqual(17);
-    expect(perTick.slice(12, 15)).toEqual([32, 32, 20]);
-    expect(Math.max(...perTick.slice(15))).toBeLessThanOrEqual(17);
+  it("the first runs after 06:00 read every club in full once, as the first runs of the day did", async () => {
+    // From 22:00 Bangkok (NOW + 12 hours). From 23:00 to 06:00 no run reads a club. At 06:00 each club's
+    // kept days miss the new day, so each gets a full read past the cap of three (`planReads`): twelve
+    // clubs (45 requests, the twelfth cut short), then the rest. Before 7 November 2026 this happened in
+    // the three ticks after the clubs' midnight (32, 32 and 20 requests); now the clubs sleep through it.
+    const { perRun } = await twentyOneClubs(12 * HOUR, 44);
+    expect(perRun.slice(0, 4)).toEqual([45, 40, 11, 10]); // 22:00 to 22:45
+    expect(perRun.slice(4, 32).every((n) => n === 0)).toBe(true); // 23:00 to 05:45
+    expect(perRun.slice(32, 36)).toEqual([45, 40, 11, 10]); // 06:00 to 06:45
+    expect(Math.max(...perRun.slice(36))).toBeLessThanOrEqual(35);
   });
 });
 
@@ -1198,7 +1290,7 @@ describe("what a read writes", () => {
     expect((await row("no-zone")).availability).toMatchObject({ error: "no time zone", slots: [] });
   });
 
-  it("reads today every 15 minutes and the next two days at most hourly, and keeps those days in between", async () => {
+  it("reads today every 30 minutes and the next two days at most hourly, and keeps those days in between", async () => {
     const org = await makePlayer(db, "Org");
     await club("busy-club");
     await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: at(DAY), tz: "Asia/Bangkok", venueName: "busy club", whenFull: "waitlist" });
@@ -1212,31 +1304,29 @@ describe("what a read writes", () => {
     // NOW: all three days. Today 12:00 two courts, tomorrow and the day after one each.
     const first = await read(0, [slot(2 * HOUR, "1"), slot(2 * HOUR, "2"), slot(DAY + 2 * HOUR, "1"), slot(2 * DAY + 2 * HOUR, "1")]);
     expect(first.fullAt).toBe(iso(0));
-    // 15 minutes on: today only. A court went at 12:00; tomorrow's and the day after's stay as the full read left them.
-    const second = await read(15 * 60_000, [slot(2 * HOUR, "1"), slot(DAY + 5 * HOUR, "9")]);
+    // 30 minutes on: today only. A court went at 12:00; tomorrow's and the day after's stay as the full read left them.
+    const second = await read(30 * 60_000, [slot(2 * HOUR, "1"), slot(DAY + 5 * HOUR, "9")]);
     expect(second.slots).toEqual([
       { start: iso(2 * HOUR), end: iso(3 * HOUR), free: 1 },
       { start: iso(DAY + 2 * HOUR), end: iso(DAY + 3 * HOUR), free: 1 },
       { start: iso(2 * DAY + 2 * HOUR), end: iso(2 * DAY + 3 * HOUR), free: 1 },
     ]);
-    expect(second).toMatchObject({ fetchedAt: iso(15 * 60_000), fullAt: iso(0), days: ["2026-10-10", "2026-10-11", "2026-10-12"], error: null });
-    await read(30 * 60_000, [slot(2 * HOUR, "1")]);
-    await read(45 * 60_000, [slot(2 * HOUR, "1")]);
+    expect(second).toMatchObject({ fetchedAt: iso(30 * 60_000), fullAt: iso(0), days: ["2026-10-10", "2026-10-11", "2026-10-12"], error: null });
     // An hour after the full read: all three days again.
-    const fifth = await read(60 * 60_000, [slot(2 * HOUR, "1")]);
-    expect(fifth.fullAt).toBe(iso(60 * 60_000));
-    expect(fifth.slots).toHaveLength(1);
-    expect(seen.map((t) => t.days)).toEqual([3, 1, 1, 1, 3]);
+    const third = await read(60 * 60_000, [slot(2 * HOUR, "1")]);
+    expect(third.fullAt).toBe(iso(60 * 60_000));
+    expect(third.slots).toHaveLength(1);
+    expect(seen.map((t) => t.days)).toEqual([3, 1, 3]);
   });
 
   it("a read that times out keeps the club's last good read, and the club goes to the back", async () => {
     // On 11 October 2026 four Playtomic clubs answered past the platform's ten seconds, and each run
     // wrote "timeout" and no times over their good reads: their pages lost their free courts for an hour.
     // Each good read came from the club's own link, as the run writes it (`linkKey`).
-    const goodOf = (slug: string) => ({ fetchedAt: at(-20 * 60_000).toISOString(), day: "2026-10-10", days: ["2026-10-10", "2026-10-11", "2026-10-12"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", error: null, fullAt: at(-20 * 60_000).toISOString(), slots: [{ start: iso(2 * HOUR), end: iso(3 * HOUR), free: 2 }], linkKey: linkKey(`https://playtomic.io/${slug}`) });
+    const goodOf = (slug: string) => ({ fetchedAt: at(-40 * 60_000).toISOString(), day: "2026-10-10", days: ["2026-10-10", "2026-10-11", "2026-10-12"], tz: "Asia/Bangkok", source: "scrape:playtomic", platform: "playtomic", error: null, fullAt: at(-40 * 60_000).toISOString(), slots: [{ start: iso(2 * HOUR), end: iso(3 * HOUR), free: 2 }], linkKey: linkKey(`https://playtomic.io/${slug}`) });
     const good = goodOf("slow-today");
-    await club("slow-today", { availability: good as never, availabilityAt: at(-20 * 60_000) });
-    await club("gone-today", { availability: goodOf("gone-today") as never, availabilityAt: at(-19 * 60_000) });
+    await club("slow-today", { availability: good as never, availabilityAt: at(-40 * 60_000) });
+    await club("gone-today", { availability: goodOf("gone-today") as never, availabilityAt: at(-39 * 60_000) });
     const answers: Record<string, ScrapeResult> = {
       "slow-today": { ok: false, status: null, reason: "timeout", requests: 1, detail: "availability 2026-10-10: TimeoutError" },
       "gone-today": { ok: false, status: 404, reason: "not_found", requests: 1, detail: "club page: HTTP 404" },
@@ -1261,7 +1351,7 @@ describe("what a read writes", () => {
     await runScrape(db, at(60_000), { adapters: [flaky], fetchImpl: w2.fetchImpl, clock: w2.clock });
     expect((await row("slow-today")).availability).toMatchObject({ error: "timeout", slots: [] });
     // Nor with a good read from another link: those were another club's courts, so the timeout is written.
-    await db.update(clubs).set({ availability: { ...good, linkKey: linkKey("https://playtomic.io/elsewhere") } as never, availabilityAt: at(-20 * 60_000) }).where(eq(clubs.slug, "slow-today"));
+    await db.update(clubs).set({ availability: { ...good, linkKey: linkKey("https://playtomic.io/elsewhere") } as never, availabilityAt: at(-40 * 60_000) }).where(eq(clubs.slug, "slow-today"));
     const w3 = world();
     await runScrape(db, at(2 * 60_000), { adapters: [flaky], fetchImpl: w3.fetchImpl, clock: w3.clock });
     expect((await row("slow-today")).availability).toMatchObject({ error: "timeout", slots: [] });
@@ -1277,8 +1367,10 @@ describe("what a read writes", () => {
       await runScrape(db, at(t), { adapters: [reader("playtomic", { seen })], fetchImpl: w.fetchImpl, clock: w.clock });
     };
     await run(0, 200);
-    await run(15 * 60_000, 404);
-    await run(30 * 60_000, 200);
+    await run(30 * 60_000, 404);
+    // Due again 45 minutes after the full read, under the hour: the failed read kept nothing, so all three days.
+    await db.update(clubs).set({ availabilityAt: at(0) }).where(eq(clubs.slug, "busy-club"));
+    await run(45 * 60_000, 200);
     expect(seen.map((t) => t.days)).toEqual([3, 1, 3]);
   });
 

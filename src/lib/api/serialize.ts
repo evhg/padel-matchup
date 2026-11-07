@@ -247,7 +247,8 @@ export type PublicClub = {
   /**
    * Today's free courts, still to come, in the club's zone; null when there is nothing current to say.
    * `source` says where they come from: "club" is a feed the club shares, "platform" is a read of the
-   * booking platform's public page (`platform` names it), refreshed up to every 15 minutes and dropped
+   * booking platform's public page (`platform` names it), refreshed about every 30 minutes, 06:00 to 23:00
+   * in the club's zone, and dropped
    * after two hours without a clean read. `free` courts are free for the whole of each slot, and a
    * platform's slots never overlap. Times read from a platform are not ours to license (not CC BY 4.0).
    */

@@ -11,6 +11,7 @@ import { AI_FEATURES, KEY_REFUSED_LINE, anthropicAdminKey, anthropicCapUsd, esti
 import { PLAN, pacedTarget } from "@/lib/research/budget";
 import { platformById } from "@/lib/booking/platforms";
 import { scrapeBoard } from "@/lib/booking/scrape";
+import { PUSH_CALLED_KEY, PUSH_TICK_KEY } from "./cronJobs";
 
 /**
  * The service board: every service the stack leans on, what we use of it this month,
@@ -52,7 +53,27 @@ export const CEILINGS = {
   domainAlertDays: 30,
   backupMaxAgeHours: 36,
   hourlyCronMaxAgeMin: 120,
-  pushCronMaxAgeMin: 20,
+  /**
+   * The push job's own tick: pg_cron writes `cron_push_tick_at` on every run of the job, every five
+   * minutes, whether or not it calls the app (migration 0104). Older than this, pg_cron has stopped.
+   */
+  pushTickMaxAgeMin: 20,
+  /**
+   * The app's last push run (`cron_push_at`). Since migration 0104 the job calls the app only when
+   * something is due, and at night nothing may be: the court reader sleeps from 23:00 to 06:00 in each
+   * club's zone, and the clubs in Bangkok and Singapore leave six quiet hours (23:00 to 05:00 Bangkok
+   * time). Eight hours covers that night with two to spare; past it, something that should have called
+   * the app did not.
+   */
+  pushRunMaxAgeMin: 8 * 60,
+  /**
+   * A call the app did not answer: the job's last call (`cron_push_called_at`) is this long or more
+   * after the app's last run, and at least `pushCallGraceMin` old (the app has sixty seconds to write).
+   * In the day the reader calls every 15 minutes, so one failed call stays green and two in a row turn red;
+   * after a quiet night, the first failed call turns red.
+   */
+  pushUnansweredMin: 20,
+  pushCallGraceMin: 2,
   syncCronMaxAgeMin: 40,
 } as const;
 
@@ -105,6 +126,24 @@ async function openUptimeIncidents(db: Db): Promise<number> {
 
 const minutesAgo = (epochSeconds: number, now: Date) => Math.max(0, Math.round((now.getTime() / 1000 - epochSeconds) / 60));
 
+/**
+ * The push job's health from three epoch-second readings (0 for none): pg_cron's tick, the app's last
+ * run, and the job's last call to the app. OK while the tick is under 20 minutes old, the app ran in the
+ * last eight hours, and no call is unanswered (`CEILINGS.pushUnansweredMin`). With no tick at all, the
+ * job still has its command from before migration 0104 (a deploy that came before the Migrate workflow,
+ * or a migration that failed): that job calls the app every five minutes, so the old rule judges it, the
+ * app's last run under 20 minutes (`noTick`). Pure.
+ */
+export function pushJobHealth(r: { tickAt: number; runAt: number; calledAt: number }, now: Date): { ok: boolean; tickAge: number | null; runAge: number | null; calledAge: number | null; unanswered: boolean; noTick: boolean } {
+  const tickAge = r.tickAt ? minutesAgo(r.tickAt, now) : null;
+  const runAge = r.runAt ? minutesAgo(r.runAt, now) : null;
+  const calledAge = r.calledAt ? minutesAgo(r.calledAt, now) : null;
+  const unanswered = calledAge !== null && now.getTime() / 1000 - r.calledAt >= CEILINGS.pushCallGraceMin * 60 && r.calledAt - r.runAt >= CEILINGS.pushUnansweredMin * 60;
+  if (tickAge === null) return { ok: runAge !== null && runAge < CEILINGS.pushTickMaxAgeMin, tickAge, runAge, calledAge, unanswered: false, noTick: true };
+  const ok = tickAge < CEILINGS.pushTickMaxAgeMin && runAge !== null && runAge < CEILINGS.pushRunMaxAgeMin && !unanswered;
+  return { ok, tickAge, runAge, calledAge, unanswered, noTick: false };
+}
+
 export type ServiceBoard = { month: string; at: string; rows: ServiceRow[] };
 
 export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoard> {
@@ -115,6 +154,8 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   const dbBytes = (await latest(db, "db_bytes"))?.value ?? 0;
   const hourlyAt = (await latest(db, "cron_hourly_at"))?.value ?? 0;
   const pushAt = (await latest(db, "cron_push_at"))?.value ?? 0;
+  const pushTickAt = (await latest(db, PUSH_TICK_KEY))?.value ?? 0;
+  const pushCalledAt = (await latest(db, PUSH_CALLED_KEY))?.value ?? 0;
   const syncAt = (await latest(db, "cron_sync_at"))?.value ?? 0;
   const syncAge = syncAt ? Math.round((now.getTime() / 1000 - syncAt) / 60) : null;
   const pushSubs = (await latest(db, "push_subs"))?.value ?? 0;
@@ -143,13 +184,16 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
   push({ key: "supabase_db", name: "Supabase Postgres", role: "the database", used: dbBytes, limit: CEILINGS.supabaseDbBytes, usage: mb(dbBytes), ceiling: `${mb(CEILINGS.supabaseDbBytes)} free project`, note: "Daily snapshot by the hourly job.", link: "https://supabase.com/dashboard/project/udvtuxaxzfimeoubofdz/reports" });
   push({ key: "supabase_egress", name: "Supabase egress", role: "bytes out of the database", used: null, limit: null, usage: "dashboard only", ceiling: `${CEILINGS.supabaseEgressGb} GB / month`, note: "No API for it on the free plan.", link: "https://supabase.com/dashboard/project/udvtuxaxzfimeoubofdz/reports", state: "info" });
   const hourlyAge = hourlyAt ? minutesAgo(hourlyAt, now) : null;
-  const pushAge = pushAt ? minutesAgo(pushAt, now) : null;
-  push({ key: "pg_cron", name: "Supabase pg_cron + pg_net", role: "hourly job, the five-minute push job, the ten-minute calendar sync", used: null, limit: null, usage: `hourly ${hourlyAge === null ? "never" : `${hourlyAge} min ago`} · push ${pushAge === null ? "never" : `${pushAge} min ago`} · sync ${syncAge === null ? "never" : `${syncAge} min ago`}`, ceiling: `hourly < ${CEILINGS.hourlyCronMaxAgeMin} min · push < ${CEILINGS.pushCronMaxAgeMin} min · sync < ${CEILINGS.syncCronMaxAgeMin} min`, note: "Reminders, waitlists, lessons, offers, calendars, listening, backups, digests all hang off these three.", state: hourlyAge !== null && hourlyAge < CEILINGS.hourlyCronMaxAgeMin && pushAge !== null && pushAge < CEILINGS.pushCronMaxAgeMin && (syncAge === null || syncAge < CEILINGS.syncCronMaxAgeMin) ? "ok" : "alert" });
+  const pushJob = pushJobHealth({ tickAt: pushTickAt, runAt: pushAt, calledAt: pushCalledAt }, now);
+  const pushText = pushJob.noTick
+    ? `push ${pushJob.runAge === null ? "never" : `${pushJob.runAge} min ago`} (no tick yet: the job from before migration 0104, judged by the app's last run < ${CEILINGS.pushTickMaxAgeMin} min)`
+    : `push tick ${pushJob.tickAge === null ? "never" : `${pushJob.tickAge} min ago`}, app ${pushJob.runAge === null ? "never" : `${pushJob.runAge} min ago`}${pushJob.unanswered ? `, a call ${pushJob.calledAge} min ago not answered` : ""}`;
+  push({ key: "pg_cron", name: "Supabase pg_cron + pg_net", role: "hourly job, the five-minute push job, the ten-minute calendar sync", used: null, limit: null, usage: `hourly ${hourlyAge === null ? "never" : `${hourlyAge} min ago`} · ${pushText} · sync ${syncAge === null ? "never" : `${syncAge} min ago`}`, ceiling: `hourly < ${CEILINGS.hourlyCronMaxAgeMin} min · push tick < ${CEILINGS.pushTickMaxAgeMin} min, app < ${CEILINGS.pushRunMaxAgeMin / 60} h · sync < ${CEILINGS.syncCronMaxAgeMin} min`, note: "Reminders, waitlists, lessons, offers, calendars, listening, backups, digests all hang off these three. The push job ticks every five minutes and calls the app only when something is due (kicksmash_push_due, migration 0104): its tick says pg_cron runs, and the app's last run may be hours old at night, when the court reader sleeps. Red when the tick stops, when the app has not run for eight hours, or when a call at least two minutes old came 20 minutes or more after the app's last run: two failed calls in a row in the day, or the first failed call after a quiet night.", state: hourlyAge !== null && hourlyAge < CEILINGS.hourlyCronMaxAgeMin && pushJob.ok && (syncAge === null || syncAge < CEILINGS.syncCronMaxAgeMin) ? "ok" : "alert" });
 
   // Free court times read from the booking platforms' public pages (DECIDING rule 35): one line per
   // platform with a reader, and one per platform that listed clubs name but no reader reads.
   const scrapeLines = await scrapeBoard(db, now);
-  if (!scrapeLines.length) push({ key: "scrape", name: "Court times from platforms", role: "free courts read from the booking platforms' public pages", used: null, limit: null, usage: "no platform reader yet", ceiling: "1 request / second / platform · 8 clubs / platform / run · 45 s", note: "A reader per platform goes in src/lib/booking/adapters/. Until one exists the job reads nothing.", state: "off" });
+  if (!scrapeLines.length) push({ key: "scrape", name: "Court times from platforms", role: "free courts read from the booking platforms' public pages", used: null, limit: null, usage: "no platform reader yet", ceiling: "1 request / second / platform · 12 clubs / platform / run · 45 s", note: "A reader per platform goes in src/lib/booking/adapters/. Until one exists the job reads nothing.", state: "off" });
   const clubsOf = (n: number) => `${fmt(n)} listed club${n === 1 ? "" : "s"}`;
   for (const l of scrapeLines) {
     const name = platformById(l.platform)?.name ?? l.platform;
@@ -164,11 +208,11 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
           ? "stopped: the page changed at two clubs; the reader needs a fix, and a deploy of new code starts it again"
           : l.state === "resting"
             ? `resting until ${l.restUntil!.toISOString().slice(0, 16).replace("T", " ")} UTC after a block`
-            : `fresh: ${fmt(l.fresh)} club${l.fresh === 1 ? "" : "s"} read in the last hour`;
+            : `fresh: ${fmt(l.fresh)} club${l.fresh === 1 ? "" : "s"} read in the last hour${l.quiet ? " (quiet hours: no club is read from 23:00 to 06:00 in its own zone)" : ""}`;
     const unread = l.unread ? ` · ${clubsOf(l.unread)} not read: no link a reader takes` : "";
     // "Book this court" fills the platform's checkout (DECIDING rule 36) while its club page still builds that link.
     const checkout = l.checkout === "lost" ? ` · checkout off: ${name}'s page no longer builds its link (match pages give the day page)` : l.checkout === "off" ? " · checkout off (checkout_off_* row)" : l.checkout === "on" ? " · checkout on" : "";
-    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}${unread}${checkout}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Today read every 15 minutes, the next two days about hourly, by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" || l.checkout === "lost" ? "warn" : "ok" });
+    push({ key: `scrape_${l.platform}`, name: `Court times: ${name}`, role: "free courts read from the platform's public club pages", used: null, limit: null, usage: `${usage} · ${fmt(l.requestsToday)} requests today${l.blockedToday ? ` · blocked ${l.blockedToday} time(s) today` : ""}${unread}${checkout}`, ceiling: "1 request / second · 8 a club · rest 6 h, 24 h, then a week after a block", note: "Today read every 30 minutes from 06:00 to 23:00 in each club's zone, the next two days about hourly, by the push job. A 401, 403, 429 or a challenge stops the platform; nothing gets around a block.", state: l.state === "off" ? "off" : l.state === "stopped" ? "alert" : l.state === "resting" || l.checkout === "lost" ? "warn" : "ok" });
   }
 
   // Mail. A send that failed today turns the row yellow and says how many: until 15 October 2026 a
