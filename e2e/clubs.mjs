@@ -389,7 +389,7 @@ try {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText(/^Saved/).waitFor({ timeout: 15000 });
   const CRON = { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` };
-  // The read rides the five-minute push job and runs once in four minutes: make it due, then tick.
+  // The read rides the push job and runs once in 14 minutes, at any hour here (SCRAPE_QUIET_HOURS, e2e/run.mjs): make it due, then tick.
   await fetch(`${BASE}/api/admin/metrics`, { method: "POST", headers: { ...CRON, "content-type": "application/json" }, body: JSON.stringify({ key: "cron_scrape_at", value: 0 }) });
   const tick = await fetch(`${BASE}/api/cron/push`, { headers: CRON }).then((r) => r.json());
   check("the push job reads the club on the platform, and the checkout is on", tick.scrape?.platforms?.playtomic?.ok >= 1 && tick.scrape?.platforms?.playtomic?.checkout === "on", JSON.stringify(tick.scrape ?? tick).slice(0, 300));

@@ -240,10 +240,10 @@ describe("a free court offered to the players who asked for that hour", () => {
   });
 
   /**
-   * The read of 15 minutes writes every platform's club, the ones that failed too, so the clubs with a
-   * fresh write outgrow the 30 a run takes (production had 27 on 11 October 2026). The run takes the
-   * clubs a want can hear about, never just the newest writes: at 31, the oldest of the three 15-minute
-   * groups fell out of every hourly run, and a want there never heard.
+   * The reader of free court times writes every platform's club, the ones that failed too, so the clubs
+   * with a fresh write outgrow the 30 a run takes (production had 27 on 11 October 2026). The run takes
+   * the clubs a want can hear about, never just the newest writes: at 31, the oldest of the reader's
+   * groups (three 15-minute groups then) fell out of every hourly run, and a want there never heard.
    */
   it("finds the club a want names among more fresh clubs than a run takes", async () => {
     // 31 directory clubs read in the last 31 minutes, beside the club's own feed written now; the want is at the oldest.

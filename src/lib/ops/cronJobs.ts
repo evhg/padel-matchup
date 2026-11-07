@@ -19,10 +19,28 @@ import type { Db } from "@/db";
  */
 export const CRON_SECRET_NAME = "kicksmash_cron_secret";
 
+/**
+ * The push job calls the app only when something is due (migration 0104; the owner's decision of
+ * 7 November 2026, "Start the push job only when something is due"). `kicksmash_push_due()` asks the
+ * database first: a reminder, a card to refresh, a coach's offer, request or lesson, a tournament
+ * match, or the court reader's turn. Until then the job called the app every five minutes, 288 times
+ * a day, and nearly every call found nothing to do. The function is a superset of what the route does
+ * (`tests/push-gate.test.ts`), and it says yes on any error of its own.
+ *
+ * On every run, called or not, the job writes its tick (`PUSH_TICK_KEY`, epoch seconds), and when it
+ * calls the app, the call (`PUSH_CALLED_KEY`), in `metrics_daily`. The service board judges pg_cron by
+ * the tick and the app by its own `cron_push_at` (`pushJobHealth` in `services.ts`), so a quiet night
+ * stays green and a job that stopped, or an app that does not answer, turns red.
+ */
+export const PUSH_GATE = "kicksmash_push_due";
+export const PUSH_TICK_KEY = "cron_push_tick_at";
+export const PUSH_CALLED_KEY = "cron_push_called_at";
+
+/** `gated`: the job asks `kicksmash_push_due()` first and calls the route only on a yes (`jobCommand`). */
 export const CRON_JOBS = [
-  { name: "kicksmash-hourly", schedule: "0 * * * *", path: "/api/cron/hourly" },
-  { name: "kicksmash-push", schedule: "*/5 * * * *", path: "/api/cron/push" },
-  { name: "kicksmash-sync", schedule: "*/10 * * * *", path: "/api/cron/sync" },
+  { name: "kicksmash-hourly", schedule: "0 * * * *", path: "/api/cron/hourly", gated: false },
+  { name: "kicksmash-push", schedule: "*/5 * * * *", path: "/api/cron/push", gated: true },
+  { name: "kicksmash-sync", schedule: "*/10 * * * *", path: "/api/cron/sync", gated: false },
 ] as const;
 
 /**
@@ -47,13 +65,25 @@ export const CRON_TIMEOUT_MS = 60_000;
 /** Any job that calls one of the three routes, whatever it was named by hand. */
 const CRON_ROUTE = "/api/cron/(hourly|push|sync)";
 
-/** The SQL a job runs: a GET with the secret read from Vault at run time. */
-export function jobCommand(base: string, path: string): string {
+/**
+ * The SQL a job runs: a GET with the secret read from Vault at run time. A gated job (the push job,
+ * migration 0104) is one statement: it asks `kicksmash_push_due()` once, writes its tick (and the call,
+ * on a yes) into `metrics_daily` as `setMetric` would (the UTC day, the key, the epoch seconds), and
+ * calls the route only on a yes. Migration 0104 writes the same text, character for character.
+ */
+export function jobCommand(base: string, path: string, gated = false): string {
   const url = `${base.replace(/\/+$/, "")}${path}`;
   if (!/^https:\/\/[A-Za-z0-9.:-]+\/api\/cron\/[a-z]+$/.test(url)) throw new Error(`not a cron url: ${url}`);
-  return (
+  const get =
     `select net.http_get(url := '${url}', headers := jsonb_build_object('Authorization', 'Bearer ' || ` +
-    `(select decrypted_secret from vault.decrypted_secrets where name = '${CRON_SECRET_NAME}')), timeout_milliseconds := ${CRON_TIMEOUT_MS})`
+    `(select decrypted_secret from vault.decrypted_secrets where name = '${CRON_SECRET_NAME}')), timeout_milliseconds := ${CRON_TIMEOUT_MS})`;
+  if (!gated) return get;
+  return (
+    `with due as (select public.${PUSH_GATE}() as yes), ` +
+    `tick as (insert into public.metrics_daily (day, key, value) select (now() at time zone 'UTC')::date, k, floor(extract(epoch from now()))::bigint ` +
+    `from due, unnest(array['${PUSH_TICK_KEY}', '${PUSH_CALLED_KEY}']) as k where k = '${PUSH_TICK_KEY}' or due.yes ` +
+    `on conflict (day, key) do update set value = excluded.value) ` +
+    `${get} from due where due.yes`
   );
 }
 
@@ -94,16 +124,28 @@ export async function storeCronSecret(db: Db, secret: string): Promise<"created"
   return "created";
 }
 
+/** Is the push job's gate in this database (migration 0104)? */
+export async function pushGateAvailable(db: Db): Promise<boolean> {
+  const [row] = rowsOf<{ ok: boolean }>(await db.execute(sql`select to_regprocedure(${`public.${PUSH_GATE}(timestamptz)`}) is not null as ok`));
+  return Boolean(row?.ok);
+}
+
 /**
  * The three jobs, by name, and nothing else calling the same routes: a job typed by hand under
- * another name would run the same work twice, so it goes. The same result as migration 0069.
+ * another name would run the same work twice, so it goes. The same result as migrations 0069 and 0104.
+ * The push job gets its gate only where `kicksmash_push_due` exists: on a database that has not had
+ * 0104 yet, a gated job would fail on every tick and call nothing, so it gets the command from before
+ * 0104 instead, and the answer says so (`pushGated: false`); the Migrate workflow's 0104 then gives it
+ * the gate.
  */
-export async function scheduleCronJobs(db: Db, base: string): Promise<void> {
+export async function scheduleCronJobs(db: Db, base: string): Promise<{ pushGated: boolean }> {
+  const gate = await pushGateAvailable(db);
   const names = sql.join(
     CRON_JOBS.map((j) => sql`${j.name}`),
     sql`, `,
   );
   const strays = rowsOf<{ jobid: number }>(await db.execute(sql`select jobid from cron.job where command ~ ${CRON_ROUTE} and (jobname is null or jobname not in (${names}))`));
   for (const s of strays) await db.execute(sql`select cron.unschedule(${s.jobid}::bigint)`);
-  for (const job of CRON_JOBS) await db.execute(sql`select cron.schedule(${job.name}, ${job.schedule}, ${jobCommand(base, job.path)})`);
+  for (const job of CRON_JOBS) await db.execute(sql`select cron.schedule(${job.name}, ${job.schedule}, ${jobCommand(base, job.path, job.gated && gate)})`);
+  return { pushGated: gate };
 }

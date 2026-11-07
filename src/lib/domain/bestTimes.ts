@@ -6,7 +6,8 @@ import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
  *
  * The owner's choice of 10 October 2026, "Best times + one-tap booking by a player": the free times a
  * club shares (read hourly, `src/lib/booking/availability.ts`) or a platform shows publicly (read
- * every 15 minutes, `src/lib/booking/scrape.ts`, DECIDING rule 35), cached on the club's row
+ * every 30 minutes from 06:00 to 23:00 in the club's zone, `src/lib/booking/scrape.ts`, DECIDING
+ * rule 35), cached on the club's row
  * (`clubs.availability`), offered where people decide when to play
  * (the create form, /play, the crew's Telegram group), best first. A free court at a usual club at a
  * usual time comes first, then the soonest. One time per club and day, so three chips are three

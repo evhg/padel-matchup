@@ -355,9 +355,9 @@ describe("the read keeps the offers, and only the match page reads them", () => 
     await seed();
     await run(world(withScripts(KNOWN)));
     const full = (await row()).availability!;
-    // Fifteen minutes on, in a new function instance: today alone, with the tenant id (no page, no names).
+    // Thirty minutes on (a club's next visit), in a new function instance: today alone, with the tenant id (no page, no names).
     resetPlaytomicState();
-    const later = new Date(NOW.getTime() + 15 * MIN);
+    const later = new Date(NOW.getTime() + 30 * MIN);
     const w = world(withScripts(KNOWN));
     await run(w, later);
     expect(w.calls).toEqual(["/api/clubs/availability"]);
@@ -371,10 +371,10 @@ describe("the read keeps the offers, and only the match page reads them", () => 
 
   it("a read of today alone over a row with no offers yet has no names: a match on a named court gets the day page, never another court", async () => {
     // The row as the code before the offers wrote it (and as a checkout switched back on finds it): a
-    // clean full read 20 minutes ago, with the tenant id and the link's key, and no offers to lend names.
+    // clean full read 30 minutes ago, with the tenant id and the link's key, and no offers to lend names.
     await seed();
-    const before: ClubAvailability = { fetchedAt: ago(20), day: "2026-10-10", days: DAYS, tz: TZ, source: "scrape:playtomic", platform: "playtomic", slots: [], error: null, fullAt: ago(20), ref: TENANT, linkKey: linkKey(LINK) };
-    await db.update(clubs).set({ availability: before, availabilityAt: new Date(NOW.getTime() - 20 * MIN) }).where(eq(clubs.slug, "the-padel-co"));
+    const before: ClubAvailability = { fetchedAt: ago(30), day: "2026-10-10", days: DAYS, tz: TZ, source: "scrape:playtomic", platform: "playtomic", slots: [], error: null, fullAt: ago(30), ref: TENANT, linkKey: linkKey(LINK) };
+    await db.update(clubs).set({ availability: before, availabilityAt: new Date(NOW.getTime() - 30 * MIN) }).where(eq(clubs.slug, "the-padel-co"));
     // Tonight, 18:00 in Bangkok (11:00 UTC), both courts are free for 90 minutes.
     const both = (date: string) => JSON.stringify([PADEL2, PADEL1].map((id) => ({ resource_id: id, start_date: date, slots: [{ start_time: "11:00:00", duration: 90, price: "1500 THB" }] })));
     const w = world(withScripts(KNOWN), {}, both);
@@ -420,7 +420,7 @@ describe("the read keeps the offers, and only the match page reads them", () => 
     await setMetric(db, "checkout_off_playtomic", 1, "2026-10-10");
     const timeout: ScrapeResult = { ok: false, status: null, reason: "timeout", requests: 1, detail: "availability 2026-10-10: TimeoutError" };
     const slow: AvailabilityAdapter = { ...playtomicAdapter, scrape: async (t, f) => (await f(t.bookingUrl), timeout) };
-    const later = new Date(NOW.getTime() + 20 * MIN);
+    const later = new Date(NOW.getTime() + 30 * MIN);
     const r = await run(world(withScripts(KNOWN)), later, slow);
     expect(r.failed).toEqual([{ slug: "the-padel-co", platform: "playtomic", error: "timeout", why: "availability 2026-10-10: TimeoutError" }]);
     // The good read stays, its times included, and its offers go.

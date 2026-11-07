@@ -145,6 +145,31 @@ counted on the server, crawlers left out, while Vercel counts page views in the 
 Vercel Hobby functions also count time: 4 hours of active CPU and 360 GB-hours of provisioned memory a
 month (Vercel's Hobby figures as read on 10 October 2026; the usage page has the live numbers). A
 function that waits on the network counts against the memory, not the CPU, for every second it waits.
+**The scheduled jobs and the 4 hours of active CPU (7 November 2026).** Kicksmash used about 6 to 7
+minutes of active CPU a day, about 3.3 to 3.5 hours a month, 95% of what the whole account used. The
+scheduled jobs made nearly all of it: 457 starts a day (288 push, 144 calendar sync, 24 hourly, and
+Vercel's own daily call), about 0.85 s of active CPU a start on average. Players used very little.
+The owner answered "A and B, go ahead" (DECIDING rule 35 for A; "The push job asks first", below, for
+B). What one start costs, measured on the build machine on 7 November 2026 against a real Postgres 16
+in another process (`process.cpuUsage()` and `/proc/<pid>/stat`, the median of five runs after one
+warm-up; scripts outside the repository):
+
+| What | CPU, this machine |
+|---|---|
+| One push tick with nothing due, in a warm process (the route's own functions, the reader not due) | 9 ms |
+| The same, as `GET /api/cron/push` on `next start`, warm (40 calls, the average) | 11 to 13 ms |
+| The first call of a fresh `next start`, from its launch to the end of that tick | 2.1 to 2.4 s, 1.9 to 2.1 s of it after the server listens |
+| A court-reader run over the test fixtures: one Playtomic club, full read (4 requests) | 9 ms |
+| The same club, today alone (1 request) | 9 ms |
+| Eleven Playtomic clubs, each a full read (the first run after 06:00) | 37 ms |
+| Eleven clubs, today alone | 24 ms |
+| Eleven clubs an hour later: three full reads and eight of today | 29 ms |
+
+So the work of a tick is a few milliseconds, and a start that loads the code is about two seconds.
+The average of 0.85 s a start fits a mix of warm and cold starts. That is why the two changes cut
+starts, not work. These numbers do not measure a cold start on Vercel itself, the network waits (which
+count against the memory, not the CPU), TLS to the platforms and to Supabase, or the hourly and
+calendar jobs. Read Vercel's usage page a week after the change to know the real figure.
 Since 28 October 2026 a signed-in browser adds one invocation in 30 days for its new year
 (`POST /api/me/session?do=renew`, no read), a browser whose record is gone one in its life (`?do=dead`),
 and the "Remember me on this phone" card one a day for a browser that sees it (`passkey_shown`). At 1,000
@@ -574,8 +599,51 @@ Three jobs call the app from Supabase `pg_cron` through `pg_net`, and the servic
   Once a day, the first run after 03:00 UTC (after the day's backup) removes the player rows nothing ties to a person: no contact, no public profile, nothing in the database pointing at them (read from the schema; their saved clubs and a coach page with no lesson ever booked go with them; a note, a want or a seat keeps them), and at least 14 days old (`src/lib/domain/disposable.ts`, the owner's decision of 24 September 2026). `GET /api/admin/disposable` lists what today's run would remove and changes nothing; the run's `disposed` and the daily metric `players_disposed` count what went.
   Every run, near its end, sends what players' quiet hours held (the owner's decision D, 9 October 2026; `sendQuietSummaries` in `src/lib/notify.ts`): each person whose quiet hours ended with notices waiting hears once, one short message per channel they have (Telegram, email when activity emails are on, each push device; WhatsApp has no template for it, so a WhatsApp-only player reads the inbox), and those notices count as delivered. At most 200 people a run, read on the partial index `notices_due_idx`; the rest go the next hour. Then it prunes the inbox: rows older than 90 days (`INBOX_DAYS`), at most 5,000 a run, oldest by `notices_created_idx`. The run's `noticeSummaries` and `noticesPruned` count them, and so do the daily metrics `notice_summaries` and `notices_pruned`. The inbox grows by one row per notice per player, a few kilobytes a day at today's size; 90 days keeps it far below the database's 500 MB.
   Every run also deletes the device hints last seen more than a year ago, 500 at most a run (`pruneDeviceHints` in `src/lib/domain/deviceHints.ts`; the owner's decision of 28 October 2026), and counts them as `hints_pruned`. /privacy promises "one year after you last used it".
-- the push job, every 5 minutes → `/api/cron/push`: match reminders, waitlist offers, lapses and lesson reminders. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour). Each tick also reads the free court times of about a third of the clubs on the booking platforms (below).
+- the push job, a tick every 5 minutes → `/api/cron/push`, only when something is due (below): match reminders, the chat cards' reminders and Result buttons, waitlist offers, lapses, lesson reminders, the tournament's 15-minute notices, and the court reader's turn. A match reminder is a notice like any other: a player who switched reminders off gets none, and quiet hours never hold one (the match is within the hour). Every 15 minutes the job also reads the free court times of about half of the clubs on the booking platforms, from 06:00 to 23:00 in each club's zone (below).
 - `kicksmash-sync`, every 10 minutes → `/api/cron/sync`: the coaches' calendars, both ways.
+
+**The push job asks first** (migration 0104). The owner's decision of 7 November 2026: "Start the push
+job only when something is due. The database checks first, and it calls the app only when a
+notification waits." The job's command asks `kicksmash_push_due()` in the database, and calls the app
+only on a yes. The function says yes for a match reminder within 95 minutes (push, Telegram, Discord,
+LINE), a Telegram card of a match that started in the last day and was last rendered before the
+start, a lapsed waitlist offer, an open lesson request whose time came, a lesson to remind within 20
+hours, a tournament match within 21 minutes, and the court reader's turn. The reader's turn is its
+last run (or its last skip with `SCRAPE_DISABLED=all`, `cron_scrape_skipped_at`) 12 or more minutes
+old, and a club that a lane may pick in its day hours: the same club as `anyClubAwake` (listed, no
+feed of its own, a booking link or a website on a platform's host). Each clause is a little wider
+than the route, so the function may say yes when the route then finds nothing; it never says no when
+the route would act (`tests/push-gate.test.ts` runs the route's own due functions beside it, and holds
+the sources, the feed kinds and the platform hosts to the code). It reads and never writes, and it
+says yes on any error of its own. It costs about 1 ms in the database, and about 6 ms as the first call in a new connection, as a pg_cron run is (Postgres 16 with the directory's 67 clubs, measured).
+A new kind of work in the push route, or a new platform host, needs a new migration that replaces the
+function; otherwise the work waits for a tick that something else wakes. The role `kicksmash` may call
+it, for the day the app connects as that role (AGENTS.md rule 10); the API roles may not.
+
+- **Starts a day.** Before: 288 push starts. Now: about 72 for the court reader (four an hour while a
+  club is in its day hours: 05:00 to 23:00 Bangkok time, because Singapore's clubs wake an hour
+  earlier), and one or two for each match reminder, lesson reminder and Telegram card's Result button.
+  A Telegram card is refreshed once after its match starts: the edit moves its `updated_at` past the
+  start, and `refreshStarted` and the gate take only a card rendered before the start, so a failed edit
+  is tried again and a good one ends it. Until this change, the push job read every such card on every
+  tick for a day. With today's one match in 14 days, that is about 75 a day, so about 210 fewer starts. The sync (144) and the hourly
+  job (24, and Vercel's daily call) do not change: 457 starts a day before, about 245 now.
+- **The tick.** The job writes `cron_push_tick_at` (epoch seconds) into `metrics_daily` on every run,
+  and `cron_push_called_at` when it calls the app, in the same statement. The app still writes
+  `cron_push_at` when it runs. pg_cron still runs the job 288 times a day, so its run log is the same.
+- **The board.** The `pg_cron` row judges pg_cron by the tick (under 20 minutes) and the app by
+  `cron_push_at` (under 8 hours, which covers the six quiet hours of a night with two to spare). It also
+  turns red when a call two minutes old came 20 minutes or more after the app's last run: two failed
+  calls in a row in the day, or the first failed call after a quiet night (`pushJobHealth` in
+  `src/lib/ops/services.ts`). With no tick row at all, the job still has its command from before 0104
+  (a deploy that came before the Migrate workflow, or a migration that failed), so the row judges the
+  app's last run by the old rule, under 20 minutes, and says "no tick yet". The admin page's "Push
+  cron" line asks the same.
+- `POST /api/admin/cron` writes the same command (`jobCommand` with `gated` in
+  `src/lib/ops/cronJobs.ts`) where `kicksmash_push_due` exists. On a database without 0104 it writes the
+  command from before 0104, because a gated job would fail on every tick, and its answer says so
+  (`pushGated: false`). `tests/cron-jobs.test.ts` holds the code and the migration together and runs the
+  job's command.
 
 **The three definitions live in the repository** since migration 0069 (`src/lib/ops/cronJobs.ts`,
 held to the migration by `tests/cron-jobs.test.ts`). Before that they existed only in the database's
@@ -591,7 +659,7 @@ held to the migration by `tests/cron-jobs.test.ts`). Before that they existed on
 **pg_cron's run log is cleared once a week** (migration 0101). The owner's decision of 15 October
 2026: "Yes, weekly cleanup (Recommended)". pg_cron writes one row to `cron.job_run_details` for each
 run of each job. That is 456 rows a day: 288 from the push job, 144 from the sync, 24 from the hourly
-job. Nothing deleted them. On 15 October 2026 the table held 18,071 rows and 7.27 MB, the largest
+job. (The push job still runs 288 times a day since migration 0104; most of its runs call nothing.) Nothing deleted them. On 15 October 2026 the table held 18,071 rows and 7.27 MB, the largest
 relation in a 32 MB database, and 11,687 of those rows ended more than 14 days ago.
 
 - `kicksmash-cron-log-cleanup` runs at 03:17 UTC each Sunday. It deletes the rows that ended more
@@ -613,22 +681,39 @@ DECIDING rule 35, the owner's decision of 10 October 2026: Kicksmash reads the f
 the booking platforms show on their public club pages, and accepts the risk of being blocked.
 
 **The job.** `scrapeIfDue` in `src/lib/booking/scrape.ts`, called at the end of each push tick. A run
-starts when the last one began 4 minutes ago or more, so it runs on every tick. Each platform picks
-its own clubs, at most eight: listed, no feed of their own, and a link on that platform. The link is
-the booking link, else the website (the directory lists most clubs with the platform's page as their
-website and no booking link). Every such club is due when its last read is 14 minutes old, and the
-oldest cache goes first. So a club that one tick reads comes due three ticks later. The clubs fall into
-three groups, each tick reads one group, and each club is read every 15 minutes. At eight clubs a lane,
-a platform keeps that pace for 24 clubs. Past 24, the oldest still go first, and each club waits longer.
+starts when the last one began 14 minutes ago or more (`SCRAPE.dueMs`), so it runs on every third
+tick, every 15 minutes, and the push job's gate calls the app for it (above). Each platform picks its
+own clubs, at most twelve: listed, no feed of their own, a link on that platform, and in its day
+hours. The link is the booking link, else the website (the directory lists most clubs with the
+platform's page as their website and no booking link). Every such club is due when its last read is
+29 minutes old (`SCRAPE.clubDueMs`), and the oldest cache goes first. So a club that one run reads
+comes due two runs later. The clubs fall into two groups, each run reads one group, and each club is
+read every 30 minutes. At twelve clubs a lane, a platform keeps that pace for 24 clubs (Playtomic has
+20). Past 24, the oldest still go first, and each club waits longer.
+**The quiet hours.** The owner's decision of 7 November 2026 (DECIDING rule 35): "Run the court reader
+less often. Run it every 30 minutes, and only from 06:00 to 23:00 Thailand time." A club is read from
+06:00 to 22:59 in its own zone (`SCRAPE.dayFrom`, `SCRAPE.dayTo`): the clubs are in Bangkok and
+Singapore, and Singapore's clubs wake and sleep an hour earlier on a Bangkok clock. A club with no
+zone keeps Bangkok's hours. The hour is Postgres's own, so the query takes `clubs.tz` as it is, and every
+door that writes the column checks the name first (the claim, a player's club, the manage page,
+`scripts/import-clubs.mjs`). Postgres's list of zone names would cost about 73 ms a query in
+production (measured on 7 November 2026), so the query does not ask it. When no club is in its day hours the run
+is `{ skipped: "night" }` and writes nothing, so the first tick after 06:00 finds the read due. The
+first runs of the morning read every club in full (the kept days miss the new day), twelve clubs a
+lane a run, so the night's backlog takes the first two runs. `SCRAPE_QUIET_HOURS=off` reads at every
+hour; only the browser suites set it. The service board's line for a platform stays green through the
+night and says "quiet hours".
 Until 11 October 2026 only a club that people used was due after 14 minutes, and any other club waited
-an hour. Production had no such club on a platform, so each club was read once an hour.
+an hour. Production had no such club on a platform, so each club was read once an hour. From then until
+7 November 2026 every club was due after 14 minutes, on every five-minute tick, day and night.
 
 Each platform has its own lane: one request a second, at most eight requests a club. The run stops
 before 45 seconds, or before 50 seconds less the push tick's own time. A full read covers three days,
 about once an hour (`fullDueMs`, 58 minutes). Between full reads, a club has today alone read and keeps
 the later days of its last full read. A lane makes at most three full reads a run (`fullPerLane`). A
 club past them has today alone read, and its full read waits for its next visit, never past 88
-minutes (`fullLateMs`). So the full reads spread over the ticks. Playtomic reads today in one request:
+minutes (`fullLateMs`). With a visit every 30 minutes, the next visit comes at 90 minutes, so a club
+whose full read waited gets it then, past the cap: each club's full read comes every 60 or 90 minutes. Playtomic reads today in one request:
 the cache keeps the club's tenant id (`ref`), and the reader then skips the club page. The cache also
 keeps a key of the link that the read came from (`linkKey`, eight hex digits, never the link). The run
 uses the kept id, the kept days and a kept good read only while the club's link gives the same key.
@@ -645,48 +730,62 @@ Book & Go clubs book on their own domain, so `BOOKANDGO_APPS` in `bookandgo.ts` 
 host to the club's app (Prime Padel 39, MBP Sports 51, Sterling 83). A new Book & Go club needs one
 line there, and its club row needs `booking_platform = 'bookandgo'`, because no link names the platform.
 
-**The cost.** No invocation of its own: it rides the push job's 288 invocations a day. It adds no
-migration and no table. A run with nothing to read costs one write and one read of `metrics_daily`,
-and one small query for each platform.
+**The cost.** No invocation of its own: it rides the push job, and since 7 November 2026 its turn is
+most of the push job's starts (about 72 a day). It adds no table. A run with nothing to read costs one
+write and two reads of `metrics_daily`, one read of `clubs` for the day hours, and one small query for
+each platform.
 
-The requests a day, for production's clubs on 11 October 2026, and Mandala Racquet Club. Its Playtomic link (`the-mandala-club`) is not in production yet: a change to `data/clubs.json` reaches production only through a migration. "Before" is from `metrics_daily`: the
-count by 14:05 UTC, and that rate over a whole day. "Now" is the most the code sends: a club's full
-read every hour, and three reads of today between them.
+The requests a day. "11 October to 7 November" is `metrics_daily` for 6 November 2026 (every club
+every 15 minutes, day and night). "Now, at most" is a club's full read every hour and one read of
+today between, for the 17 day hours of each club. The cap of three full reads a lane makes some full
+reads come at 90 minutes, so Playtomic sends less: `tests/scrape.test.ts` ("21 clubs") measures 96
+requests an hour for 21 clubs, about 1,630 a day. Mandala Racquet Club's Playtomic link
+(`the-mandala-club`) is not in production yet: a change to `data/clubs.json` reaches production only
+through a migration.
 
-| Platform | Clubs read | Before (by 14:05 UTC, a whole day) | Now, at most |
+| Platform | Clubs read | 11 October to 7 November (6 November) | Now, at most |
 |---|---|---|---|
-| Playtomic | 20, and 21 with Mandala | 1,016, about 1,730 | 21 × (4 + 3 × 1) × 24 = 3,528 |
-| MATCHi | 2 | 104, about 180 | 2 × (4 + 3 × 2) × 24 = 480 |
-| Book & Go | 4 | 156, about 270 | 4 × (4 + 3 × 2) × 24 = 960 |
+| Playtomic | 20, and 21 with Mandala | 3,658 | 21 × (4 + 1) × 17 = 1,785 |
+| MATCHi | 2 | 480 | 2 × (4 + 2) × 17 = 204 |
+| Book & Go | 5 | 752 | 5 × (4 + 2) × 17 = 510 |
+
+Before 11 October (a full read every hour, day and night) Playtomic sent about 1,730 a day, MATCHi
+about 180 and Book & Go about 270.
 
 A Playtomic full read is at most the club page and three days, and a read of today is one request
 (the tenant id above). MATCHi and Book & Go read their club page or their list of locations again for
 today, so a read of today is two requests. The two Prime Padel clubs share one Book & Go app, and the
-lane's cache answers the second club, so Book & Go sends about 720. The pace does not change: one
-request a second for each platform, at most eight a club, and a stop at the first block.
+lane's cache answers the second club, so Book & Go sends less than the table says. The pace does not
+change: one request a second for each platform, at most eight a club, and a stop at the first block.
 
-The function time. A typical tick reads about seven Playtomic clubs: about five of today and two full
-reads, about 13 requests, and 15 to 20 seconds. The lanes run side by side, so the slowest lane sets
-the time. That is about 72 minutes of function time a day, about 36 hours a month. Before 11 October
-2026 it was 96 runs of about 25 seconds, about 40 minutes a day. On the Hobby plan that time counts
-against the provisioned memory, not the active CPU, because the run mostly waits: at the 2 GB a Hobby
-function has, about 72 of the 360 GB-hours a month (20%). The worst case is every tick at its full 45
-seconds: about 216 GB-hours (60%). That happens only when a platform is slow on every tick, and
+The function time. Since 7 November 2026 a run comes every 15 minutes in the day hours, about 72 runs
+a day. A run in steady state sends Playtomic 19 to 35 requests, 24 on average (`tests/scrape.test.ts`,
+"21 clubs": a cycle of six runs, 90 minutes, sends 144), so it takes about 25 to 35 seconds. The lanes
+run side by side, so the slowest lane sets the time. That is about 30 to 40 minutes of function time a
+day, about 16 to 20 hours a month. From 11 October to 7 November 2026 it was 288 runs of 15 to 20
+seconds, about 72 minutes a day; before 11 October, 96 runs of about 25 seconds, about 40 minutes a
+day. On the Hobby plan that time counts against the provisioned memory, not the active CPU, because
+the run mostly waits: at the 2 GB a Hobby function has, about 32 to 40 of the 360 GB-hours a month
+(9 to 11%; it was about 72, 20%). The worst case is every run at its full 45 seconds: about 54
+GB-hours (15%; it was 216, 60%). That happens only when a platform is slow on every run, and
 `scrape_cut_<platform>` then shows it. Each run sends at most 45 requests to each platform and writes
-at most eight club rows for each. A tick in steady state sends at most 17 to Playtomic: three full
-reads and five reads of today (`tests/scrape.test.ts`, "21 clubs"). The three ticks after midnight
-in the clubs' zone are the exception. Then the kept days of each club miss the new third day, so each
-club gets a full read past the cap of three. That is eight, eight and five clubs, so 32, 32 and 20
-requests (`tests/scrape.test.ts`, "after the clubs' midnight"). The first three ticks of the code that
-adds `linkKey` do the same once, because no older read has a key. A club whose link changed also
-gets one full read past the cap.
+at most twelve club rows for each. The cap of three full reads a lane delays a full read by one visit
+at most, so the full reads of a group come in waves: steady runs send 19, 20, 31 or 35, never more
+than 35. The first runs after 06:00 are the exception. Then the kept days of each club miss the new
+day, so each club gets a full read past the cap: twelve clubs, then the rest, so 45 and 40 requests.
+The first of those runs fills its 45 seconds, so its twelfth club is cut short and read on the next
+run (`tests/scrape.test.ts`, "the first runs after 06:00"). Until 7 November 2026 the same came in the
+three ticks after the clubs' midnight, 32, 32 and 20 requests; the clubs now sleep through midnight.
+The first runs of the code that adds `linkKey` did the same once, because no older read had a key. A
+club whose link changed also gets one full read past the cap.
 
 **The egress** (Supabase, 5 GB a month). A read from a platform keeps three days on the club row.
 Measured on the fixtures (10 October 2026): one day of The Cage Padel Tribe is 9 pieces and 0.7 KB,
 the worst day (the count changing every half hour, 07:00 to 23:00) is 32 pieces and 2.5 KB, and the
 cache without its slots is about 0.3 KB. Nothing reads the whole cache on a hot path. The pick selects
 six columns and the cache without its slots: at most about 4 KB for each platform a run, so at most
-about 100 MB a month for three platforms on every tick, and about 25 MB at today's 27 clubs. `/clubs`, the city pages, the API and MCP read only the next 26
+about 26 MB a month for three platforms at 72 runs a day, and about 10 MB at today's 27 clubs (it was
+about 100 MB and 25 MB with a run on every five-minute tick). `/clubs`, the city pages, the API and MCP read only the next 26
 hours of each club's slots: about 1 to 3 KB for a club with a fresh read, so up to about 60 KB a render
 with 20 such clubs. The picker lists and the Telegram place keyboard read no cache at all. The hourly
 court offers read the slots two to seven hours ahead for at most 30 clubs: at most about 25 MB a month.
@@ -767,8 +866,9 @@ with `why` "frame: budget". A run on a very busy tick has
 less than 30 s, and a first club it cuts is not written: the next fair run reads it.
 
 **When clubs are cut.** `scrape_cut_<platform>` counts the clubs whose read the run's deadline cut
-short, at most one a lane a run. A few cuts a day are normal: a lane of eight clubs can run out of
-its 45 s, and the push job leaves the read less time on a busy tick. A "frame: budget" row means that
+short, at most one a lane a run. A few cuts a day are normal: a lane of twelve clubs can run out of
+its 45 s (Playtomic's first run after 06:00 always does), and the push job leaves the read less time on a busy
+tick. A "frame: budget" row means that
 one club did not fit in a fair run, so read that club's requests (the platform was slow, or the club
 needs more requests than its neighbours). Ask
 `select day, key, value from metrics_daily where key like 'scrape_cut_%' order by day desc limit 14`,

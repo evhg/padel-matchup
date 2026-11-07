@@ -429,6 +429,9 @@ export function guessCity(slug: string | null, tz: string | null | undefined): s
   return CITIES.find((c) => venueInCity(c, slug, tz))?.slug ?? null;
 }
 
+/** A zone name the code knows, else null: a name nobody can read never reaches `clubs.tz`. */
+const knownZone = (tz: string | null | undefined): string | null => (tz && isValidTimeZone(tz) ? tz : null);
+
 export type ClaimInput = ClubInput & { name: string; playerId: string; tz?: string | null; /** The claim's check: who they are at the club, and a work email or the club's phone. */ claimRole?: unknown; claimContact?: unknown };
 
 export { CLAIM_ROLES, type ClaimRole } from "./claimRoles";
@@ -481,7 +484,8 @@ export async function claimClub(db: Db, input: ClaimInput): Promise<PickableClub
   const claimContact = text(input.claimContact, 120) ?? (same ? existing.claimContact : null);
   const claimVerifiedAt = same && existing.claimContact === claimContact ? existing.claimVerifiedAt : null;
   // No zone from the browser: the city's zone will do, and the week can make matches from the first hour.
-  const tz = input.tz ?? existing?.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
+  // Only a zone the code knows: the reader of free court times takes the column as it is (`dayHours` in scrape.ts).
+  const tz = knownZone(input.tz) ?? existing?.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
   // A claimed row is a claim, whatever it was before. The directory's own fields (country, province,
   // the court counts) are left alone: they are still true, and the owner edits them through the
   // manage link like everything else.
@@ -523,7 +527,7 @@ export async function addClub(db: Db, input: AddClubInput): Promise<PickableClub
   const city = fields.city ?? guessCity(slug, input.tz) ?? null;
   const country = fields.country ?? countryOfTz(input.tz) ?? null;
   const province = fields.province ?? (city ? (cityBySlug(city)?.name ?? null) : null);
-  const tz = input.tz ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
+  const tz = knownZone(input.tz) ?? (city ? (cityBySlug(city)?.tz ?? null) : null);
   const values = { ...fields, city, country, province, name, tz, source: "player", addedBy: input.playerId, claimedBy: null, approvedAt: null, rejectedAt: null, claimDecision: null, founding: false, updatedAt: new Date() };
   if (existing) {
     const [row] = await db.update(clubs).set(values).where(eq(clubs.slug, existing.slug)).returning(columnsButCache);

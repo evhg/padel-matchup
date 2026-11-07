@@ -38,8 +38,8 @@ import { errorClass } from "./errorClass";
  * above asks for exactly that. This reader reads those paths under the owner's decision of 10 October
  * 2026 (DECIDING rule 35): "platforms forbid scraping in their terms but we are just testing ... So
  * scraping at risk of being blocked is acceptable, just do it." robots.txt does not bind a reader under
- * that rule; the frame keeps the load low instead (today every 15 minutes, the next two days about
- * hourly) and stops at the first sign of a block.
+ * that rule; the frame keeps the load low instead (today every 30 minutes from 06:00 to 23:00 in the
+ * club's zone, the next two days about hourly) and stops at the first sign of a block.
  */
 
 export const PLAYTOMIC_UA = "KicksmashBot/1.0 (+https://kicksma.sh/about)";

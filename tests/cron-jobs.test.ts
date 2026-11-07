@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { CRON_JOBS, CRON_LOG_CLEANUP, CRON_SECRET_NAME, jobCommand, listCronJobs, scheduleCronJobs, storeCronSecret, cronAvailable } from "@/lib/ops/cronJobs";
+import { CRON_JOBS, CRON_LOG_CLEANUP, CRON_SECRET_NAME, PUSH_CALLED_KEY, PUSH_GATE, PUSH_TICK_KEY, jobCommand, listCronJobs, scheduleCronJobs, storeCronSecret, cronAvailable } from "@/lib/ops/cronJobs";
 
 /**
  * The scheduled jobs, in the repository (migration 0069).
@@ -14,6 +14,8 @@ import { CRON_JOBS, CRON_LOG_CLEANUP, CRON_SECRET_NAME, jobCommand, listCronJobs
  */
 
 const MIGRATION = readFileSync("drizzle/0069_cron_jobs_in_the_repo.sql", "utf8");
+/** Migration 0104: the gate function, and the block that gives the push job its gate. */
+const GATE_FILE = readFileSync("drizzle/0104_push_job_gate.sql", "utf8");
 const OLD = "s3cret-0123456789abcdef";
 
 const STANDINS = `
@@ -65,7 +67,8 @@ describe("the scheduled jobs live in the repository", () => {
     for (const spec of CRON_JOBS) {
       const job = after.find((j) => j.jobname === spec.name)!;
       expect(job.schedule).toBe(spec.schedule);
-      // The migration and the code write the same command, character for character.
+      // The migration and the code write the same command, character for character. 0069 wrote the
+      // push job with no gate; 0104 adds it (below).
       expect(job.command).toBe(jobCommand("https://kicksma.sh", spec.path));
     }
     expect(after.some((j) => j.command.includes(OLD)), "a job's text still holds the secret").toBe(false);
@@ -91,6 +94,7 @@ describe("the scheduled jobs live in the repository", () => {
   it("schedules the jobs on a database that had none, and the operator's call stores the secret", async () => {
     const { pg, db } = await database();
     await pg.exec(MIGRATION);
+    await pg.exec(GATE_FILE);
     expect((await jobs(pg)).map((j) => j.jobname)).toEqual(CRON_JOBS.map((j) => j.name));
     expect(await secrets(pg)).toEqual([]); // nothing to move, and nothing made up
 
@@ -103,6 +107,8 @@ describe("the scheduled jobs live in the repository", () => {
     await pg.exec(`insert into cron.job (jobname, schedule, command) values ('extra', '*/5 * * * *', 'select net.http_get(url:=''https://kicksma.sh/api/cron/push'')')`);
     await scheduleCronJobs(db, "https://kicksma.sh");
     expect((await jobs(pg)).map((j) => j.jobname)).toEqual(CRON_JOBS.map((j) => j.name));
+    // The operator's call writes what the migrations wrote: the push job with its gate.
+    for (const spec of CRON_JOBS) expect((await jobs(pg)).find((j) => j.jobname === spec.name)!.command).toBe(jobCommand("https://kicksma.sh", spec.path, spec.gated));
 
     const listed = await listCronJobs(db);
     expect(listed.map((j) => j.jobname)).toEqual(CRON_JOBS.map((j) => j.name));
@@ -157,10 +163,14 @@ describe("a weekly job clears pg_cron's run log", () => {
     await pg.exec(CLEANUP);
     expect(await jobs(pg)).toEqual(after);
 
-    // The operator's list shows it, and a later POST /api/admin/cron leaves it where it is.
+    // The operator's list shows it, and a later POST /api/admin/cron leaves it where it is (after 0104,
+    // which gives the push job the gate the code writes).
     expect((await listCronJobs(db)).map((j) => j.jobname)).toEqual(after.map((j) => j.jobname));
+    await pg.exec(GATE_FILE);
+    const gated = await jobs(pg);
     await scheduleCronJobs(db, "https://kicksma.sh");
-    expect(await jobs(pg)).toEqual(after);
+    expect(await jobs(pg)).toEqual(gated);
+    expect(gated.find((j) => j.jobname === CRON_LOG_CLEANUP.name)).toEqual(job);
   });
 
   it("deletes only the run log's rows that ended more than 14 days ago", async () => {
@@ -201,3 +211,117 @@ describe("a weekly job clears pg_cron's run log", () => {
     expect((await pg.query<{ c: string | null }>("select to_regclass('cron.job')::text as c")).rows[0].c).toBeNull();
   });
 });
+
+/**
+ * The push job's gate (migration 0104, the owner's decision of 7 November 2026: "Start the push job only
+ * when something is due"). The stand-ins above, 0069 and 0101 first, as production has them. What the
+ * function answers is `tests/push-gate.test.ts`; here, what the job does with the answer.
+ */
+describe("the push job asks the database first, and records its tick", () => {
+  /** The job's own table and a gate that answers what the test says, beside a net.http_get that keeps its calls. */
+  const RECORDING = `
+    create table if not exists public.metrics_daily (day date not null, key text not null, value bigint not null default 0, primary key (day, key));
+    create table net.calls (id bigserial primary key, url text, headers jsonb);
+    create or replace function net.http_get(url text, params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds integer default 5000) returns bigint language sql as $$
+      insert into net.calls (url, headers) values (url, headers) returning id $$;
+    create table public.gate_answer (yes boolean);
+    insert into public.gate_answer values (false);
+    create or replace function public.${PUSH_GATE}(at timestamptz default now()) returns boolean language sql stable as $$ select yes from public.gate_answer $$;
+  `;
+
+  it("gives the push job its gate on the host it called, as the code writes it, and touches nothing else", async () => {
+    const { pg } = await database();
+    const host = "https://staging.example.org";
+    const lit = (text: string) => `'${text.replaceAll("'", "''")}'`;
+    await pg.exec(`
+      insert into cron.job (jobname, schedule, command) values
+        ('kicksmash-hourly', '0 * * * *', ${lit(jobCommand(host, "/api/cron/hourly"))}),
+        ('kicksmash-push', '*/5 * * * *', ${lit(jobCommand(host, "/api/cron/push"))}),
+        ('kicksmash-sync', '*/10 * * * *', ${lit(jobCommand(host, "/api/cron/sync"))}),
+        ('push-by-hand', '*/5 * * * *', ${lit(`select net.http_get(url:='${host}/api/cron/push')`)});
+      select vault.create_secret('${OLD}', '${CRON_SECRET_NAME}');
+    `);
+    await pg.exec(CLEANUP);
+    const before = await jobs(pg);
+    await pg.exec(GATE_FILE);
+
+    const after = await jobs(pg);
+    expect(after.map((j) => j.jobname)).toEqual(["kicksmash-cron-log-cleanup", "kicksmash-hourly", "kicksmash-push", "kicksmash-sync"]);
+    for (const spec of CRON_JOBS) expect(after.find((j) => j.jobname === spec.name)!.command).toBe(jobCommand(host, spec.path, spec.gated));
+    // The push job alone changed: the others, the run log's cleanup and the secret are as they were.
+    expect(after.filter((j) => j.jobname !== "kicksmash-push")).toEqual(before.filter((j) => j.jobname !== "kicksmash-push" && j.jobname !== "push-by-hand"));
+    expect(after.find((j) => j.jobname === "kicksmash-push")!.schedule).toBe("*/5 * * * *");
+    expect(await secrets(pg)).toEqual([{ name: CRON_SECRET_NAME, secret: OLD }]);
+    expect(after.some((j) => j.command.includes(OLD)), "a job's text holds the secret").toBe(false);
+
+    // Run twice, change nothing (the Migrate workflow can be re-run by hand).
+    await pg.exec(GATE_FILE);
+    expect(await jobs(pg)).toEqual(after);
+  });
+
+  it("the operator's call before 0104 keeps the push job without its gate, and says so", async () => {
+    // A gated job on a database with no kicksmash_push_due would fail on every tick and call nothing.
+    const { pg, db } = await database();
+    await pg.exec(MIGRATION);
+    expect(await scheduleCronJobs(db, "https://kicksma.sh")).toEqual({ pushGated: false });
+    expect((await jobs(pg)).find((j) => j.jobname === "kicksmash-push")!.command).toBe(jobCommand("https://kicksma.sh", "/api/cron/push"));
+    // Once 0104 is in, the same call gives it the gate.
+    await pg.exec(GATE_FILE);
+    expect(await scheduleCronJobs(db, "https://kicksma.sh")).toEqual({ pushGated: true });
+    expect((await jobs(pg)).find((j) => j.jobname === "kicksmash-push")!.command).toBe(jobCommand("https://kicksma.sh", "/api/cron/push", true));
+  });
+
+  it("takes kicksma.sh when no job names a host, as 0069 does", async () => {
+    const { pg } = await database();
+    await pg.exec(GATE_FILE);
+    expect((await jobs(pg)).map((j) => [j.jobname, j.command])).toEqual([["kicksmash-push", jobCommand("https://kicksma.sh", "/api/cron/push", true)]]);
+  });
+
+  it("writes its tick on every run, and calls the app, once, only on a yes", async () => {
+    const { pg } = await database();
+    await pg.exec(MIGRATION);
+    await pg.exec(GATE_FILE);
+    await pg.exec(RECORDING);
+    await pg.exec(`select vault.create_secret('${OLD}', '${CRON_SECRET_NAME}')`);
+    const command = (await pg.query<{ command: string }>("select command from cron.job where jobname = 'kicksmash-push'")).rows[0].command;
+    const metric = async (key: string) => (await pg.query<{ value: number; fresh: boolean; today: boolean }>(`select value, abs(value - extract(epoch from now())) < 60 as fresh, day = (now() at time zone 'UTC')::date as today from public.metrics_daily where key = '${key}'`)).rows;
+    const calls = async () => (await pg.query<{ url: string; auth: string }>("select url, headers->>'Authorization' as auth from net.calls order by id")).rows;
+
+    // Nothing due: the tick, and no call.
+    await pg.exec(command);
+    expect(await metric(PUSH_TICK_KEY)).toEqual([{ value: expect.any(Number), fresh: true, today: true }]);
+    expect(await metric(PUSH_CALLED_KEY)).toEqual([]);
+    expect(await calls()).toEqual([]);
+
+    // Something due: the tick, the call recorded, and one GET with the secret from Vault.
+    await pg.exec("update public.gate_answer set yes = true");
+    await pg.exec(command);
+    expect(await metric(PUSH_TICK_KEY)).toHaveLength(1); // one row a day, written over
+    expect(await metric(PUSH_CALLED_KEY)).toEqual([{ value: expect.any(Number), fresh: true, today: true }]);
+    expect(await calls()).toEqual([{ url: "https://kicksma.sh/api/cron/push", auth: `Bearer ${OLD}` }]);
+
+    // A gate that fails outright (dropped, say) stops the job, and with it the tick: the board turns red.
+    await pg.exec(`update public.metrics_daily set value = 0; drop function public.${PUSH_GATE}(timestamptz)`);
+    await expect(pg.exec(command)).rejects.toThrow();
+    expect(Number((await metric(PUSH_TICK_KEY))[0].value)).toBe(0);
+    expect(await calls()).toHaveLength(1);
+  });
+
+  it("makes the function and touches no job on a database without pg_cron, which is every local and test database", async () => {
+    const { pg, db } = await database(false);
+    await pg.exec(GATE_FILE);
+    expect(await cronAvailable(db)).toBe(false);
+    expect((await pg.query<{ f: string | null }>(`select to_regprocedure('public.${PUSH_GATE}(timestamptz)')::text as f`)).rows[0].f).toBe(`${PUSH_GATE}(timestamp with time zone)`);
+  });
+
+  it("refuses the function to everybody but its owner and the app's own role: no API role may call it", async () => {
+    const { pg } = await database(false);
+    await pg.exec("create role anon nologin; create role authenticated nologin; create role somebody nologin; create role kicksmash nologin;");
+    await pg.exec(GATE_FILE);
+    const can = async (role: string) => (await pg.query<{ ok: boolean }>(`select has_function_privilege('${role}', 'public.${PUSH_GATE}(timestamptz)', 'execute') as ok`)).rows[0].ok;
+    for (const role of ["anon", "authenticated", "somebody"]) expect([role, await can(role)]).toEqual([role, false]);
+    // The app may move onto the role kicksmash one day (AGENTS.md rule 10): the job must still run then.
+    expect(await can("kicksmash")).toBe(true);
+  });
+});
+

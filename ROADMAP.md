@@ -1426,6 +1426,25 @@ Everything in this list is live. The README describes each in detail.
   buttons are two columns now, so WhatsApp and Telegram fit a 390 px phone. `src/lib/domain/heldRow.ts`;
   proven in `tests/held-row.test.ts`, `tests/held-record.test.ts`, `tests/past-players.test.ts`,
   `e2e/core.mjs` and `e2e/player-states.mjs`.
+- **Fewer starts on the Vercel plan: the court reader every 30 minutes in the day, and a push job that
+  asks first (7 November 2026, migration 0104).** Kicksmash used about 6 to 7 minutes of the Hobby
+  plan's active CPU a day, 95% of the account's 4 hours a month, nearly all of it on the scheduled jobs.
+  The owner answered "A and B, go ahead". A: "Run the court reader less often. Run it every 30 minutes,
+  and only from 06:00 to 23:00 Thailand time." Each club is now read every 30 minutes from 06:00 to
+  23:00 in its own zone (Bangkok and Singapore; DECIDING rule 35), a run every 15 minutes, twelve clubs
+  a lane. B: "Start the push job only when something is due. The database checks first, and it calls
+  the app only when a notification waits." pg_cron still ticks every five minutes, but the job asks
+  `kicksmash_push_due()` first, a superset of what the route does that says yes on any error of its own,
+  and calls `/api/cron/push` only on a yes. The court reader rides that job, so its turn is one of the
+  clauses, with the app's own test for a club it may read. A Telegram card of a started match is now
+  refreshed once after the start, not read on every tick for a day. The push job's starts fall from 288 a day to about 75, all the jobs' from 457 to about 245,
+  and Playtomic's requests from about 3,650 a day to about 1,630. The job writes its tick, so the
+  service board judges pg_cron by the tick and the app by its last run, with eight hours for a quiet
+  night. Measured on the build machine: a push tick with nothing due is about 10 ms of CPU, and the
+  first call of a fresh server about 2 s (docs/OPERATING.md). `src/lib/ops/cronJobs.ts`,
+  `src/lib/booking/scrape.ts`, `drizzle/0104_push_job_gate.sql`, `src/lib/ops/services.ts`; proven in
+  `tests/push-gate.test.ts`, `tests/cron-jobs.test.ts`, `tests/scrape.test.ts` and
+  `tests/services.test.ts`.
 
 ## The finish line
 

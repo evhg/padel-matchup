@@ -519,13 +519,23 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     // Not started: the button is not on the card and a tap says so.
     expect(JSON.stringify(sent("editMessageText").at(-1)!.body.reply_markup)).not.toContain(`r:${code}`);
     expect(await tap(85, org, card.messageId, `r:${code}`)).toBe("result:not_yet");
-    // Time passes.
+    // Time passes: the match started two hours ago, and the card was last rendered before that.
     const ev = (await getEventByCode(db, code))!.event;
     await db.update(events).set({ startsAt: new Date(Date.now() - 2 * HOUR) }).where(eq(events.id, ev.id));
+    await db.update(telegramCards).set({ updatedAt: new Date(Date.now() - 3 * HOUR) }).where(eq(telegramCards.eventId, ev.id));
+    // An edit Telegram refuses leaves updated_at where it was, so the next tick tries again.
+    editFailures = [{ error_code: 429, description: "Too Many Requests: retry after 1" }];
+    expect(await refreshStartedCards(db)).toBe(0);
     calls = [];
     expect(await refreshStartedCards(db)).toBe(1);
     expect(JSON.stringify(sent("editMessageText").at(-1)!.body.reply_markup)).toContain(`r:${code}`);
-    expect(await refreshStartedCards(db)).toBe(0); // same render, no second edit
+    // The edit moved the card's updated_at past the start, so the next tick does not even read it
+    // (the push job's gate stops waking for it, migration 0104).
+    const [after] = await db.select().from(telegramCards).where(eq(telegramCards.eventId, ev.id));
+    expect(after.updatedAt.getTime()).toBeGreaterThan(Date.now() - 2 * HOUR);
+    calls = [];
+    expect(await refreshStartedCards(db)).toBe(0);
+    expect(sent("editMessageText")).toEqual([]);
     expect(await tap(86, org, card.messageId, `r:${code}`)).toBe("result:prompt");
     const prompt = sent("sendMessage").at(-1)!;
     const rows = (prompt.body.reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }).inline_keyboard;
