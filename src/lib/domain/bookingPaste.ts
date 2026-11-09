@@ -1,9 +1,10 @@
 import { bookandgoApp } from "@/lib/booking/adapters/bookandgo";
 import { matchiFacilitySlug } from "@/lib/booking/adapters/matchi";
 import { playtomicClubPage } from "@/lib/booking/adapters/playtomic";
-import { cleanUrl, detectPlatform, madeToShare } from "@/lib/booking/platforms";
+import { detectPlatform, madeToShare } from "@/lib/booking/platforms";
 import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { distinctWords, matchVenue, WEEKDAYS, ZONE_ALIASES } from "@/lib/telegram/parse";
+import { LINK_RE, linksIn, PASTE_TEXT_MAX } from "./bookingLink";
 import type { BookingShot } from "./bookingShot";
 import { CITIES } from "./cities";
 import { normalName } from "./dupes";
@@ -72,30 +73,13 @@ export type BookingRead = {
 
 export type BookingPreview = { title?: string | null; description?: string | null };
 
-/** What a paste may carry: a chat's worth. */
-export const PASTE_TEXT_MAX = 4000;
-/** Links read from one paste. */
-export const PASTE_LINKS_MAX = 5;
 /** Names read from one paste: a match is four, a tournament night is read elsewhere. */
 export const PASTE_NAMES_MAX = 7;
 const FIELD_MAX = 40;
 
 // ── Links ────────────────────────────────────────────────────────────────────────────────────────
-
-const LINK_RE = /https?:\/\/[^\s<>"'«»“”]+/giu;
-
-/** The http(s) links in a paste, then `extra` (a Telegram message's link entities), cleaned, the first spelling of each, five at most. */
-export function linksIn(text: string, extra: readonly string[] = []): string[] {
-  const found = [...((text ?? "").slice(0, PASTE_TEXT_MAX).match(LINK_RE) ?? []), ...extra.slice(0, 20)];
-  const out: string[] = [];
-  for (const raw of found) {
-    if (typeof raw !== "string") continue;
-    const clean = cleanUrl(raw.replace(/[.,;:!?)\]}>»"'”]+$/u, ""));
-    if (clean && !out.includes(clean)) out.push(clean);
-    if (out.length >= PASTE_LINKS_MAX) break;
-  }
-  return out;
-}
+// The link reader is in `bookingLink.ts`, so the booking link field uses it without this whole reader.
+export { linksIn, PASTE_LINKS_MAX, PASTE_TEXT_MAX } from "./bookingLink";
 
 const setpointSlug = (u: URL): string | null => {
   const host = u.hostname.toLowerCase();

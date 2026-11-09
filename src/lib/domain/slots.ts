@@ -368,6 +368,9 @@ export async function removeFromSlot(
   });
 }
 
+/** A name to hold with the record its place keeps (null: held by name). */
+export type HeldName = { name: string; playerId: string | null };
+
 /**
  * "Paste the names from the group": the organiser's names, each a reserved spot in the next free seat,
  * in one transaction under the event's lock, so one request and one line-up change carry the whole
@@ -378,16 +381,20 @@ export async function removeFromSlot(
  * the organiser said "Yes, that's Danny" or tapped the chip (`heldRecordsFor` in `heldRecord.ts`, which
  * found it again on the server). A record already in the match takes no second place: that name is held
  * by name, as every other name is.
+ *
+ * A name may also come with its record (`HeldName`), for a caller that knows the record already and
+ * not only the name: "Play again" holds the last match's players (`holdLastPlayers` in `playAgain.ts`),
+ * and two of them may carry one name, which a map by the name cannot tell apart.
  */
-export async function reserveNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; records?: ReadonlyMap<string, string>; now?: Date }): Promise<{ held: Slot[]; event: Event }> {
+export async function reserveNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: readonly (string | HeldName)[]; records?: ReadonlyMap<string, string>; now?: Date }): Promise<{ held: Slot[]; event: Event }> {
   const now = input.now ?? new Date();
   return db.transaction(async (tx) => {
     let ev = await lockEvent(tx, input.eventId);
     const held: Slot[] = [];
-    for (const raw of input.names) {
-      const name = normalizeName(raw);
+    for (const entry of input.names) {
+      const name = normalizeName(typeof entry === "string" ? entry : entry.name);
       if (!name) continue;
-      const playerId = input.records?.get(normalName(name)) ?? null;
+      const playerId = typeof entry === "string" ? (input.records?.get(normalName(name)) ?? null) : entry.playerId;
       try {
         let done: { slot: Slot; event: Event };
         try {

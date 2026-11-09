@@ -241,7 +241,7 @@
     "capacityHelp": "Las plazas libres al empezar la ronda 1 se eliminan: el torneo lo juegan los presentes.",
     "more": "Más opciones",
     "bookingUrl": "Enlace de reserva de pista",
-    "bookingUrlHelp": "¿Ya has reservado la pista? Pega el enlace del club o tu confirmación. Los jugadores verán un botón que lo abre. Aquí no se indica cómo pagar.",
+    "bookingUrlHelp": "¿Ya has reservado la pista? Pega el enlace del club o la invitación a tu partido desde la app. Vale el mensaje entero. Los jugadores lo abren desde la página del partido. En The Padel Society o Playtomic, cada jugador paga ahí su parte. Para una cuenta bancaria o PromptPay, usa «Cómo pagar».",
     "bookingSet": "Enlace de reserva añadido",
     "titleSet": "Título o nota añadidos",
     "format": "Formato",
@@ -305,7 +305,8 @@
     "askPastFirst": "Primero responde la pregunta sobre {name}.",
     "playedWithYou": "Jugaron contigo",
     "keepsRecord": "Mantiene los partidos de {name}",
-    "pasteTotal": "La reserva dice {total} por la pista. Añade el precio por jugador en «Más opciones»."
+    "pasteTotal": "La reserva dice {total} por la pista. Añade el precio por jugador en «Más opciones».",
+    "bookingUrlNoLink": "Aquí no hay ningún enlace. Pega el enlace del club o de la app. Empieza por https://"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -801,7 +802,8 @@
     "bookFooter": "Esta dirección lee confirmaciones de reserva y responde con un enlace. No guarda nada de tu correo. Si marcas esta respuesta como spam, guarda tu dirección solo para no volver a escribirte.",
     "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario.",
     "playAgainIn": "Me apunto",
-    "playAgainLine": "{spots}. Un toque abre la página del partido en el paso para unirte."
+    "playAgainLine": "{spots}. Un toque abre la página del partido en el paso para unirte.",
+    "playAgainHeldLine": "Un toque abre la página del partido en el paso para unirte."
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",
@@ -1168,7 +1170,7 @@
     "levelCheckAsked": "{name} te pide que confirmes su nivel",
     "coachListed": "Un entrenador ya acepta reservas en {title}: {name}",
     "wantersTold": "Los jugadores que pidieron entrenador en {title} acaban de saber de ti: {count}",
-    "playAgain": "{name} creó el próximo partido: {day} {time} en {venue}. ¿Te apuntas?",
+    "playAgain": "{name} creó el próximo partido: {day} {time} en {venue}. {what, select, held {Tienes una plaza reservada. ¿Te apuntas?} other {¿Te apuntas?}}",
     "requestWaitlisted": "El organizador dijo que sí. El partido está lleno, así que estás en la lista de espera: {day} {time}, {venue}",
     "passkeySaved": "{what, select, unknown {Un teléfono ya te recuerda.} other {Un teléfono ya te recuerda: {name}.}} ¿No fuiste tú? Quítalo en Mis partidos."
   },

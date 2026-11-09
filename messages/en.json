@@ -241,7 +241,7 @@
     "capacityHelp": "Spots still open when round 1 starts are dropped: the tournament becomes the players present.",
     "more": "More options",
     "bookingUrl": "Court booking link",
-    "bookingUrlHelp": "Already booked the court? Paste the club's link or your confirmation. Players get a button that opens it. This is not where you say how to pay.",
+    "bookingUrlHelp": "Already booked the court? Paste the club's link or your game's invitation from the app. The whole message is fine. Players open it from the match page. On The Padel Society or Playtomic, each player pays their own share there. For a bank or PromptPay line, use \"How to pay\".",
     "bookingSet": "Booking link added",
     "titleSet": "Title or note added",
     "format": "Format",
@@ -305,7 +305,8 @@
     "askPastFirst": "Answer the question about {name} first.",
     "playedWithYou": "Played with you",
     "keepsRecord": "Keeps {name}'s matches",
-    "pasteTotal": "The booking says {total} for the court. Add the cost per player under More options."
+    "pasteTotal": "The booking says {total} for the court. Add the cost per player under More options.",
+    "bookingUrlNoLink": "This has no link in it. Paste the link from the club or the app. It starts with https://"
   },
   "share": {
     "title": "Your match is live",
@@ -801,7 +802,8 @@
     "bookFooter": "This address reads booking confirmations and answers with a link. It keeps nothing from your email. If you mark this answer as spam, it keeps your address only so that it never writes to you again.",
     "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form.",
     "playAgainIn": "I'm in",
-    "playAgainLine": "{spots}. One tap opens the match page at the join step."
+    "playAgainLine": "{spots}. One tap opens the match page at the join step.",
+    "playAgainHeldLine": "One tap opens the match page at the join step."
   },
   "errors": {
     "not_found": "We couldn't find that.",
@@ -1168,7 +1170,7 @@
     "levelCheckAsked": "{name} asks you to confirm their level",
     "coachListed": "A coach now takes bookings in {title}: {name}",
     "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}",
-    "playAgain": "{name} made the next game: {day} {time} at {venue}. Are you in?",
+    "playAgain": "{name} made the next game: {day} {time} at {venue}. {what, select, held {A place is held for you. Are you in?} other {Are you in?}}",
     "requestWaitlisted": "The organiser said yes. The match is full, so you are on the waiting list: {day} {time}, {venue}",
     "passkeySaved": "{what, select, unknown {A phone now signs you in.} other {A phone now signs you in: {name}.}} Not you? Remove it on My matches."
   },

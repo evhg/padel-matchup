@@ -251,10 +251,22 @@ try {
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);
   await p.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();
-  await p.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
-  const nextCode = p.url().split("/").slice(-2)[0];
-  await p.goto(`${BASE}/${nextCode}`);
+  // The owner's report of 9 November 2026: "when erik clicked play again, he had to add the players again".
+  // The tap now holds a place for each player of the last game, and the organiser lands on the new
+  // match, where the line-up shows them and one message names them.
+  await p.waitForURL((u) => /^\/[^/]{4}$/.test(u.pathname) && u.pathname !== `/${mcode}`, { timeout: 30000 });
+  const nextCode = new URL(p.url()).pathname.slice(1);
   check("Play again makes the next game on the day and at the time picked", nextCode !== mcode && (await p.getByText(/19:30/).count()) > 0, nextCode);
+  const playedHeld = p.getByTestId("held-message");
+  await playedHeld.waitFor({ timeout: 20000 });
+  const heldRows = await Promise.all(["Bo", "Cy", "Di"].map((n) => p.getByText(`Reserved for ${n}`, { exact: true }).count()));
+  const heldLine = (await playedHeld.textContent()) ?? "";
+  check(
+    "Play again holds a place for each player of the last game: the line-up shows Bo, Cy and Di held, and one message names them",
+    heldRows.every((c) => c === 1) && /One message for Bo, Cy,? and Di/.test(heldLine),
+    JSON.stringify({ heldRows, heldLine }),
+  );
+  await shot(p, "v3c-play-again-held");
   // The round goes out after the answer: back on the last game, the help line no longer promises a message.
   let roundSaid = false;
   for (let i = 0; i < 10 && !roundSaid; i++) {

@@ -7,7 +7,10 @@ import { DomainError } from "./errors";
 import { duplicateEvent } from "./events";
 import { admission, rangeHolds, waivedByPlay, type Admission, type RangeWaiver } from "./levels";
 import { noticeKey } from "./noticeKinds";
+import { normalizeName } from "./players";
+import { LIMITS, takeRate } from "./ratelimit";
 import { DELETED_PLAYER_NAME } from "./result";
+import { joinEvent, reserveNames } from "./slots";
 
 /**
  * "Play again": the owner's decision of 11 October 2026, option A, "Make the one working group repeat
@@ -15,8 +18,9 @@ import { DELETED_PLAYER_NAME } from "./result";
  *
  * The organiser picks the day and the time; the last game's day and time a week on is the default.
  * Everything else carries over (`duplicateEvent`), and a crew's match stays the crew's. Each player who
- * sat in the last match hears once, "Are you in?", through the notice gate (`notifyPlayAgain` in
- * `src/lib/notify.ts`), and a second tap on the same old match sends nothing (`claimPlayAgainRound`).
+ * sat in the last match keeps a held place in the next game (`holdLastPlayers`, since 9 November 2026)
+ * and hears once, "Are you in?", through the notice gate (`notifyPlayAgain` in `src/lib/notify.ts`),
+ * and a second tap on the same old match holds and sends nothing (`claimPlayAgainRound`).
  * And a player who already played a finished, scored match with the organiser is not held to that
  * organiser's level range (`admissionAt`).
  */
@@ -315,16 +319,86 @@ export async function existingNextGame(db: Db, old: OldGame, startsAt: Date): Pr
  * hour (`lockCrewHour`), so two taps at once, or a tap beside the hourly job, make one game.
  */
 export async function nextGameFor(db: Db, old: Event, input: { creatorPlayerId: string; startsAt: Date; now: Date }): Promise<{ event: Event; made: boolean }> {
-  const run = async (q: Db) => {
-    const there = await existingNextGame(q, old, input.startsAt);
-    if (there) return { event: there, made: false };
-    return { event: await duplicateEvent(q, { sourceEventId: old.id, creatorPlayerId: input.creatorPlayerId, startsAt: input.startsAt, now: input.now }), made: true };
-  };
-  const groupId = old.groupId;
-  if (!groupId) return run(db);
+  if (!old.groupId) return nextGameIn(db, old, input);
+  return inCrewHour(db, old.groupId, input.startsAt, (tx) => nextGameIn(tx, old, input));
+}
+
+/** `nextGameFor`'s look and write, on the handle it is given. */
+async function nextGameIn(q: Db, old: Event, input: { creatorPlayerId: string; startsAt: Date; now: Date }): Promise<{ event: Event; made: boolean }> {
+  const there = await existingNextGame(q, old, input.startsAt);
+  if (there) return { event: there, made: false };
+  return { event: await duplicateEvent(q, { sourceEventId: old.id, creatorPlayerId: input.creatorPlayerId, startsAt: input.startsAt, now: input.now }), made: true };
+}
+
+/** One transaction, holding the crew hour when there is a crew (`lockCrewHour`). */
+function inCrewHour<T>(db: Db, groupId: string | null, startsAt: Date, run: (tx: Db) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
-    await lockCrewHour(tx, groupId, input.startsAt);
+    if (groupId) await lockCrewHour(tx, groupId, startsAt);
     return run(tx);
+  });
+}
+
+/**
+ * The places "Play again" holds in the next game. The owner's report of 9 November 2026: "when erik
+ * clicked play again, he had to add the players again". Erik's new match had only Erik, and Erik held
+ * Jakob, Nicolai and Tim one at a time. So each player who sat in the last match (`playAgainRecipients`:
+ * a taken seat inside the capacity, a record, not the tapper, not a deleted account) gets a held place,
+ * in the old seat order, and the place keeps that player's record, as a "Played with you" pick does
+ * (`holdNames` in `src/actions/slots.ts`). `records: false` is a session by name that proved nothing
+ * (`nameOnly`): its places are held by name, as its picks are.
+ *
+ * Only in a game the tapper organises (the organiser holds places, and nobody else), never on a
+ * fixed-pairs night (the pairs sign up again, `duplicateEvent`), only for a player with no place in the
+ * game yet, and only as many as its open places. One rate check for all of them against the daily
+ * limit every held place counts towards; over it, nothing is held, and the game and the message still
+ * go. Bounded reads: the recipients (`slots_event_position_idx`), the game's places for them
+ * (`slots_event_player_idx`), its open places; then one `reserveNames` under the game's lock.
+ * Returns the players whose places were held, in seat order.
+ */
+export async function holdLastPlayers(q: Db, old: Pick<Event, "id" | "capacity">, next: Event, input: { tapperId: string; records: boolean; now: Date }): Promise<string[]> {
+  if (next.creatorPlayerId !== input.tapperId || next.fixedPairs) return [];
+  const people = (await playAgainRecipients(q, old, input.tapperId)).filter((p) => normalizeName(p.displayName));
+  if (people.length === 0) return [];
+  const here = await q
+    .select({ id: slots.playerId })
+    .from(slots)
+    .where(and(eq(slots.eventId, next.id), inArray(slots.playerId, people.map((p) => p.id))));
+  const inGame = new Set(here.map((r) => r.id));
+  const [free] = await q
+    .select({ n: sql<number>`count(*)::int` })
+    .from(slots)
+    .where(and(eq(slots.eventId, next.id), lte(slots.position, next.capacity), inArray(slots.status, ["empty", "declined"])));
+  const hold = people.filter((p) => !inGame.has(p.id)).slice(0, Number(free?.n ?? 0));
+  if (hold.length === 0) return [];
+  if (!(await takeRate(q, "reserve", next.creatorPlayerId, LIMITS.reservesPerOrganizerPerDay, "day", input.now, hold.length))) return [];
+  const { held } = await reserveNames(q, {
+    eventId: next.id,
+    actorPlayerId: input.tapperId,
+    names: hold.map((p) => ({ name: p.displayName, playerId: input.records ? p.id : null })),
+    now: input.now,
+  });
+  return hold.slice(0, held.length).map((p) => p.id);
+}
+
+/** What one "Play again" tap did: the game, whether it made it, whether the organiser took a seat, whether it claimed the round, and whose places it held. */
+export type PlayAgainTap = { event: Event; made: boolean; joined: boolean; claimed: boolean; held: string[] };
+
+/**
+ * One "Play again" tap, in one transaction (with the crew hour held for a crew's match): the game
+ * (`nextGameIn`: the one already there, else a new one with the old settings), the organiser's seat in a
+ * new game, the old match's one round (`claimPlayAgainRound`), and with the round the last players' held
+ * places (`holdLastPlayers`). So the organiser lands on a line-up that already has the players, and a
+ * second tap on the same old match holds nobody twice. The messages go after the answer, for the round
+ * this tap claimed (`notifyPlayAgain` with `claimed`). `creatorPlayerId` is the tapper.
+ */
+export async function playAgainTap(db: Db, old: Event, input: { creatorPlayerId: string; startsAt: Date; now: Date; records: boolean }): Promise<PlayAgainTap> {
+  return inCrewHour(db, old.groupId, input.startsAt, async (tx) => {
+    const { event, made } = await nextGameIn(tx, old, input);
+    // The organiser's own seat first, so the held places follow in the old seat order.
+    const joined = made ? (await joinEvent(tx, { eventId: event.id, playerId: input.creatorPlayerId, now: input.now }).catch(() => null))?.outcome === "joined" : false;
+    const claimed = await claimPlayAgainRound(tx, old, event, input.creatorPlayerId, input.now);
+    const held = claimed ? await holdLastPlayers(tx, old, event, { tapperId: input.creatorPlayerId, records: input.records, now: input.now }) : [];
+    return { event, made, joined, claimed, held };
   });
 }
 
@@ -333,9 +407,11 @@ export async function nextGameFor(db: Db, old: Event, input: { creatorPlayerId: 
  * list or an invitation), and anybody who already got its crew notice or its "Are you in?" message. So
  * nobody hears about one game twice, whichever of the weekly slot and "Play again" came first. Two
  * bounded reads: the game's places (`slots_event_position_idx`), and these people's notices
- * (`notices_player_created_idx`, at most ninety days of rows each).
+ * (`notices_player_created_idx`, at most ninety days of rows each). `heldNow`: the players whose places
+ * this round held (`holdLastPlayers`); that place tells them nothing yet, so it does not count, and the
+ * round's message tells them it is there.
  */
-export async function toldOfGame(db: Db, eventId: string, playerIds: readonly string[]): Promise<Set<string>> {
+export async function toldOfGame(db: Db, eventId: string, playerIds: readonly string[], heldNow: ReadonlySet<string> = new Set()): Promise<Set<string>> {
   const ids = [...new Set(playerIds)];
   if (ids.length === 0) return new Set();
   const seated = await db
@@ -346,7 +422,7 @@ export async function toldOfGame(db: Db, eventId: string, playerIds: readonly st
     .select({ id: notices.playerId })
     .from(notices)
     .where(and(inArray(notices.playerId, ids), eq(notices.eventId, eventId), inArray(notices.key, [noticeKey("crewMatch"), noticeKey("playAgain")])));
-  return new Set([...seated.map((r) => r.id), ...heard.map((r) => r.id)].filter((id): id is string => Boolean(id)));
+  return new Set([...seated.map((r) => r.id).filter((id) => !id || !heldNow.has(id)), ...heard.map((r) => r.id)].filter((id): id is string => Boolean(id)));
 }
 
 /**

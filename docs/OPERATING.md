@@ -367,6 +367,10 @@ sign-in's counters (`signin_<way>`, `signin_ua_<class>` and its extras) go in on
   `join_src_link` joins. When `hold_picked` is high and that sum is low, players do not take their
   places from the one message. The message's link carries `?s=wa` or `?s=link`, so `view_src_*` counts
   the arrivals as for every match link.
+- **The places "Play again" holds.** `play_again_held`: one for each place that a "Play again" tap held
+  in the next game for a player of the last match (DECIDING rule 37, the owner's report of 9 November
+  2026). The places count against `reservesPerOrganizerPerDay` too. A player takes such a place in the
+  same four ways as a picked place, so compare `play_again_held` with the same sum as `hold_picked`.
 - **A typed name that is already in the match.** `join_name_seated`: a web join from a browser that
   knew nobody typed the name of a record seated or waiting in the match, and the page asked "Danny is
   in this match. Sign in as Danny?" (DECIDING rule 34, the owner's decision of 15 October 2026).

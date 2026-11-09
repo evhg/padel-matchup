@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition, type ReactNode } from "react";
 import { updateEventAction } from "@/actions/events";
-import { editErrorKey, shownStart, startToSend } from "@/lib/editMatchForm";
+import { editErrorKey, noBookingLink, shownStart, startToSend } from "@/lib/editMatchForm";
 import { EventFields, type EventFormValues } from "./EventFields";
 import type { VenueOption } from "./VenueCombobox";
 
@@ -19,6 +19,7 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
   const [values, setValues] = useState<EventFormValues>(initial);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // A locked viewer's day, time and zone are the page's own, never older ones the form kept (`shownStart`).
   const shown = shownStart(values, initial, startLocked);
@@ -26,6 +27,7 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
   const save = () =>
     start(async () => {
       setError(null);
+      setBookingError(null);
       const r = await updateEventAction(code, {
         title: values.title,
         // The day, the time and the zone only when one of them changed (`startToSend`).
@@ -49,7 +51,8 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
         payNote: values.payNote,
       });
       if (!r.ok) {
-        setError(t(editErrorKey(r)));
+        if (noBookingLink(r)) setBookingError(t("create.bookingUrlNoLink"));
+        else setError(t(editErrorKey(r)));
         return;
       }
       setOpen(false);
@@ -59,7 +62,7 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false }
     return (
       <div className="flex flex-col gap-4 animate-pop">
         <h3 className="font-extrabold">{t("creator.edit")}</h3>
-        <EventFields values={shown} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} startLocked={startLocked} />
+        <EventFields values={shown} onChange={(p) => setValues((v) => ({ ...v, ...p }))} venues={venues} showType={false} startLocked={startLocked} bookingError={bookingError} />
         {error && <p className="text-sm font-semibold text-danger">{error}</p>}
         <div className="flex gap-2">
           <button type="button" className="btn-primary flex-1" disabled={pending} onClick={save}>

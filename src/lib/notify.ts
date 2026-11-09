@@ -403,17 +403,24 @@ export async function notifyGroupMatch(db: Db, group: Group, ev: Event, excludeP
  * played match sends (`claimPlayAgainRound`). No WhatsApp template says this,
  * so a player whose only channel is WhatsApp finds it in the inbox on My matches.
  *
+ * Since 9 November 2026 the tap also holds a place for each of them (`holdLastPlayers`), and a player
+ * whose place it held reads "A place is held for you." in the same message (`what: "held"`).
+ * `o.claimed`: the tap claimed the round already, in the transaction that made the game and held the
+ * places (`playAgainTap`), so this sends without a second claim; `o.held` names the players whose
+ * places it held. Only that caller passes it.
+ *
  * Returns how many people the round reached (inbox rows), 0 when the round was already sent.
  */
-export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: Pick<Player, "id" | "displayName">, now = new Date()): Promise<number> {
+export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: Pick<Player, "id" | "displayName">, now = new Date(), o: { claimed?: boolean; held?: readonly string[] } = {}): Promise<number> {
+  const heldNow = new Set(o.held ?? []);
   // The claim and every read the round needs share one transaction: a read that fails takes the claim
   // back with it, so the round waits for the next tap instead of being spent on nobody. The notice rows
   // come after the commit, through the gate that never throws (`recordNotices`), so nothing after the
   // claim can lose it.
   const round = await db.transaction(async (tx) => {
-    if (!(await claimPlayAgainRound(tx, old, next, tapper.id, now))) return null;
+    if (!o.claimed && !(await claimPlayAgainRound(tx, old, next, tapper.id, now))) return null;
     const all = await playAgainRecipients(tx, old, tapper.id);
-    const told = await toldOfGame(tx, next.id, all.map((p) => p.id));
+    const told = await toldOfGame(tx, next.id, all.map((p) => p.id), heldNow);
     const people = all.filter((p) => !told.has(p.id));
     if (people.length === 0) return { people, organizer: tapper, detail: null };
     const organizer = next.creatorPlayerId === tapper.id ? tapper : ((await getPlayer(tx, next.creatorPlayerId)) ?? tapper);
@@ -422,13 +429,14 @@ export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: P
   if (!round?.detail) return 0;
   const { people, organizer, detail } = round;
   const name = firstName(organizer.displayName);
-  const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "playAgain", eventId: next.id, params: { ...matchParams(next), name }, startsAt: next.startsAt, tz: next.tz })), now);
+  const what = (p: Pick<Player, "id">) => (heldNow.has(p.id) ? "held" : "other");
+  const released = await recordNotices(db, people.map((p) => ({ playerId: p.id, sender: "playAgain", eventId: next.id, params: { ...matchParams(next), name, what: what(p) }, startsAt: next.startsAt, tz: next.tz })), now);
   const open = eventUrl(baseUrl(), next.code);
   for (const p of people) {
     if (released.get(p.id) !== "now") continue;
     // No recipient handed to ctx: no personal link is made, and none could leak into the message.
     const c = await ctx(db, next, p.locale, null, detail);
-    const text = c.t("noticeItem.playAgain", { ...c.vars, name });
+    const text = c.t("noticeItem.playAgain", { ...c.vars, name, what: what(p) });
     // `bind: false`: the email's "get this on Telegram" line carries a ticket that binds whoever taps it
     // to this player, and this is the message most likely to be forwarded ("want to come?").
     if (telegramEnabled() && p.telegramId) {
@@ -441,7 +449,8 @@ export async function notifyPlayAgain(db: Db, old: Event, next: Event, tapper: P
     // The email shows "I'm in" as its button; a push has no button, and its tap opens the same link,
     // so the line under the question names no button (`email.playAgainLine`).
     const join = playAgainJoinUrl(next.code);
-    const body = c.t("email.playAgainLine", c.vars);
+    // A held place is no open spot: its line leaves out the count of spots left ("No spots left" once the places are held).
+    const body = heldNow.has(p.id) ? c.t("email.playAgainHeldLine") : c.t("email.playAgainLine", c.vars);
     await tell(db, p, `${text}\n${body}`, { inline_keyboard: [[{ text: c.t("email.playAgainIn"), url: join }]] }, { notice: { released: "now" }, bind: false, label: c.t("email.playAgainIn") }).catch(() => undefined);
   }
   return people.length;

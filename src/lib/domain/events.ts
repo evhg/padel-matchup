@@ -2,6 +2,7 @@ import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, series, slots, venues, type Event, type Slot, type TournamentFormat } from "@/db/schema";
 import { madeToShare } from "@/lib/booking/platforms";
+import { bookingLinkOf } from "./bookingLink";
 import { newManageCode, newShareCode } from "@/lib/codes";
 import { MATCH_CAPACITY, MAX_TOURNAMENT_CAPACITY } from "@/lib/config";
 import { isValidTimeZone } from "@/lib/dates";
@@ -50,7 +51,7 @@ export type CreateEventInput = {
   groupId?: string | null;
   /** Opt-in to the public venue board. */
   publicListing?: boolean;
-  /** Link to the club's booking page or confirmation. */
+  /** Link to the club's booking page or confirmation, or a pasted text that carries one (`bookingLinkOf`); a text with no link is refused. */
   bookingUrl?: string | null;
   /**
    * A pasted booking's invitation for strangers (the owner, 11 October 2026: "Only made-to-share
@@ -64,10 +65,15 @@ export type CreateEventInput = {
 };
 
 /**
- * The booking link a new match keeps: the one the organiser typed, else the pasted booking's
- * invitation when it is made to share (`madeToShare`, query string removed), else none. Pure.
+ * The booking link a new match keeps: the one the organiser typed or pasted (`bookingLinkOf`), else the
+ * pasted booking's invitation when it is made to share (`madeToShare`, query string removed), else none.
+ * A typed text with no link in it is refused (`invalid`, `bookingUrl`), never dropped. Pure.
  */
-export const bookingLinkFor = (input: Pick<CreateEventInput, "bookingUrl" | "invite">): string | null => cleanUrl(input.bookingUrl) ?? madeToShare(input.invite)?.url ?? null;
+export function bookingLinkFor(input: Pick<CreateEventInput, "bookingUrl" | "invite">): string | null {
+  const typed = bookingLinkOf(input.bookingUrl);
+  if (!typed.ok) throw new DomainError("invalid", "bookingUrl");
+  return typed.url ?? madeToShare(input.invite)?.url ?? null;
+}
 
 /**
  * What a copy of a match keeps of its booking link: an invitation to one booking is that booking's,
@@ -145,6 +151,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
   const capacity = resolveCapacity(input.type, input.capacity);
   const durationMinutes = resolveLength(input.type, input.durationMinutes);
   const venueMapUrl = cleanUrl(input.venueMapUrl);
+  const bookingUrl = bookingLinkFor(input);
   const range = normalizeRange(input.levelMin, input.levelMax);
   // "WAREHAUS.club" is the club at `warehaus`, whatever its name would make of itself. Asked before
   // the transaction opens, so the write stays one statement.
@@ -189,7 +196,7 @@ export async function createEvent(db: Db, input: CreateEventInput): Promise<Even
           groupId: input.groupId ?? null,
           publicListing: Boolean(input.publicListing) && Boolean(venueName),
           venueSlug: slug,
-          bookingUrl: bookingLinkFor(input),
+          bookingUrl,
           cost: cleanText(input.cost, 40),
           payNote: cleanText(input.payNote, 120),
         })
@@ -283,6 +290,7 @@ export type UpdateEventInput = {
   category?: EventCategory | null;
   ageMin?: number | null;
   publicListing?: boolean;
+  /** As on create (`bookingLinkOf`): a pasted text keeps its link; a text with no link refuses the whole save. */
   bookingUrl?: string | null;
   cost?: string | null;
   payNote?: string | null;
@@ -304,6 +312,9 @@ export type UpdateEventResult = {
 export type UpdateEventActor = { asOrganiser?: boolean };
 
 export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput, now = new Date(), actor: UpdateEventActor = {}): Promise<UpdateEventResult> {
+  // A text with no link in it is refused before anything is read or written, never stored as no link.
+  const booking = patch.bookingUrl === undefined ? undefined : bookingLinkOf(patch.bookingUrl);
+  if (booking && !booking.ok) throw new DomainError("invalid", "bookingUrl");
   // Asked before the transaction opens. Inside one, this query waits on a connection the transaction
   // is already holding, and the whole call hangs until it times out.
   const venueName = patch.venueName === undefined ? undefined : cleanText(patch.venueName, 80);
@@ -373,10 +384,7 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
         calendarChanged = true;
       }
     }
-    if (patch.bookingUrl !== undefined) {
-      const u = cleanUrl(patch.bookingUrl);
-      if (u !== ev.bookingUrl) set.bookingUrl = u;
-    }
+    if (booking?.ok && booking.url !== ev.bookingUrl) set.bookingUrl = booking.url;
     if (patch.cost !== undefined) {
       const c = cleanText(patch.cost, 40);
       if (c !== ev.cost) set.cost = c;
