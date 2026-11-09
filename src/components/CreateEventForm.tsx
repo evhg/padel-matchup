@@ -11,6 +11,7 @@ import type { PastNamesState } from "./PastNames";
 import { useOwnNameAutofill } from "./PasskeyAutofill";
 import type { VenueOption } from "./VenueCombobox";
 import { readDeviceSignals } from "@/lib/deviceSignals";
+import { noBookingLink } from "@/lib/editMatchForm";
 
 /** Inputs that press themselves on Enter: a browser clicks them, and that is theirs to keep. */
 const PRESSED = new Set(["submit", "button", "image", "reset"]);
@@ -157,6 +158,7 @@ export function CreateEventForm({
   const [invite, setInvite] = useState(booking?.invite ?? null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // The organiser's past players (names, days and clubs only), asked for once, when the names first show,
   // and only for somebody the app knows: "Played with you", and "Is this Danny…?" under a typed name.
@@ -210,6 +212,7 @@ export function CreateEventForm({
     // The organiser's own name typed, as before: the passkey's request waiting in that field ends first.
     own.stop();
     setError(null);
+    setBookingError(null);
     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
     // "Is this Danny…?" still open: the place is held only once the organiser said who it is.
     const typed = namesTyped(values.haveNames);
@@ -259,7 +262,8 @@ export function CreateEventForm({
         invite: invite?.url,
       }, { hint: await readDeviceSignals() });
       // On success the action redirects to the share screen.
-      if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
+      if (r && !r.ok && noBookingLink(r)) setBookingError(t("create.bookingUrlNoLink"));
+      else if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
     });
   };
 
@@ -286,6 +290,7 @@ export function CreateEventForm({
           courtTotal={booking?.total ?? null}
           past={hasIdentity ? { state: past, answers, onLoad: loadPast, onAdd: addPast, onAnswer: answer, reveal } : undefined}
           enterNext
+          bookingError={bookingError}
         />
       </div>
       {booking && (

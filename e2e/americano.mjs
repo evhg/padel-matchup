@@ -135,14 +135,20 @@ try {
   await bea.goto(`${BASE}/me`);
   check("/me shows placement", (await bea.getByText(/#\d of 4/).count()) > 0);
 
-  // Play again from the tournament page (creator)
+  // Play again from the tournament page (creator). Since the owner's report of 9 November 2026 ("when
+  // erik clicked play again, he had to add the players again") the tap holds a place for each player of
+  // the last night, and the organiser lands on the new night's own page, where the line-up shows them.
   await a.goto(`${BASE}/${code}`);
   await a.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();
-  await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
-  const code2 = a.url().split("/").slice(-2)[0];
+  await a.waitForURL((u) => /^\/[^/]{4}$/.test(u.pathname) && u.pathname !== `/${code}`, { timeout: 30000 });
+  const code2 = new URL(a.url()).pathname.slice(1);
   check("play again created a new event", code2 !== code, code2);
-  await a.goto(`${BASE}/${code2}`);
-  check("clone is a tournament with organizer joined", (await a.getByText("1/4 players").count()) > 0 && (await a.getByText("Americano").count()) > 0);
+  const heldAgain = await a.locator("main").getByText(/^Reserved for /).allTextContents();
+  check(
+    "clone is a tournament with organizer joined, and Bea, who played the last night, holds a place in it",
+    (await a.getByText("1/4 players").count()) > 0 && (await a.getByText("Americano").count()) > 0 && heldAgain.some((t) => t.startsWith("Reserved for Bea")),
+    JSON.stringify(heldAgain),
+  );
 
   // Locale switch timing
   const t0 = Date.now();

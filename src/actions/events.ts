@@ -16,7 +16,7 @@ import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { clientKeyFrom } from "@/lib/ipKey";
 import { getSessionPlayer } from "@/lib/session";
 import { setBanter } from "@/lib/domain/banter";
-import { cancelEvent, createEvent, isSeated, updateEvent } from "@/lib/domain/events";
+import { bookingLinkFor, cancelEvent, createEvent, isSeated, updateEvent } from "@/lib/domain/events";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
@@ -26,7 +26,9 @@ import { emitMatchEvent } from "@/lib/api/webhooks";
 import { postCardForTicket } from "@/lib/telegram/bot";
 import { postCardForDiscordTicket } from "@/lib/discord/bot";
 import { notifyEventCancelled, notifyEventUpdated, notifyGroupMatch, notifyPlayAgain, notifyPromotion, sendCalendarInvite, welcomeEmail } from "@/lib/notify";
-import { nextGameFor, playAgainStart } from "@/lib/domain/playAgain";
+import { playAgainStart, playAgainTap } from "@/lib/domain/playAgain";
+import { bumpMetrics } from "@/lib/domain/metrics";
+import { later } from "@/lib/alerts";
 import { heldRecordsFor, pastPlayerRows, pastViews, pickable } from "@/lib/domain/heldRecord";
 import { cleanPicks, type PastView } from "@/lib/domain/pastAsk";
 import { ActionFailure, assertRate, getViewer, loadEvent, nameOnly, requireCreator, requireMatchEditor, requirePlayer, runA, type ActionResult } from "./shared";
@@ -93,6 +95,8 @@ export async function createEventAction(raw: CreateEventInput, o: { hint?: unkno
   let code: string | null = null;
   const res = await runA(async () => {
     const input = createSchema.parse(raw);
+    // A booking link field with no link in it refuses the form before a record or a rate count is made.
+    bookingLinkFor(input);
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
     await assertRate(db, "create", me.id, LIMITS.eventsPerPlayerPerDay);
@@ -263,15 +267,20 @@ const playAgainSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 /**
  * "Play again": any participant or the organizer clones this event on the day and at the time they
- * picked (a week on when they did not) and becomes its organizer. Each player of this match then hears
- * once, "Are you in?" (DECIDING rule 37), after the response and once per old match, however often anybody
- * taps, and only once the match was played. When a game is already there (`existingNextGame`: the one
- * the round announced, or the crew's own game at that hour, which the weekly slot made), the tap lands
- * on it instead of making a second one beside it, and the round, if still unsent, announces that game.
+ * picked (a week on when they did not) and becomes its organizer. Each player of this match then keeps
+ * a held place in it, with their record (`holdLastPlayers`, since the owner's report of 9 November
+ * 2026), and hears once, "Are you in?" (DECIDING rule 37), after the response and once per old match,
+ * however often anybody taps, and only once the match was played. The game, the organiser's seat, the
+ * round's claim and the held places are one transaction (`playAgainTap`). A session by name that proved
+ * nothing (`nameOnly`) holds the places by name, as its "Played with you" picks are held. When a game is
+ * already there (`existingNextGame`: the one the round announced, or the crew's own game at that hour,
+ * which the weekly slot made), the tap lands on it instead of making a second one beside it, and the
+ * round, if still unsent, announces that game. With places held, the organiser lands on the game's own
+ * page, where the line-up shows them and the one message for them (`heldMessageOf`); else on the share
+ * page of a new game, as before.
  */
 export async function duplicateEventAction(code: string, pick?: { date: string; time: string } | null): Promise<ActionResult<{ code: string }>> {
-  let newCode: string | null = null;
-  let sameCode: string | null = null;
+  let landOn: string | null = null;
   const res = await runA(async () => {
     const when = playAgainSchema.parse(pick);
     const { db, detail } = await loadEvent(code);
@@ -282,26 +291,27 @@ export async function duplicateEventAction(code: string, pick?: { date: string; 
     const now = new Date();
     const startsAt = playAgainStart(detail.event, when, now);
     const organizer = viewer.player ?? (await getPlayer(db, creatorId));
-    // One game per crew hour: the look and the write hold the hour (`nextGameFor`, `lockCrewHour`).
-    const { event: ev, made } = await nextGameFor(db, detail.event, { creatorPlayerId: creatorId, startsAt, now });
-    if (!made) {
-      sameCode = ev.code;
-      // The round goes once per old match: a game the round already announced sends nothing here.
-      if (organizer) after(() => notifyPlayAgain(db, detail.event, ev, organizer).then(() => undefined).catch((e) => console.warn("[play again] the round failed", code, e)));
+    // One game per crew hour: the look and the write hold the hour (`playAgainTap`, `lockCrewHour`).
+    const tap = await playAgainTap(db, detail.event, { creatorPlayerId: creatorId, startsAt, now, records: !(await nameOnly(viewer.player)) });
+    const ev = tap.event;
+    // The round goes once per old match: only the tap that claimed it sends it.
+    const round = () => (organizer && tap.claimed ? notifyPlayAgain(db, detail.event, ev, organizer, new Date(), { claimed: true, held: tap.held }).then(() => undefined) : Promise.resolve());
+    if (tap.held.length > 0) await later(() => bumpMetrics(db, tap.held.map(() => "play_again_held")));
+    if (!tap.made) {
+      landOn = `/${ev.code}`;
+      if (tap.held.length > 0) revalidatePath(`/${ev.code}`);
+      after(() => round().catch((e) => console.warn("[play again] the round failed", code, e)));
       return { code: ev.code };
     }
-    const { joinEvent } = await import("@/lib/domain/slots");
-    const joined = await joinEvent(db, { eventId: ev.id, playerId: creatorId }).catch(() => null);
-    if (joined?.outcome === "joined" && organizer) after(() => sendCalendarInvite(db, ev, organizer));
+    if (tap.joined && organizer) after(() => sendCalendarInvite(db, ev, organizer));
     after(async () => {
       await emitMatchEvent(db, "match.created", ev.code, { playAgainOf: code });
-      if (organizer) await notifyPlayAgain(db, detail.event, ev, organizer).catch((e) => console.warn("[play again] the round failed", code, e));
+      await round().catch((e) => console.warn("[play again] the round failed", code, e));
     });
-    newCode = ev.code;
+    landOn = tap.held.length > 0 ? `/${ev.code}` : `/${ev.code}/share`;
     return { code: ev.code };
   });
-  if (res.ok && sameCode) redirect(`/${sameCode}`);
-  if (res.ok && newCode) redirect(`/${newCode}/share`);
+  if (res.ok && landOn) redirect(landOn);
   return res;
 }
 

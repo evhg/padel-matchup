@@ -1445,6 +1445,28 @@ Everything in this list is live. The README describes each in detail.
   `src/lib/booking/scrape.ts`, `drizzle/0104_push_job_gate.sql`, `src/lib/ops/services.ts`; proven in
   `tests/push-gate.test.ts`, `tests/cron-jobs.test.ts`, `tests/scrape.test.ts` and
   `tests/services.test.ts`.
+- **"Play again" keeps the players (9 November 2026, no migration).** The owner reported: "when erik
+  clicked play again, he had to add the players again". The new match had only Erik, and Erik held
+  Jakob, Nicolai and Tim one at a time. Now the tap holds a place for each player who sat in the last
+  match. Each place keeps the player's record, as a "Played with you" pick does. The places follow the
+  old seat order, and the open places of the game limit them. The game, the organiser's seat, the round
+  and the places are one transaction, with one rate check for all the places. A second tap holds
+  nobody twice. A session by name holds by name only. A player with a channel still hears once, and
+  the message now says "A place is held for you". The organiser lands on the new match, with the line-up
+  and the one message for the held players. Counter: `play_again_held` (DECIDING rule 37).
+  `src/lib/domain/playAgain.ts` (`holdLastPlayers`, `playAgainTap`), `src/actions/events.ts`,
+  `src/lib/notify.ts`; proven in `tests/play-again-holds.test.ts` and `e2e/viral.mjs`.
+- **The booking link field takes a pasted invitation, and says when it finds no link (9 November
+  2026).** The owner reported: "when I edit a match I can't add booking link so each player knows where
+  to pay their share?" An organiser saved the edit form four times, and the match still had no link.
+  The server kept only a bare link and turned any other text into no link, with no word to the
+  organiser. A share message from an app ("Join my game on The Padel Society! https://…") is such a
+  text. Now "Court booking link" on the create form and the edit form keeps the text's first
+  made-to-share link, else its first link. A bare link and a bare host work as before. A text with no
+  link refuses the save, and the form says so under the field. The help text now says that a game's
+  invitation goes here, and that on The Padel Society or Playtomic each player pays their own share
+  there. "Play again" still does not copy an invitation to last week's game. `bookingLinkOf` in
+  `src/lib/domain/bookingLink.ts`; proven in `tests/booking-link.test.ts`.
 
 ## The finish line
 

@@ -29,3 +29,6 @@ export function shownStart<T extends StartFields>(values: T, initial: StartField
 /** A start the viewer may no longer move says why; any other refusal stays the plain one. */
 export const editErrorKey = (r: { error: string; detail?: string }): "event.startLocked" | "errors.invalid" =>
   r.error === "forbidden" && r.detail === "startsAt" ? "event.startLocked" : "errors.invalid";
+
+/** The booking link field held a text with no link (`bookingLinkOf`): the create and the edit form say so under that field. */
+export const noBookingLink = (r: { error: string; detail?: string }): boolean => r.error === "invalid" && r.detail === "bookingUrl";

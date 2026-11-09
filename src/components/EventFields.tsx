@@ -2,7 +2,7 @@
 
 import { CITIES } from "@/lib/domain/cities";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useId, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ComponentProps } from "react";
 import { GAMES_PRESETS, POINTS_PRESETS } from "@/lib/domain/americano";
 import type { TournamentFormat } from "@/db/schema";
 import { AGE_MINS, CATEGORY_KEYS, EVENT_CATEGORIES, type AgeMin, type EventCategory } from "@/lib/domain/eventTags";
@@ -114,6 +114,7 @@ export function EventFields({
   startLocked = false,
   past,
   enterNext = false,
+  bookingError = null,
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
@@ -137,6 +138,8 @@ export function EventFields({
   past?: Omit<ComponentProps<typeof PastNames>, "text">;
   /** The create form, where Go moves on to the next field (`enterMovesOn`): the keyboard says "next" on the venue and the court. The edit form has no such step, so its keys stay as they were. */
   enterNext?: boolean;
+  /** The server found no link in "Court booking link" (`bookingLinkOf`): said under the field, and "More" opens to show it. */
+  bookingError?: string | null;
 }) {
   const t = useTranslations();
   // A day or a time the booking did not give shows the form's own (the usual slot, else tomorrow at
@@ -221,8 +224,13 @@ export function EventFields({
   // Sent with "Is this Danny…?" still open: the names show again, wherever "More" was left.
   const reveal = past?.reveal ?? 0;
   useEffect(() => {
-    if (reveal) setMoreOpen(true);
-  }, [reveal]);
+    if (reveal || bookingError) setMoreOpen(true);
+  }, [reveal, bookingError]);
+  // The field sits above the button in a long form: the refusal takes the person to it.
+  const bookingInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (bookingError && moreOpen) bookingInput.current?.focus();
+  }, [bookingError, moreOpen]);
   // The level sits one tap from the form, behind its own chip: "looking for a fourth" carries the one
   // fact the fourth needs. The presets stay folded (rule 1); the chip reads what is set.
   const [levelOpen, setLevelOpen] = useState(false);
@@ -653,7 +661,9 @@ export function EventFields({
               <label className="label">
                 {t("create.bookingUrl")} <span className="font-normal">({t("common.optional")})</span>
               </label>
-              <input className="input" type="url" inputMode="url" autoComplete="off" placeholder="https://" value={values.bookingUrl} maxLength={500} onChange={(e) => onChange({ bookingUrl: e.target.value })} />
+              {/* Text, not "url": a pasted share message carries the link among words, and the browser refused it. */}
+              <input ref={bookingInput} className="input" type="text" inputMode="url" autoComplete="off" placeholder="https://" value={values.bookingUrl} maxLength={500} aria-invalid={bookingError ? true : undefined} onChange={(e) => onChange({ bookingUrl: e.target.value })} data-testid="booking-url" />
+              {bookingError && <p className="mt-1.5 text-sm font-semibold text-danger" role="alert" data-testid="booking-url-error">{bookingError}</p>}
               <p className="mt-1.5 text-sm text-muted">{t("create.bookingUrlHelp")}</p>
             </div>
             <div>
