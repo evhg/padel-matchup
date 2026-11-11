@@ -1419,7 +1419,15 @@
     "removePhoto": "Remove the photo",
     "waiting": "Waiting for the score",
     "makeWeekly": "Make it weekly",
-    "removePhotoConfirm": "Remove the photo from the result card?"
+    "removePhotoConfirm": "Remove the photo from the result card?",
+    "watchHighlights": "Watch highlights",
+    "addHighlights": "Add the highlights video",
+    "highlightsHelp": "Paste the YouTube link of the match video. Only the players of this match see it here.",
+    "saveHighlights": "Save the link",
+    "highlightsNotYoutube": "Paste a YouTube link, for example https://youtu.be/…",
+    "removeHighlights": "Remove the video link",
+    "removeHighlightsConfirm": "Remove the highlights link for everybody in this match?",
+    "filmTips": "To film a match: put the phone on the back glass, in the centre, in landscape. Record in 4K at 30 fps, in airplane mode, with a power bank."
   },
   "group": {
     "title": "Group",

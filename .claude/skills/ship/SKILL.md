@@ -940,6 +940,13 @@ Wall clock first, credits second. What actually moved it, measured:
   three locales, and no change of one side is lost.
 - **Anchor on the name, never the line number.** Keys have landed in `coach.home` when they were meant
   for `coach.page` because the insertion point was found by counting.
+- **A frozen clock reaches the test database too.** `freezeClock` fakes `Date`, and PGlite reads `Date`
+  for Postgres's own timers. A timer armed on the real clock then looked 32 days away, Node turned the
+  delay into 1 ms, and three tests in `tests/scrape.test.ts` spun about 40,000 times while they waited.
+  The `TimeoutOverflowWarning` sat in every CI log as noise until the owner asked about it on
+  11 November 2026. `tests/helpers/setup.ts` caps such a delay, and `tests/long-timers.test.ts` fails
+  without the cap. A warning that repeats in a log is a fault until a trace says otherwise:
+  `NODE_OPTIONS=--trace-warnings` named the code, and `--reporter=verbose` named the test, in two runs.
 - **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that
   correctly refused a student's reschedule, because the fixture's "now" sat inside the twelve-hour
   cutoff; and on lesson times that landed in the 12:00–15:00 gap between the morning and afternoon

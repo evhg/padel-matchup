@@ -101,6 +101,14 @@ export const events = pgTable(
     /** Optional link to the club's booking page or confirmation. */
     bookingUrl: text("booking_url"),
     /**
+     * The match video on YouTube ("Watch highlights"), added after the start by anybody in the match.
+     * A YouTube link only, kept in one spelling (`highlightsLinkOf`). Shown to the match's own players and
+     * organiser, never in the public API: the video shows their faces. Who added it, so they or the
+     * organiser can take it down, as with the court photo.
+     */
+    highlightsUrl: text("highlights_url"),
+    highlightsBy: uuid("highlights_by").references(() => players.id, { onDelete: "set null" }),
+    /**
      * The court is booked: a player in the match booked and paid in the club's own app, and said so
      * with one tap ("I booked it"); any player may take it back. Who and when, nothing else: never an
      * amount, a payment or a reference, because no payment passes through Kicksmash (DECIDING rule 36).

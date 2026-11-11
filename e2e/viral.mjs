@@ -252,6 +252,15 @@ try {
   await shot(p, "v3-card-photo");
   // "Play again" all the way through: another day picked in the control, the next game made on it.
   await p.goto(`${BASE}/${mcode}`);
+  // "Watch highlights" (the owner, 10 November 2026): YouTube's share text, pasted, becomes one link.
+  await p.getByTestId("highlights-add").locator("summary").click();
+  await p.getByTestId("highlights-input").fill("Our match https://youtu.be/dQw4w9WgXcQ?si=x1");
+  await p.getByTestId("highlights-save").click();
+  await p.getByTestId("highlights-watch").waitFor({ timeout: 20000 });
+  check(
+    "a pasted YouTube share text becomes Watch highlights, and the person who added it can take it down",
+    (await p.getByTestId("highlights-watch").getAttribute("href")) === "https://www.youtube.com/watch?v=dQw4w9WgXcQ" && (await p.getByTestId("highlights-remove").count()) === 1,
+  );
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);
   await p.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();

@@ -46,6 +46,7 @@ import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
+import { HighlightsLink } from "@/components/HighlightsLink";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, OtherShares } from "@/components/ShareSheet";
 import { HeldRowButton } from "@/components/TakeHeld";
@@ -997,6 +998,12 @@ async function EventPage({ params, searchParams }: Props) {
             prompt={creatorBanner ? t("creator.scoreReminderBanner") : null}
             playAgainQuiet={!viewer.isCreator}
           />
+        )}
+        {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their faces). */}
+        {over && !cancelled && canPlayAgain && (
+          <div className="px-1">
+            <HighlightsLink code={code} url={ev.highlightsUrl ?? null} canRemove={Boolean(me && ev.highlightsUrl && (ev.highlightsBy === me.id || ev.creatorPlayerId === me.id))} />
+          </div>
         )}
         {over && otherShares}
         {seriesRow && (
