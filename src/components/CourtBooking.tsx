@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { setCourtBookedAction } from "@/actions/slots";
+import { errorLine } from "@/lib/errorLine";
 
 /**
  * The court on the match page: "Book this court" for the organiser and the players, the chosen day,
@@ -20,8 +21,22 @@ import { setCourtBookedAction } from "@/actions/slots";
  */
 export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: string; book: { url: string; checkout: string | null } | null; slotLine: string; booked: { name: string | null } | null; canMark: boolean }) {
   const t = useTranslations("event");
+  const tr = useTranslations();
   const [pending, start] = useTransition();
-  const mark = (v: boolean) => start(async () => void (await setCourtBookedAction(code, v)));
+  // "I booked it" and "Undo" say why when they are refused (`errors.<code>`), never nothing.
+  const [error, setError] = useState<string | null>(null);
+  const mark = (v: boolean) => {
+    setError(null);
+    start(async () => {
+      const r = await setCourtBookedAction(code, v);
+      if (!r.ok) setError(tr(`errors.${errorLine(r.error)}`));
+    });
+  };
+  const said = error && (
+    <p className="basis-full text-sm font-semibold text-danger" role="status">
+      {error}
+    </p>
+  );
 
   if (booked) {
     return (
@@ -36,6 +51,7 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
             {t("courtBookedUndoMark")}
           </button>
         )}
+        {said}
       </div>
     );
   }
@@ -62,6 +78,7 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
           {t("bookedIt")}
         </button>
         <span className="text-xs text-muted">{t("bookYourself")}</span>
+        {said}
       </div>
     </div>
   );

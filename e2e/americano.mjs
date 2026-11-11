@@ -1,6 +1,6 @@
 // Americano tournament journey on a fresh local server (see e2e/run.mjs):
 // create with names, invite, generate rounds, enter scores, standings, clone, locale switch.
-import { BASE, crashed, finish, launch, makeCheck, shot, switchLang } from "./lib.mjs";
+import { BASE, openMore, crashed, finish, launch, makeCheck, shot, switchLang } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
 const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Asia/Bangkok" };
@@ -20,7 +20,8 @@ try {
   await a.goto(BASE + "/");
   check("landing shows the create form", (await a.getByRole("button", { name: "Create & get the link" }).count()) > 0);
   await a.getByPlaceholder("e.g. Alex").fill("Org");
-  await a.getByRole("button", { name: /Tournament/ }).click();
+  await openMore(a);
+  await a.getByTestId("type-line").click(); // "Tournament instead", the last line under More options
   // start 1h ago so scoring is open
   const past = new Date(Date.now() - 60 * 60 * 1000);
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(past);

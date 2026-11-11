@@ -4,7 +4,7 @@
 // verification) is the phone's password manager. A passkey that browser A saves is read off its
 // authenticator and put into browser B's and C's, as Apple Passwords or Google Password Manager makes
 // it there: B and C are other browsers on the same phone, with none of A's cookies.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, shot, openSettings } from "./lib.mjs";
 
 const browser = await launch();
 /** What a phone shows, 390 px wide, around the element the walk just scrolled to: the full-page shot of a long page is too tall to read. */
@@ -168,6 +168,7 @@ try {
   await a.page.reload();
   check("the card does not come back once the record has a passkey", (await a.page.getByTestId("remember-phone").count()) === 0);
   await a.page.goto(`${BASE}/me`);
+  await openSettings(a.page); // behind "Settings" on My matches (the owner, 9 November 2026)
   const phones = a.page.getByTestId("my-phones");
   await phones.waitFor({ timeout: 10000 });
   check("My matches lists the phone under \"Phones that remember you\", with Remove", (await phones.getByTestId("my-phone").count()) === 1 && (await phones.getByRole("button", { name: /^Remove / }).count()) === 1);
@@ -472,6 +473,7 @@ try {
 
   // ---- Remove: the phone's copy then signs in nobody ----
   await a.page.goto(`${BASE}/me`);
+  await openSettings(a.page); // behind "Settings" on My matches (the owner, 9 November 2026)
   await a.page.getByTestId("my-phones").getByRole("button", { name: /^Remove / }).click();
   await a.page.getByTestId("my-phone").waitFor({ state: "detached", timeout: 20000 });
   check("Remove takes the passkey away", Number((await ask(`select count(*)::int as n from passkeys k join players p on p.id = k.player_id where p.display_name = '${NAME}'`))[0]?.n) === 0);
@@ -506,6 +508,7 @@ try {
   // late on a busy machine, and a late read sends nothing, so that join would keep no key.
   await hp.getByTestId("nav-play").click();
   await hp.waitForURL((u) => u.pathname === "/me", { timeout: 20000 });
+  await openSettings(hp); // behind "Settings" on My matches (the owner, 9 November 2026)
   const hints = hp.getByTestId("my-hints");
   await hints.waitFor({ timeout: 10000 });
   await hints.scrollIntoViewIfNeeded();
@@ -534,6 +537,7 @@ try {
   await hp.waitForTimeout(1000);
   check("another join from the same phone keeps the key again", (await hintsOf("Hana Hint"))?.n === 1);
   await hp.goto(`${BASE}/me`);
+  await openSettings(hp); // behind "Settings" on My matches (the owner, 9 November 2026)
   const objection = hints.getByRole("switch", { name: "Don't recognise my phones", exact: true });
   await objection.waitFor({ timeout: 10000 });
   await objection.scrollIntoViewIfNeeded();

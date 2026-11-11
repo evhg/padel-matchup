@@ -5,7 +5,7 @@ import { events, feedback, players, pushSubscriptions, slots } from "@/db/schema
 import { anonymizePlayer } from "@/lib/domain/anonymize";
 import { createEvent } from "@/lib/domain/events";
 import { changePlayerEmail } from "@/lib/domain/identity";
-import { addOptOut, isOptedOut, optOutPath, optOutSignature, removeOptOut } from "@/lib/domain/optouts";
+import { addOptOut, confirmOptOut, isOptedOut, optOutPath, optOutSignature, optOutState, removeOptOut } from "@/lib/domain/optouts";
 import { takeRate } from "@/lib/domain/ratelimit";
 import { getRolodex } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
@@ -57,6 +57,20 @@ describe("email opt-outs", () => {
     expect(optOutSignature("A@Example.com")).toBe(a);
     expect(optOutSignature("b@example.com")).not.toBe(a);
     expect(optOutPath("A@Example.com")).toBe(`/unsubscribe?e=a%40example.com&s=${a}`);
+  });
+  // Button audit, 9 November 2026: opening the link stopped all email at once, so a mail scanner that
+  // follows every link (Safe Links and its kind) stopped it for the person. Opening asks; a post stops.
+  it("asks on a visit and changes nothing; only the yes stops the email, and only for a signed link", async () => {
+    const sig = optOutSignature("scanned@example.com");
+    expect(await optOutState(db, "scanned@example.com", sig)).toEqual({ state: "ask", email: "scanned@example.com" });
+    expect(await optOutState(db, "scanned@example.com", sig)).toEqual({ state: "ask", email: "scanned@example.com" });
+    expect(await isOptedOut(db, "scanned@example.com")).toBe(false);
+    expect(await optOutState(db, "scanned@example.com", "forged")).toEqual({ state: "bad" });
+    expect(await confirmOptOut(db, "scanned@example.com", "forged")).toBe(false);
+    expect(await isOptedOut(db, "scanned@example.com")).toBe(false);
+    expect(await confirmOptOut(db, "Scanned@Example.com", sig)).toBe(true);
+    expect(await isOptedOut(db, "scanned@example.com")).toBe(true);
+    expect(await optOutState(db, "scanned@example.com", sig)).toEqual({ state: "done", email: "scanned@example.com" });
   });
 });
 

@@ -43,7 +43,7 @@ async function sayAll(db: Db, c: Pick<Competition, "slug" | "name" | "tz">, send
     const p = people.get(i.playerId!)!;
     const { t, locale } = await translatorFor(p.locale);
     const [head, body] = i.lines(t as unknown as Translate, locale);
-    await tell(db, p, `${head}\n${body}`, { inline_keyboard: [[{ text: t("tournament.open"), url: i.url ?? pageUrl(c) }]] }, { notice: { released: released.get(p.id) ?? "now" }, trailer: i.trailer });
+    await tell(db, p, `${head}\n${body}`, { inline_keyboard: [[{ text: t("tournament.open"), url: i.url ?? pageUrl(c) }]] }, { notice: { released: released.get(p.id) ?? "now" }, trailer: i.trailer, label: t("tournament.open") });
   }
 }
 

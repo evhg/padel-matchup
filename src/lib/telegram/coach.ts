@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { lessonPackages, type Coach, type Player } from "@/db/schema";
 import { parseCoachLine, parseCoachSetting, parseStudentLine, type CoachIntent, type CoachSetting, type Match, type StudentRef } from "@/lib/coach/assistant";
-import { acceptOffer, afterLessonFreed, decideRequest, epochMin, fromEpochMin, getWaitlistEntry, withdrawWaitlist } from "@/lib/coach/chains";
+import { acceptOffer, afterLessonFreed, decideRequest, epochMin, fromEpochMin, getWaitlistEntry, leaveWaitlist } from "@/lib/coach/chains";
 import { notifyLessonBooked, notifyLessonCancelled, notifyLessonMoved, notifyOffer, notifyPaidClaimed, notifyPaidConfirmed, notifyRequestDecided, notifyStudentAccepted } from "@/lib/coach/notify";
 import { coachBotLocale, coachStrings, dayOnlyLabel, whenLabel, type CoachBotLocale, type CoachBotStrings } from "@/lib/coach/strings";
 import { BOT_COMMANDS } from "./commands";
@@ -35,20 +35,21 @@ import {
   packageLine,
   presetHours,
   studentLink,
-  setLessonPaid,
+  markLessonPaid,
   setPackagePaid,
   updateCoach,
   type Hours,
   setStudentStatus,
   studentCoaches,
   studentStatus,
+  type CancelOutcome,
   type LessonWithPeople,
   type StudentCoach,
 } from "@/lib/domain/coaching";
 import { isDomainError } from "@/lib/domain/errors";
 import { coachCommands, coachKeyboard, menuWord, studentCommands, studentKeyboard } from "@/lib/coach/menu";
-import { agendaButtons, tapBlockDays, tapBookWho, tapCancelList, tapMoney, tapMoveList, tapSettings, tapSetupPrice, tapStudentBook, tapStudentMove, tapStudentPay, tapStudents } from "./taps";
-import { answerCallbackQuery, editMessageText, esc, pinChatMessage, sendMessage, sendPhoto, setChatCommands, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser, unpinAllChatMessages } from "./api";
+import { agendaButtons, packId, redrawLessonCard, tapBlockDays, tapBookWho, tapCancelList, tapMoney, tapMoveList, tapSettings, tapSetupPrice, tapStudentBook, tapStudentMove, tapStudentPay, tapStudents } from "./taps";
+import { answerCallbackQuery, editMessageReplyMarkup, editMessageText, esc, pinChatMessage, sendMessage, sendPhoto, setChatCommands, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser, unpinAllChatMessages } from "./api";
 
 /**
  * The courtside assistant. In the bot's private chat a coach types one line and the
@@ -58,6 +59,16 @@ import { answerCallbackQuery, editMessageText, esc, pinChatMessage, sendMessage,
 
 type Cb = NonNullable<TgUpdate["callback_query"]>;
 export const kb = (rows: { text: string; callback_data?: string; url?: string }[][]): InlineKeyboard => ({ inline_keyboard: rows });
+
+type InlineButton = InlineKeyboard["inline_keyboard"][number][number];
+/**
+ * The buttons under a message with the tapped one changed (`to` gives its new face) or taken out
+ * (`to` null), every other button as it was. A row left empty goes. Pure, for the paid taps.
+ */
+export function swapButton(markup: InlineKeyboard | undefined, data: string, to: ((b: InlineButton) => InlineButton) | null): InlineKeyboard {
+  const rows = (markup?.inline_keyboard ?? []).map((row) => row.flatMap((b) => (b.callback_data === data ? (to ? [to(b)] : []) : [b])));
+  return { inline_keyboard: rows.filter((row) => row.length > 0) };
+}
 
 export const pkgText = (s: CoachBotStrings, pkg: { size: number; used: number; expiresAt: Date | null; closedAt: Date | null } | null, now = new Date()) => {
   if (!pkg) return s.noPackage;
@@ -182,7 +193,13 @@ async function applySetting(db: Db, coach: Coach, set: CoachSetting, s: CoachBot
     await say(s.saved(s.labClubs, names.join(", ")));
     return "coach:set:club";
   }
-  await updateCoach(db, coach.id, { promptpayId: set.id });
+  try {
+    await updateCoach(db, coach.id, { promptpayId: set.id });
+  } catch (e) {
+    if (!isDomainError(e) || e.code !== "invalid") throw e;
+    await say(s.promptpayBad);
+    return "coach:set:promptpay_refused";
+  }
   await say(s.saved(s.labPromptpay, set.id));
   return "coach:set:promptpay";
 }
@@ -295,7 +312,7 @@ async function coachFlow(db: Db, coach: Coach, coachPlayer: Player, rawText: str
         await say(s.whichOne, kb(rows.slice(0, 6).map((l) => [{ text: `✕ ${l.student?.displayName ?? "?"} ${whenLabel(l.startsAt, coach.tz, locale)}`, callback_data: `cu:${l.id}` }])));
         return "coach:cancel:which";
       }
-      return cancelByCoach(db, coach, rows[0].id, s, locale, chatId);
+      return (await cancelByCoach(db, coach, rows[0].id, s, locale, chatId)).said;
     }
     case "move": {
       if (!intent.startsAt) {
@@ -391,7 +408,7 @@ export async function moveOne(
   }
 }
 
-export async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, editMessageId?: number): Promise<string> {
+export async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, editMessageId?: number): Promise<{ said: string; outcome: CancelOutcome }> {
   const { lesson, outcome } = await cancelLesson(db, { lessonId, by: "coach", coach });
   const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
   const pkg = lesson.packageId ? (await db.select().from(lessonPackages).where(eq(lessonPackages.id, lesson.packageId)).limit(1))[0] ?? null : null;
@@ -401,7 +418,7 @@ export async function cancelByCoach(db: Db, coach: Coach, lessonId: string, s: C
   const text = s.cancelled(student?.displayName ?? "?", whenLabel(lesson.startsAt, coach.tz, locale));
   if (editMessageId) await editMessageText(chatId, editMessageId, esc(text), null).catch(() => undefined);
   else await sendMessage(chatId, esc(text), { silent: true });
-  return "coach:cancelled";
+  return { said: "coach:cancelled", outcome };
 }
 
 // ------------------------------------------------------------------ student flow
@@ -547,8 +564,11 @@ export async function studentCancel(db: Db, player: Player, lessonId: string, s:
   const coachRow = (await studentCoaches(db, player.id)).find((m) => m.coach.id === lesson.coachId)?.coach;
   if (!coachRow) return "student:cancel:none";
   const hoursUntil = (lesson.startsAt.getTime() - Date.now()) / 3_600_000;
-  if (!confirmed && hoursUntil < coachRow.cutoffHours) {
-    await sendMessage(chatId, esc(`${s.lateWarning(coachRow.cutoffHours)}`), { silent: true, keyboard: kb([[{ text: `✕ ${s.cancel}`, callback_data: `lx:${lesson.id}` }]]) });
+  // Always one question first, as on the web: inside the cutoff it names the cost, outside it says
+  // nothing counts. One tap used to cancel at once from "You booked…", the reminder and /lessons.
+  if (!confirmed) {
+    const ask = hoursUntil < coachRow.cutoffHours ? s.lateWarning(coachRow.cutoffHours) : s.cancelAsk(coachRow.cutoffHours);
+    await sendMessage(chatId, esc(ask), { silent: true, keyboard: kb([[{ text: `✕ ${s.cancel}`, callback_data: `lx:${lesson.id}` }, { text: s.tapKeep, callback_data: "kz:" }]]) });
     return "student:cancel:confirm";
   }
   const { lesson: updated, outcome } = await cancelLesson(db, { lessonId, by: "student", coach: coachRow, actorPlayerId: player.id });
@@ -756,10 +776,12 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
       return "student:offer:none";
     }
     if (action === "lw") {
-      await withdrawWaitlist(db, hit.coach.id, id, player.id);
+      // "No thanks": the spot goes to the next student waiting at once, not after the thirty minutes.
+      const { next } = await leaveWaitlist(db, hit.coach, id, player.id);
       await editMessageText(chatId, messageId, esc(s.offerWithdrawn), null).catch(() => undefined);
       await answerCallbackQuery(cb.id);
-      return "student:offer:withdrawn";
+      if (next) await notifyOffer(db, hit.coach, next).catch(() => undefined);
+      return next ? "student:offer:passed_on" : "student:offer:withdrawn";
     }
     try {
       const { lesson, package: pkg } = await acceptOffer(db, hit.coach, id, player.id);
@@ -786,8 +808,10 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
         await answerCallbackQuery(cb.id, s.nothingToCancel);
         return "coach:undo:none";
       }
-      await cancelByCoach(db, coach, id, s, locale, chatId, messageId);
-      await answerCallbackQuery(cb.id, s.undone);
+      // The toast names what happened: cancelled, and the lesson back in the package when one paid for it.
+      // "Undone" said the coach had taken something back, and promised a package to a lesson that had none.
+      const { outcome } = await cancelByCoach(db, coach, id, s, locale, chatId, messageId);
+      await answerCallbackQuery(cb.id, s.youCancelled(outcome === "refunded" ? s.outcomeRefunded : "").trim());
       return "coach:undo";
     }
     if (action === "cp") {
@@ -799,10 +823,12 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
       const paid = !pkg.paidAt;
       await setPackagePaid(db, coach.id, pkg.id, paid);
       await answerCallbackQuery(cb.id, paid ? s.markedPaid : s.markedUnpaid);
+      // Only the tapped button changes, and it says the new state, so a second tap reads as the undo it
+      // is. editMessageReplyMarkup touches no text and no caption, so it works under the QR photo too;
+      // the whole keyboard used to become this one button, and under a photo the label never moved.
       const label = paid ? `${s.paid} ✓` : `${s.unpaid} → ${s.paid}`;
-      const isPhoto = Boolean((cb.message as { photo?: unknown }).photo);
-      if (!isPhoto) await editMessageText(chatId, messageId, esc(cb.message.text ?? ""), kb([[{ text: label, callback_data: `cp:${pkg.id}` }]])).catch(() => undefined);
-      return "coach:paid";
+      await editMessageReplyMarkup(chatId, messageId, swapButton(cb.message.reply_markup, data, (b) => ({ text: b.text.includes(": ") ? `${label}: ${b.text.slice(b.text.indexOf(": ") + 2)}` : label, callback_data: data }))).catch(() => undefined);
+      return paid ? "coach:paid" : "coach:unpaid";
     }
     if (action === "cm") {
       if (!extra) {
@@ -813,16 +839,22 @@ export async function handleCoachCallback(db: Db, cb: Cb, player: Player): Promi
       return moveOne(db, coach, { lessonId: id, startsAt: fromEpochMin(extra), by: "coach" }, s, locale, chatId, messageId);
     }
     if (action === "cq") {
-      const lesson = await setLessonPaid(db, coach.id, id, true);
+      const { lesson, changed } = await markLessonPaid(db, coach.id, id);
       if (!lesson) {
         await answerCallbackQuery(cb.id);
         return "coach:lesson_paid:none";
       }
-      const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
+      // A second tap on an old message changes nothing, so the student is not told twice.
+      const student = changed && lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
       if (student) await notifyPaidConfirmed(db, { coach, student, lesson }).catch(() => undefined);
       await answerCallbackQuery(cb.id, s.markedPaid);
-      await editMessageText(chatId, messageId, esc(cb.message.text ?? s.markedPaid), null).catch(() => undefined);
-      return "coach:lesson_paid";
+      // On a lesson's own card the card is drawn again, money line and buttons with it. On a list
+      // ("💰 Money") only the tapped row goes: one tap used to take every other "✓ Paid" with it.
+      const packed = packId(lesson.id);
+      const onCard = (cb.message.reply_markup?.inline_keyboard ?? []).flat().some((b) => ["kf", "km", "kx", "kq"].some((k) => b.callback_data?.startsWith(`${k}:${packed}`)));
+      if (onCard) await redrawLessonCard(db, coach, lesson.id, s, locale, chatId, messageId);
+      else await editMessageReplyMarkup(chatId, messageId, swapButton(cb.message.reply_markup, data, null)).catch(() => undefined);
+      return changed ? "coach:lesson_paid" : "coach:lesson_paid:already";
     }
     if (action === "cs") {
       const student = await getPlayerById(db, id);

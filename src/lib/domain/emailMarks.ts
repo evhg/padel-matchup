@@ -1,6 +1,6 @@
 import { and, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { emailMarks } from "@/db/schema";
+import { emailMarks, emailOptOuts } from "@/db/schema";
 
 /**
  * Bounces and complaints: when an address stops working, the app stops writing to it and says so.
@@ -91,6 +91,23 @@ export async function markedAmong(db: Db, addresses: readonly (string | null | u
     .from(emailMarks)
     .where(and(inArray(emailMarks.address, wanted), isNotNull(emailMarks.markedAt)));
   return new Set(rows.map((r) => r.address));
+}
+
+/**
+ * Of these addresses, the ones that get no mail from an organiser: marked (a bounce or a complaint), or
+ * opted out of organisers' mail (`isOptedOut`, the invitation's own "no more emails" link). One
+ * statement down both primary keys for a whole roster: the organiser's line-up reads it once, so a row
+ * held for an address that opted out never says "Invite emailed" (review, 9 November 2026).
+ */
+export async function mailBlocksAmong(db: Db, addresses: readonly (string | null | undefined)[]): Promise<{ marked: Set<string>; optedOut: Set<string> }> {
+  const wanted = [...new Set(addresses.map(normalAddress).filter((a) => a.includes("@")))];
+  if (!wanted.length) return { marked: new Set(), optedOut: new Set() };
+  const rows = await db
+    .select({ address: emailMarks.address, kind: sql<string>`'marked'`.as("kind") })
+    .from(emailMarks)
+    .where(and(inArray(emailMarks.address, wanted), isNotNull(emailMarks.markedAt)))
+    .unionAll(db.select({ address: emailOptOuts.email, kind: sql<string>`'opted_out'`.as("kind") }).from(emailOptOuts).where(inArray(emailOptOuts.email, wanted)));
+  return { marked: new Set(rows.filter((r) => r.kind === "marked").map((r) => r.address)), optedOut: new Set(rows.filter((r) => r.kind === "opted_out").map((r) => r.address)) };
 }
 
 export async function markOf(db: Db, address: string | null | undefined): Promise<{ kind: MarkKind; markedAt: Date } | null> {

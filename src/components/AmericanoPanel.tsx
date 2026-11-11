@@ -310,7 +310,7 @@ export function AmericanoPanel({
           <div key={r.id} className="rounded-2xl border border-line p-3">
             <div className="flex items-center justify-between">
               <div className="font-extrabold">{t("americano.round", { n: r.roundNumber })}</div>
-              {isCreator && !locked && r.id === last?.id && (
+              {isCreator && !locked && !cancelled && r.id === last?.id && (
                 <button
                   type="button"
                   className="btn-danger btn-xs"

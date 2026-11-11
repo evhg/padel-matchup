@@ -50,7 +50,7 @@ export default async function EmbedBoard({ params }: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">{calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"))}</div>
                     <div className={`text-xs font-bold ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>
-                      {spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t("venue.full")}
+                      {spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t(ev.whenFull === "closed" ? "venue.fullClosed" : "venue.full")}
                       {chip ? ` · ${chip}` : ""}
                       {forChip ? ` · ${forChip}` : ""}
                     </div>

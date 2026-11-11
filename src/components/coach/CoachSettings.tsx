@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { coachErrorKey } from "@/lib/coach/errorKey";
 import { useRouter } from "next/navigation";
 import { removePhotoAction, removeQrAction, saveCoachSettingsAction, uploadPhotoAction, uploadQrAction, type SettingsInput } from "@/actions/coach";
 import { COACH_PHOTO_MAX_BYTES, LESSON_MINUTES, QR_UPLOAD_MAX_BYTES } from "@/lib/domain/coaching";
@@ -48,7 +49,7 @@ export function CoachSettings({ initial, hasQr, qrUrl, currency, hasPhoto, photo
     start(async () => {
       const r = await saveCoachSettingsAction(v);
       if (!r.ok) {
-        setError(r.error === "invalid" && r.detail && /^\d$/.test(r.detail) ? t("settings.invalidHours", { day: days[Number(r.detail)] }) : t("errors.no_coach"));
+        setError(r.error === "invalid" && r.detail && /^\d$/.test(r.detail) ? t("settings.invalidHours", { day: days[Number(r.detail)] }) : r.error === "invalid" && r.detail === "promptpay" ? t("setup.badPromptpay") : r.error === "invalid" && r.detail === "payLink" ? t("setup.badPayLink") : t(coachErrorKey(r.error)));
         return;
       }
       setSaved(true);

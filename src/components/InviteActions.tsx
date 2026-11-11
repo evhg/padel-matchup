@@ -53,11 +53,15 @@ export function InviteActions({
       if (!r.ok) setError(r.detail === "held_record" ? t("errors.held_record") : t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
     });
   };
-  const decline = () =>
+  // One tap gives the place away, and the first player waiting moves into it, so it asks first. Not after
+  // the email's own "Can't make it" (`autoDecline`, `?decline=1`): that tap is the second already.
+  const decline = () => {
+    if (!autoDecline && !window.confirm(t("invitePage.declineConfirm"))) return;
     start(async () => {
       const r = await declineInviteAction(code, inviteCode);
       if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
     });
+  };
 
   return (
     <form onSubmit={confirm} className="flex flex-col gap-3">

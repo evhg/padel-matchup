@@ -100,14 +100,21 @@ async function timeRows(db: Db, coach: Coach, dateStr: string, minutes: number, 
   return chunk(free.map((d) => ({ text: timeOf(d, coach.tz, o.locale), callback_data: cbFor(d) })), 4);
 }
 
+/** A sum of money is seven digits at most; a PromptPay ID is a phone (ten digits) or an ID number (thirteen). */
+export const MONEY_DIGITS = 7;
+export const PROMPTPAY_DIGITS = 13;
+
 /**
  * A number, tapped. Twelve buttons in the chat: the digits, ⌫ and ✓. The digits so far ride in the
  * callback, so the keypad is as stateless as everything else here. One component for every figure
  * the book asks for — a price, a fee, a package's price, a PromptPay number — so nobody ever types
  * one, which is what the Russian players asked for through the owner.
+ *
+ * `max` is how many digits the pad takes: seven for a sum of money, thirteen for a PromptPay ID. One cap
+ * for both cut a phone number (ten digits) to seven, and the bad ID made every QR from it invalid.
  */
-function keypad(prefix: string, digits: string, s: CoachBotStrings): InlineKeyboard {
-  const key = (d: string) => ({ text: d, callback_data: `${prefix}${(digits + d).slice(0, 7)}` });
+function keypad(prefix: string, digits: string, s: CoachBotStrings, max = MONEY_DIGITS): InlineKeyboard {
+  const key = (d: string) => ({ text: d, callback_data: `${prefix}${(digits + d).slice(0, max)}` });
   return kb([
     [key("1"), key("2"), key("3")],
     [key("4"), key("5"), key("6")],
@@ -247,6 +254,9 @@ async function lessonCard(db: Db, coach: Coach, lessonId: string, s: CoachBotStr
   await put(chatId, editId, text, kb(rows));
   return "coach:tap:lesson";
 }
+
+/** The lesson's card drawn again in place: after "✓ Paid" on it, its money line and its buttons say paid. */
+export const redrawLessonCard = (db: Db, coach: Coach, lessonId: string, s: CoachBotStrings, locale: string, chatId: number, editId: number): Promise<string> => lessonCard(db, coach, lessonId, s, locale, chatId, editId);
 
 /** Buttons under an agenda: one per lesson, into its card. */
 export const agendaButtons = (rows: LessonWithPeople[], coach: Coach, locale: string): InlineKeyboard | undefined => (rows.length ? kb(rows.slice(0, 8).map((l) => [{ text: `${lessonLabel(l, coach, locale)} ›`, callback_data: `kl:${packId(l.id)}` }])) : undefined);
@@ -481,10 +491,21 @@ async function settingsKeypad(db: Db, coach: Coach, player: Player, field: strin
   const f = FIELDS[field];
   if (!f) return "coach:tap:none";
   const promptpay = field === "pp" || field === "pq";
+  const max = promptpay ? PROMPTPAY_DIGITS : MONEY_DIGITS;
+  const wide = digits.slice(0, max);
+  let refused = false;
   if (done) {
     // PromptPay is digits too, but ten to thirteen of them and never a sum: it keeps its own shape.
-    if (promptpay) await updateCoach(db, coach.id, { promptpayId: digits || null });
-    else await updateCoach(db, coach.id, f.patch(Number(digits)));
+    // A length no bank reads is refused by updateCoach, and the pad comes back with the reason.
+    try {
+      if (promptpay) await updateCoach(db, coach.id, { promptpayId: wide || null });
+      else await updateCoach(db, coach.id, f.patch(Number(wide)));
+    } catch (e) {
+      if (!promptpay || !isDomainError(e) || e.code !== "invalid") throw e;
+      refused = true;
+    }
+  }
+  if (done && !refused) {
     const fresh = (await getCoachForActor(db, player.id))?.coach ?? coach;
     // The setup's price saved: how students pay comes next, unless the coach said already.
     if (field === "ps" && !fresh.promptpayId && !fresh.payAtClub && !fresh.payLink) return settingsKeypad(db, fresh, player, "pq", "", false, s, locale, chatId, editId);
@@ -492,13 +513,12 @@ async function settingsKeypad(db: Db, coach: Coach, player: Player, field: strin
     return `coach:set:${field}`;
   }
   const prefix = `kv:${field}:`;
-  const wide = promptpay ? digits.slice(0, 13) : digits;
-  const pad = keypad(prefix, wide, s);
-  if (promptpay) for (const row of pad.inline_keyboard) for (const b of row) if (b.callback_data && !b.callback_data.endsWith(":ok")) b.callback_data = `${prefix}${(b.callback_data.slice(prefix.length) + "").slice(0, 13)}`;
+  const pad = keypad(prefix, wide, s, max);
   // In the setup the keypad says why it asks, and the other answers sit under it.
   if (field === "pq") pad.inline_keyboard.push([{ text: s.tapPayAtClub, callback_data: "ke:club:1" }], [{ text: s.tapLater, callback_data: "ke:show" }]);
   const heading = field === "ps" ? `${s.setupPrice}\n${s.tapEnter(f.label(s), wide)}` : field === "pq" ? `${s.setupPay}\n${s.tapEnter(f.label(s), wide)}` : s.tapEnter(f.label(s), wide);
-  await put(chatId, editId, heading, pad);
+  await put(chatId, editId, refused ? `${s.promptpayBad}\n${heading}` : heading, pad);
+  if (refused) return "coach:tap:keypad_refused";
   return field === "ps" || field === "pq" ? `coach:setup:${field === "ps" ? "price" : "pay"}` : "coach:tap:keypad";
 }
 
@@ -514,6 +534,13 @@ async function offersScreen(db: Db, coach: Coach, seg: string[], s: CoachBotStri
   const asInput = (o: (typeof offers)[number]) => ({ id: o.id, size: o.size, minutes: o.minutes, heads: o.heads, price: o.price, validDays: o.validDays });
   if (seg[0] === "x") {
     const gone = unpackId(seg[1] ?? "");
+    const offer = offers.find((o) => o.id === gone);
+    if (!offer) return offersScreen(db, coach, [""], s, locale, chatId, editId);
+    // One question first, as the web's form asks for a save: the ✕ sits right beside the next package.
+    if (seg[2] !== "y") {
+      await put(chatId, editId, s.tapOfferRemoveAsk(s.tapPackageLabel(offer.size, offer.minutes, offer.heads, money(offer.price, coach.currency))), kb([[{ text: s.tapOfferRemoveYes, callback_data: `kg:x:${seg[1]}:y` }, { text: s.tapBack, callback_data: "kg:" }]]));
+      return "coach:tap:offer_remove_ask";
+    }
     await saveOffers(db, coach.id, offers.filter((o) => o.id !== gone).map(asInput));
     return offersScreen(db, coach, [""], s, locale, chatId, editId);
   }
@@ -853,14 +880,15 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
         const lid = unpackId(seg[0]);
         const lesson = lid ? await getLesson(db, lid) : null;
         if (!lesson || lesson.coachId !== coach.id) return "coach:tap:none";
+        const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
         try {
           await compLesson(db, { lessonId: lesson.id, coach });
         } catch (e) {
           if (!isDomainError(e)) throw e;
-          await answerCallbackQuery(cb.id, s.markedPaid).catch(() => undefined);
+          // The tap is answered already, so a toast here would never show: the card says why instead.
+          await put(chatId, editId, e.code === "already_paid" ? s.tapCompPaid(student?.displayName ?? "?", whenLabel(lesson.startsAt, coach.tz, locale)) : s.nothingToCancel, kb([]));
           return "coach:tap:comp_refused";
         }
-        const student = lesson.studentPlayerId ? await getPlayerById(db, lesson.studentPlayerId) : null;
         await put(chatId, editId, s.tapOnMeDone(student?.displayName ?? "?", whenLabel(lesson.startsAt, coach.tz, locale)), kb([]));
         return "coach:tap:comped";
       }
@@ -980,9 +1008,20 @@ export async function handleTapCallback(db: Db, cb: Cb, player: Player): Promise
       await put(chatId, editId, `${dayOnlyLabel(day, locale)} — ${s.tapWhichHour}`, kb([...hourRows((hh) => `${base}:${hh}`), [{ text: s.tapBack, callback_data: `st:${seg[0]}:${coach.lessonMinutes}:${seg[1]}` }]]));
       return "student:tap:hour";
     }
-    case "sk":
+    case "sk": {
       if (!seg[1]) return packagesFor(db, coach, s, chatId, editId);
-      return unpackId(seg[1]) ? takePackage(db, player, coach, unpackId(seg[1])!, s, chatId, editId) : "student:tap:none";
+      const offerId = unpackId(seg[1]);
+      if (!offerId) return "student:tap:none";
+      if (seg[2] === "y") return takePackage(db, player, coach, offerId, s, chatId, editId);
+      // One question first, as on the web (`pkgConfirm`): a package is money owed from the tap on.
+      const offer = (await listOffers(db, coach.id)).find((o) => o.id === offerId);
+      if (!offer) {
+        await put(chatId, editId, s.offerGone, kb([]));
+        return "student:tap:offer_gone";
+      }
+      await put(chatId, editId, s.tapPackageAsk(`${s.tapPackageLabel(offer.size, offer.minutes, offer.heads, money(offer.price, coach.currency))}`, coach.displayName), kb([[{ text: s.tapPackageYes, callback_data: `sk:${seg[0]}:${seg[1]}:y` }, { text: s.tapBack, callback_data: `sk:${seg[0]}` }]]));
+      return "student:tap:package_ask";
+    }
   }
   return null;
 }

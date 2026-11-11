@@ -43,7 +43,8 @@ export function WhenIPlay({ initial, suggestedPlace }: { initial: Want[]; sugges
       const times = time ? around(time) : { fromTime: null, toTime: null };
       const res = await recordWantAction({ place, weekday: weekday === "" ? null : Number(weekday), ...times });
       if (!res.ok) {
-        setError(res.error === "invalid" ? t("unknownPlace") : res.error === "too_many" ? t("tooMany") : t("unknownPlace"));
+        // "We do not know that court" only for a place we do not know; anything else is not about the place.
+        setError(res.error === "invalid" ? t("unknownPlace") : res.error === "too_many" ? t("tooMany") : t("notSaved"));
         return;
       }
       setWants((prev) => [...prev.filter((w) => w.id !== res.data.id), { id: res.data.id, weekday: weekday === "" ? null : Number(weekday), ...times, place }]);
@@ -52,8 +53,10 @@ export function WhenIPlay({ initial, suggestedPlace }: { initial: Want[]; sugges
 
   const remove = (id: string) =>
     start(async () => {
+      setError(null);
       const res = await dropWantAction(id);
       if (res.ok) setWants((prev) => prev.filter((w) => w.id !== id));
+      else setError(t("notSaved"));
     });
 
   return (

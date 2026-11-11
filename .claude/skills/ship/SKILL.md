@@ -112,6 +112,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
 
 ### Check the thing, not the description of the thing
 
+- **A gate shares the machine with nobody.** Two full gates hung in the browser step for over 100
+  minutes on 9 November 2026 while agents ran their own builds and browser suites beside them; each
+  suite alone then finished in 11 to 148 seconds. Run the gate only when no other build, server or
+  browser run is alive (`pgrep -af "next start|e2e/run|playwright"`), and find a hang suite by suite
+  with `E2E_ONLY=<suite>` under `timeout`.
+- **Hiding a form once its job is done also hides its confirmation.** "No entry form for a player
+  already entered" unmounted the form that showed "You are in Gold" the moment the page refreshed.
+  Keep the component mounted and pass the state (`alreadyIn`), so it keeps what it just showed.
 - **A test never reaches a real outside service.** The unit suite never cleared `RESEND_API_KEY`, so in a
   shell that held the live key every unit run, the gate's included, sent the notifications its tests
   trigger through the real mail service. CI has no key, so nothing ever went red. `tests/helpers/setup.ts`
@@ -1333,6 +1341,16 @@ Wall clock first, credits second. What actually moved it, measured:
   one pill on a phone, and three suites that clicked `ru` by role on an iPhone viewport hung on a
   hidden button and said only "timeout". `switchLang` in `e2e/lib.mjs` taps the pill first; use it,
   and give the next collapsing control the same kind of helper in the same change.
+- **A fold that takes controls off a screen takes them out of every suite that taps them.** The redesign
+  of 9 November 2026 put the create form's court, length, level and "Tournament" under "More options",
+  and My matches' settings under one "Settings" line. A control inside a closed `<details>` or an unopened
+  fold is not there for `getByRole` or a click, so twelve suites would have timed out with a bare
+  "timeout". `openMore`, `openSettings` and `openOtherShares` in `e2e/lib.mjs` open each fold once; grep
+  the suites for every control the fold takes (`grep -n "level-chip\|length-choice\|Centre court"`) and
+  call the opener before the first tap. A count (`locator.count()`, a CSS locator) still sees a closed
+  fold's content, so a check that counts passes either way: open the fold where the check means "on
+  the screen". And a list that opens under a field covers the button right under it: the venue list
+  covered "Create" once the court moved away, so on the create form it takes its own room.
 - **`scripts/i18n.mjs add` needs the section to exist.** `email.claimCode.subject` failed with "has no
   section" and, under `set -e`, took the rest of the script with it: the edits after that line never
   ran. A new nested section (`email.claimCode`) is written by hand in all three files first; then the

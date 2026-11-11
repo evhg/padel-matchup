@@ -260,7 +260,7 @@ async function VenueBoardPage({ params }: Props) {
                       <div className="truncate text-sm text-muted">
                         {formatEventDay(ev.startsAt, ev.tz, locale)} · {t("event.players", { count: occupied, capacity: ev.capacity })}
                       </div>
-                      <div className={`mt-1 text-sm font-bold ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t("venue.full")}</div>
+                      <div className={`mt-1 text-sm font-bold ${spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{spotsLeft > 0 ? t("event.spotsLeft", { count: spotsLeft }) : t(ev.whenFull === "closed" ? "venue.fullClosed" : "venue.full")}</div>
                     </div>
                     <span className="text-faint">›</span>
                   </Link>
@@ -277,9 +277,12 @@ async function VenueBoardPage({ params }: Props) {
           <Link href={`/v/${slug}/poster`} prefetch={false} className="link">
             🖨 {t("venue.poster")}
           </Link>
-          <Link href={`/?venue=${encodeURIComponent(board.name)}`} prefetch={false} className="link">
-            + {t("common.newMatch")}
-          </Link>
+          {/* An empty board already offers "Organize one here", to the same address: one door, not two. */}
+          {(later.length > 0 || week) && (
+            <Link href={`/?venue=${encodeURIComponent(board.name)}`} prefetch={false} className="link">
+              + {t("common.newMatch")}
+            </Link>
+          )}
         </div>
         {coachesHere.length > 0 && (
           <section className="card" data-testid="club-coaches">

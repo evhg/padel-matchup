@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { attachHeldRecordAction, removeAction } from "@/actions/slots";
+import { errorLine } from "@/lib/errorLine";
 import { ShareButtons } from "./ShareSheet";
 
 export function SlotActions({
@@ -41,19 +42,26 @@ export function SlotActions({
   // November 2026). The one message under the line-up names the places a player takes from the match link.
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
+  // A refusal says why (the match ended while the page was open: `past`), never nothing.
+  const [error, setError] = useState<string | null>(null);
 
   const remove = () => {
     const msg = kind === "invited" ? t("creator.cancelInviteConfirm", { name }) : t("creator.removeConfirm", { name });
     if (!confirm(msg)) return;
+    setError(null);
     start(async () => {
-      await removeAction(code, slotId);
+      const r = await removeAction(code, slotId);
+      if (!r.ok) setError(t(`errors.${errorLine(r.error)}`));
     });
   };
 
-  const keep = () =>
+  const keep = () => {
+    setError(null);
     start(async () => {
-      await attachHeldRecordAction(code, slotId);
+      const r = await attachHeldRecordAction(code, slotId);
+      if (!r.ok) setError(t(`errors.${errorLine(r.error)}`));
     });
+  };
 
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -73,6 +81,7 @@ export function SlotActions({
           {kind === "invited" ? t("creator.cancelInvite") : t("creator.remove")}
         </button>
       </div>
+      {error && <p className="text-sm font-semibold text-danger">{error}</p>}
       {open && inviteUrl && (
         <div className="rounded-2xl bg-bg p-3 animate-pop">
           <div className="mb-2 text-sm font-bold">{t("creator.sendTheirLink")}</div>

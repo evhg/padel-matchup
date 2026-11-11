@@ -1,11 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asc, eq } from "drizzle-orm";
-import type { Db } from "@/db";
+import { and, asc, eq } from "drizzle-orm";
+import { getDb, type Db } from "@/db";
+import { createEventAction } from "@/actions/events";
 import { activity, events, slots } from "@/db/schema";
 import { courtBookedBy } from "@/lib/domain/courtBooked";
 import { createEvent } from "@/lib/domain/events";
 import { settleNewMatch } from "@/lib/domain/newMatch";
 import { getEventByCode } from "@/lib/domain/queries";
+import { namesToSeat, roomForNames } from "@/lib/domain/slots";
+import { PLAYER_COOKIE, sealPlayerId } from "@/lib/session";
+import { asAction } from "./helpers/action";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, DAY, HOUR, makePlayer } from "./helpers/db";
 
@@ -96,5 +100,41 @@ describe("a new match from a pasted booking", () => {
     const ed = await makePlayer(db, "Ed");
     const ev = await newMatch(ed);
     expect(await settleNewMatch(db, { event: ev, organiser: ed, joinSelf: false, booked: true, now: NOW })).toEqual({ joined: false, held: 0, booked: true });
+  });
+});
+
+// ------------------------------------------------------------------ more names than places (button audit, 9 November 2026, F4)
+
+describe("\"Players you already have\" longer than the room", () => {
+  it("the room is the match's places less the organiser's own, and the organiser's name in the list is not a place", () => {
+    expect(roomForNames(4, true)).toBe(3);
+    expect(roomForNames(4, false)).toBe(4);
+    expect(namesToSeat(["Cath", " Bo ", "", "Cy", "Di"], "cath")).toEqual(["Bo", "Cy", "Di"]);
+  });
+
+  describe("the create form, called as the browser calls it", () => {
+    let app: Db;
+    beforeAll(async () => {
+      app = await getDb();
+    });
+    let n = 0;
+    const day = new Date(NOW.getTime() + 2 * DAY).toISOString().slice(0, 10);
+    const create = async (who: { id: string }, names: string[]) =>
+      (await asAction({ [PLAYER_COOKIE]: sealPlayerId(who.id) }, () => createEventAction({ type: "match", date: day, time: "18:00", tz: "Asia/Bangkok", whenFull: "waitlist", venueName: "Warehaus", names }).catch((e: unknown) => e))).result;
+    const made = async (who: { id: string }) => app.select({ id: events.id }).from(events).where(eq(events.creatorPlayerId, who.id));
+
+    it("four other names in a match of four: refused with the three that fit, and no match is made", async () => {
+      const cath = await makePlayer(app, `Cath ${++n}`);
+      expect(await create(cath, ["Bo", "Cy", "Di", "Ed"])).toEqual({ ok: false, error: "full", detail: "3" });
+      expect(await made(cath)).toHaveLength(0);
+    });
+
+    it("three other names, or four with the organiser's own: the match is made and holds all three", async () => {
+      const cath = await makePlayer(app, `Cath ${++n}`);
+      const answer = (await create(cath, [cath.displayName, "Bo", "Cy", "Di"])) as { digest?: string };
+      expect(String(answer.digest ?? "")).toMatch(/\/share/);
+      const [ev] = await made(cath);
+      expect(await app.select().from(slots).where(and(eq(slots.eventId, ev.id), eq(slots.kind, "reserved")))).toHaveLength(3);
+    });
   });
 });

@@ -4,11 +4,16 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { decideJoinRequestAction } from "@/actions/slots";
 import { formatLevel } from "@/lib/domain/levels";
+import { errorLine } from "@/lib/errorLine";
 
 export type RequestItem = { id: string; name: string; level: number | null; ago: string };
 
-/** Organizer-only: players outside the level range who asked in. */
-export function JoinRequests({ code, items }: { code: string; items: RequestItem[] }) {
+/**
+ * Organizer-only: players outside the level range who asked in. `waitlist`: the match keeps a waiting
+ * list, so a yes on a full match waitlists the player; with none, a yes needs an open spot
+ * (`decideJoinRequest` refuses `full`), and the help says that instead.
+ */
+export function JoinRequests({ code, items, waitlist = true }: { code: string; items: RequestItem[]; waitlist?: boolean }) {
   const t = useTranslations();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +23,7 @@ export function JoinRequests({ code, items }: { code: string; items: RequestItem
     start(async () => {
       setError(null);
       const r = await decideJoinRequestAction(code, id, approve);
-      if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" || r.error === "level_required" ? "generic" : r.error}` as "errors.generic"));
+      if (!r.ok) setError(t(`errors.${errorLine(r.error)}`));
       setBusy(null);
     });
   };
@@ -26,7 +31,7 @@ export function JoinRequests({ code, items }: { code: string; items: RequestItem
   return (
     <div className="mt-4 rounded-2xl border border-warn/40 bg-warn-soft/40 p-3">
       <div className="font-extrabold">{t("level.requestsTitle")}</div>
-      <p className="text-xs text-muted">{t("level.requestsHelp")}</p>
+      <p className="text-xs text-muted">{t(waitlist ? "level.requestsHelp" : "level.requestsHelpClosed")}</p>
       <ul className="mt-2 flex flex-col gap-2">
         {items.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center gap-2">

@@ -31,3 +31,23 @@ export function optOutSignature(email: string): string {
 }
 
 export const optOutPath = (email: string) => `/unsubscribe?e=${encodeURIComponent(normalizeEmail(email) ?? "")}&s=${optOutSignature(email)}`;
+
+/**
+ * What the opt-out page shows for a link, without writing anything: a bad link, the question, or done.
+ * Opening the link changes nothing, because a mail scanner (Safe Links and its kind) opens every link
+ * in a mail, and the page used to stop all email to that person on the scanner's visit. The person
+ * says yes with a button that posts (`stopEmailAction`), the same promise `notify.ts` keeps for "I'm in".
+ */
+export async function optOutState(db: Db, e: string | null | undefined, s: string | null | undefined): Promise<{ state: "bad" } | { state: "ask" | "done"; email: string }> {
+  const email = normalizeEmail(e);
+  if (!email || !s || optOutSignature(email) !== s) return { state: "bad" };
+  return { state: (await isOptedOut(db, email)) ? "done" : "ask", email };
+}
+
+/** The yes from the opt-out page: only a link this server signed stops an address. */
+export async function confirmOptOut(db: Db, e: string | null | undefined, s: string | null | undefined): Promise<boolean> {
+  const email = normalizeEmail(e);
+  if (!email || !s || optOutSignature(email) !== s) return false;
+  await addOptOut(db, email);
+  return true;
+}

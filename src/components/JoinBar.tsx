@@ -13,8 +13,10 @@ import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import type { BackInDoors } from "./BackInHelp";
 import { readDeviceSignals } from "@/lib/deviceSignals";
+import { WHATSAPP_COLOURS, WhatsAppIcon } from "./ShareSheet";
 
-export type JoinState = "join" | "join_waitlist" | "leave" | "leave_waitlist" | "member_live" | "full" | "cancelled" | "past" | "requested" | "request_declined";
+export type { JoinState } from "@/lib/domain/joinState";
+import type { JoinState } from "@/lib/domain/joinState";
 /** Someone who can confirm the viewer's level for this event: a coach at the club, or the club. */
 export type VerifierDTO = { key: string; name: string; target: { coachId: string } | { clubSlug: string } };
 
@@ -37,8 +39,11 @@ export function JoinBar({
   partnerName = null,
   partnerGoes = false,
   pairsLocked = false,
-  tellGroupHref = null,
+  share = null,
+  organiser = false,
+  heldHint = false,
   rangeWaived = null,
+  heldPlace = false,
   openJoin = false,
   namesHere = [],
   claimable = [],
@@ -74,15 +79,26 @@ export function JoinBar({
   /** Round 1 is drawn: the pairs are the field, and no partner is added any more. */
   pairsLocked?: boolean;
   /**
-   * WhatsApp's share with the line-up typed, for a player who is in: the trip out of the group ends
-   * back in it. A ghost button beside Leave, so it never competes with a primary action (DECIDING rule 1).
+   * The match's one WhatsApp share (the owner, 9 November 2026: "Bottom bar (Recommended)"), for the
+   * organiser and every seated player: its message fits the state (`shareMessage`). `strong` while places
+   * are open or held, and for a player's result after the match: a full-width green button. Otherwise the
+   * quiet "Tell the group" beside Leave, so it never competes with the page's one primary (DECIDING rule 1).
    */
-  tellGroupHref?: string | null;
+  share?: { href: string; label: string; strong: boolean } | null;
+  /** The organiser: Leave is in Organizer tools, never in the bar (the same decision). */
+  organiser?: boolean;
+  /**
+   * A browser that knows nobody, on a match with a held row it may take (the audit's state 03): the bar's
+   * first words are "Is a place held for you? Tap your name above.", and Join is a line under them.
+   */
+  heldHint?: boolean;
   /**
    * The organiser already played a finished, scored match with the viewer, so the range does not hold
    * them (DECIDING rules 21 and 37): "ok" lets them in, "unverified" still asks for a confirmed level.
    */
   rangeWaived?: RangeWaiver;
+  /** The organiser holds a place for this very record: Join takes it, with no range and no level asked (`joinWithPolicy`). */
+  heldPlace?: boolean;
   /**
    * The page was opened from an "I'm in" outside Telegram (`?join=1`, `playAgainJoinUrl`): the join step
    * opens by itself, as after a tap on Join. It never joins: a link that a mail scanner follows seats nobody.
@@ -119,7 +135,7 @@ export function JoinBar({
 
   // Outside the range, or inside it with only a declared level where the event wants a confirmed one;
   // the same answer the server gives, a past game with the organiser included.
-  const { needsLevel, outOfRange, unverified } = joinBarLevel({ range: levelRange, level: myLevel, verifiedOnly, verified, waived: rangeWaived });
+  const { needsLevel, outOfRange, unverified } = joinBarLevel({ range: levelRange, level: myLevel, verifiedOnly, verified, waived: rangeWaived, held: heldPlace });
 
   // State updates after an awaited server action are wrapped in startTransition
   // so they join the router's transition instead of interrupting it (React 19).
@@ -199,7 +215,7 @@ export function JoinBar({
     else if (!requestJoin()) setInline(true);
   }, [openJoin, state, step]);
 
-  if (state === "cancelled" || state === "past") return null;
+  if (state === "cancelled" || (state === "past" && !share)) return null;
 
   const joinLabel = outOfRange || unverified ? t("level.askToJoin") : state === "join_waitlist" ? t("event.joinWaitlist") : isTournament ? t("event.joinTournament") : t("event.join");
 
@@ -213,9 +229,18 @@ export function JoinBar({
     if (!requestJoin()) setInline(true);
   };
 
+  // The one share: a full-width green button while it is the bar's main job, else the quiet "Tell the group".
+  const shareLink = (full: boolean) =>
+    share ? (
+      <a href={share.href} target="_blank" rel="noopener noreferrer" className={share.strong ? `btn-brand ${WHATSAPP_COLOURS}${full ? " w-full" : " btn-sm"}` : `btn-ghost btn-sm${full ? " w-full" : ""}`} data-testid="tell-group">
+        <WhatsAppIcon /> {share.label}
+      </a>
+    ) : null;
+  const tall = Boolean(share?.strong) && state === "leave";
+
   return (
     <>
-      <div className="h-28" aria-hidden />
+      <div className={tall ? "h-40" : "h-28"} aria-hidden />
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80" style={{ boxShadow: "var(--shadow-bar)" }}>
         <div className="mx-auto flex w-full max-w-xl items-center gap-3 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
           {(state === "join" || state === "join_waitlist") && (
@@ -237,7 +262,7 @@ export function JoinBar({
                     if (!hasIdentity && !name.trim()) return setError(t("identity.nameRequired"));
                     // The Go key and Join while "Take Danny's held place" is on screen: a second Danny would close the place for good.
                     if (!hasIdentity && heldNameOf(name, held)) return setError(t("errors.name_held"));
-                    if (levelRange && level == null) return setError(t("errors.level_required"));
+                    if (levelRange && !heldPlace && level == null) return setError(t("errors.level_required"));
                     join(hasIdentity ? undefined : name, level, fixedPairs ? partner : undefined);
                   }}
                 >
@@ -249,9 +274,10 @@ export function JoinBar({
                   )}
                   <div className="flex gap-2">
                     {!hasIdentity && <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} maxLength={40} enterKeyHint="go" data-testid="join-bar-name" />}
-                    {levelRange && <LevelSelect value={level} onChange={setLevel} />}
+                    {levelRange && !heldPlace && <LevelSelect value={level} onChange={setLevel} />}
+                    {/* On a full match the form puts the player on the waiting list, and says so (a fixed-pairs night's form read "Join"). */}
                     <button type="submit" className="btn-primary shrink-0" disabled={pending}>
-                      {pending ? t("common.working") : t("event.joinShort")}
+                      {pending ? t("common.working") : state === "join_waitlist" ? t("event.joinWaitlist") : t("event.joinShort")}
                     </button>
                   </div>
                   {!hasIdentity && own.note}
@@ -263,13 +289,23 @@ export function JoinBar({
                   {/* Played before: Face ID or a fingerprint, in one line, where the bar is the join form (DECIDING rule 39). */}
                   {!hasIdentity && !asking && <PasskeySignIn className="btn-ghost btn-sm w-full whitespace-normal leading-snug" />}
                 </form>
+              ) : heldHint ? (
+                <div data-testid="held-stranger">
+                  <p className="text-base font-extrabold leading-snug">{t("event.heldStranger")}</p>
+                  <button ref={joinButton} type="button" className="link mt-0.5 text-sm font-semibold" disabled={pending} onClick={onJoin}>
+                    {pending ? t("common.working") : joinLabel}
+                  </button>
+                </div>
               ) : (
                 <button ref={joinButton} type="button" className="btn-primary w-full text-lg" disabled={pending} onClick={onJoin}>
                   {pending ? t("common.working") : joinLabel}
                 </button>
               )}
+              {/* The organiser with no seat of their own still has the one share. */}
+              {share && !inline && shareLink(true)}
               <div className="flex justify-between gap-2 text-xs font-semibold text-muted">
-                <span>{outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : unverified && myLevel != null ? t(rangeWaived === "unverified" ? "levelCheck.gateWaived" : "levelCheck.gate", { level: formatLevel(myLevel) }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
+                {/* A held place of the viewer's own is theirs on a full match too: no spots-left line over it. */}
+                <span>{heldPlace ? null : outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : unverified && myLevel != null ? t(rangeWaived === "unverified" ? "levelCheck.gateWaived" : "levelCheck.gate", { level: formatLevel(myLevel) }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
                 {error && <span className="text-danger">{error}</span>}
               </div>
             </div>
@@ -307,41 +343,48 @@ export function JoinBar({
           )}
           {state === "request_declined" && <div className="flex-1 text-sm font-bold text-muted">{t("level.requestDeclined", { name: organizerName })}</div>}
           {state === "leave" && (
-            <>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-base font-extrabold text-ok">✓ {fixedPairs ? (partnerName ? t("pairs.youAreInWith", { name: partnerName }) : t("pairs.youAreInAlone")) : t("event.youAreIn")}</div>
-                {/* Came alone: the partner's name now, the way the join takes it. */}
-                {fixedPairs && !partnerName && !pairsLocked && (addingPartner ? (
-                  <form
-                    className="mt-1 flex gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (partner.trim()) join(undefined, undefined, partner);
-                    }}
-                  >
-                    <input className="input min-h-10 min-w-0 flex-1 text-sm" autoFocus value={partner} onChange={(e) => setPartner(e.target.value)} placeholder={t("pairs.partnerName")} aria-label={t("pairs.partnerName")} maxLength={40} />
-                    <button type="submit" className="btn-secondary btn-sm shrink-0" disabled={pending || !partner.trim()}>
-                      {t("pairs.savePartner")}
+            <div className="flex w-full flex-col gap-2">
+              <div className="flex w-full items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-base font-extrabold text-ok">✓ {fixedPairs ? (partnerName ? t("pairs.youAreInWith", { name: partnerName }) : t("pairs.youAreInAlone")) : t("event.youAreIn")}</div>
+                  {/* Came alone: the partner's name now, the way the join takes it. */}
+                  {fixedPairs && !partnerName && !pairsLocked && (addingPartner ? (
+                    <form
+                      className="mt-1 flex gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (partner.trim()) join(undefined, undefined, partner);
+                      }}
+                    >
+                      <input className="input min-h-10 min-w-0 flex-1 text-sm" autoFocus value={partner} onChange={(e) => setPartner(e.target.value)} placeholder={t("pairs.partnerName")} aria-label={t("pairs.partnerName")} maxLength={40} />
+                      <button type="submit" className="btn-secondary btn-sm shrink-0" disabled={pending || !partner.trim()}>
+                        {t("pairs.savePartner")}
+                      </button>
+                    </form>
+                  ) : (
+                    <button type="button" className="link text-xs font-semibold" onClick={() => setAddingPartner(true)}>
+                      {t("pairs.addPartner")}
                     </button>
-                  </form>
-                ) : (
-                  <button type="button" className="link text-xs font-semibold" onClick={() => setAddingPartner(true)}>
-                    {t("pairs.addPartner")}
+                  ))}
+                  {error && <div className="text-xs text-danger">{error}</div>}
+                </div>
+                {!tall && shareLink(false)}
+                {!organiser && (
+                  <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={leave}>
+                    {t("event.leave")}
                   </button>
-                ))}
-                {error && <div className="text-xs text-danger">{error}</div>}
+                )}
               </div>
-              {tellGroupHref && (
-                <a href={tellGroupHref} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm" data-testid="tell-group">
-                  {t("event.tellGroup")}
-                </a>
-              )}
-              <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={leave}>
-                {t("event.leave")}
-              </button>
+              {tall && shareLink(true)}
+            </div>
+          )}
+          {state === "member_live" && (
+            <>
+              <div className="flex-1 text-base font-extrabold text-court">● {t("event.inProgress")}</div>
+              {shareLink(false)}
             </>
           )}
-          {state === "member_live" && <div className="flex-1 text-base font-extrabold text-court">● {t("event.inProgress")}</div>}
+          {state === "past" && shareLink(true)}
           {state === "leave_waitlist" && (
             <>
               <div className="flex-1">
@@ -353,7 +396,19 @@ export function JoinBar({
               </button>
             </>
           )}
-          {state === "full" && <div className="flex-1 text-base font-extrabold text-warn">{t("event.full")}</div>}
+          {/* Once the match is on, a waiting place can no longer be left (`leaveEvent` refuses after the start): where the player stands, and no button. */}
+          {state === "waitlist_live" && (
+            <div className="flex-1" data-testid="waitlist-live">
+              <div className="text-base font-extrabold">{t("event.youAreOnWaitlist", { position: waitlistPosition })}</div>
+              <div className="text-xs font-semibold text-court">● {t("event.inProgress")}</div>
+            </div>
+          )}
+          {state === "full" && (
+            <>
+              <div className="flex-1 text-base font-extrabold text-warn">{t("event.full")}</div>
+              {shareLink(false)}
+            </>
+          )}
         </div>
       </div>
     </>

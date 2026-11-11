@@ -17,7 +17,9 @@ export function DeleteAccount({ byName = null }: { byName?: ProofDoors | null })
   const t = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [refused, setRefused] = useState(false);
+  // Why the deletion did not happen: the proof a session by name lacks, or anything else. A refusal
+  // that showed nothing left the button as it was, and the person could not tell it had failed.
+  const [refused, setRefused] = useState<"proof_required" | "generic" | null>(null);
   if (byName)
     return (
       <p className="mt-6 text-center text-xs text-faint" data-testid="delete-by-name">
@@ -32,10 +34,11 @@ export function DeleteAccount({ byName = null }: { byName?: ProofDoors | null })
         disabled={pending}
         onClick={() => {
           if (!confirm(t("me.deleteConfirm"))) return;
+          setRefused(null);
           start(async () => {
             const r = await deleteMyAccountAction();
             if (r.ok) router.push("/");
-            else if (r.error === "proof_required") setRefused(true);
+            else setRefused(r.error === "proof_required" ? "proof_required" : "generic");
           });
         }}
       >
@@ -43,7 +46,7 @@ export function DeleteAccount({ byName = null }: { byName?: ProofDoors | null })
       </button>
       {refused && (
         <span className="mt-2 block" role="alert">
-          {t("errors.proof_required")}
+          {t(refused === "proof_required" ? "errors.proof_required" : "errors.generic")}
         </span>
       )}
     </p>

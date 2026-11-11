@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { coachErrorKey } from "@/lib/coach/errorKey";
 import { useRouter } from "next/navigation";
 import { acceptOfferAction, joinWaitlistAction, leaveCoachAction, leaveWaitlistAction, requestCoachAction, requestTimeAction, studentAttachSlipAction, studentBookAction, studentCancelAction, studentClaimPaidAction, studentMoveAction, takeOfferAction } from "@/actions/coach";
 import type { StudentStatus } from "@/lib/domain/coaching";
@@ -120,7 +121,8 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
   };
   const groupPrices = Boolean(prices && (longer ? second?.two : prices.two || prices.three || prices.four));
   const money = (n: number) => `${n} ${prices?.currency ?? owed?.currency ?? ""}`.trim();
-  const errorText = (code: string) => (["slot_taken", "not_student", "blocked", "not_taking_bookings", "outside_hours", "too_soon", "too_late", "no_coach", "past", "has_package"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  // Each code its own words (`coachErrorKey`); anything else says it did not work, never "that time just got taken".
+  const errorText = (code: string) => t(coachErrorKey(code));
 
   /** The student takes a package from the page: unpaid, and the ways to pay are on this screen. */
   const takePackage = (o: OfferDTO2) => {
@@ -269,7 +271,9 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
     });
   const leave = (id: string) =>
     start(async () => {
-      await leaveWaitlistAction(handle, id);
+      setError(null);
+      const r = await leaveWaitlistAction(handle, id);
+      if (!r.ok) setError(errorText(r.error));
       router.refresh();
     });
   const ask = (e: React.FormEvent) => {

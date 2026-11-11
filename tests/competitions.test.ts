@@ -8,6 +8,7 @@ import {
   competitionPage,
   createCompetition,
   enterPair,
+  enterShown,
   entriesOf,
   listOpenCompetitions,
   pairByClaimToken,
@@ -16,7 +17,9 @@ import {
   setPairPaid,
   withdrawEntriesOf,
   withdrawPair,
+  withdrawRefusal,
 } from "@/lib/domain/competitions";
+import { competitionCategories } from "@/db/schema";
 import { DomainError } from "@/lib/domain/errors";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb, makePlayer } from "./helpers/db";
@@ -151,5 +154,63 @@ describe("the serious tournament: entries and categories", () => {
     expect(gone).toHaveLength(2);
     expect(await entriesOf(db, c.id, ana.id)).toEqual([]);
     expect((await db.select().from(competitionPairs).where(eq(competitionPairs.p1PlayerId, ana.id))).every((p) => p.status === "withdrawn")).toBe(true);
+  });
+});
+
+/**
+ * The player's Withdraw on /t/{slug} showed in every state (button audit, 9 November 2026). After the
+ * event a tap moved a waiting pair up and told it so, for a tournament that was over. The clock is
+ * Tuesday 8 September 2026; the competition is the weekend of 5 and 6 September, or a month out.
+ */
+describe("a pair leaves only while its category is still being played", () => {
+  let db: Db;
+  let close: () => Promise<void>;
+  beforeAll(async () => ({ db, close } = await createTestDb()));
+  afterAll(() => close());
+  const NOW = new Date("2026-09-08T09:00:00Z");
+
+  it("the rule: not once the draw is done, not after the last day in the competition's zone", () => {
+    const c = { tz: "Asia/Bangkok", endsOn: "2026-09-08" };
+    expect(withdrawRefusal(c, { drawStatus: "published" }, NOW)).toBeNull();
+    expect(withdrawRefusal(c, { drawStatus: "done" }, NOW)).toBe("done");
+    expect(withdrawRefusal({ ...c, endsOn: "2026-09-07" }, { drawStatus: "none" }, NOW)).toBe("over");
+    // 23:30 on the 8th in Bangkok is still the last day there, though it is the 8th in UTC too: and 00:30 on the 9th is not.
+    expect(withdrawRefusal(c, { drawStatus: "none" }, new Date("2026-09-08T16:30:00Z"))).toBeNull();
+    expect(withdrawRefusal(c, { drawStatus: "none" }, new Date("2026-09-08T17:30:00Z"))).toBe("over");
+  });
+
+  it("refuses the player after the event and once the draw is done; the organiser and a closing account still may", async () => {
+    const org = await makePlayer(db, "Org");
+    const past = await createCompetition(db, { organizerPlayerId: org.id, name: "Last Weekend Open", tz: "Asia/Bangkok", startsOn: "2026-09-05", endsOn: "2026-09-06" });
+    const cat = await addCategory(db, { competitionId: past.id, organizerPlayerId: org.id, name: "Open", maxPairs: 4 });
+    const ana = await makePlayer(db, "Ana");
+    const bo = await makePlayer(db, "Bo");
+    const cy = await makePlayer(db, "Cy");
+    const a = await enterPair(db, { categoryId: cat.id, playerId: ana.id, partner: { name: "Al" }, locale: "en" });
+    const b = await enterPair(db, { categoryId: cat.id, playerId: bo.id, partner: { name: "Bea" }, locale: "en" });
+    for (const n of ["Dee", "Eli"]) await enterPair(db, { categoryId: cat.id, playerId: (await makePlayer(db, n)).id, partner: { name: `${n} mate` }, locale: "en" });
+    const waiting = await enterPair(db, { categoryId: cat.id, playerId: cy.id, partner: { name: "Cat" }, locale: "en" });
+    expect(waiting.pair.status).toBe("waiting");
+    expect(await code(withdrawPair(db, { pairId: a.pair.id, actorPlayerId: ana.id }))).toBe("closed:over");
+    expect((await db.select().from(competitionPairs).where(eq(competitionPairs.id, waiting.pair.id)))[0].status).toBe("waiting");
+    expect((await withdrawPair(db, { pairId: b.pair.id, actorPlayerId: org.id })).pair.status).toBe("withdrawn");
+    expect((await withdrawEntriesOf(db, ana.id, NOW))[0].pair.status).toBe("withdrawn");
+
+    const soon = await createCompetition(db, { organizerPlayerId: org.id, name: "Next Month Open", tz: "Asia/Bangkok", startsOn: "2026-10-10", endsOn: "2026-10-11" });
+    const open = await addCategory(db, { competitionId: soon.id, organizerPlayerId: org.id, name: "Open", maxPairs: 4 });
+    const d = await enterPair(db, { categoryId: open.id, playerId: ana.id, partner: { name: "Al" }, locale: "en" });
+    await db.update(competitionCategories).set({ drawStatus: "done" }).where(eq(competitionCategories.id, open.id));
+    expect(await code(withdrawPair(db, { pairId: d.pair.id, actorPlayerId: ana.id }))).toBe("closed:done");
+    await db.update(competitionCategories).set({ drawStatus: "published" }).where(eq(competitionCategories.id, open.id));
+    expect((await withdrawPair(db, { pairId: d.pair.id, actorPlayerId: ana.id })).pair.status).toBe("withdrawn");
+  });
+
+  it("the entry form stays away from a player already entered in that category", () => {
+    const cat = { id: "gold", drawStatus: "none" as const };
+    expect(enterShown({ status: "open" }, cat, [])).toBe(true);
+    expect(enterShown({ status: "open" }, cat, [{ categoryId: "gold", status: "entered" }])).toBe(false);
+    expect(enterShown({ status: "open" }, cat, [{ categoryId: "gold", status: "waiting" }])).toBe(false);
+    expect(enterShown({ status: "open" }, cat, [{ categoryId: "silver", status: "entered" }])).toBe(true);
+    expect(enterShown({ status: "closed" }, cat, [])).toBe(false);
   });
 });

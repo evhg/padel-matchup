@@ -18,15 +18,16 @@ export function ClaimCodeForm({ token, email, initialConfirmed = false }: { toke
     setNote(null);
     start(async () => {
       const r = await confirmClaimCodeAction(token, code.trim());
+      // A wrong code, a code used up by too many tries or past its time, and anything else, each in its own words.
       if (r.ok) setConfirmed(true);
-      else setNote(t("club.codeWrong"));
+      else setNote(r.error === "invalid" && r.detail === "code_wrong" ? t("club.codeWrong") : r.error === "invalid" && r.detail === "code_expired" ? t("club.codeExpired") : t("common.somethingWrong"));
     });
   };
   const again = () => {
     setNote(null);
     start(async () => {
       const r = await sendClaimCodeAction(token);
-      setNote(r.ok && r.data.sentTo ? t("club.codeSentTo", { email: r.data.sentTo }) : t("common.somethingWrong"));
+      setNote(r.ok && r.data.sentTo ? t("club.codeSentTo", { email: r.data.sentTo }) : !r.ok && r.error === "too_many" ? t("club.codeLimit") : r.ok ? t("club.codeNotSent") : t("common.somethingWrong"));
     });
   };
   if (confirmed) {

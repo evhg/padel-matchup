@@ -9,7 +9,7 @@
 // awkward states, assert the shapes a machine can judge, and photograph the rest for a person —
 // `SHOTS=./shots pnpm e2e` is how you get them.
 import { existsSync, readFileSync } from "node:fs";
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, openSettings, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 
 const browser = await launch();
 /** What a phone shows, 390 px wide, around the element the walk just scrolled to: the full-page shot of a long page is too tall to read. */
@@ -66,13 +66,17 @@ const page = async (opts) => {
   return p;
 };
 
-/** Which direct child of <main> holds this text, counting from the top. -1 when nothing does. */
+/**
+ * The blocks of <main>, counting from the top: its direct children, with the "Settings" fold on My matches
+ * read as the blocks inside it (the owner, 9 November 2026: the settings sit behind one line, in the same order).
+ */
+/** Which block holds this text. -1 when nothing does. */
 const blockWith = (p, text) =>
-  p.evaluate(
-    (t) => [...(document.querySelector("main")?.children ?? [])].findIndex((el) => (el.textContent ?? "").includes(t)),
-    text,
-  );
-const blocks = (p) => p.evaluate(() => document.querySelector("main")?.children.length ?? 0);
+  p.evaluate((t) => {
+    const all = [...(document.querySelector("main")?.children ?? [])].flatMap((el) => (el.matches('[data-testid="me-settings"]') ? [...(el.querySelector('[data-testid="me-settings-body"]')?.children ?? [])] : [el]));
+    return all.findIndex((el) => (el.textContent ?? "").includes(t));
+  }, text);
+const blocks = (p) => p.evaluate(() => [...(document.querySelector("main")?.children ?? [])].flatMap((el) => (el.matches('[data-testid="me-settings"]') ? [...(el.querySelector('[data-testid="me-settings-body"]')?.children ?? [])] : [el])).length);
 
 const LANDMARKS = {
   en: { link: "Your personal link", del: "Delete my account", feedback: "Tell us what should change" },
@@ -279,6 +283,7 @@ try {
   const bellAfterTwo = await bellUntil((n) => n === 0);
   check("opening the other match too leaves no bell", bellAfterTwo === 0, `${bellAfterOne} -> ${bellAfterTwo}`);
   await dana.goto(BASE + "/me");
+  await openSettings(dana); // the notice switches are behind "Settings" (the owner, 9 November 2026)
   check("and the inbox keeps both notices, read", (await dana.getByTestId("inbox").locator("li").filter({ hasText: "Kai joined" }).count()) >= 3 && (await dana.getByTestId("inbox").locator("li[data-unread]").count()) === 0);
 
   const notices = dana.getByTestId("notice-settings");
@@ -291,6 +296,7 @@ try {
   await notices.getByRole("status").waitFor({ timeout: 20000 });
   await dana.reload();
   await dana.waitForLoadState("networkidle").catch(() => {});
+  await openSettings(dana); // a reload closes the "Settings" line again
   const kept = dana.getByTestId("notice-settings");
   check("after a reload the line says what was set", (await kept.getByTestId("notice-summary").innerText()) === "5 of 7 on · quiet 22:00–08:00", await kept.getByTestId("notice-summary").innerText());
   await kept.locator("summary").click();
@@ -305,6 +311,7 @@ try {
   await dana.setViewportSize({ width: 1280, height: 900 });
   await dana.goto(BASE + "/me");
   await dana.waitForLoadState("networkidle").catch(() => {});
+  await openSettings(dana);
   const wide = await dana.locator("body").innerText();
   check("nothing asks a desktop visitor to add anything to a home screen", !/home screen/i.test(wide), (wide.match(/.{0,40}home screen.{0,40}/i) ?? [""])[0]);
   await shot(dana, "player-me-desktop");
@@ -314,6 +321,7 @@ try {
   for (const loc of ["ru", "es"]) {
     await dana.goto(`${BASE}/${loc}/me`);
     await dana.waitForLoadState("networkidle").catch(() => {});
+    await openSettings(dana); // read every word of the screen, the settings too
     const t = await dana.locator("body").innerText();
     check(`the ${loc} My matches carries no untranslated key`, !/\b[a-z]+\.[a-z]+\.[a-zA-Z]+\b/.test(t.replace(/\S+@\S+|https?:\S+|[\w-]+\.(?:sh|com|org|net)\b/g, "")), (t.match(/\b[a-z]+\.[a-z]+\.[a-zA-Z]+\b/) ?? [""])[0]);
     check(`the ${loc} My matches shows no half-written value`, !/undefined|NaN|\[object/.test(t), (t.match(/.{0,30}(undefined|NaN|\[object).{0,30}/) ?? [""])[0]);
@@ -343,11 +351,16 @@ try {
   const unreachedText = (await unreached.innerText()).replace(/\s+/g, " ");
   check(
     "the organiser's page names the past partners Kicksmash cannot reach, and not the one it reaches, nor a player of a match not yet over; both sign in as themselves",
-    unreachedText.includes("Kicksmash can't reach ") && unreachedText.includes("Tomasz") && unreachedText.includes("Olek") && unreachedText.includes("Send them the link: they sign in as themselves.") && !unreachedText.includes("Milena") && !unreachedText.includes("Ivo"),
+    unreachedText.includes("Kicksmash can't reach ") && unreachedText.includes("Tomasz") && unreachedText.includes("Olek") && unreachedText.includes("Send the match link to them too: they sign in as themselves.") && !unreachedText.includes("Milena") && !unreachedText.includes("Ivo"),
     unreachedText,
   );
-  const sendHref = (await unreached.getByTestId("unreached-send").getAttribute("href")) ?? "";
-  check("its one action is the match's own WhatsApp share, the link tagged as WhatsApp's", sendHref.startsWith("https://wa.me/?text=") && decodeURIComponent(sendHref).includes(`/${nextCode}?s=wa`), sendHref.slice(0, 120));
+  // Words only since 9 November 2026 (the owner: "You decide…"): the bar's one share sends the match link.
+  const sendHref = (await rosa.getByTestId("tell-group").getAttribute("href")) ?? "";
+  check(
+    "the line has no button of its own, and the bar's one share sends the match's own link, tagged as WhatsApp's",
+    (await unreached.locator("a, button").count()) === 0 && sendHref.startsWith("https://wa.me/?text=") && decodeURIComponent(sendHref).includes(`/${nextCode}?s=wa`),
+    sendHref.slice(0, 120),
+  );
   await unreached.scrollIntoViewIfNeeded();
   await shot(rosa, "player-unreached-line");
   await unreached.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -360,8 +373,8 @@ try {
   await unreached.waitFor({ timeout: 20000 });
   const plainText = (await unreached.innerText()).replace(/\s+/g, " ");
   check(
-    "a partner \"That's me\" refuses keeps the plain line: \"Send them the link.\", with no promise that they sign in as themselves",
-    plainText.includes("Tomasz") && plainText.includes("Olek") && plainText.includes("Send them the link.") && !plainText.includes("they sign in as themselves"),
+    "a partner \"That's me\" refuses keeps the plain line: \"Send the match link to them too.\", with no promise that they sign in as themselves",
+    plainText.includes("Tomasz") && plainText.includes("Olek") && plainText.includes("Send the match link to them too.") && !plainText.includes("they sign in as themselves"),
     plainText,
   );
   await unreached.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -633,7 +646,7 @@ try {
   // A record that proves itself is in the one message: the link opens her row, and her row opens her own door.
   check(
     "Nora holds Ines's place with her record, and the one message names Ines",
-    (await nora.locator("main li", { hasText: "Reserved for Ines" }).getByTestId("keeps-record").count()) === 1 && ((await nora.getByTestId("held-message").textContent().catch(() => "")) ?? "").includes("One message for Ines"),
+    (await nora.locator("main li", { hasText: "Reserved for Ines" }).getByTestId("keeps-record").count()) === 1 && ((await nora.getByTestId("held-message").textContent().catch(() => "")) ?? "").includes("asks Ines to open the link"),
   );
   await nora.close();
 

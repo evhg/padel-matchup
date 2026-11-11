@@ -113,4 +113,4 @@ async function CardPage({ params }: Props) {
   );
 }
 
-export default withClientMessages(["card", "common", "share"], CardPage);
+export default withClientMessages(["card", "common", "errors", "share"], CardPage);

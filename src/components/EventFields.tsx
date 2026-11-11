@@ -115,6 +115,9 @@ export function EventFields({
   past,
   enterNext = false,
   bookingError = null,
+  playerFields = false,
+  compact = false,
+  beforeMore = null,
 }: {
   values: EventFormValues;
   onChange: (patch: Partial<EventFormValues>) => void;
@@ -140,6 +143,21 @@ export function EventFields({
   enterNext?: boolean;
   /** The server found no link in "Court booking link" (`bookingLinkOf`): said under the field, and "More" opens to show it. */
   bookingError?: string | null;
+  /**
+   * A seated player's "Change the details" (the owner's decision of 9 November 2026): the day, the time,
+   * the length, the place, the court, the map and the note, nothing else (`PLAYER_EDIT_FIELDS`, which
+   * `updateEvent` holds). The note shows at once, with no "More options" around it.
+   */
+  playerFields?: boolean;
+  /**
+   * The create form's layout (the owner, 9 November 2026: "Tidy both"): above the fold only the usual-time
+   * chip, the day, the time and the venue, then Create (`beforeMore`). The length ("90 min" in the
+   * summary), the court, the map link, the time zone and the level go under "More options", and
+   * "Tournament" is a line under the form instead of a segment. The edit form keeps the full layout.
+   */
+  compact?: boolean;
+  /** What stands between the fields and "More options" in the compact layout: the create button. */
+  beforeMore?: React.ReactNode;
 }) {
   const t = useTranslations();
   // A day or a time the booking did not give shows the form's own (the usual slot, else tomorrow at
@@ -275,6 +293,10 @@ export function EventFields({
   const fieldSizes = [...new Set([...Array.from({ length: 16 }, (_, i) => (i + 1) * 4), values.capacity])].sort((a, b) => a - b);
 
   const summary = [
+    compact ? t("event.minutes", { minutes: values.durationMinutes }) : null,
+    compact && values.court.trim() ? (/^\d{1,3}$/.test(values.court.trim()) ? t("event.courtNumber", { n: values.court.trim() }) : values.court.trim()) : null,
+    compact && hasRange(range) ? rangeChip(t, range) : null,
+    compact ? tagChip(t, values) : null,
     values.whenFull === "closed" ? t("create.whenFullClosed") : t("create.whenFullWaitlist"),
     values.venueName.trim() ? (values.publicListing ? t("venue.listedShort") : t("venue.notListedShort")) : null,
     values.bookingUrl ? t("create.bookingSet") : null,
@@ -284,64 +306,7 @@ export function EventFields({
     .filter(Boolean)
     .join(" · ");
 
-  return (
-    <div className="flex flex-col gap-5">
-      {showType && (
-        <div>
-          <div className="segment" role="group" aria-label={t("create.title")}>
-            <button type="button" aria-pressed={values.type === "match"} onClick={() => pickType("match")}>
-              {t("create.typeMatch")}
-              <span className="block text-2xs font-semibold opacity-70">{t("create.typeMatchHelp")}</span>
-            </button>
-            <button type="button" aria-pressed={values.type === "tournament"} onClick={() => pickType("tournament")}>
-              {t("create.typeTournament")}
-              <span className="block text-2xs font-semibold opacity-70">{t("create.typeTournamentHelp")}</span>
-            </button>
-          </div>
-
-        </div>
-      )}
-
-      {!startLocked && timeChips.length > 0 && (
-        <div data-testid={freeCount > 0 ? "free-times" : undefined}>
-          <div className="label">{freeCount === 0 ? t("create.chipsLabel") : freeCount === timeChips.length ? t("create.freeLabel", { club: values.venueName.trim() }) : t("create.freeAndUsualLabel", { club: values.venueName.trim() })}</div>
-          <div className="flex flex-wrap gap-2">
-          {timeChips.map((c) => {
-            const active = values.date === c.date && values.time === c.time && (!c.tz || values.tz === c.tz);
-            return (
-              <button key={c.key} type="button" aria-pressed={active} data-testid={c.free ? "free-chip" : undefined} onClick={() => pick(c.tz ? { date: c.date, time: c.time, tz: c.tz } : { date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
-                {c.free ? `✓ ${c.label}` : c.label}
-              </button>
-            );
-          })}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label">{t("create.date")}</label>
-          <input className={`input ${lacks.date || doubt.date ? gap : ""}`} type="date" value={values.date} onChange={(e) => pick({ date: e.target.value })} disabled={startLocked} required aria-describedby={lacks.date ? "paste-no-date" : doubt.date ? "paste-check-day" : undefined} />
-        </div>
-        <div>
-          <label className="label">{t("create.time")}</label>
-          <input className={`input ${lacks.time ? gap : ""}`} type="time" step={300} value={values.time} onChange={(e) => pick({ time: e.target.value })} disabled={startLocked} required aria-describedby={lacks.time ? "paste-no-time" : undefined} />
-        </div>
-      </div>
-      {(lacks.date || lacks.time) && (
-        <div className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-missing-when">
-          {lacks.date && <p id="paste-no-date">✏️ {t("create.pasteNoDay")}</p>}
-          {lacks.time && <p id="paste-no-time">✏️ {t("create.pasteNoTime")}</p>}
-        </div>
-      )}
-      {doubt.date && (
-        <p id="paste-check-day" className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-check-day">
-          ✏️ {t("create.pasteCheckDay")}
-        </p>
-      )}
-      <div className="-mt-3 text-sm text-muted">
-        {t("create.timezone")}:{" "}
-        {startLocked ? (
+  const tzPicker = startLocked ? (
           <span>{values.tz.replace(/_/g, " ")}</span>
         ) : tzOpen ? (
           <select className="input mt-1" value={values.tz} onChange={(e) => onChange({ tz: e.target.value })} data-testid="tz-select">
@@ -364,20 +329,9 @@ export function EventFields({
           <button type="button" className="link" onClick={() => setTzOpen(true)}>
             {values.tz.replace(/_/g, " ")}
           </button>
-        )}
-        {startLocked && (
-          <p className="mt-1 font-semibold" data-testid="start-locked">
-            {t("event.startLocked")}
-          </p>
-        )}
-        {/* Only where the club's feed speaks for the time picked; past it, nothing rather than a guess. */}
-        {!startLocked && freeThen && (
-          <p className={`mt-1 ${freeThen.key.startsWith("create.free") ? "font-semibold text-ok" : ""}`} data-testid="free-then">
-            {t(freeThen.key, freeThen.values)}
-          </p>
-        )}
-      </div>
-
+        );
+  const lengthEl = (
+    <>
       {/* How long the court is booked, beside the time it starts: three taps, 90 already chosen. The
           owner's decision of 30 September 2026, after a player could not tell 60 from 90. */}
       <div>
@@ -401,20 +355,10 @@ export function EventFields({
         </div>
       </div>
 
-      <div>
-        <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} enterKeyHint={enterNext ? "next" : undefined} />
-        {lacks.venue && (
-          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-missing-club">
-            ✏️ {t("create.pasteNoClub")}
-          </p>
-        )}
-        {doubt.venue && (
-          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-check-club">
-            ✏️ {t("create.pasteCheckClub")}
-          </p>
-        )}
-      </div>
-
+    </>
+  );
+  const courtEl = (
+    <>
       <div className="-mt-2">
         <label className="label">
           {t("create.court")} <span className="font-normal">({t("common.optional")})</span>
@@ -440,95 +384,10 @@ export function EventFields({
           <input className="input" value={values.court} maxLength={40} placeholder={t("create.courtPlaceholder")} autoComplete="off" enterKeyHint={enterNext ? "next" : undefined} onChange={(e) => onChange({ court: e.target.value })} />
         )}
       </div>
-      {courtTotal && (
-        <p className="-mt-2 text-sm text-muted" data-testid="paste-total">
-          💸 {t("create.pasteTotal", { total: courtTotal })}
-        </p>
-      )}
-
-
-      {values.type === "tournament" && (
-        <div>
-          {showType && (
-            <div className="mb-3">
-              <label className="label">{t("create.format")}</label>
-              <div className="flex flex-wrap gap-2" role="group" aria-label={t("create.format")}>
-                {FORMATS.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    aria-pressed={values.format === f}
-                    onClick={() => onChange({ format: f, pointsPerMatch: values.gamesTo ? null : values.pointsPerMatch == null || values.pointsPerMatch === DEFAULT_POINTS[values.format] ? DEFAULT_POINTS[f] : values.pointsPerMatch })}
-                    className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${values.format === f ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}
-                  >
-                    {t(FORMAT_KEYS[f])}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1.5 text-sm text-muted">{values.fixedPairs ? t(({ americano: "pairs.howAmericano", mexicano: "pairs.howMexicano", king: "pairs.howKing" } as const)[values.format]) : t(FORMAT_HELP_KEYS[values.format])}</p>
-              {/* Fixed pairs (decision F): off by default, the same engine with the pair as the unit. */}
-              <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
-                <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.fixedPairs} onChange={(e) => onChange({ fixedPairs: e.target.checked })} data-testid="fixed-pairs" />
-                <span className="min-w-0">
-                  <span className="block font-bold">{t("pairs.fixed")}</span>
-                  <span className="block text-xs text-muted">{t("pairs.fixedHelp")}</span>
-                </span>
-              </label>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">{t("create.capacity")}</label>
-              <select
-                className="input px-3"
-                aria-label={t("create.capacity")}
-                value={values.capacity}
-                onChange={(e) => onChange({ capacity: Number(e.target.value) })}
-              >
-                {fieldSizes.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">{t("create.scoreBy")}</label>
-              {/* One way to score at a time: points per match, or first to N games (the other popular way). */}
-              <select
-                className="input px-3"
-                aria-label={t("create.scoreBy")}
-                value={values.gamesTo ? `g:${values.gamesTo}` : values.pointsPerMatch ? `p:${values.pointsPerMatch}` : ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  onChange(v.startsWith("g:") ? { gamesTo: Number(v.slice(2)), pointsPerMatch: null } : v.startsWith("p:") ? { pointsPerMatch: Number(v.slice(2)), gamesTo: null } : { pointsPerMatch: null, gamesTo: null });
-                }}
-              >
-                <option value="">{t("create.pointsFree")}</option>
-                {POINTS_PRESETS.map((n) => (
-                  <option key={`p${n}`} value={`p:${n}`}>
-                    {t("create.pointsN", { n })}
-                  </option>
-                ))}
-                {GAMES_PRESETS.map((n) => (
-                  <option key={`g${n}`} value={`g:${n}`}>
-                    {t("create.gamesTo", { n })}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {planLine && (
-            <p className="mt-1.5 text-sm font-semibold" data-testid="night-plan">
-              {planLine}
-            </p>
-          )}
-          {plan?.tooLong && <p className="mt-1 text-sm text-warn">{t("create.planTooLong", { minutes: values.durationMinutes })}</p>}
-          <p className="mt-1.5 text-sm text-muted">{showType ? `${t("create.roundsHelp")} ${t("create.capacityHelp")}` : `${t("create.tournamentHelp")} ${t("create.capacityHelp")}`}</p>
-        </div>
-      )}
-
-
+    </>
+  );
+  const levelEl = (
+    <>
       <div>
         <button type="button" className="chip-muted hover:bg-line" aria-expanded={levelOpen} onClick={() => setLevelOpen((o) => !o)} data-testid="level-chip">
           🎚️ {[rangeChip(t, range) ?? t("level.any"), tagChip(t, values)].filter(Boolean).join(" · ")}{" "}
@@ -615,6 +474,235 @@ export function EventFields({
           </div>
         )}
       </div>
+    </>
+  );
+  return (
+    <div className="flex flex-col gap-5">
+      {!compact && (
+        <>
+      {showType && (
+        <div>
+          <div className="segment" role="group" aria-label={t("create.title")}>
+            <button type="button" aria-pressed={values.type === "match"} onClick={() => pickType("match")}>
+              {t("create.typeMatch")}
+              <span className="block text-2xs font-semibold opacity-70">{t("create.typeMatchHelp")}</span>
+            </button>
+            <button type="button" aria-pressed={values.type === "tournament"} onClick={() => pickType("tournament")}>
+              {t("create.typeTournament")}
+              <span className="block text-2xs font-semibold opacity-70">{t("create.typeTournamentHelp")}</span>
+            </button>
+          </div>
+
+        </div>
+      )}
+
+        </>
+      )}
+      {!startLocked && timeChips.length > 0 && (
+        <div data-testid={freeCount > 0 ? "free-times" : undefined}>
+          <div className="label">{freeCount === 0 ? t("create.chipsLabel") : freeCount === timeChips.length ? t("create.freeLabel", { club: values.venueName.trim() }) : t("create.freeAndUsualLabel", { club: values.venueName.trim() })}</div>
+          <div className="flex flex-wrap gap-2">
+          {timeChips.map((c) => {
+            const active = values.date === c.date && values.time === c.time && (!c.tz || values.tz === c.tz);
+            return (
+              <button key={c.key} type="button" aria-pressed={active} data-testid={c.free ? "free-chip" : undefined} onClick={() => pick(c.tz ? { date: c.date, time: c.time, tz: c.tz } : { date: c.date, time: c.time })} className={`min-h-11 rounded-xl px-3.5 text-sm font-bold ring-1 transition ${active ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}>
+                {c.free ? `✓ ${c.label}` : c.label}
+              </button>
+            );
+          })}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="label">{t("create.date")}</label>
+          <input className={`input ${lacks.date || doubt.date ? gap : ""}`} type="date" value={values.date} onChange={(e) => pick({ date: e.target.value })} disabled={startLocked} required aria-describedby={lacks.date ? "paste-no-date" : doubt.date ? "paste-check-day" : undefined} />
+        </div>
+        <div>
+          <label className="label">{t("create.time")}</label>
+          <input className={`input ${lacks.time ? gap : ""}`} type="time" step={300} value={values.time} onChange={(e) => pick({ time: e.target.value })} disabled={startLocked} required aria-describedby={lacks.time ? "paste-no-time" : undefined} />
+        </div>
+      </div>
+      {(lacks.date || lacks.time) && (
+        <div className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-missing-when">
+          {lacks.date && <p id="paste-no-date">✏️ {t("create.pasteNoDay")}</p>}
+          {lacks.time && <p id="paste-no-time">✏️ {t("create.pasteNoTime")}</p>}
+        </div>
+      )}
+      {doubt.date && (
+        <p id="paste-check-day" className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-check-day">
+          ✏️ {t("create.pasteCheckDay")}
+        </p>
+      )}
+      {compact ? (
+        freeThen && !startLocked ? (
+          <div className="-mt-3 text-sm text-muted">
+        {/* Only where the club's feed speaks for the time picked; past it, nothing rather than a guess. */}
+        {!startLocked && freeThen && (
+          <p className={`mt-1 ${freeThen.key.startsWith("create.free") ? "font-semibold text-ok" : ""}`} data-testid="free-then">
+            {t(freeThen.key, freeThen.values)}
+          </p>
+        )}
+          </div>
+        ) : null
+      ) : (
+      <div className="-mt-3 text-sm text-muted">
+        {t("create.timezone")}:{" "}
+        {startLocked ? (
+          <span>{values.tz.replace(/_/g, " ")}</span>
+        ) : tzOpen ? (
+          <select className="input mt-1" value={values.tz} onChange={(e) => onChange({ tz: e.target.value })} data-testid="tz-select">
+            <optgroup label={t("create.tzNearby")}>
+              {nearby.map((z) => (
+                <option key={`near-${z}`} value={z}>
+                  {z.replace(/_/g, " ")}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label={t("create.tzAll")}>
+              {zones.map((z) => (
+                <option key={z} value={z}>
+                  {z.replace(/_/g, " ")}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        ) : (
+          <button type="button" className="link" onClick={() => setTzOpen(true)}>
+            {values.tz.replace(/_/g, " ")}
+          </button>
+        )}
+        {startLocked && (
+          <p className="mt-1 font-semibold" data-testid="start-locked">
+            {t("event.startLocked")}
+          </p>
+        )}
+        {/* Only where the club's feed speaks for the time picked; past it, nothing rather than a guess. */}
+        {!startLocked && freeThen && (
+          <p className={`mt-1 ${freeThen.key.startsWith("create.free") ? "font-semibold text-ok" : ""}`} data-testid="free-then">
+            {t(freeThen.key, freeThen.values)}
+          </p>
+        )}
+      </div>
+
+      )}
+      {!compact && lengthEl}
+      <div>
+        <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} enterKeyHint={enterNext ? "next" : undefined} mapField={!compact} />
+        {lacks.venue && (
+          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-missing-club">
+            ✏️ {t("create.pasteNoClub")}
+          </p>
+        )}
+        {doubt.venue && (
+          <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-check-club">
+            ✏️ {t("create.pasteCheckClub")}
+          </p>
+        )}
+      </div>
+
+      {!compact && courtEl}
+      {courtTotal && (
+        <p className="-mt-2 text-sm text-muted" data-testid="paste-total">
+          💸 {t("create.pasteTotal", { total: courtTotal })}
+        </p>
+      )}
+
+
+      {values.type === "tournament" && !playerFields && (
+        <div>
+          {showType && (
+            <div className="mb-3">
+              <label className="label">{t("create.format")}</label>
+              <div className="flex flex-wrap gap-2" role="group" aria-label={t("create.format")}>
+                {FORMATS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-pressed={values.format === f}
+                    onClick={() => onChange({ format: f, pointsPerMatch: values.gamesTo ? null : values.pointsPerMatch == null || values.pointsPerMatch === DEFAULT_POINTS[values.format] ? DEFAULT_POINTS[f] : values.pointsPerMatch })}
+                    className={`min-h-10 rounded-xl px-3 text-sm font-bold ring-1 transition ${values.format === f ? "bg-ink text-on-ink ring-ink" : "bg-card text-ink ring-line-strong hover:bg-bg"}`}
+                  >
+                    {t(FORMAT_KEYS[f])}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-sm text-muted">{values.fixedPairs ? t(({ americano: "pairs.howAmericano", mexicano: "pairs.howMexicano", king: "pairs.howKing" } as const)[values.format]) : t(FORMAT_HELP_KEYS[values.format])}</p>
+              {/* Fixed pairs (decision F): off by default, the same engine with the pair as the unit. */}
+              <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
+                <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.fixedPairs} onChange={(e) => onChange({ fixedPairs: e.target.checked })} data-testid="fixed-pairs" />
+                <span className="min-w-0">
+                  <span className="block font-bold">{t("pairs.fixed")}</span>
+                  <span className="block text-xs text-muted">{t("pairs.fixedHelp")}</span>
+                </span>
+              </label>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">{t("create.capacity")}</label>
+              <select
+                className="input px-3"
+                aria-label={t("create.capacity")}
+                value={values.capacity}
+                onChange={(e) => onChange({ capacity: Number(e.target.value) })}
+              >
+                {fieldSizes.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">{t("create.scoreBy")}</label>
+              {/* One way to score at a time: points per match, or first to N games (the other popular way). */}
+              <select
+                className="input px-3"
+                aria-label={t("create.scoreBy")}
+                value={values.gamesTo ? `g:${values.gamesTo}` : values.pointsPerMatch ? `p:${values.pointsPerMatch}` : ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  onChange(v.startsWith("g:") ? { gamesTo: Number(v.slice(2)), pointsPerMatch: null } : v.startsWith("p:") ? { pointsPerMatch: Number(v.slice(2)), gamesTo: null } : { pointsPerMatch: null, gamesTo: null });
+                }}
+              >
+                <option value="">{t("create.pointsFree")}</option>
+                {POINTS_PRESETS.map((n) => (
+                  <option key={`p${n}`} value={`p:${n}`}>
+                    {t("create.pointsN", { n })}
+                  </option>
+                ))}
+                {GAMES_PRESETS.map((n) => (
+                  <option key={`g${n}`} value={`g:${n}`}>
+                    {t("create.gamesTo", { n })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {planLine && (
+            <p className="mt-1.5 text-sm font-semibold" data-testid="night-plan">
+              {planLine}
+            </p>
+          )}
+          {plan?.tooLong && <p className="mt-1 text-sm text-warn">{t("create.planTooLong", { minutes: values.durationMinutes })}</p>}
+          <p className="mt-1.5 text-sm text-muted">{showType ? `${t("create.roundsHelp")} ${t("create.capacityHelp")}` : `${t(FORMAT_HELP_KEYS[values.format])} ${t("create.roundsHelp")} ${t("create.capacityHelp")}`}</p>
+        </div>
+      )}
+
+
+      {playerFields ? (
+        <div>
+          <label className="label">
+            {t("create.note")} <span className="font-normal">({t("common.optional")})</span>
+          </label>
+          <textarea className="textarea" value={values.note} maxLength={500} placeholder={t("create.notePlaceholder")} onChange={(e) => onChange({ note: e.target.value })} />
+        </div>
+      ) : (
+      <>
+      {!compact && levelEl}
+      {compact && beforeMore}
       <div className="border-t border-line pt-4">
         <button type="button" className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
           <span className="min-w-0">
@@ -627,8 +715,28 @@ export function EventFields({
         </button>
         {moreOpen && (
           <div className="mt-5 flex flex-col gap-5 animate-pop">
+      {compact && (
+        <>
+          {lengthEl}
+          {courtEl}
+          <div className="-mt-2">
+            <label className="label">
+              {t("create.venueMapUrl")} <span className="font-normal">({t("common.optional")})</span>
+            </label>
+            <input className="input" type="url" inputMode="url" placeholder={t("create.venueMapUrlPlaceholder")} value={values.venueMapUrl} maxLength={500} onChange={(e) => onChange({ venueMapUrl: e.target.value })} />
+          </div>
+          <div className="-mt-2 text-sm text-muted">
+            {t("create.timezone")}:{" "}
+            {tzPicker}
+          </div>
+          {levelEl}
+        </>
+      )}
       {/* An organiser who is three of four shares a link that says "3 spots left", which is true and
-          reads as though nobody is coming. The names go in before the link is ever shared. */}
+          reads as though nobody is coming. The names go in before the link is ever shared. The create
+          form only (`showType`): the edit form sends no names, so there it held nothing and said
+          nothing (review, 9 November 2026); a match that exists holds a place on its own row. */}
+      {showType && (
       <div>
         <label className="label">{t("create.haveAlready")}</label>
         <textarea className="textarea" rows={3} value={values.haveNames} maxLength={600} onChange={(e) => onChange({ haveNames: e.target.value })} data-testid="have-already" />
@@ -636,6 +744,7 @@ export function EventFields({
         {values.type === "tournament" && values.fixedPairs && <p className="mt-1 text-xs text-muted">{t("pairs.namesHelp")}</p>}
         {past && <PastNames text={values.haveNames} {...past} />}
       </div>
+      )}
       <div>
         <label className="label">{t("create.whenFull")}</label>
         <div className="segment">
@@ -694,9 +803,17 @@ export function EventFields({
               </label>
               <textarea className="textarea" value={values.note} maxLength={500} placeholder={t("create.notePlaceholder")} onChange={(e) => onChange({ note: e.target.value })} />
             </div>
+            {/* "Tournament" as a line at the end of the form, under "More options", not a segment (the owner, 9 November 2026). */}
+            {compact && showType && (
+              <button type="button" className="link self-start text-left text-sm font-semibold" onClick={() => pickType(values.type === "tournament" ? "match" : "tournament")} data-testid="type-line">
+                {t(values.type === "tournament" ? "create.matchLine" : "create.tournamentLine")} →
+              </button>
+            )}
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

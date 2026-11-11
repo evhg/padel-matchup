@@ -13,13 +13,13 @@ import { isValidInviteCode, isValidShareCode } from "@/lib/codes";
 import { emailEnabled } from "@/lib/config";
 import { formatEventDayLong, formatEventTime, tzLabel } from "@/lib/dates";
 import { playersWithEmail } from "@/lib/domain/identity";
-import { inviteView } from "@/lib/domain/heldByName";
+import { inviteStateOf, inviteView } from "@/lib/domain/heldByName";
 import { heldLinkRefusal, heldRecordOf, heldRecordView, provableHere } from "@/lib/domain/heldRecord";
 import { telegramBotId } from "@/lib/telegram/api";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
 import { getSlotByInviteCode, holdsPlaceIn } from "@/lib/domain/queries";
 import { namedByOf } from "@/lib/domain/pairSeats";
-import { mayUseHeldLink } from "@/lib/domain/slots";
+import { liveRefusal, mayUseHeldLink } from "@/lib/domain/slots";
 import { venueWithCourt } from "@/lib/labels";
 import { getSessionPlayer } from "@/lib/session";
 import { withClientMessages } from "@/i18n/withClientMessages";
@@ -67,8 +67,9 @@ async function InvitePage({ params, searchParams }: Props) {
   const name = slot.invitedName ?? "";
   const title = calendarTitle(ev, t(ev.type === "match" ? "event.match" : "event.tournament"));
   const mine = Boolean(me && slot.playerId === me.id);
-  const state: "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled" =
-    ev.status === "cancelled" ? "cancelled" : slot.status === "invited" ? "invited" : slot.status === "declined" ? "declined" : (slot.status === "confirmed" || slot.status === "joined") && mine ? "confirmed_mine" : "gone";
+  const now = new Date();
+  // A place still held on a match that is over offers no "I'm in" and no "Can't make it": both would be refused (`inviteStateOf`).
+  const state = inviteStateOf({ cancelled: ev.status === "cancelled", over: liveRefusal(ev, now) === "past", slotStatus: slot.status, mine });
   // Somebody whose record is in this match already (the organiser checking the link, a player who
   // opened a friend's): "I'm in" would only free this place, so the page asks the server's own rule
   // (`mayUseHeldLink`). The person it is held for, in by another door, keeps "I'm in": it frees the
@@ -85,7 +86,7 @@ async function InvitePage({ params, searchParams }: Props) {
   // and one bounded read of the limits only for a browser that knows nobody.
   const recordId = state === "invited" || state === "declined" ? await heldRecordOf(db, slot) : null;
   const asRecord = Boolean(recordId && !me);
-  const refusal = asRecord ? (slot.player ? await heldLinkRefusal(db, ev, { id: recordId!, name: slot.player.displayName }, new Date()) : "nobody") : null;
+  const refusal = asRecord ? (slot.player ? await heldLinkRefusal(db, ev, { id: recordId!, name: slot.player.displayName }, now) : "nobody") : null;
   const baseView = inviteView(state, Boolean(inAlready), theirs);
   const doors = provableHere({ email: emailEnabled(), telegram: Boolean(telegramBotId()) });
   const view = recordId ? heldRecordView(baseView, state, !me ? "nobody" : me.id === recordId ? "record" : "other", refusal, doors) : baseView;
@@ -182,6 +183,12 @@ async function InvitePage({ params, searchParams }: Props) {
               </Link>
             </div>
           )}
+          {/* From the email's "Can't make it" (`?decline=1`): nothing is declined until the tap below, because mail scanners follow links. One line says so. */}
+          {view === "actions" && decline === "1" && (
+            <p className="mb-3 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold" data-testid="decline-hint">
+              {t("invitePage.declineHint")}
+            </p>
+          )}
           {view === "actions" && <InviteActions code={code} inviteCode={invite} invitedName={name} hasIdentity={Boolean(me)} emailEnabled={emailEnabled()} knownEmail={me?.email ?? null} autoDecline={decline === "1"} reconfirm={false} asRecord={asRecord} askEmail={!byName} />}
           {view === "declined" && (
             <>
@@ -193,7 +200,8 @@ async function InvitePage({ params, searchParams }: Props) {
           {view === "confirmed" && (
             <>
               <h2 className={`text-xl font-extrabold ${waitingAt ? "" : "text-ok"}`}>{waitingAt ? t("event.youAreOnWaitlist", { position: waitingAt }) : `✓ ${t("invitePage.confirmed")}`}</h2>
-              <p className="mt-1 text-sm text-muted">{waitingAt ? t("pairs.inviteWaiting") : t("invitePage.confirmedHelp")}</p>
+              {/* "Add it to your calendar" only where the calendar card below shows: a deployment with no mail has none. */}
+              <p className="mt-1 text-sm text-muted">{waitingAt ? t("pairs.inviteWaiting") : emailEnabled() ? t("invitePage.confirmedHelp") : t("invitePage.confirmedHelpNoMail")}</p>
               {me && <CalendarEmail code={code} email={me.email} emailEnabled={emailEnabled()} member={!waitingAt} invited={invited} byName={byName} className="mt-4" />}
               <Link href={eventHref} className="btn-primary mt-2 w-full">
                 {t("invitePage.goToEvent")}
@@ -208,6 +216,14 @@ async function InvitePage({ params, searchParams }: Props) {
                 {t("invitePage.goToEvent")}
               </Link>
             </>
+          )}
+          {view === "past" && (
+            <div data-testid="invite-past">
+              <h2 className="text-xl font-extrabold">{t("event.past")}</h2>
+              <Link href={eventHref} className="btn-primary mt-4 w-full">
+                {t("invitePage.goToEvent")}
+              </Link>
+            </div>
           )}
           {view === "cancelled" && (
             <>

@@ -11,7 +11,7 @@ import { useOwnNameAutofill } from "@/components/PasskeyAutofill";
  * One category's door: a name (when the visitor has none yet), the partner's name, one button.
  * Done, it shows where the pair landed and the link the partner confirms with.
  */
-export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }: { slug: string; categoryId: string; categoryName: string; hasIdentity: boolean; full: boolean }) {
+export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full, alreadyIn = false }: { slug: string; categoryId: string; categoryName: string; hasIdentity: boolean; full: boolean; /** The viewer is entered in this category already (`enterShown` is false): no form, but a confirmation this form just showed stays after the page refreshes, because the form stays mounted. */ alreadyIn?: boolean }) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -49,6 +49,7 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full }:
       </div>
     );
   }
+  if (alreadyIn) return null;
   if (!open) {
     return (
       <button type="button" className={`${full ? "btn-ghost" : "btn-primary"} btn-sm mt-3`} onClick={() => setOpen(true)} data-testid={`enter-${categoryId}`}>

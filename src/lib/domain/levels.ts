@@ -269,13 +269,38 @@ export type RangeWaiver = "ok" | "unverified" | null;
  * is a past partner on a confirmed-levels-only match: the range no longer holds them, a confirmed level
  * is what they need, so the bar asks for one (the verifier chips) and never says "outside the range".
  */
-export function joinBarLevel(o: { range: LevelRange | null; level: number | null; verifiedOnly: boolean; verified: boolean; waived: RangeWaiver }): { needsLevel: boolean; outOfRange: boolean; unverified: boolean } {
+export function joinBarLevel(o: { range: LevelRange | null; level: number | null; verifiedOnly: boolean; verified: boolean; waived: RangeWaiver; held?: boolean }): { needsLevel: boolean; outOfRange: boolean; unverified: boolean } {
+  // A place the organiser holds for this very record: the server skips the range and asks no level for it
+  // (`joinWithPolicy`), so the bar says Join and asks for nothing (review, 9 November 2026: it read "Ask to
+  // join" and "Your level is outside", and the tap seated the player).
+  if (o.held) return { needsLevel: false, outOfRange: false, unverified: false };
   const fit = levelFit(o.range, o.level);
   return {
     needsLevel: Boolean(o.range) && o.level == null,
     outOfRange: !o.waived && (fit === "below" || fit === "above"),
     unverified: o.waived === "unverified" || (!o.waived && Boolean(o.range) && o.verifiedOnly && fit === "ok" && !o.verified),
   };
+}
+
+/** Whether a join with this reading of the level asks the organiser instead of taking a place: the bar's "Ask to join". */
+export const joinAsks = (r: { outOfRange: boolean; unverified: boolean }): boolean => r.outOfRange || r.unverified;
+
+/**
+ * Whether the page offers "Be their partner" to this viewer on a fixed-pairs night: the page's side of
+ * `partnerAdmission`, from what the page read already (`waived`, `rangeWaiverAt`). The organiser and a
+ * player with a place here pair with no check; a viewer the range would refuse, or a browser that knows
+ * nobody on a ranged night, joins through the Join button, which asks the level (review, 9 November
+ * 2026: the button showed, and the tap answered with words about a level the player already had).
+ */
+export function partnerOffered(
+  ev: { levelMin: number | null; levelMax: number | null; levelVerifiedOnly?: boolean | null },
+  me: { level: number | null | undefined; levelVerifiedLevel?: number | null } | null,
+  o: { organiser: boolean; seated: boolean; waived: RangeWaiver },
+): boolean {
+  if (!hasRange({ min: ev.levelMin, max: ev.levelMax }) || o.organiser || o.seated) return true;
+  if (!me) return false;
+  const fit = admission(ev, me);
+  return fit === "ok" || (rangeHolds(fit) && o.waived === "ok");
 }
 
 /**

@@ -29,7 +29,7 @@ import {
 } from "@/lib/domain/slots";
 import { joinGroup } from "@/lib/domain/groups";
 import { setCourtBooked } from "@/lib/domain/courtBooked";
-import { formatLevel } from "@/lib/domain/levels";
+import { formatLevel, hasRange } from "@/lib/domain/levels";
 import { joinWithPolicy, partnerAdmission, wasComplete } from "@/lib/domain/joining";
 import { bePartner, pairSingles, splitPair } from "@/lib/domain/pairSeats";
 import { afterConfirm, afterJoin, afterLeave, afterRelease } from "@/lib/aftermath";
@@ -164,14 +164,29 @@ export async function joinAction(code: string, name?: string, level?: number | n
  * "Be their partner" on a fixed-pairs night: the player takes the place beside a single on the list.
  * Somebody new is joined as any join is, with its notices (`afterJoin`); a ranged night holds them to
  * the range the way the Join button does, and an ask to join goes through that button.
+ *
+ * Before any record is made, the typed name meets the join's own name rules (`whoJoins`: a held place
+ * of the name, a seated record of the name), and a browser that knows nobody on a ranged night is sent
+ * to the Join button, which asks the level. Until 9 November 2026 this door made the record first, so a
+ * refused tap left a new record behind, and a typed "Danny" beside a seated Danny made a second Danny.
  */
 export async function bePartnerAction(code: string, slotId: string, name?: string, hint?: unknown): Promise<ActionResult<{ outcome: "paired" }>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const before = wasComplete(detail);
-    const me = await requirePlayer(db, name);
-    await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     const ev = detail.event;
+    const known = await getSessionPlayer(db);
+    const namesHere = [...detail.roster, ...detail.waitlist].filter((s) => s.status !== "empty" && s.status !== "declined").map((s) => s.player?.displayName ?? s.invitedName);
+    const make = async () => {
+      // This row has no room for a level: a ranged night's newcomer joins with the Join button.
+      if (hasRange({ min: ev.levelMin, max: ev.levelMax })) throw new ActionFailure("level_required");
+      return requirePlayer(db, name, { namesHere });
+    };
+    const who = await whoJoins(detail, known, name, new Date(), make, { keepsRecord: (id) => hasLifeOutside(db, id, ev.id) });
+    if ("held" in who) throw new ActionFailure("name_held");
+    if ("seated" in who) throw new ActionFailure("name_seated");
+    const me = who.player;
+    await assertRate(db, "join", me.id, LIMITS.joinsPerPlayerPerHour, "hour");
     // Somebody already in (the organiser let them in) pairs without a second check of the range.
     const seated = [...detail.roster, ...detail.waitlist].some((s) => s.playerId === me.id);
     const gate = await partnerAdmission(db, ev, me, seated);
@@ -610,11 +625,16 @@ export async function claimPaidAction(code: string): Promise<ActionResult<null>>
   });
 }
 
-/** The organiser says it arrived, or takes it back. The domain refuses anyone else. */
+/**
+ * The organiser says it arrived, or takes it back. The domain refuses anyone else. `requireCreator`
+ * proved the organiser, by the session or by the manage link, so the tap is the creator's, as
+ * `verifyLevelsAction` attributes it: a co-organiser on the manage link, with no session or with
+ * their own, tapped every chip in vain until 9 November 2026 (the domain saw a stranger).
+ */
 export async function setPaidAction(code: string, slotId: string, paid: boolean): Promise<ActionResult<null>> {
   return runA(async () => {
-    const { db, detail, viewer } = await requireCreator(code);
-    await setSlotPaid(db, { eventId: detail.event.id, slotId, actorPlayerId: viewer.player?.id ?? "", paid });
+    const { db, detail } = await requireCreator(code);
+    await setSlotPaid(db, { eventId: detail.event.id, slotId, actorPlayerId: detail.event.creatorPlayerId, paid });
     revalidatePath(`/${code}`);
     return null;
   });

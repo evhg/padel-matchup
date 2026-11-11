@@ -8,7 +8,6 @@ import { checkSets, MAX_SETS, setsComplete, tally, typedSets, type DraftSet } fr
 import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 import { SameTimeButton } from "./SameTimeButton";
-import { ShareButtons } from "./ShareSheet";
 
 type P = { id: string; name: string; team: "a" | "b" | null; level?: number | null };
 type S = { setNumber: number; sideA: number; sideB: number };
@@ -28,6 +27,8 @@ export function ScorePanel({
   weeklyOffered = false,
   weeklyWhen = null,
   card,
+  prompt = null,
+  playAgainQuiet = false,
 }: {
   code: string;
   scores: S[];
@@ -44,8 +45,16 @@ export function ScorePanel({
   weeklyOffered?: boolean;
   /** The weekly slot in words, in the page's language as it renders now ("Sat 18:00"). */
   weeklyWhen?: string | null;
-  /** The shareable result card, once a result exists. */
+  /** The shareable result card, once a result exists. Its WhatsApp share is the bottom bar's; Telegram and Copy are under "Other ways to share". */
   card?: ResultCardView | null;
+  /**
+   * The organiser's question on a match over with no score ("How did it go? Enter the final score."): a
+   * sentence over "Enter score", which is the one control for it (the owner, 9 November 2026). It was a
+   * banner of its own that led to the same form.
+   */
+  prompt?: string | null;
+  /** A seated player: "Play again" is a quiet button, because the bar's result share is their one primary. */
+  playAgainQuiet?: boolean;
 }) {
   const t = useTranslations();
   // Only the fact that the offer was shown is latched: the tap makes the crew, the page then renders
@@ -172,18 +181,18 @@ export function ScorePanel({
                 <img src={card.image} alt={card.alt} width={1200} height={630} className="block h-auto w-full" />
               </a>
               {card.photo && <PhotoButton code={code} hasPhoto={card.photo.has} canRemove={card.photo.canRemove} />}
-              <ShareButtons url={card.shareUrl} text={card.shareText} imageUrl={card.image} />
             </div>
           )}
           {canPlayAgain && playAgain && (
             <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
-              <PlayAgainButton code={code} offer={playAgain} />
+              <PlayAgainButton code={code} offer={playAgain} quiet={playAgainQuiet} />
               {weekly && weeklyWhen && <SameTimeButton code={code} when={weeklyWhen} />}
             </div>
           )}
         </div>
       )}
 
+      {!editing && prompt && scores.length === 0 && <p className="mt-2 font-bold" data-testid="score-prompt">🏆 {prompt}</p>}
       {!editing && canEdit && (
         <button type="button" className={`${scores.length ? "btn-ghost btn-sm" : "btn-primary w-full"} mt-4`} onClick={() => setEditing(true)}>
           {scores.length ? t("score.edit") : t("score.enter")}

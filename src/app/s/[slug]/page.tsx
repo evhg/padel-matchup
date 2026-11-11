@@ -111,7 +111,7 @@ async function SeriesPage({ params }: Props) {
                   {formatEventTime(next.event.startsAt, next.event.tz, locale)}
                   {next.event.venueName ? ` · ${next.event.venueName}` : ""}
                 </div>
-                <div className={`mt-1 text-sm font-bold ${next.spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{next.spotsLeft > 0 ? t("event.spotsLeft", { count: next.spotsLeft }) : t("venue.full")}</div>
+                <div className={`mt-1 text-sm font-bold ${next.spotsLeft > 0 ? "text-ok" : "text-warn"}`}>{next.spotsLeft > 0 ? t("event.spotsLeft", { count: next.spotsLeft }) : t(next.event.whenFull === "closed" ? "venue.fullClosed" : "venue.full")}</div>
               </div>
               {next.spotsLeft > 0 || next.event.whenFull !== "closed" ? (
                 <Link href={`/${next.event.code}?s=series`} prefetch={false} className="btn-primary shrink-0">
@@ -119,7 +119,7 @@ async function SeriesPage({ params }: Props) {
                 </Link>
               ) : (
                 <Link href={`/${next.event.code}?s=series`} prefetch={false} className="btn-ghost shrink-0">
-                  {t("venue.full")}
+                  {t("venue.fullClosed")}
                 </Link>
               )}
             </div>

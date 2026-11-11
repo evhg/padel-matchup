@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { addPhotoAction, removePhotoAction } from "@/actions/photos";
+import { errorLine } from "@/lib/errorLine";
 
 /**
  * "Add the court photo": the browser shrinks it to a card-sized JPEG before it leaves the
@@ -14,6 +15,7 @@ import { addPhotoAction, removePhotoAction } from "@/actions/photos";
  */
 export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPhoto: boolean; canRemove: boolean }) {
   const t = useTranslations("card");
+  const tr = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -65,10 +67,23 @@ export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPh
 
   if (hasPhoto) {
     if (!canRemove) return null;
+    // The card goes back to its plain picture for everybody, so the tap asks first; a refusal says why.
+    const remove = () => {
+      if (!confirm(t("removePhotoConfirm"))) return;
+      setError(null);
+      start(async () => {
+        const r = await removePhotoAction(code);
+        if (!r.ok) return setError(tr(`errors.${errorLine(r.error)}`));
+        router.refresh();
+      });
+    };
     return (
-      <button type="button" className="text-xs text-faint hover:text-muted" disabled={pending} onClick={() => start(async () => { await removePhotoAction(code); router.refresh(); })} data-testid="photo-remove">
-        {t("removePhoto")}
-      </button>
+      <div className="flex flex-col gap-1">
+        <button type="button" className="text-xs text-faint hover:text-muted" disabled={pending} onClick={remove} data-testid="photo-remove">
+          {t("removePhoto")}
+        </button>
+        {error && <p className="text-xs font-semibold text-danger">{error}</p>}
+      </div>
     );
   }
   return (

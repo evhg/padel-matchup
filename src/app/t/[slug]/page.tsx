@@ -17,7 +17,7 @@ import { getDb } from "@/db";
 import { baseUrl, shortHost } from "@/lib/config";
 import { competitionDraws } from "@/lib/domain/competitionDraw";
 import { isDayOfPlay, orderOfPlay } from "@/lib/domain/competitionSchedule";
-import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken, pairSummary } from "@/lib/domain/competitions";
+import { competitionPage, entriesOf, getCompetition, isOrganizer, pairByClaimToken, pairSummary, enterShown, withdrawRefusal } from "@/lib/domain/competitions";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
 import { bandLabel, dayRange } from "@/lib/tournamentText";
@@ -184,7 +184,8 @@ async function TournamentPage({ params, searchParams }: Props) {
                         </div>
                         <div className="text-sm text-muted">{e.status === "waiting" ? `${t("tournament.waiting")} · #${e.position}` : t("tournament.entered", { category: v.category.name })}</div>
                       </div>
-                      <WithdrawButton slug={c.slug} pairId={e.id} />
+                      {/* Gone once the category's draw is done or the last day has passed: the server refuses it then too. */}
+                      {!withdrawRefusal(c, v.category, new Date()) && <WithdrawButton slug={c.slug} pairId={e.id} spotGoesOn={e.status !== "waiting" && (page.categories.find((k) => k.category.id === v.category.id)?.waiting.length ?? 0) > 0} />}
                     </div>
                     {e.claimToken && e.p1PlayerId === me?.id && (
                       <div className="flex flex-col gap-2 text-xs">
@@ -250,7 +251,7 @@ async function TournamentPage({ params, searchParams }: Props) {
                     </ol>
                   </div>
                 )}
-                {c.status === "open" && category.drawStatus === "none" && <EnterForm slug={c.slug} categoryId={category.id} categoryName={category.name} hasIdentity={Boolean(me)} full={full} />}
+                {c.status === "open" && category.drawStatus === "none" && <EnterForm slug={c.slug} categoryId={category.id} categoryName={category.name} hasIdentity={Boolean(me)} full={full} alreadyIn={!enterShown(c, category, mine)} />}
                 {draws.get(category.id) && (
                   <DrawView view={draws.get(category.id)!} slug={c.slug} tz={c.tz} />
                 )}

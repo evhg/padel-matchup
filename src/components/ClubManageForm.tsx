@@ -2,10 +2,34 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { refreshClubAction, updateClubAction } from "@/actions/clubs";
+import { refreshClubAction, updateClubAction, type UpdateClubInput } from "@/actions/clubs";
 import { COUNTRIES, countryName } from "@/lib/domain/countries";
 
 export type ClubFormValues = { website: string; bookingUrl: string; mapUrl: string; courts: string; courtsIndoor: string; courtsOutdoor: string; about: string; place: string; country: string; opensAt: string; closesAt: string; availabilityUrl: string; availabilityKind: string };
+
+/**
+ * What Save sends. Each text field goes as typed, an emptied one as "": a key whose value is
+ * `undefined` never reaches a server action (React's reply decoder deletes it), so `v.website ||
+ * undefined` kept the old link after a manager cleared it. `cleanClubInput` turns "" into null. The
+ * feed's two fields go only while their section is open: a closed section keeps the feed as it is.
+ */
+export function clubFormPayload(v: ClubFormValues, feedOpen: boolean): UpdateClubInput {
+  return {
+    website: v.website,
+    bookingUrl: v.bookingUrl,
+    mapUrl: v.mapUrl,
+    courts: v.courts ? Number(v.courts) : null,
+    courtsIndoor: v.courtsIndoor === "" ? null : Number(v.courtsIndoor),
+    courtsOutdoor: v.courtsOutdoor === "" ? null : Number(v.courtsOutdoor),
+    about: v.about,
+    place: v.place,
+    country: v.country,
+    opensAt: v.opensAt,
+    closesAt: v.closesAt,
+    availabilityUrl: feedOpen ? v.availabilityUrl : undefined,
+    availabilityKind: feedOpen ? v.availabilityKind : undefined,
+  };
+}
 
 /** Everything a club can change, one screen; the feed section folds because most clubs skip it. */
 export function ClubManageForm({ token, initial }: { token: string; initial: ClubFormValues }) {
@@ -28,21 +52,7 @@ export function ClubManageForm({ token, initial }: { token: string; initial: Clu
     e.preventDefault();
     setNote(null);
     start(async () => {
-      const r = await updateClubAction(token, {
-        website: v.website || undefined,
-        bookingUrl: v.bookingUrl || undefined,
-        mapUrl: v.mapUrl || undefined,
-        courts: v.courts ? Number(v.courts) : null,
-        courtsIndoor: v.courtsIndoor === "" ? null : Number(v.courtsIndoor),
-        courtsOutdoor: v.courtsOutdoor === "" ? null : Number(v.courtsOutdoor),
-        about: v.about || undefined,
-        place: v.place || undefined,
-        country: v.country || undefined,
-        opensAt: v.opensAt || undefined,
-        closesAt: v.closesAt || undefined,
-        availabilityUrl: feedOpen ? v.availabilityUrl || undefined : undefined,
-        availabilityKind: feedOpen ? v.availabilityKind || undefined : undefined,
-      });
+      const r = await updateClubAction(token, clubFormPayload(v, feedOpen));
       setNote(r.ok ? [t("club.saved"), feedNote(r.data)].filter(Boolean).join(" · ") : t("common.somethingWrong"));
     });
   };

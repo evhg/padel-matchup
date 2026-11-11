@@ -95,6 +95,27 @@ export async function switchLang(page, l) {
   await target.click();
 }
 /**
+ * Opens the create form's "More options" when it is closed (the owner, 9 November 2026: the length, the
+ * court, the map link, the time zone, the level and "Tournament" moved behind it). A collapsing control
+ * gets its own opener in the suites, as the language pill did.
+ */
+export async function openMore(page) {
+  const more = page.locator("main button[aria-expanded]", { hasText: "More options" }).first();
+  if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+}
+/** Opens the "Settings" line on My matches (the same decision): everything set there is behind it. A signed-out page has none, and the call does nothing. */
+export async function openSettings(page) {
+  const fold = page.getByTestId("me-settings");
+  // Signed out, My matches is the way back in and has no settings: nothing to open. The page is rendered on the server, so a count after the visit is the answer.
+  if ((await fold.count()) === 0) return;
+  if (!(await fold.evaluate((d) => d.open))) await page.locator("[data-testid=me-settings] > summary").click();
+}
+/** Opens the match page's "Other ways to share" (Telegram, Copy link, the QR and the story image). */
+export async function openOtherShares(page) {
+  const fold = page.getByTestId("other-shares");
+  if (!(await fold.evaluate((d) => d.open))) await page.locator("[data-testid=other-shares] > summary").click();
+}
+/**
  * Does a day label hold the widest label its format prints, on one line, inside its box? Today's date
  * proves little: "FRI, OCT 9" fits a column that "DOM, 13 SEPT" overflows. So the label takes every day
  * of a year in English, Russian and Spanish, in the format it shows (with the weekday when its text has

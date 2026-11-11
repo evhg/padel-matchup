@@ -147,16 +147,20 @@ describe("the question renders the record's own doors, the email code first", ()
     expect(at("telegram")).toBeLessThan(at("passkey"));
   });
 
-  it("none: no door at all, only \"I'm a different Danny\"", () => {
+  it("none: no door at all, only \"I'm a different Danny\", and the question names the way in that is left", () => {
     const html = ask(NO_DOORS);
     expect(shown(html)).toEqual([]);
     expect(html).not.toContain('data-testid="seated-doors"');
     expect(html).toContain("I&#x27;m a different Danny");
+    // "Sign in as Danny?" with nothing to sign in with read as a dead end (review, 9 November 2026).
+    expect(html).toContain("Danny is in this match. Is it you? Open your personal link or ask the organizer.");
+    expect(html).not.toContain("Sign in as Danny?");
   });
 
-  it("a record \"That's me\" signs in gets its two taps and no door", () => {
+  it("a record \"That's me\" signs in gets its two taps and no door, under the question that asks to sign in", () => {
     const html = ask({ email: false, telegram: false, passkey: false }, ["Danny"]);
     expect(html).toContain('data-testid="thats-me"');
     expect(shown(html)).toEqual([]);
+    expect(html).toContain("Danny is in this match. Sign in as Danny?");
   });
 });

@@ -242,6 +242,18 @@ export async function appendFeedbackReply(db: Db, id: string, replyText: string,
 
 export type Delivery = { status: "sent" | "failed" | "capped" | "no_channel" | "not_found"; error?: string };
 
+/**
+ * Whether the answer to a note from the web form can reach its writer, and by which way, in the order
+ * `deliverToPerson` tries for it: the signed-in player's Telegram, an address typed on the form, the
+ * player's own address, then a phone with notifications on (`hasPush`). The thank-you speaks by it:
+ * until 9 November 2026 it knew only Telegram and the typed address, so a signed-in player with an
+ * address or a phone was told the answer could not reach them, while the answer did (button audit, F17). Pure.
+ */
+export function webReplyRoute(player: { telegramId: number | null; email: string | null } | null, typedEmail: string | null, hasPush: boolean): { replyVia: "telegram" | "email" | null; canReply: boolean } {
+  const replyVia = player?.telegramId ? "telegram" : typedEmail || player?.email ? "email" : null;
+  return { replyVia, canReply: replyVia !== null || (player !== null && hasPush) };
+}
+
 /** The one way out: the person hears from us on the channel they used. */
 export async function deliverToPerson(item: Feedback, text: string, fetchImpl: typeof fetch = fetch, db?: Db): Promise<Delivery> {
   const message = text.trim().slice(0, FEEDBACK_LIMITS.messageMax);

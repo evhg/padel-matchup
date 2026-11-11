@@ -73,7 +73,7 @@ async function releaseFor(db: Db, p: Player, n: TellNotice): Promise<Release> {
   return recordNotice(db, { ...n, playerId: p.id });
 }
 
-export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard: Keyboard | undefined, o: { notice: TellNotice; /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string; /** The notice as a WhatsApp template. Without it WhatsApp is never tried: a coach's notices have no template. */ whatsapp?: WaNotice; /** False leaves the email's "get this on Telegram" line out: its link binds whoever taps it to this player, so a message meant to be forwarded must not carry it. */ bind?: boolean }): Promise<Release> {
+export async function tell(db: Db, p: Player | null | undefined, text: string, keyboard: Keyboard | undefined, o: { notice: TellNotice; /** A last line for Telegram only, the way a reply to this message is recognised ("↳ ks:…"); email and push never carry it. */ trailer?: string; /** The email's button, when "Open the match" is not what its link does. */ label?: string; /** The page email and push open when no button carries a link: where the same thing is done on the web. */ link?: string; /** The notice as a WhatsApp template. Without it WhatsApp is never tried: a coach's notices have no template. */ whatsapp?: WaNotice; /** False leaves the email's "get this on Telegram" line out: its link binds whoever taps it to this player, so a message meant to be forwarded must not carry it. */ bind?: boolean }): Promise<Release> {
   if (!p) return "off";
   const release = await releaseFor(db, p, o.notice);
   if (release !== "now") return release;
@@ -93,7 +93,7 @@ export async function tell(db: Db, p: Player | null | undefined, text: string, k
     if (via === "none") return release;
   }
   // The link a button would have opened, so the fallback is not a dead end.
-  const url = keyboard?.inline_keyboard.flat().find((b) => b.url)?.url ?? `${baseUrl()}/coach`;
+  const url = keyboard?.inline_keyboard.flat().find((b) => b.url)?.url ?? o.link ?? `${baseUrl()}/coach`;
   if (via === "email" && p.email) {
     const { t } = await translatorFor(p.locale);
     const [heading, ...rest] = text.split("\n");
@@ -109,6 +109,16 @@ export async function tell(db: Db, p: Player | null | undefined, text: string, k
   }
   return release;
 }
+
+/**
+ * Where a coach notice opens outside Telegram, with a label that says what is there. A button in the
+ * chat is a callback, which email and push cannot carry, so the link used to fall back to /coach for
+ * everybody: a student who had only email met the coach setup page, under "Open the match".
+ */
+const studentDoor = (coach: Coach, s: CoachBotStrings) => ({ link: `${baseUrl()}/c/${coach.handle}`, label: s.openLessons });
+const coachDoor = (s: CoachBotStrings) => ({ link: `${baseUrl()}/coach`, label: s.openSchedule });
+/** A join request and the money are on the students screen, at the student's own row. */
+const studentsDoor = (s: CoachBotStrings, studentId: string) => ({ link: `${baseUrl()}/coach/students#s-${studentId}`, label: s.openStudents });
 
 /** A lesson as a notice row keeps: the hour and the coach's zone, and the other person's name. Never a link. */
 const lessonAt = (at: Date, coach: Coach, name: string) => ({ at: at.toISOString(), tz: coach.tz, name });
@@ -128,11 +138,11 @@ export async function notifyLessonBooked(db: Db, n: LessonNotice): Promise<void>
   let coach: Release = "off";
   if (n.by === "coach") {
     const s = coachStrings(coachBotLocale(n.student.locale));
-    student = await tell(db, n.student, s.coachBooked(n.coach.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale), pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${n.lesson.id}` }]] }, { notice: { sender: "lessonBooked", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) } });
+    student = await tell(db, n.student, s.coachBooked(n.coach.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale), pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${n.lesson.id}` }]] }, { notice: { sender: "lessonBooked", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) }, ...studentDoor(n.coach, s) });
   }
   if (n.by === "student" && coachPlayer) {
     const s = coachStrings(coachBotLocale(coachPlayer.locale));
-    coach = await tell(db, coachPlayer, s.studentBooked(n.student.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale), pkgText(s, n.pkg)), undefined, { notice: { sender: "lessonBooked", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.student.displayName) } });
+    coach = await tell(db, coachPlayer, s.studentBooked(n.student.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale), pkgText(s, n.pkg)), undefined, { notice: { sender: "lessonBooked", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.student.displayName) }, ...coachDoor(s) });
   }
   if (filed(n.by, "student", student)) await emailLesson(n, "REQUEST").catch(() => undefined);
   if (filed(n.by, "coach", coach)) await emailLessonToCoach(coachPlayer, n, "REQUEST").catch(() => undefined);
@@ -147,11 +157,11 @@ export async function notifyLessonCancelled(db: Db, n: LessonNotice & { outcome:
     const alts = n.alternatives ?? [];
     const text = s.coachCancelled(n.coach.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale)) + (alts.length ? `\n${s.altTimes}` : "");
     const keyboard = alts.length ? { inline_keyboard: [alts.map((d) => ({ text: whenLabel(d, n.coach.tz, n.student.locale), callback_data: `lb:${n.coach.id}:${epochMin(d)}` }))] } : undefined;
-    student = await tell(db, n.student, text, keyboard, { notice: { sender: "lessonCancelled", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) } });
+    student = await tell(db, n.student, text, keyboard, { notice: { sender: "lessonCancelled", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) }, ...studentDoor(n.coach, s) });
   }
   if (n.by === "student" && coachPlayer) {
     const s = coachStrings(coachBotLocale(coachPlayer.locale));
-    coach = await tell(db, coachPlayer, s.studentCancelled(n.student.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale), outcomeText(s, n.outcome)), undefined, { notice: { sender: "lessonCancelled", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.student.displayName) } });
+    coach = await tell(db, coachPlayer, s.studentCancelled(n.student.displayName, whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale), outcomeText(s, n.outcome)), undefined, { notice: { sender: "lessonCancelled", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.student.displayName) }, ...coachDoor(s) });
   }
   if (filed(n.by, "student", student)) await emailLesson(n, "CANCEL").catch(() => undefined);
   if (filed(n.by, "coach", coach)) await emailLessonToCoach(coachPlayer, n, "CANCEL").catch(() => undefined);
@@ -172,7 +182,7 @@ export async function notifyLessonMoved(db: Db, n: { from: Lesson; to: Lesson; c
   const fromWhen = whenLabel(n.from.startsAt, n.coach.tz, told.locale);
   const toWhen = whenLabel(n.to.startsAt, n.coach.tz, told.locale);
   const s = coachStrings(coachBotLocale(told.locale));
-  const release = await tell(db, told, n.by === "student" ? s.studentMoved(n.student.displayName, fromWhen, toWhen) : s.coachMoved(n.coach.displayName, fromWhen, toWhen), undefined, { notice: { sender: "lessonMoved", startsAt: n.to.startsAt, tz: n.coach.tz, params: lessonAt(n.to.startsAt, n.coach, n.by === "student" ? n.student.displayName : n.coach.displayName) } });
+  const release = await tell(db, told, n.by === "student" ? s.studentMoved(n.student.displayName, fromWhen, toWhen) : s.coachMoved(n.coach.displayName, fromWhen, toWhen), undefined, { notice: { sender: "lessonMoved", startsAt: n.to.startsAt, tz: n.coach.tz, params: lessonAt(n.to.startsAt, n.coach, n.by === "student" ? n.student.displayName : n.coach.displayName) }, ...(n.by === "student" ? coachDoor(s) : studentDoor(n.coach, s)) });
   // The student's calendar entry moves with it: one REQUEST at the new hour replaces the old.
   if (filed(n.by, "student", release)) await emailLesson({ lesson: n.to, coach: n.coach, student: n.student, pkg: null, by: n.by }, "REQUEST").catch(() => undefined);
   // The move lands in the coach's calendar too: same UID, new hour, so the old entry is replaced.
@@ -186,7 +196,7 @@ export async function notifyPaidClaimed(db: Db, n: { coach: Coach; student: Play
   const when = whenLabel(n.lesson.startsAt, n.coach.tz, coachPlayer.locale);
   const amount = n.lesson.amount ? `${n.lesson.amount} ${n.coach.currency}` : "";
   const s = coachStrings(coachBotLocale(coachPlayer.locale));
-  await tell(db, coachPlayer, s.paidClaimed(n.student.displayName, when, amount), undefined, { notice: { sender: "paidClaimed", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.student.displayName) } });
+  await tell(db, coachPlayer, s.paidClaimed(n.student.displayName, when, amount), undefined, { notice: { sender: "paidClaimed", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.student.displayName) }, ...studentsDoor(s, n.student.id) });
 }
 
 /**
@@ -197,7 +207,7 @@ export async function notifyPaidClaimed(db: Db, n: { coach: Coach; student: Play
 export async function notifyPaidConfirmed(db: Db, n: { coach: Coach; student: Player; lesson: Lesson }): Promise<void> {
   const when = whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale);
   const s = coachStrings(coachBotLocale(n.student.locale));
-  await tell(db, n.student, s.paidConfirmed(n.coach.displayName, when), undefined, { notice: { sender: "paidConfirmed", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) } });
+  await tell(db, n.student, s.paidConfirmed(n.coach.displayName, when), undefined, { notice: { sender: "paidConfirmed", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) }, ...studentDoor(n.coach, s) });
 }
 
 /** A student came in through the coach's own link: one quiet line, no button, nothing to decide. */
@@ -205,7 +215,7 @@ export async function notifyStudentJoined(db: Db, coach: Coach, student: Player)
   const coachPlayer = await getPlayerById(db, coach.playerId);
   if (!coachPlayer) return;
   const s = coachStrings(coachBotLocale(coachPlayer.locale));
-  await tell(db, coachPlayer, s.studentJoined(student.displayName), undefined, { notice: { sender: "studentJoined", params: { name: student.displayName } } });
+  await tell(db, coachPlayer, s.studentJoined(student.displayName), undefined, { notice: { sender: "studentJoined", params: { name: student.displayName } }, ...studentsDoor(s, student.id) });
 }
 
 /** A student took a package from the page. Unpaid until the coach says so; this is what asks them to look. */
@@ -213,14 +223,14 @@ export async function notifyPackageTaken(db: Db, n: { coach: Coach; student: Pla
   const coachPlayer = await getPlayerById(db, n.coach.playerId);
   if (!coachPlayer) return;
   const s = coachStrings(coachBotLocale(coachPlayer.locale));
-  await tell(db, coachPlayer, s.packageTaken(n.student.displayName, n.pkg.size, n.pkg.amount != null ? `${n.pkg.amount} ${n.pkg.currency}` : ""), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/coach/students#s-${n.student.id}` }]] }, { notice: { sender: "packageTaken", params: { name: n.student.displayName, count: n.pkg.size } } });
+  await tell(db, coachPlayer, s.packageTaken(n.student.displayName, n.pkg.size, n.pkg.amount != null ? `${n.pkg.amount} ${n.pkg.currency}` : ""), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/coach/students#s-${n.student.id}` }]] }, { notice: { sender: "packageTaken", params: { name: n.student.displayName, count: n.pkg.size } }, label: s.openStudents });
 }
 
 export async function notifyStudentRequest(db: Db, coach: Coach, student: Player): Promise<void> {
   const coachPlayer = await getPlayerById(db, coach.playerId);
   if (!coachPlayer) return;
   const s = coachStrings(coachBotLocale(coachPlayer.locale));
-  await tell(db, coachPlayer, s.studentAsked(student.displayName), { inline_keyboard: [[{ text: s.accept, callback_data: `cs:${student.id}` }]] }, { notice: { sender: "studentAsked", params: { name: student.displayName } } });
+  await tell(db, coachPlayer, s.studentAsked(student.displayName), { inline_keyboard: [[{ text: s.accept, callback_data: `cs:${student.id}` }]] }, { notice: { sender: "studentAsked", params: { name: student.displayName } }, ...studentsDoor(s, student.id) });
 }
 
 /** A student the coach added by hand, with an email: one note with the coach's link, nothing else. */
@@ -244,7 +254,7 @@ export async function notifyStudentInvited(db: Db, coach: Coach, student: Player
 
 export async function notifyStudentAccepted(db: Db, coach: Coach, student: Player): Promise<void> {
   const s = coachStrings(coachBotLocale(student.locale));
-  await tell(db, student, s.youWereAccepted(coach.displayName), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] }, { notice: { sender: "studentAccepted", params: { name: coach.displayName } } });
+  await tell(db, student, s.youWereAccepted(coach.displayName), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] }, { notice: { sender: "studentAccepted", params: { name: coach.displayName } }, label: s.openLessons });
 }
 
 /** A freed slot offered to the first in line: one message with a button, thirty minutes on the clock. */
@@ -252,12 +262,12 @@ export async function notifyOffer(db: Db, coach: Coach, offer: Offer): Promise<v
   const student = offer.player;
   const when = whenLabel(offer.startsAt, coach.tz, student.locale);
   const s = coachStrings(coachBotLocale(student.locale));
-  await tell(db, student, s.offer(coach.displayName, when, OFFER_MINUTES), { inline_keyboard: [[{ text: s.offerTake, callback_data: `lo:${offer.entry.id}` }, { text: s.offerNo, callback_data: `lw:${offer.entry.id}` }]] }, { notice: { sender: "lessonOffer", startsAt: offer.startsAt, tz: coach.tz, params: lessonAt(offer.startsAt, coach, coach.displayName) } });
+  await tell(db, student, s.offer(coach.displayName, when, OFFER_MINUTES), { inline_keyboard: [[{ text: s.offerTake, callback_data: `lo:${offer.entry.id}` }, { text: s.offerNo, callback_data: `lw:${offer.entry.id}` }]] }, { notice: { sender: "lessonOffer", startsAt: offer.startsAt, tz: coach.tz, params: lessonAt(offer.startsAt, coach, coach.displayName) }, ...studentDoor(coach, s) });
 }
 
 export async function notifyOfferLapsed(db: Db, coach: Coach, student: Player, startsAt: Date): Promise<void> {
   const s = coachStrings(coachBotLocale(student.locale));
-  await tell(db, student, s.offerLapsed(whenLabel(startsAt, coach.tz, student.locale)), undefined, { notice: { sender: "offerLapsed", startsAt: startsAt, tz: coach.tz, params: lessonAt(startsAt, coach, coach.displayName) } });
+  await tell(db, student, s.offerLapsed(whenLabel(startsAt, coach.tz, student.locale)), undefined, { notice: { sender: "offerLapsed", startsAt: startsAt, tz: coach.tz, params: lessonAt(startsAt, coach, coach.displayName) }, ...studentDoor(coach, s) });
 }
 
 /** A time outside the hours: the coach gets one yes/no. Telegram when they have it, email otherwise. */
@@ -266,7 +276,7 @@ export async function notifyRequest(db: Db, coach: Coach, student: Player, reque
   if (!coachPlayer) return;
   const when = whenLabel(request.startsAt, coach.tz, coachPlayer.locale);
   const s = coachStrings(coachBotLocale(coachPlayer.locale));
-  await tell(db, coachPlayer, s.requestAsk(student.displayName, when) + (request.note ? `\n“${request.note}”` : ""), { inline_keyboard: [[{ text: `✓ ${s.requestYes}`, callback_data: `rq:${request.id}:y` }, { text: `✕ ${s.requestNo}`, callback_data: `rq:${request.id}:n` }]] }, { notice: { sender: "lessonRequest", startsAt: request.startsAt, tz: coach.tz, params: lessonAt(request.startsAt, coach, student.displayName) } });
+  await tell(db, coachPlayer, s.requestAsk(student.displayName, when) + (request.note ? `\n“${request.note}”` : ""), { inline_keyboard: [[{ text: `✓ ${s.requestYes}`, callback_data: `rq:${request.id}:y` }, { text: `✕ ${s.requestNo}`, callback_data: `rq:${request.id}:n` }]] }, { notice: { sender: "lessonRequest", startsAt: request.startsAt, tz: coach.tz, params: lessonAt(request.startsAt, coach, student.displayName) }, ...coachDoor(s) });
 }
 
 export async function notifyRequestDecided(db: Db, n: { coach: Coach; student: Player; request: LessonRequest; lesson: Lesson | null; pkg: LessonPackage | null }): Promise<void> {
@@ -277,8 +287,8 @@ export async function notifyRequestDecided(db: Db, n: { coach: Coach; student: P
   const params = lessonAt(request.startsAt, coach, coach.displayName);
   const about = { startsAt: request.startsAt, tz: coach.tz };
   const release = lesson
-    ? await tell(db, student, s.requestAccepted(coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${lesson.id}` }]] }, { notice: { sender: "lessonRequestAccepted", ...about, params } })
-    : await tell(db, student, s.requestDeclined(coach.displayName, when), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] }, { notice: { sender: "lessonRequestDeclined", ...about, params } });
+    ? await tell(db, student, s.requestAccepted(coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${lesson.id}` }]] }, { notice: { sender: "lessonRequestAccepted", ...about, params }, ...studentDoor(coach, s) })
+    : await tell(db, student, s.requestDeclined(coach.displayName, when), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${coach.handle}` }]] }, { notice: { sender: "lessonRequestDeclined", ...about, params }, ...studentDoor(coach, s) });
   // The calendar entry only exists when the answer was yes; a no is carried by tell() like any notice.
   if (lesson && release === "now") await emailLesson({ lesson, coach, student, pkg: n.pkg, by: "coach" }, "REQUEST").catch(() => undefined);
   // The coach said yes to an hour outside their own template, so their calendar is exactly where it needs to land.
@@ -289,20 +299,20 @@ export async function notifyRequestDecided(db: Db, n: { coach: Coach; student: P
 export async function notifyLessonReminder(db: Db, n: { lesson: Lesson; coach: Coach; student: Player; pkg: LessonPackage | null }): Promise<void> {
   const when = whenLabel(n.lesson.startsAt, n.coach.tz, n.student.locale);
   const s = coachStrings(coachBotLocale(n.student.locale));
-  await tell(db, n.student, s.reminder(n.coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${n.lesson.id}` }]] }, { notice: { sender: "lessonReminder", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) } });
+  await tell(db, n.student, s.reminder(n.coach.displayName, when, pkgText(s, n.pkg)), { inline_keyboard: [[{ text: s.cancel, callback_data: `lc:${n.lesson.id}` }]] }, { notice: { sender: "lessonReminder", startsAt: n.lesson.startsAt, tz: n.coach.tz, params: lessonAt(n.lesson.startsAt, n.coach, n.coach.displayName) }, ...studentDoor(n.coach, s) });
 }
 
 /** Nearly out, or nearly expired: one note to the student, which is also the rebooking nudge. */
 export async function notifyLowPackage(db: Db, n: { pkg: LessonPackage; coach: Coach; student: Player; left: number; daysLeft: number | null }): Promise<void> {
   const s = coachStrings(coachBotLocale(n.student.locale));
-  await tell(db, n.student, s.lowPackage(n.coach.displayName, s.pkgLine(n.left, n.pkg.size, n.daysLeft)), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${n.coach.handle}` }]] }, { notice: { sender: "lowPackage", params: { name: n.coach.displayName, count: n.left } } });
+  await tell(db, n.student, s.lowPackage(n.coach.displayName, s.pkgLine(n.left, n.pkg.size, n.daysLeft)), { inline_keyboard: [[{ text: s.open, url: `${baseUrl()}/c/${n.coach.handle}` }]] }, { notice: { sender: "lowPackage", params: { name: n.coach.displayName, count: n.left } }, ...studentDoor(n.coach, s) });
 }
 
 export async function notifyManagerJoined(db: Db, coach: Coach, manager: Player): Promise<void> {
   const coachPlayer = await getPlayerById(db, coach.playerId);
   if (!coachPlayer) return;
   const s = coachStrings(coachBotLocale(coachPlayer.locale));
-  await tell(db, coachPlayer, s.managerJoined(manager.displayName), undefined, { notice: { sender: "managerJoined", params: { name: manager.displayName } } });
+  await tell(db, coachPlayer, s.managerJoined(manager.displayName), undefined, { notice: { sender: "managerJoined", params: { name: manager.displayName } }, ...coachDoor(s) });
 }
 
 // ------------------------------------------------------------------ email

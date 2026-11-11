@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { coachErrorKey } from "@/lib/coach/errorKey";
 import { useRouter } from "next/navigation";
 import { coachBlockAction, coachBookAction, coachCancelAction, coachNoShowAction, coachOpenAction, coachSetLessonPaidAction, coachUndoNoShowAction, compLessonAction, decideRequestAction, setLessonAmountAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
@@ -65,7 +66,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
     return [...m.entries()];
   }, [later]);
 
-  const errorText = (code: string) => (["slot_taken", "not_student", "outside_hours", "too_soon", "no_coach", "past", "already_paid"].includes(code) ? t(`errors.${code}` as "errors.slot_taken") : t("errors.slot_taken"));
+  const errorText = (code: string) => t(coachErrorKey(code));
 
   const cancel = (l: LessonDTO) => {
     if (!confirm(t("home.cancelConfirm", { name: l.studentName }))) return;
@@ -77,14 +78,18 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
   };
   const noShow = (l: LessonDTO) =>
     start(async () => {
-      await coachNoShowAction(l.id);
+      setError(null);
+      const r = await coachNoShowAction(l.id);
+      if (!r.ok) setError(errorText(r.error));
       router.refresh();
     });
   // The tap taken back, on the row it was made on. A confirm on every no-show would tax the real
   // ones; an undo costs only the coach who needs it.
   const undoNoShow = (l: LessonDTO) =>
     start(async () => {
-      await coachUndoNoShowAction(l.id);
+      setError(null);
+      const r = await coachUndoNoShowAction(l.id);
+      if (!r.ok) setError(errorText(r.error));
       router.refresh();
     });
   // A tip, a rounding, a weekend at double rate: the coach's book, the coach's number.
@@ -186,7 +191,8 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
           {t("home.unmarkPaid")}
         </button>
       )}
-      {l.comped == null && (l.status === "booked" || l.status === "done") && (
+      {/* Not on a lesson marked paid: the book refuses it there (a refund happens at the bank). */}
+      {l.comped == null && !l.paid && (l.status === "booked" || l.status === "done") && (
         <button type="button" className="btn-ghost btn-xs" onClick={() => comp(l)} disabled={pending} data-testid="comp-lesson">
           {t("book.comp")}
         </button>

@@ -4,9 +4,14 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { setPublicProfileAction } from "@/actions/identity";
 import { CopyButton } from "@/components/ShareSheet";
+import type { ProofDoors } from "@/components/DeleteAccount";
 
-/** My matches → Passport: the public page switch (off by default), the signed level, the export. One card, three lines. */
-export function PassportCard({ publicOn, slug, base }: { publicOn: boolean; slug: string | null; base: string }) {
+/**
+ * My matches → Passport: the public page switch (off by default), the signed level, the export. One card, three lines.
+ * `byName`: a session by name that proved nothing (DECIDING rule 34) gets no download, the owner's decision of
+ * 9 November 2026: in its place, why, and the doors on this page that prove it, as the account's deletion says.
+ */
+export function PassportCard({ publicOn, slug, base, byName = null }: { publicOn: boolean; slug: string | null; base: string; byName?: ProofDoors | null }) {
   const t = useTranslations();
   const [on, setOn] = useState(publicOn);
   const [publicSlug, setPublicSlug] = useState(slug);
@@ -48,12 +53,18 @@ export function PassportCard({ publicOn, slug, base }: { publicOn: boolean; slug
           </a>
         </div>
       )}
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <a href="/api/me/export" className="link" download>
-          ⬇ {t("passport.export")}
-        </a>
-        <span className="text-xs text-faint">{t("passport.exportHelp")}</span>
-      </div>
+      {byName ? (
+        <p className="mt-3 text-xs text-muted" data-testid="export-by-name">
+          {t("passport.exportByName", { doors: byName })}
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <a href="/api/me/export" className="link" download>
+            ⬇ {t("passport.export")}
+          </a>
+          <span className="text-xs text-faint">{t("passport.exportHelp")}</span>
+        </div>
+      )}
     </section>
   );
 }

@@ -82,4 +82,4 @@ async function CoachStudentsPage() {
   );
 }
 
-export default withClientMessages(["coach.book", "coach.done", "coach.home", "coach.how", "coach.import", "coach.noPackage", "coach.packageLine", "coach.packageLineNoExpiry", "coach.students", "common", "share"], CoachStudentsPage);
+export default withClientMessages(["coach.book", "coach.done", "coach.errors", "coach.home", "coach.how", "coach.import", "coach.noPackage", "coach.packageLine", "coach.packageLineNoExpiry", "coach.students", "common", "share"], CoachStudentsPage);

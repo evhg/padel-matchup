@@ -20,7 +20,8 @@
     "courtTitle": "A court is free at {club} today at {time}",
     "courtBody": "You said you want to play around this time at {club}. Book the court with the club, make the match here, and share the link. To stop these, remove the request on your own page.",
     "courtButton": "Make the match",
-    "courtTitleTomorrow": "A court is free at {club} tomorrow at {time}"
+    "courtTitleTomorrow": "A court is free at {club} tomorrow at {time}",
+    "notSaved": "Not saved. Try again."
   },
   "common": {
     "appName": "Kicksmash",
@@ -155,7 +156,10 @@
     "signOutConfirm": "Sign out on this browser? It forgets you and stops your notifications here. Your personal link and a home-screen icon still sign you in.",
     "signedInAs": "Signed in as {name}",
     "heldRowMe": "I'm {name}",
-    "heldRowProve": "Is this you, {name}? Sign in first, then tap your name again."
+    "heldRowProve": "Is this you, {name}? Sign in first, then tap your name again.",
+    "seatedAskNoDoor": "{name} is in this match. Is it you? Open your personal link or ask the organizer.",
+    "linkMailLimit": "You emailed this link to yourself the most times allowed for one day. Copy it instead, or try again tomorrow.",
+    "linkNotSent": "The email to {email} did not go out. Copy the link instead, or check the address below."
   },
   "landing": {
     "headline": "Padel in one link.",
@@ -235,7 +239,6 @@
     "courtsAuto": "Auto",
     "pointsPerMatch": "Points per match",
     "pointsFree": "Free",
-    "tournamentHelp": "Americano: partners rotate every round, most points wins. Rounds are generated on the day.",
     "court": "Court",
     "courtPlaceholder": "e.g. 3 or Centre court",
     "capacityHelp": "Spots still open when round 1 starts are dropped: the tournament becomes the players present.",
@@ -306,7 +309,12 @@
     "playedWithYou": "Played with you",
     "keepsRecord": "Keeps {name}'s matches",
     "pasteTotal": "The booking says {total} for the court. Add the cost per player under More options.",
-    "bookingUrlNoLink": "This has no link in it. Paste the link from the club or the app. It starts with https://"
+    "namesTooMany": "{count, plural, =0 {This match has no free place for the names in \"Players you already have\". Take them out.} one {Only one name in \"Players you already have\" fits in this match. Take out the others.} other {Only # names in \"Players you already have\" fit in this match. Take out the others.}}",
+    "tooManyToday": "You created the most matches allowed for one day. Try again tomorrow.",
+    "notInGroup": "Only members of this group can create its matches.",
+    "bookingUrlNoLink": "This has no link in it. Paste the link from the club or the app. It starts with https://",
+    "tournamentLine": "Tournament instead: 4 to 64 players",
+    "matchLine": "Match instead: exactly 4 players"
   },
   "share": {
     "title": "Your match is live",
@@ -320,7 +328,7 @@
     "manageTitle": "Organizer link",
     "manageHint": "Private — don't share. Open it on another device to manage this match.",
     "emailTitle": "Save your organizer link + get notified",
-    "emailHelp": "Drop your email and we'll send you your organizer link (this match, one tap, any device) and put it in your Google Calendar. Being late, or worse, forgetting your own game, is a total no-no in padel. We'll also ping you when players join, leave or confirm.",
+    "emailHelp": "Add your email. With a place in this match you get its calendar invitation; otherwise you get a link to your matches. We also email you when players join, leave or confirm.",
     "emailPlaceholder": "you@example.com",
     "emailSaved": "Saved. We'll email you when something happens.",
     "titleMatch": "Your match is live",
@@ -334,7 +342,10 @@
     "storyCopy": "Copy the link for the sticker",
     "nativeShareImage": "Share the picture…",
     "copyMessage": "Copy message",
-    "copyThisMessage": "Copy this message"
+    "otherWays": "Other ways to share",
+    "otherWaysSummary": "Telegram, copy the link, QR code, story image",
+    "moreSummary": "Telegram, QR code, story image, reminder, email, organizer link",
+    "otherWaysSummaryShort": "Telegram, copy the link, QR code"
   },
   "event": {
     "match": "Padel match",
@@ -357,7 +368,7 @@
     "youAreOnWaitlist": "You're #{position} on the waitlist",
     "waitlistHelp": "We'll move you in automatically if a spot frees up.",
     "full": "This match is full",
-    "fullHelp": "All spots are taken. Ask the organizer, or create your own match.",
+    "fullHelp": "All spots are taken, and this match has no waiting list.",
     "cancelled": "This match was cancelled",
     "cancelledHelp": "The organizer called it off. Nothing to do here.",
     "past": "This match is over",
@@ -398,7 +409,7 @@
     "joinShort": "Join",
     "inviteNotAccepted": "Invite not yet accepted",
     "inviteSent": "Invite sent",
-    "notifyMe": "Email me when the line-up changes",
+    "notifyMe": "Email me about all my matches",
     "openBooking": "Booking",
     "costPerPlayer": "{cost} per player",
     "paidTitle": "Who has paid",
@@ -412,7 +423,7 @@
     "minutes": "{minutes} min",
     "until": "until {time}",
     "changeDetails": "Change the details",
-    "changeDetailsHelp": "Anyone playing can change the time, the place or the note. Everybody hears about it.",
+    "changeDetailsHelp": "You can change the day, the time, the length, the place, the court and the note. A new day, time, length, place or court goes to everybody playing. A new note shows on this page only.",
     "tellGroup": "Tell the group",
     "bookCourt": "Book this court",
     "bookedIt": "I booked it",
@@ -438,7 +449,11 @@
     "courtBookedUndoName": "Undo: mark the court as not booked",
     "startedAgo": "Started {when}",
     "leaveWaitlistConfirm": "Leave the waiting list?",
-    "fullHeldHelp": "All spots are taken. Is a place held for you? Tap your name above."
+    "fullHeldHelp": "All spots are taken. Is a place held for you? Tap your name above.",
+    "organiserOnly": "Only the organiser changes that. You can change the day, the time, the length, the place, the court and the note.",
+    "shareInvite": "Invite on WhatsApp",
+    "shareResult": "Share the result",
+    "heldStranger": "Is a place held for you? Tap your name above."
   },
   "creator": {
     "tools": "Organizer tools",
@@ -460,14 +475,12 @@
     "cancelInviteConfirm": "Remove {name}? Their invite link stops working.",
     "edit": "Edit match",
     "cancelEvent": "Cancel match",
-    "cancelEventConfirm": "Cancel this match for everyone? Players with an email get a cancellation.",
+    "cancelEventConfirm": "Cancel this match for everyone? Every player with a seat hears it: by email, Telegram, WhatsApp or a notification. Held places and the waiting list hear nothing.",
     "saveChanges": "Save changes",
-    "notifications": "Email me when players join, leave or respond",
+    "notifications": "Email me about all my matches",
     "scoreReminderBanner": "How did it go? Enter the final score.",
     "manageLinkTitle": "Organizer link",
     "rolodexHint": "Start typing to pick from players you've played with.",
-    "inviteAll": "Send all invites in one message",
-    "inviteAllHelp": "One message with each person's personal link. Send it only to those people. In the group, post the match link.",
     "reserveSpot": "Reserve spot {n}",
     "reserveSheetHelp": "Hold this spot for someone. You'll get a personal link to forward to them.",
     "reserveInline": "Reserve this spot for…",
@@ -479,7 +492,7 @@
     "emailBounced": "Email bounced",
     "inviteBounced": "The invite email bounced. Send the invite link another way.",
     "banter": "Banter in the chat",
-    "banterHelp": "One playful line from your crew's own matches, like three wins in a row or a third late pull-out. Only in the crew's chat and on the result card, never on a public page.",
+    "banterHelp": "One playful line from your crew's own matches, like three wins in a row or a third late pull-out. Only in the crew's chat and on the result card, never on a public page. The switch covers every match you organize.",
     "scoreReminderTournament": "Round {n} is waiting for scores. Enter them in the card below.",
     "pasteTitle": "Paste the names from the group",
     "pasteHelp": "Who said they are in? Copy the replies from your group chat and paste them here: \"1. Ana 2. Bo\", \"+1 Cy\" or one name per line. Each name gets a reserved spot, and nobody gets a message.",
@@ -493,18 +506,22 @@
     "playedWithYou": "Played with you",
     "keepRecord": "Keep {name}'s matches",
     "keepsRecord": "Keeps {name}'s matches",
-    "unreached": "Kicksmash can't reach {names}. Send them the link.",
+    "unreached": "Kicksmash can't reach {names}. Send the match link to them too.",
     "unreachedMore": "{count} more",
-    "unreachedSend": "Send the link on WhatsApp",
-    "unreachedSignIn": "Kicksmash can't reach {names}. Send them the link: they sign in as themselves.",
+    "unreachedSignIn": "Kicksmash can't reach {names}. Send the match link to them too: they sign in as themselves.",
     "keepsRecords": "Keeps the matches of {names}",
     "pickMore": "Tap more names to reserve more spots.",
     "picksFull": "Every open spot is picked.",
     "picksNoSpot": "No place left for {names}.",
-    "heldMessage": "One message for {names}",
-    "heldMessageHelp": "{count, plural, one {Send it to them, or to the group. They open the match link and tap their name.} other {Send it to the group, or to each of them. They open the match link and tap their name.}}",
     "heldMessageNot": "Not in this message: {names}. {count, plural, one {Send them their personal link from their row.} other {Send each of them their personal link from their row.}}",
-    "heldMessageNotShare": "Not in this message: {names}. {count, plural, one {Open the match and send them their personal link from their row.} other {Open the match and send each of them their personal link from their row.}}"
+    "heldMessageNotShare": "Not in this message: {names}. {count, plural, one {Open the match and send them their personal link from their row.} other {Open the match and send each of them their personal link from their row.}}",
+    "editCapacityInUse": "Players hold places you want to remove. Take them off the list first, or keep more places.",
+    "inviteOptedOut": "This address asked for no email. Send the link another way.",
+    "reserveEmailsNow": "Done emails them the invite now.",
+    "manageWrong": "This organizer link does not work. Check that you copied all of it.",
+    "heldInShare": "The WhatsApp message in the bar asks {names} to open the link and tap their name.",
+    "leaveSeat": "Give up my place",
+    "leaveSeatHelp": "You stay the organizer. Your place goes to the next player."
   },
   "score": {
     "title": "Score",
@@ -547,7 +564,7 @@
     "noScore": "No score",
     "cancelled": "Cancelled",
     "you": "You",
-    "identityHelp": "Your identity lives in this browser, no password. Save your personal link below to use it anywhere.",
+    "identityHelp": "Your identity lives in this browser, no password. Save your personal link above to use it anywhere.",
     "placement": "#{place} of {total}",
     "restoreCta": "Played before on another phone? Restore",
     "deleteAccount": "Delete my account",
@@ -576,7 +593,10 @@
     "identityByName": "You came in by tapping your name, so your personal link and reminders on this browser stay hidden until you confirm an email with a code or link Telegram.",
     "sameNameOnly": "A name alone cannot add these matches. They belong to a member of a group that asks to join.",
     "sameRunsCrew": "A name alone cannot add these matches. They belong to somebody who runs a crew.",
-    "deleteByName": "You came in by tapping your name, so this browser cannot delete the account. {doors, select, both {First prove it is yours: confirm your email with the code we send, or link Telegram, above. Then delete it.} email {First prove it is yours: confirm your email with the code we send, above. Then delete it.} telegram {First prove it is yours: link Telegram above. Then delete it.} other {Delete it from the browser where you first joined.}}"
+    "deleteByName": "You came in by tapping your name, so this browser cannot delete the account. {doors, select, both {First prove it is yours: confirm your email with the code we send, or link Telegram, above. Then delete it.} email {First prove it is yours: confirm your email with the code we send, above. Then delete it.} telegram {First prove it is yours: link Telegram above. Then delete it.} other {Delete it from the browser where you first joined.}}",
+    "sameConfirm": "Add these matches to your record? The two records become one, and you cannot undo it.",
+    "settings": "Settings",
+    "settingsSummary": "Phones, when you play, passport, feedback, notices, personal link, name, level, email"
   },
   "notFound": {
     "title": "Link not found",
@@ -605,7 +625,10 @@
     "asRecord": "You join as {name}, with the matches you played before.",
     "signInFirst": "Is this you, {name}? Sign in first.",
     "signInFirstHelp": "This place keeps the matches of {name}. Get back in with the email or Telegram you used before, then tap I'm in.",
-    "askOrganiserHelp": "Is this you, {name}? Open this link on the phone you used before, or ask the organiser."
+    "askOrganiserHelp": "Is this you, {name}? Open this link on the phone you used before, or ask the organiser.",
+    "declineHint": "Tap Can't make it below to free your place.",
+    "declineConfirm": "Give up your place? Somebody else can take it.",
+    "confirmedHelpNoMail": "See you on court."
   },
   "shareText": {
     "event": "🎾 Padel {day} at {time} — {venue}. {spots}. Tap to join: {url}",
@@ -613,12 +636,13 @@
     "invite": "🎾 Hey {name}! I saved you a spot for padel {day} at {time} at {venue}. Confirm here: {url}",
     "nudge": "🎾 {name}, still on for padel {day} at {time} at {venue}? Please confirm or decline here: {url}",
     "spotsLeft": "{count, plural, =0 {No spots left} one {# spot left} other {# spots left}}",
-    "inviteGroup": "🎾 Padel {day} at {time} — {venue}. I reserved spots for you. Confirm with your personal link:\n{lines}",
     "result": "🎾 {line} · {day}\n{url}",
     "group": "🎾 Join our padel group {name}: {url}",
     "spots": "{count, plural, =0 {full} one {# spot} other {# spots}}",
     "held": "{count} held",
-    "heldGroup": "🎾 Padel {day} at {time} — {venue}. {count, plural, one {I'm holding a place for {names}} other {I'm holding places for {names}}}. Open the link and tap your name: {url}"
+    "heldGroup": "🎾 Padel {day} at {time} — {venue}. {count, plural, one {I'm holding a place for {names}} other {I'm holding places for {names}}}. Open the link and tap your name: {url}",
+    "heldOpen": "🎾 Padel {day} at {time} — {venue}. {count, plural, one {I'm holding a place for {names}} other {I'm holding places for {names}}}, and {open, plural, one {# spot is open} other {# spots are open}}. Open the link: tap your name, or join: {url}",
+    "fullWaitlist": "full, waiting list open"
   },
   "og": {
     "players": "{count}/{capacity} players",
@@ -1030,7 +1054,7 @@
     "refillTitle": "A spot opened · {day} {time}",
     "refillBody": "{venue} · {spots}. Tap to take it.",
     "enable": "Remind me 1 hour before",
-    "enableHelp": "One notification an hour before each of your matches. Late is a no-no, remember.",
+    "enableHelp": "Changes to your matches, free spots, new matches from your crew, and a reminder an hour before each match.",
     "on": "Reminders on · 1 hour before each match",
     "off": "Turn off",
     "denied": "Notifications are blocked for this site in your browser settings.",
@@ -1070,7 +1094,7 @@
     "cookiesTitle": "Cookies",
     "cookiesBody": "Functional cookies only: who you are, your language, your text size, the matches you organise, and where you came from. No tracking across other sites, no third-party cookies, no banner needed.",
     "rightsTitle": "Your rights",
-    "rightsBody": "Change your name or email anytime. Turn notifications off. Download everything we hold about you as one file from My matches → Passport. Delete your account from My matches: your personal data disappears, your old scores stay as 'Deleted player' so your friends' history still adds up.",
+    "rightsBody": "Change your name or email anytime. Turn notifications off. Download everything we hold about you as one file from My matches → Passport. Delete your account from My matches: your personal data disappears, your old scores stay as 'Deleted player' so your friends' history still adds up. If you came in by your name alone, prove who you are first with an email code or Telegram, then download or delete.",
     "termsTitle": "Terms",
     "termsBody": "It's free. Be nice, show up, enter the score. The app comes as-is with no warranty; if a link breaks or a court double-books, that's between you and your padel buddies. We can remove abusive content or accounts.",
     "openTitle": "Open source",
@@ -1114,7 +1138,8 @@
     "inboxHelp": "Every notice we sent you, or kept for you. Each stays {days} days.",
     "unread": "New",
     "awayTitle": "{count, plural, one {# update} other {# updates}} while you were away",
-    "awayBody": "They are in your inbox on My matches."
+    "awayBody": "They are in your inbox on My matches.",
+    "notSaved": "Not saved. Reload the page and try again."
   },
   "noticeItem": {
     "matchUpdated": "Your match moved: {day} {time}, {venue}",
@@ -1193,7 +1218,7 @@
     "deleteTitle": "When you delete your account",
     "deleteBody": "Delete it at the bottom of My matches. If you came in by your name alone, prove who you are first with an email code or Telegram. At once, we remove your name, email and phone (also the copies an organiser typed for your seat), your personal link, linked chat accounts, public page, notification devices, the phones that remember you, the phones we recognise, the times you wanted to play, your inbox, and your coach page with its lessons. Your upcoming spots are released, and the matches you organise are cancelled. Your old scores and level stay under “Deleted player”, so your partners' history still adds up. The notes you sent through the feedback form stay, with the name and contact on them, because they are about the app: ask us and we delete them too. Your first name leaves the page of ideas that became the app. Copies made before you deleted leave our private backup repository after about {backupDays, plural, one {# day} other {# days}}. After that, older copies are no longer in its history, and GitHub removes them later. Until then, only we can open them.",
     "rightsTitle": "Your rights",
-    "rightsBody": "See and change your name, email and notices on My matches. Download everything we hold about you as one file from My matches → Passport. Delete it all from the bottom of My matches. Forget a phone we recognise there too, at any time, or object to the key with “Don't recognise my phones”: it covers that account and lasts until you switch it off. For anything else, a question, a correction or a complaint, write to us through the feedback form.",
+    "rightsBody": "See and change your name, email and notices on My matches. Download everything we hold about you as one file from My matches → Passport. If you came in by your name alone, prove who you are first with an email code or Telegram. Delete it all from the bottom of My matches. Forget a phone we recognise there too, at any time, or object to the key with “Don't recognise my phones”: it covers that account and lasts until you switch it off. For anything else, a question, a correction or a complaint, write to us through the feedback form.",
     "lawTitle": "The law",
     "lawBody": "Thailand's Personal Data Protection Act (PDPA) applies. We use your data to run the app you came to use (our agreement with you), and to help you sign in on your own phone and keep the app free of duplicate players (our legitimate interest). We use it for nothing else: we never sell it, never show ads, and never build a profile of you for anybody else.",
     "termsLink": "Terms of use →",
@@ -1223,7 +1248,10 @@
     "doneTitle": "Done. No more emails.",
     "doneBody": "Organizers can no longer email {email} through Kicksmash. If you ever add this address yourself on a match page, that counts as a yes and turns emails back on.",
     "badLinkTitle": "That link doesn't check out",
-    "badLinkBody": "It may be incomplete or expired. Use the link from the email you received."
+    "badLinkBody": "It may be incomplete or expired. Use the link from the email you received.",
+    "askTitle": "Stop all email from Kicksmash?",
+    "askBody": "Organizers will no longer be able to email {email} through Kicksmash. Nothing changes until you tap the button.",
+    "askYes": "Yes, stop all email"
   },
   "levelCheck": {
     "alreadyAnswered": "Someone else already answered this one; the list is refreshed.",
@@ -1362,7 +1390,8 @@
     "tagAgeLabel": "Age",
     "tagAnyAge": "Any age",
     "tagAge": "{age}+",
-    "tagHelp": "The tag helps the right players find the game. Nobody is checked."
+    "tagHelp": "The tag helps the right players find the game. Nobody is checked.",
+    "requestsHelpClosed": "Outside the level range. Approving seats them while a spot is open."
   },
   "card": {
     "title": "Result card",
@@ -1389,7 +1418,8 @@
     "photoFailed": "That picture could not be used. Try another one.",
     "removePhoto": "Remove the photo",
     "waiting": "Waiting for the score",
-    "makeWeekly": "Make it weekly"
+    "makeWeekly": "Make it weekly",
+    "removePhotoConfirm": "Remove the photo from the result card?"
   },
   "group": {
     "title": "Group",
@@ -1410,14 +1440,14 @@
     "remove": "Remove",
     "admin": "Admin",
     "nextMatch": "Create the next match",
-    "nextMatchHelp": "Prefilled with the group's usual settings. Every member gets a ping.",
+    "nextMatchHelp": "Prefilled with the group's usual settings. Each member sees the match in My matches, and gets an email or a phone notification if they switched them on.",
     "upcoming": "Upcoming",
     "past": "Past",
     "noUpcoming": "Nothing scheduled yet.",
     "repeats": "Weekly slot",
     "none": "No automatic matches",
     "every": "Every {day} at {time}",
-    "autoHelp": "The next match is created {n} days ahead and everyone is notified. Any member can still create one by hand.",
+    "autoHelp": "The next match is created {n} days ahead. Each member sees it in My matches, and gets an email or a phone notification if they switched them on. Any member can still create one by hand.",
     "leadDays": "Create it {n} days ahead",
     "settings": "Group settings",
     "save": "Save",
@@ -1470,7 +1500,8 @@
     "askToJoinSetting": "Ask to join",
     "telegramRun": "Run a Telegram group for this crew",
     "telegramRunHelp": "First make a new Telegram group only for this crew's padel, then tap the button above and pick it. Kicksmash joins it as an admin, keeps one card per match there and reads the chat to take “in” and “out”. It keeps first names, Telegram usernames, who is in or out, the court and the score, never the text. A group admin can type /quiet, or remove the bot, to stop.",
-    "telegramJoin": "Join the crew's Telegram group"
+    "telegramJoin": "Join the crew's Telegram group",
+    "removeConfirm": "Remove {name} from the group? They stop getting its matches."
   },
   "venue": {
     "board": "Venue board",
@@ -1496,7 +1527,8 @@
     "listNow": "Show on the {venue} board",
     "recentResults": "Recent results",
     "recentWon": "Won",
-    "recentPlayer": "Player"
+    "recentPlayer": "Player",
+    "fullClosed": "Full"
   },
   "ranking": {
     "title": "Ranking",
@@ -1671,7 +1703,7 @@
     "feedJson": "JSON list of free slots",
     "submit": "Claim this page",
     "claimed": "Claim received",
-    "claimedHelp": "Your manage link is below; save it, it also shows on My matches. We confirm the claim with the contact you gave, usually within a day; you hear from us on Telegram or by email, and the page goes live.",
+    "claimedHelp": "Your manage link is below. Save it: it also shows on My matches. We check the claim with the contact you gave, usually within a day. Open your manage link to see our answer. When we approve the claim, the page goes live.",
     "manageLink": "Manage link",
     "manageTitle": "Manage {club}",
     "statusPending": "Waiting for our check",
@@ -1739,13 +1771,13 @@
     "contactHelp": "A work email at the club's own domain is confirmed by a code at once, and the page goes live. Anything else we check by hand, usually within a day.",
     "attest": "By claiming, you confirm that you work at {club} and may manage its page.",
     "claimedHelpCode": "We sent a 6-digit code to your work email. Enter it below and the page goes live.",
-    "claimedHelpVerified": "Your work email is confirmed and the page is live. You hear from us on Telegram or by email.",
+    "claimedHelpVerified": "Your work email is confirmed and the page is live.",
     "codeTitle": "Confirm your work email",
     "codeSentTo": "Code sent to {email}",
     "codeLabel": "6-digit code",
     "codeConfirm": "Confirm",
     "codeConfirmed": "Work email confirmed. The page is live.",
-    "codeWrong": "That code is not right or has expired. Send a new one.",
+    "codeWrong": "That code is not right. Check it and try again.",
     "codeAgain": "Send a new code",
     "country": "Country",
     "placePlaceholder": "Kuala Lumpur, Moscow, Phuket…",
@@ -1776,7 +1808,10 @@
     "dayLesson": "Lesson",
     "dayNoCourt": "No court named",
     "freeFromPlatform": "From {platform}'s public page · Updated {time}",
-    "freePlatformDown": "Free times from {platform} are not available just now."
+    "freePlatformDown": "Free times from {platform} are not available just now.",
+    "codeExpired": "That code expired or had too many tries. Send a new code.",
+    "codeLimit": "You asked for the most codes allowed for one day. Try again tomorrow.",
+    "codeNotSent": "No new code went out. Wait an hour, then try again."
   },
   "passport": {
     "title": "Passport",
@@ -1833,7 +1868,8 @@
     "docCopyLink": "Copy JSON link",
     "docOpenJson": "Open JSON",
     "docShow": "Show the document",
-    "docBack": "Back to {name}"
+    "docBack": "Back to {name}",
+    "exportByName": "You came in by tapping your name, so this browser cannot download your data. {doors, select, both {First prove it is you: confirm your email with the code we send, or link Telegram, below. Then download it.} email {First prove it is you: confirm your email with the code we send, below. Then download it.} telegram {First prove it is you: link Telegram below. Then download it.} other {Download it from the browser where you first joined.}}"
   },
   "feedback": {
     "title": "Tell us what should change",
@@ -1841,7 +1877,7 @@
     "sub": "One idea, one bug, one wish. I read every note myself. If it changes Kicksmash, you hear about it, with what changed.",
     "placeholder": "What should be different?",
     "contactLabel": "Email, so I can answer (optional)",
-    "contactHelp": "Without it I still read it, but I cannot write back.",
+    "contactHelp": "Without it, I still read your note. I can answer only where Kicksmash already reaches you.",
     "send": "Send",
     "sent": "Got it, thank you.",
     "tooShort": "A few more words, please.",
@@ -1858,7 +1894,8 @@
     "builtEmpty": "Nothing here yet. The first idea could be yours.",
     "builtSeeAll": "See what they changed",
     "builtSince": "In the app since {date}",
-    "builtFrom": "{name}'s idea"
+    "builtFrom": "{name}'s idea",
+    "notSent": "Your note did not go through. Try again."
   },
   "coach": {
     "invite": {
@@ -1964,7 +2001,8 @@
       "offerAdd": "Add a package",
       "offerRemove": "Remove",
       "persons": "{n, plural, one {# person} other {# persons}}",
-      "notifyWaiting": "{channels}: built, waiting on their accounts. Until then an email you read later works too."
+      "notifyWaiting": "{channels}: built, waiting on their accounts. Until then an email you read later works too.",
+      "badPromptpay": "A PromptPay ID is a phone number (10 digits) or an ID number (13 digits)."
     },
     "done": {
       "title": "Your assistant is ready",
@@ -2264,7 +2302,12 @@
       "already_paid": "This lesson is already paid. A refund happens at the bank, not here.",
       "has_package": "You already have a package with lessons left. Use it up first.",
       "blocked": "This coach does not take bookings from you.",
-      "not_taking_bookings": "This coach is not taking bookings yet."
+      "not_taking_bookings": "This coach is not taking bookings yet.",
+      "too_late": "Too late to move this lesson: it is inside the coach's cancel rule. Cancel it instead.",
+      "cancelled": "That is no longer open: it was cancelled or its time ran out. Refresh the page.",
+      "forbidden": "That is not yours to change.",
+      "not_found": "That is gone. Refresh the page.",
+      "generic": "That did not work. Try again."
     },
     "email": {
       "paidSubject": "{student} says they paid",
@@ -2374,7 +2417,8 @@
       "joinButton": "Help {name} run their lessons",
       "joinGone": "That link is not valid any more. Ask the coach for a new one.",
       "how": "Anyone with the link can join once you make it; make a new one and the old stops working. A manager sees and does everything you do here, except this section.",
-      "fold": "Does someone else take your bookings?"
+      "fold": "Does someone else take your bookings?",
+      "removeConfirm": "Remove {name}? They can no longer book for you."
     }
   },
   "coachFront": {
@@ -2720,7 +2764,11 @@
         "live": "Scores come in from the players or the desk; the screen and the page follow.",
         "results": "The results file, and the podium for each category."
       }
-    }
+    },
+    "withdrawConfirmEmpty": "Withdraw this pair? Nobody is waiting, so the spot stays empty. In a draw already made, your opponents go through by walkover.",
+    "withdrawClosed": "Too late to withdraw: this category is over. Talk to the organiser.",
+    "clearDrawConfirm": "Clear the draw for {category}? Every match in it is deleted. You can make the draw again after.",
+    "clearDrawScored": "A match in this draw has a result, so the draw stays. Change that score instead."
   },
   "series": {
     "eyebrow": "Series",

@@ -7,7 +7,7 @@ import { NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { forgetOperators, operatorAuthorized } from "@/lib/api/secret";
 import type { DcInteraction } from "@/lib/discord/api";
 import { handleInteraction } from "@/lib/discord/bot";
-import { FEEDBACK_LIMITS, cleanFeedbackText, countShipped, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback, saidBefore, SHIPPED_FROM, showsShipped } from "@/lib/feedback/store";
+import { FEEDBACK_LIMITS, cleanFeedbackText, countShipped, createFeedback, decideFeedback, feedbackWeek, getFeedback, listFeedback, markAcknowledged, markNotFeedback, saidBefore, SHIPPED_FROM, showsShipped, webReplyRoute } from "@/lib/feedback/store";
 import { feedbackStrings, promisesSomething } from "@/lib/feedback/strings";
 import { composeAck, fallbackAck, parseAck, POOL } from "@/lib/feedback/ack";
 import { formatProposal, parseProposal, PROPOSAL, proposeToOwner, sweepProposals } from "@/lib/feedback/propose";
@@ -752,5 +752,19 @@ describe("the owner writing as a player", () => {
     const row = await getFeedback(db, res.slice("feedback:".length));
     expect(row?.messagesSent).toBe(1);
     expect(row?.replyText).toContain("Mia");
+  });
+});
+
+describe("the thank-you on the web form knows every way the answer reaches a player (button audit, 9 November 2026, F17)", () => {
+  const nobody = { telegramId: null, email: null };
+  it.each([
+    ["a stranger who typed no address: no way back", null, null, false, { replyVia: null, canReply: false }],
+    ["a stranger who typed an address", null, "ana@example.com", false, { replyVia: "email", canReply: true }],
+    ["a player with Telegram", { telegramId: 42, email: null }, null, false, { replyVia: "telegram", canReply: true }],
+    ["a player whose record has an address, who typed none", { telegramId: null, email: "bo@example.com" }, null, false, { replyVia: "email", canReply: true }],
+    ["a player with only a phone that takes notifications", nobody, null, true, { replyVia: null, canReply: true }],
+    ["a player with no way at all", nobody, null, false, { replyVia: null, canReply: false }],
+  ] as const)("%s", (_, player, typed, hasPush, route) => {
+    expect(webReplyRoute(player, typed, hasPush)).toEqual(route);
   });
 });

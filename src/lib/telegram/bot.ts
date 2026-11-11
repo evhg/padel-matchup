@@ -9,7 +9,7 @@ import { isValidShareCode } from "@/lib/codes";
 import { baseUrl } from "@/lib/config";
 import { isDomainError } from "@/lib/domain/errors";
 import { getEventByCode } from "@/lib/domain/queries";
-import { answerCallbackQuery, editMessageCaption, editMessageText, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
+import { answerCallbackQuery, editMessageCaption, editMessageReplyMarkup, editMessageText, esc, sendMessage, type TgMessage, type TgUpdate } from "./api";
 import { botLocale, cardTitle, strings, type BotLocale } from "./card";
 import { GROUP_TYPES, getChat, upsertChat } from "./chats";
 import { coachAssistantMessage, COACH_CALLBACK, coachHelp, handleCoachCallback, resolveRole } from "./coach";
@@ -235,7 +235,7 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   if (PASTE_CALLBACK.test(data)) return handlePasteCallback(db, cb, ctx);
   // A /new match on its club's board: off the board, or back on it.
   if (BOARD_CALLBACK.test(data)) return handleBoardCallback(db, cb, ctx);
-  const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([ab]|\d\d))?$/);
+  const m = data.match(/^([jlrwkcgx]):([A-Za-z0-9]{4})(?::([aby]|\d\d))?$/);
   const chat = cb.message ? await getChat(db, cb.message.chat.id) : null;
   const locale = chatLocale(chat, cb.from.language_code);
   const s = strings(locale);
@@ -269,7 +269,19 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
       await answerCallbackQuery(cb.id, s.toastNotOrganizer);
       return "cancel_not_organizer";
     }
-    const cancelled = await cancelEvent(db, detail.event.id, tapper.id);
+    // One question first: the tap cancels the match and every player is told, by email with a calendar
+    // cancel too. The question is a box the organiser closes, and the button under the nudge becomes the
+    // answer ("x:CODE:y"); the other buttons stay as they were.
+    if (sel !== "y") {
+      await answerCallbackQuery(cb.id, s.didntPlayAsk, { alert: true });
+      if (cb.message) {
+        const yes = { text: s.didntPlayYes, callback_data: `x:${code}:y` };
+        const rows = cb.message.reply_markup?.inline_keyboard.map((row) => row.map((b) => (b.callback_data === data ? yes : b))) ?? [[yes]];
+        await editMessageReplyMarkup(cb.message.chat.id, cb.message.message_id, { inline_keyboard: rows.some((row) => row.includes(yes)) ? rows : [...rows, [yes]] }).catch(() => undefined);
+      }
+      return "cancel_ask";
+    }
+    const cancelled = await cancelEvent(db, detail.event.id, tapper.id, { didntPlay: true });
     await answerCallbackQuery(cb.id, s.toastDidntPlay);
     // Eriik: "the button doesn't change, it remains there." A toast is gone in two seconds and the
     // message it came from still offered both buttons, so the tap looked like it did nothing. The
@@ -308,7 +320,8 @@ async function handleCallback(db: Db, cb: NonNullable<TgUpdate["callback_query"]
   } catch (e) {
     if (e instanceof ApiError && e.code === "level_required") toast = s.toastLevel;
     else if (e instanceof NameHeldError) toast = s.toastHeldChanged(e.held);
-    else if (isDomainError(e)) toast = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : s.toastError;
+    // A free-spot message or a play-again "I'm in" can be tapped after the match was called off: the card's own word says so.
+    else if (isDomainError(e)) toast = e.code === "past" ? s.toastPast : e.code === "already_in" ? s.toastAlready : e.code === "full" || e.code === "closed" ? s.toastClosed : e.code === "cancelled" ? `❌ ${s.cancelled}` : s.toastError;
     outcome = `error:${e instanceof ApiError ? e.code : isDomainError(e) ? e.code : "unknown"}`;
   }
   // A level to set, a held place taken (its "Not Danny?" line) or changed under the tap: a box the
@@ -360,6 +373,9 @@ export async function handleTelegramUpdate(db: Db, update: TgUpdate, ctx: OpCont
     }
     return "ignored";
   } catch (e) {
+    // A tap whose handler threw still gets an answer, or its button spins until Telegram gives up.
+    const cb = update.callback_query;
+    if (cb) await answerCallbackQuery(cb.id, strings(botLocale(cb.from.language_code)).toastError).catch(() => undefined);
     return `error:${e instanceof Error ? e.message : String(e)}`;
   }
 }

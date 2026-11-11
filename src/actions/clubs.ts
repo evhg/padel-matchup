@@ -40,6 +40,7 @@ const claimSchema = z.object({
 });
 export type ClaimClubInput = z.infer<typeof claimSchema>;
 
+/** The manage form sends every field, an emptied one as "" (`clubFormPayload`), so "" is how a club clears one. */
 const updateSchema = z.object({
   website: url,
   bookingUrl: url,
@@ -50,7 +51,7 @@ const updateSchema = z.object({
   about: z.string().max(CLUB_LIMITS.aboutMax).optional(),
   city: z.string().max(40).optional(),
   place: z.string().max(60).optional(),
-  country: z.string().length(2).optional(),
+  country: z.union([z.literal(""), z.string().length(2)]).optional(),
   opensAt: z.string().max(5).optional(),
   closesAt: z.string().max(5).optional(),
   availabilityUrl: url,

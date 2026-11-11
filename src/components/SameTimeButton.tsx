@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { createGroupFromEventAction } from "@/actions/groups";
+import { errorLine } from "@/lib/errorLine";
 
 /**
  * "Make it weekly", under "Play again" on the score panel: one tap turns the crew into a group with this
@@ -13,6 +14,9 @@ import { createGroupFromEventAction } from "@/actions/groups";
  */
 export function SameTimeButton({ code, when }: { code: string; when: string }) {
   const t = useTranslations("card");
+  const tr = useTranslations();
+  // A refusal says why under the button, never a "…" that turns back into the button.
+  const [error, setError] = useState<string | null>(null);
   const locale = useLocale();
   const [pending, start] = useTransition();
   const [done, setDone] = useState<{ code: string; name: string; created: boolean } | null>(null);
@@ -29,9 +33,10 @@ export function SameTimeButton({ code, when }: { code: string; when: string }) {
   }
   return (
     <div className="flex flex-col gap-1">
-      <button type="button" className="btn-ghost w-full whitespace-normal text-center leading-tight" disabled={pending} data-testid="same-time" onClick={() => start(async () => { const r = await createGroupFromEventAction(code, undefined, true); if (r.ok) setDone({ code: r.data.code, name: r.data.name, created: r.data.created }); })}>
+      <button type="button" className="btn-ghost w-full whitespace-normal text-center leading-tight" disabled={pending} data-testid="same-time" onClick={() => { setError(null); start(async () => { const r = await createGroupFromEventAction(code, undefined, true); if (r.ok) setDone({ code: r.data.code, name: r.data.name, created: r.data.created }); else setError(tr(`errors.${errorLine(r.error)}`)); }); }}>
         {pending ? "…" : `🔁 ${t("makeWeekly")}`}
       </button>
+      {error && <p className="text-center text-sm font-semibold text-danger">{error}</p>}
       <p className="text-center text-xs text-faint">{t("sameTimeHelp")}</p>
     </div>
   );

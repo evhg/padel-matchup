@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { joinAction, reserveAction, reservePickedAction } from "@/actions/slots";
-import type { LevelRange } from "@/lib/domain/levels";
+import { formatLevel, joinAsks, joinBarLevel, type LevelRange } from "@/lib/domain/levels";
 import { answerKey, askFor, PICK_CHIPS, togglePick, type PastAnswer, type PastView } from "@/lib/domain/pastAsk";
 import { BackInHelp, type BackInDoors } from "./BackInHelp";
 import { useOwnNameAutofill } from "./PasskeyAutofill";
@@ -43,6 +43,7 @@ export function OpenSpot({
   myLevel = null,
   myName = null,
   backIn = null,
+  asks = null,
 }: {
   code: string;
   slotId: string;
@@ -84,6 +85,13 @@ export function OpenSpot({
   myName?: string | null;
   /** For a browser that knows nobody: the ways back in, shown open under the name field ("Played before?", DECIDING rule 39). */
   backIn?: BackInDoors | null;
+  /**
+   * A ranged match, where a join can be only an ask (the bar's rule, `joinBarLevel`): `known`, the viewer's
+   * own level already asks; a level picked in the form asks when the range or `verifiedOnly` holds it,
+   * unless a past game with the organiser waived the range (`waived`). The spot then says "Ask to join",
+   * and the form says why, as the bar does (review, 9 November 2026: "Tap to join", then "Request sent").
+   */
+  asks?: { known: boolean; verifiedOnly: boolean; waived: boolean; rangeText: string } | null;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -137,6 +145,11 @@ export function OpenSpot({
   }, []);
 
   const needsLevel = Boolean(levelRange) && myLevel == null;
+  // What a join from here does with the level the form holds: the bar's reading, for a level picked here (declared, so never confirmed).
+  const pickedLevel = asks && level != null && myLevel == null ? joinBarLevel({ range: levelRange, level, verifiedOnly: asks.verifiedOnly, verified: false, waived: asks.waived ? "ok" : null }) : null;
+  const askOnly = mode === "join" && Boolean(asks) && (pickedLevel ? joinAsks(pickedLevel) : Boolean(asks?.known));
+  const joinWord = askOnly ? t("level.askToJoin") : t("event.joinShort");
+  const askLine = pickedLevel && askOnly && level != null ? (pickedLevel.outOfRange ? t("level.outOfRange", { level: formatLevel(level), range: asks?.rangeText ?? "" }) : t("levelCheck.gate", { level: formatLevel(level) })) : null;
 
   // The fixed Join button hands its no-identity (or no-level) case to an open row: the row whose form
   // the player opened, else the first one (`requestJoin`). A second tap, with the form open and a name in
@@ -271,7 +284,7 @@ export function OpenSpot({
         {avatar}
         <span className="min-w-0 flex-1">
           <span className="block font-semibold text-muted">{label}</span>
-          <span className="block text-xs font-semibold text-court">{pending ? t("common.working") : mode === "reserve" ? t("event.tapToReserve") : t("event.tapToJoin")}</span>
+          <span className="block text-xs font-semibold text-court">{pending ? t("common.working") : mode === "reserve" ? t("event.tapToReserve") : askOnly ? t("level.askToJoin") : t("event.tapToJoin")}</span>
         </span>
         <span className="text-faint">›</span>
       </button>
@@ -317,7 +330,7 @@ export function OpenSpot({
         </div>
         <div className="mt-2 flex items-center justify-between gap-2">
           <button type="button" className="btn-primary" disabled={pending} onClick={() => join()}>
-            {pending ? t("common.working") : t("event.joinShort")}
+            {pending ? t("common.working") : joinWord}
           </button>
           {cancel}
         </div>
@@ -384,7 +397,7 @@ export function OpenSpot({
           )}
           {mode === "join" && levelRange && <LevelSelect value={level} onChange={setLevel} />}
           <button type="submit" className="btn-primary shrink-0" disabled={pending} data-testid={many ? "hold-picks" : undefined}>
-            {pending ? t("common.working") : many ? t("creator.pasteHold", { count: picks.length }) : mode === "reserve" ? t("creator.reserveDone") : t("event.joinShort")}
+            {pending ? t("common.working") : many ? t("creator.pasteHold", { count: picks.length }) : mode === "reserve" ? t("creator.reserveDone") : joinWord}
           </button>
         </div>
         {/*
@@ -470,6 +483,12 @@ export function OpenSpot({
             {emailEnabled && <input className="input min-h-11 text-sm" type="email" inputMode="email" autoComplete="off" placeholder={`${t("creator.email")} (${t("common.optional")})`} value={email} onChange={(e) => setEmail(e.target.value)} />}
           </div>
         )}
+        {/* Done sends the invitation at once to a typed address (`reserveAction`, `sendInviteEmail`): said before the tap. */}
+        {mode === "reserve" && !many && emailEnabled && email.trim() && (
+          <p className="text-xs font-semibold text-muted" data-testid="reserve-emails-now">
+            ✉️ {t("creator.reserveEmailsNow")}
+          </p>
+        )}
         {contactHint && !many && (
           <button type="button" className="self-start rounded-xl bg-accent-soft px-3 py-2 text-left text-sm font-semibold" onClick={() => setName(contactHint.name)}>
             {t("creator.sameContact", { kind: contactHint.email && contactHint.email.toLowerCase() === email.trim().toLowerCase() ? t("creator.email").toLowerCase() : t("creator.phone").toLowerCase(), name: contactHint.name })}
@@ -477,7 +496,7 @@ export function OpenSpot({
         )}
         <div className="flex items-center justify-between gap-2">
           {/* Several picks: the one message covers the link, so the help about one personal link goes. */}
-          {error ? <span className="text-sm font-semibold text-danger">{error}</span> : many ? <span /> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</span>}
+          {error ? <span className="text-sm font-semibold text-danger">{error}</span> : many ? <span /> : askLine ? <span className="text-xs font-semibold text-warn" data-testid="open-spot-asks">{askLine}</span> : <span className="text-xs text-faint">{mode === "reserve" ? t("creator.reserveSheetHelp") : levelRange ? t("level.pickHelp") : t("identity.nameHelp")}</span>}
           {cancel}
         </div>
       </form>

@@ -222,8 +222,10 @@ describe("every path that writes a match keeps the tag", () => {
     expect(next.startsAt.toISOString()).toBe("2026-10-10T02:00:00.000Z");
 
     const seriesRow = async () => (await db.select().from(seriesTable).where(eq(seriesTable.id, s.id)))[0];
-    // A player of the edition may change its details (canEditMatchDetails): that is this date only.
-    await updateEvent(db, next.id, ids[1], { category: "men" });
+    // A player of the edition may not change its tags (the owner's decision of 9 November 2026, "Players
+    // edit only time/place/note"), and a manage link with no player changes this date only.
+    await expect(updateEvent(db, next.id, ids[1], { category: "men" })).rejects.toMatchObject({ code: "forbidden", message: "organiserOnly" });
+    await updateEvent(db, next.id, null, { category: "men" }, NOW, { asOrganiser: true });
     expect(await seriesRow()).toMatchObject({ category: "women", ageMin: 35 });
     // The organiser's change is the series' change: an edition is made from the series row, so a tag
     // set on the edition alone would be gone by the next date.

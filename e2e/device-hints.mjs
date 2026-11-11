@@ -25,7 +25,7 @@
 //
 // At the end, the browser that "It's me" signed in taps "Sign out on this browser": the request carries
 // its values, and the key of this phone leaves Tim's record (DECIDING, "A phone is never shared").
-import { BASE, crashed, finish, iphone, launch, makeCheck } from "./lib.mjs";
+import { BASE, crashed, finish, iphone, launch, makeCheck, openSettings } from "./lib.mjs";
 
 const browser = await launch();
 /** What a phone shows, 390 px wide, around the element the walk just scrolled to. */
@@ -298,6 +298,7 @@ try {
   // "My matches" in the header is a link, so the page and its tests stay.
   await app.page.getByTestId("nav-play").click();
   await app.page.waitForURL((u) => u.pathname === "/me", { timeout: 20000 });
+  await openSettings(app.page); // behind "Settings" on My matches (the owner, 9 November 2026)
   const sentToSignOut = app.hintCalls();
   await app.page.getByTestId("me-signout").click();
   await app.page.getByText("First time here? Just your name, that's it.").waitFor({ timeout: 20000 });

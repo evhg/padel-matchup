@@ -65,7 +65,35 @@ const DYNAMIC: DynamicTable = {
   },
   "src/components/EditMatch.tsx": {
     // `editErrorKey` in src/lib/editMatchForm.ts.
-    "editErrorKey(r)": ["event.startLocked", "errors.invalid"],
+    "editErrorKey(r)": ["event.startLocked", "event.organiserOnly", "errors.invalid", "errors.cancelled", "creator.editCapacityInUse"],
+  },
+  "src/components/CreatorPanel.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
+  },
+  "src/components/CourtBooking.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
+  },
+  "src/components/EmailField.tsx": {
+    // `errorLine` in src/lib/errorLine.ts, over the refused action's code.
+    "`errors.${errorLine(code)}`": ["errors.*"],
+  },
+  "src/components/MatchPayments.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
+  },
+  "src/components/PhotoButton.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
+  },
+  "src/components/SameTimeButton.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
+  },
+  "src/components/SlotActions.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
   },
   "src/components/GroupPanel.tsx": {
     // An action's error code through `errKey` (the file's top): any of errors.*.
@@ -82,7 +110,8 @@ const DYNAMIC: DynamicTable = {
     '`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}`': ["errors.*"],
   },
   "src/components/JoinRequests.tsx": {
-    '`errors.${r.error === "name_required" || r.error === "no_identity" || r.error === "level_required" ? "generic" : r.error}`': ["errors.*"],
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
   },
   "src/components/OpenSpot.tsx": {
     '`errors.${error === "no_identity" ? "generic" : error}`': ["errors.*"],
@@ -122,8 +151,8 @@ const DYNAMIC: DynamicTable = {
     "`tournament.sc_${s}`": ["tournament.sc_*"],
   },
   "src/components/coach/CoachHome.tsx": {
-    // Under useTranslations("coach"): an action's error code from the coach book.
-    "`errors.${code}`": ["errors.*"],
+    // Under useTranslations("coach"): an action's error code from the coach book (`coachErrorKey`, src/lib/coach/errorKey.ts).
+    "coachErrorKey(code)": ["errors.*"],
     "`errors.${r.error}`": ["errors.*"],
     // A lesson's status as the server sends it.
     "`home.status.${l.status}`": ["home.status.*"],
@@ -133,14 +162,22 @@ const DYNAMIC: DynamicTable = {
   "src/components/coach/CoachSettings.tsx": {
     // Under useTranslations("coach"): priceTwo, priceThree, priceFour.
     "`setup.${k}`": ["setup.priceTwo", "setup.priceThree", "setup.priceFour"],
+    "coachErrorKey(r.error)": ["errors.*"],
   },
   "src/components/coach/CoachSetup.tsx": {
     // Under useTranslations("coach"): the setup's presets and the notice hours.
     "`setup.preset.${p}`": ["setup.preset.*"],
     "`setup.notice${h}`": ["setup.notice*"],
+    "coachErrorKey(r.error)": ["errors.*"],
   },
   "src/components/coach/StudentBooking.tsx": {
-    "`errors.${code}`": ["errors.*"],
+    "coachErrorKey(code)": ["errors.*"],
+  },
+  "src/components/coach/CoachManagers.tsx": {
+    "coachErrorKey(r.error)": ["errors.*"],
+  },
+  "src/components/coach/CoachStudents.tsx": {
+    "coachErrorKey(r.error)": ["errors.*"],
   },
   "src/lib/levelText.ts": {
     // A translator handed to rangeChip: `preset` is a LEVEL_PRESETS name ("custom" never reaches it).

@@ -287,10 +287,22 @@ export async function takeHeldByName(db: Db, d: HeldDecision, taker: { id: strin
 }
 
 /** The state of a personal link's place as its page reads it. */
-export type InviteState = "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled";
+export type InviteState = "invited" | "declined" | "confirmed_mine" | "gone" | "cancelled" | "past";
 
 /** What a personal link's page shows. */
-export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled" | "sign_in_first";
+export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "confirmed" | "already_in" | "gone" | "cancelled" | "past" | "sign_in_first";
+
+/**
+ * The state of a personal link's place. `over`: the match has ended (`liveRefusal` says `past`). A place
+ * still held or declined on a match that is over offers nothing: "I'm in" and "Can't make it" both meet
+ * `assertLive` and are refused (review, 9 November 2026: an old reminder email opened both buttons, and
+ * each tap answered "This match has already happened"). A place the viewer took stays "confirmed". Pure.
+ */
+export function inviteStateOf(o: { cancelled: boolean; over: boolean; slotStatus: string; mine: boolean }): InviteState {
+  if (o.cancelled) return "cancelled";
+  if (o.slotStatus === "invited" || o.slotStatus === "declined") return o.over ? "past" : o.slotStatus;
+  return (o.slotStatus === "confirmed" || o.slotStatus === "joined") && o.mine ? "confirmed_mine" : "gone";
+}
 
 /**
  * What a personal link's page shows. `inMatch`: the viewer's record holds a place in this match
@@ -301,6 +313,7 @@ export type InviteView = "actions" | "declined" | "held_for" | "open_again" | "c
  */
 export function inviteView(state: InviteState, inMatch: boolean, theirs: boolean): InviteView {
   if (state === "cancelled") return "cancelled";
+  if (state === "past") return "past";
   if (state === "confirmed_mine") return "confirmed";
   if (state === "gone") return inMatch ? "already_in" : "gone";
   const other = inMatch && !theirs;

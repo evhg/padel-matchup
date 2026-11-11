@@ -106,7 +106,7 @@ export function ManagePanel({ slug, status, categories }: { slug: string; status
                       className="btn-ghost btn-xs text-muted"
                       disabled={pending}
                       onClick={() => {
-                        if (confirm(t("tournament.withdrawConfirm"))) act(() => withdrawPairAction(slug, p.id));
+                        if (confirm(t(!p.waiting && c.waiting.length > 0 ? "tournament.withdrawConfirm" : "tournament.withdrawConfirmEmpty"))) act(() => withdrawPairAction(slug, p.id));
                       }}
                     >
                       {t("tournament.withdraw")}

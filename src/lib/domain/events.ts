@@ -10,7 +10,7 @@ import { DomainError } from "./errors";
 import { cleanAgeMin, cleanCategory, type EventCategory } from "./eventTags";
 import { formatOf } from "./formats";
 import { hasRange, normalizeRange } from "./levels";
-import { defaultLength, parseMatchLength, type MatchLength } from "./matchLength";
+import { defaultLength, isOver, parseMatchLength, type MatchLength } from "./matchLength";
 import { vacateSeats } from "./slots";
 import { venueSlugFor } from "./venueBoard";
 
@@ -311,6 +311,22 @@ export type UpdateEventResult = {
  */
 export type UpdateEventActor = { asOrganiser?: boolean };
 
+/**
+ * What a seated player who is not the organiser may change in "Change the details": the day and the
+ * time (with the zone they are read in), the length, the place, the court, the map and the note. The
+ * owner's decision of 9 November 2026 (DECIDING rule 34, "Players edit only time/place/note"):
+ * the level range, "when full", the venue board, the booking link, the cost, the title and the tags are
+ * the organiser's, and a change to them told nobody. `updateEvent` refuses any other field from such a
+ * player (`organiserOnly`), whatever the browser sends; the edit form shows only these.
+ */
+export const PLAYER_EDIT_FIELDS = ["startsAt", "durationMinutes", "tz", "venueName", "venueMapUrl", "court", "note"] as const satisfies readonly (keyof UpdateEventInput)[];
+
+/** The fields of `patch` that only the organiser may change: every field sent that is not a player's (`PLAYER_EDIT_FIELDS`). Pure. */
+export function organiserOnlyFields(patch: UpdateEventInput): (keyof UpdateEventInput)[] {
+  const mine: readonly string[] = PLAYER_EDIT_FIELDS;
+  return (Object.keys(patch) as (keyof UpdateEventInput)[]).filter((k) => patch[k] !== undefined && !mine.includes(k));
+}
+
 export async function updateEvent(db: Db, eventId: string, actorPlayerId: string | null, patch: UpdateEventInput, now = new Date(), actor: UpdateEventActor = {}): Promise<UpdateEventResult> {
   // A text with no link in it is refused before anything is read or written, never stored as no link.
   const booking = patch.bookingUrl === undefined ? undefined : bookingLinkOf(patch.bookingUrl);
@@ -323,6 +339,10 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
     const [ev] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
     if (!ev) throw new DomainError("not_found");
     if (ev.status === "cancelled") throw new DomainError("cancelled");
+    // The organiser by the session or the manage link (`asOrganiser`), or the creator's own record. Anybody
+    // else here is a seated player (the caller checked the seat), and changes only a player's fields.
+    const organiser = Boolean(actor.asOrganiser) || (Boolean(actorPlayerId) && actorPlayerId === ev.creatorPlayerId);
+    if (!organiser && organiserOnlyFields(patch).length > 0) throw new DomainError("forbidden", "organiserOnly");
 
     const set: Partial<typeof events.$inferInsert> = {};
     let calendarChanged = false;
@@ -480,8 +500,8 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
 
     const [updated] = await tx.update(events).set(set).where(eq(events.id, ev.id)).returning();
     // An edition is made from its series row, so a tag the series' organiser sets here would be gone by
-    // the next edition. Their change is the series' change too; a player who edits the edition changes
-    // this date only. One update by primary key, and only when the tag moved.
+    // the next edition. Their change is the series' change too; an organiser who is not the series'
+    // (a manage link with no player) changes this date only. One update by primary key, and only when the tag moved.
     if (ev.seriesId && actorPlayerId && ("category" in set || "ageMin" in set)) {
       await tx
         .update(series)
@@ -501,11 +521,19 @@ export async function updateEvent(db: Db, eventId: string, actorPlayerId: string
   });
 }
 
-export async function cancelEvent(db: Db, eventId: string, actorPlayerId: string | null): Promise<Event> {
+/**
+ * Calls a match off. A match that is over is refused (`past`): calling it off took its result off the
+ * page and the ranking, and sent every player a cancellation for a game they had played (review, 9
+ * November 2026). `o.didntPlay` is the one exception, the organiser's "We didn't play" on the score
+ * nudge, which comes when the match ends and says that it never took place.
+ */
+export async function cancelEvent(db: Db, eventId: string, actorPlayerId: string | null, o: { now?: Date; didntPlay?: boolean } = {}): Promise<Event> {
+  const now = o.now ?? new Date();
   return db.transaction(async (tx) => {
     const [ev] = await tx.select().from(events).where(eq(events.id, eventId)).for("update");
     if (!ev) throw new DomainError("not_found");
     if (ev.status === "cancelled") return ev;
+    if (!o.didntPlay && (ev.status === "past" || isOver(ev, now))) throw new DomainError("past");
     const [updated] = await tx
       .update(events)
       .set({ status: "cancelled", icsSequence: ev.icsSequence + 1 })
@@ -529,11 +557,12 @@ export const organiserAlone = (roster: Pick<Slot, "status" | "playerId">[], crea
 };
 
 /**
- * Who may change a match's details (time, length, place, court, note, price): the organiser, and
- * every player who holds a seat in it. The owner, 9 October 2026: "any player should be able to
- * change match details" - this is a friendly app among people who play together, and the one who
- * books the court is often not the one who made the match. Cancelling the match, removing people
- * and the organiser's own switches stay with the organiser.
+ * Who may change a match's details: the organiser, and every player who holds a seat in it. The owner,
+ * 9 October 2026: "any player should be able to change match details" - this is a friendly app among
+ * people who play together, and the one who books the court is often not the one who made the match.
+ * Since the owner's decision of 9 November 2026 a player changes the time, the length, the place and the
+ * note only (`PLAYER_EDIT_FIELDS`, held by `updateEvent`). Cancelling the match, removing people and the
+ * organiser's settings stay with the organiser.
  */
 export const canEditMatchDetails = (detail: { roster: Pick<Slot, "status" | "playerId">[] }, viewer: { isCreator: boolean; playerId: string | null | undefined }): boolean =>
   viewer.isCreator || isSeated(detail, viewer.playerId);

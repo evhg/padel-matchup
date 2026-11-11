@@ -93,6 +93,11 @@ export function NoticeSettings({ on, quietFrom, quietTo, summary }: { on: Record
             ✓ {t("saved")}
           </p>
         )}
+        {saved === false && (
+          <p role="alert" className="text-sm font-semibold text-danger">
+            {t("notSaved")}
+          </p>
+        )}
       </form>
     </details>
   );
