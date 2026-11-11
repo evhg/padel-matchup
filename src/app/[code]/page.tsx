@@ -999,8 +999,9 @@ async function EventPage({ params, searchParams }: Props) {
             playAgainQuiet={!viewer.isCreator}
           />
         )}
-        {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their faces). */}
-        {over && !cancelled && canPlayAgain && (
+        {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their
+            faces). From the start, as the rule allows (src/lib/domain/highlights.ts), like the court photo. */}
+        {started && !cancelled && canPlayAgain && (
           <div className="px-1">
             <HighlightsLink code={code} url={ev.highlightsUrl ?? null} canRemove={Boolean(me && ev.highlightsUrl && (ev.highlightsBy === me.id || ev.creatorPlayerId === me.id))} />
           </div>
