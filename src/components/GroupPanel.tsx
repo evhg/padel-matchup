@@ -34,7 +34,8 @@ export function CreateGroupButton({ code, suggestions }: { code: string; suggest
   if (!open) {
     return (
       <div className="mt-5 border-t border-line pt-4">
-        <button type="button" className="btn-secondary w-full" onClick={() => setOpen(true)}>
+        {/* Quiet: an occasional step, never the screen's job (DECIDING rule 1, the audit of 9 November 2026). */}
+        <button type="button" className="btn-ghost w-full" onClick={() => setOpen(true)}>
           {`👥 ${t("group.create")}`}
         </button>
         <p className="mt-1.5 text-xs text-faint">{t("group.createHelp")}</p>
@@ -300,37 +301,45 @@ export function GroupMembers({ code, members }: { code: string; members: MemberR
   const t = useTranslations();
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <ul className="mt-3 flex flex-col gap-2">
-      {members.map((m) => (
-        <li key={m.key} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
-          <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-on-ink">{m.name.slice(0, 1).toUpperCase()}</span>
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="truncate font-bold">{m.name}</span>
-            {m.level != null && <span className="chip-muted tabular-nums">{formatLevel(m.level)}</span>}
-            {m.isMe && <span className="chip-open">{t("common.you")}</span>}
-            {m.role === "admin" && <span className="chip-muted">{t("group.admin")}</span>}
-          </div>
-          {m.handle && (
-            <button
-              type="button"
-              className="btn-ghost btn-xs"
-              disabled={pending && busy === m.handle}
-              onClick={() => {
-                const handle = m.handle!;
-                setBusy(handle);
-                start(async () => {
-                  await removeGroupMemberAction(code, handle);
-                  setBusy(null);
-                });
-              }}
-            >
-              {t("group.remove")}
-            </button>
-          )}
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="mt-3 flex flex-col gap-2">
+        {members.map((m) => (
+          <li key={m.key} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
+            <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-on-ink">{m.name.slice(0, 1).toUpperCase()}</span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="truncate font-bold">{m.name}</span>
+              {m.level != null && <span className="chip-muted tabular-nums">{formatLevel(m.level)}</span>}
+              {m.isMe && <span className="chip-open">{t("common.you")}</span>}
+              {m.role === "admin" && <span className="chip-muted">{t("group.admin")}</span>}
+            </div>
+            {m.handle && (
+              <button
+                type="button"
+                className="btn-ghost btn-xs"
+                disabled={pending && busy === m.handle}
+                onClick={() => {
+                  // A removal takes the member off the crew at once, so it asks first, as Leave and Delete do.
+                  if (!confirm(t("group.removeConfirm", { name: m.name }))) return;
+                  const handle = m.handle!;
+                  setBusy(handle);
+                  setError(null);
+                  start(async () => {
+                    const r = await removeGroupMemberAction(code, handle);
+                    if (!r.ok) setError(r.error === "forbidden" ? t("errors.forbidden") : r.error === "not_found" ? t("errors.not_found") : t("errors.generic"));
+                    setBusy(null);
+                  });
+                }}
+              >
+                {t("group.remove")}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {error && <p className="mt-2 text-sm font-semibold text-danger">{error}</p>}
+    </>
   );
 }
 

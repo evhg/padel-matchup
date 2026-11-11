@@ -860,8 +860,10 @@ export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Pl
 /** 24h reminder to an unconfirmed invitee with an email (decision 12). */
 export async function sendInviteReminder(db: Db, ev: Event, slot: Slot, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !slot.invitedEmail || !slot.inviteCode) return false;
-  // Opted out counts as handled: no retry every hour.
-  if (await isOptedOut(db, slot.invitedEmail)) return true;
+  // Opted out: nothing went, so this is no reminder (`findInviteRemindersDue` leaves such an address out;
+  // this holds for one that opted out after the job read it). Until 9 November 2026 it answered true, and
+  // the organiser's row said "Reminded by email" for an address that asked for none.
+  if (await isOptedOut(db, slot.invitedEmail)) return false;
   const c = await ctx(db, ev, creator.locale);
   const link = inviteUrl(baseUrl(), ev.code, slot.inviteCode);
   const { html, text } = layout({

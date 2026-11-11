@@ -4,18 +4,20 @@ import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer, manageUrlFor, personalTokenFor } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
-import { HeldMessage } from "@/components/HeldMessage";
 import { Header } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
 import { KeepTogether } from "@/components/KeepTogether";
 import { PushToggle } from "@/components/PushToggle";
 import { ScrollTop } from "@/components/ScrollTop";
-import { CopyButton, LinkBox, QrFold, ShareButtons } from "@/components/ShareSheet";
+import { CopyButton, LinkBox, NativeShare, QrPanel, WhatsAppShare } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
-import { formatEventDay, formatEventTime } from "@/lib/dates";
+import { formatEventDay, formatEventTime, formatWeekdayTime } from "@/lib/dates";
 import { isClaimable } from "@/lib/domain/events";
+import { heldSeats, lineupNames, shareMessage } from "@/lib/domain/groupLine";
+import { isOver } from "@/lib/domain/matchLength";
+import { unreachedLine } from "@/lib/domain/unreached";
 import { heldMessageOf } from "@/lib/domain/heldRow";
 import { playerHasPush } from "@/lib/domain/push";
 import { pushEnabled, vapidPublicKey } from "@/lib/pushConfig";
@@ -23,7 +25,7 @@ import { telegramBotId } from "@/lib/telegram/api";
 import { getEventByCode } from "@/lib/domain/queries";
 import { venueWithCourt } from "@/lib/labels";
 import { personalPath } from "@/lib/personal";
-import { eventUrl } from "@/lib/share";
+import { copiedValue, eventUrl, telegramShareFor } from "@/lib/share";
 import { taggedUrl } from "@/lib/source";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
@@ -56,14 +58,36 @@ async function SharePage({ params }: Props) {
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const time = formatEventTime(ev.startsAt, ev.tz, locale);
   const venue = venueWithCourt(ev, { venueTbd: t("event.venueTbd"), courtNumber: (n) => t("event.courtNumber", { n }) });
-  const text = t("shareText.event", { day, time, venue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  // The one message for the held places, as under the organiser's line-up (the owner's decision A of 6
+  // The held places a browser that knows nobody can take from the plain link (the owner's decision A of 6
   // November 2026): a new match with Erik and three held places read "No spots left. Tap to join" here,
   // and nothing told the three what to do. One bounded read, only while a held place keeps a record with
   // no typed address and no twin; nothing on a fixed-pairs night or a match called off or over.
   const now = new Date();
   const heldMsg = await heldMessageOf(db, ev, [...detail.roster, ...detail.waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null })), now, { email: emailEnabled(), telegram: Boolean(telegramBotId()) });
-  const heldText = heldMsg.names.length > 0 ? t("shareText.heldGroup", { day, time, venue, count: heldMsg.names.length, names: new Intl.ListFormat(locale, { type: "conjunction" }).format(heldMsg.names), url }) : null;
+  // The one message, as the match page's bar sends it (`shareMessage`): the held players, the open spots, or the line-up when full.
+  const seats = detail.roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }));
+  const text =
+    shareMessage(t as unknown as (key: string, values?: Record<string, string | number>) => string, {
+      over: ev.status === "past" || isOver(ev, now),
+      result: null,
+      heldNames: heldMsg.names,
+      spots: spotsLeft,
+      locale,
+      url,
+      day,
+      time,
+      venue,
+      when: formatWeekdayTime(ev.startsAt, ev.tz, locale),
+      venueName: ev.venueName,
+      names: lineupNames(seats),
+      capacity: ev.capacity,
+      held: heldSeats(seats),
+      waitlist: ev.whenFull === "waitlist",
+    }) ?? url;
+  const listOf = (all: readonly string[]) => {
+    const { shown, more } = unreachedLine(all);
+    return new Intl.ListFormat(locale, { type: "conjunction" }).format([...shown, ...(more ? [t("creator.unreachedMore", { count: more })] : [])]);
+  };
   // No manage link for a session by name either: it never expires and works in any browser (`manageUrlFor`).
   const mUrl = await manageUrlFor(viewer.player, ev);
   // No personal link for a session by name that proved nothing (DECIDING rule 34): it would be a full sign-in.
@@ -88,44 +112,69 @@ async function SharePage({ params }: Props) {
           </p>
         </section>
         <LinkBox url={url} display={`${shortHost()}/${code}`} />
-        <ShareButtons url={url} text={text} />
-        {heldText && <HeldMessage where="share" url={url} text={heldText} names={heldMsg.names} others={heldMsg.others} />}
-        <section className="card">
-          <QrFold url={url} label={t("share.qrHint")} />
-        </section>
-        <section className="card md:hidden">
-          <h2 className="font-extrabold">📸 {t("share.story")}</h2>
-          <p className="mt-0.5 text-sm text-muted">{t("share.storyHint", { link: `${shortHost()}/${code}` })}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <a href={`/${code}/story`} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm">
-              {t("share.storyOpen")}
-            </a>
-            <CopyButton value={taggedUrl(url, "ig")} label={t("share.storyCopy")} className="btn-ghost btn-sm" />
-          </div>
-        </section>
-        <Link href={`/${code}`} prefetch={false} className="btn-secondary w-full text-lg">
+        {/* The one share (the owner, 9 November 2026): WhatsApp with the message for this state, Copy link, then the match. */}
+        <div className="grid grid-cols-2 gap-2">
+          <WhatsAppShare url={url} text={text} className=" col-span-2" testId="share-whatsapp" />
+          <CopyButton value={copiedValue(url, text, "link")} label={t("share.copyLink")} className="btn-ghost col-span-2" />
+        </div>
+        {heldMsg.names.length > 0 && heldMsg.others.length > 0 && (
+          <p className="px-1 text-sm text-muted" data-testid="held-message-not">
+            {t("creator.heldMessageNotShare", { names: listOf(heldMsg.others), count: heldMsg.others.length })}
+          </p>
+        )}
+        <Link href={`/${code}`} prefetch={false} className="btn-primary w-full text-lg">
           {t(isTournament ? "share.openTournament" : "share.openMatch")} →
         </Link>
 
-        {pushHere && <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} card />}
-        <HomeScreenPrompt personalPath={token ? personalPath(token) : null} installed={Boolean(viewer.player?.homescreenAt)} />
-
-        {emailEnabled() && (
-          <section className="card">
-            <EmailField initial={detail.creator.email} mode="creator" code={code} title={t("share.emailTitle")} help={t("share.emailHelp")} emailEnabled notifyOn={detail.creator.emailNotifications} />
-          </section>
-        )}
-
-        {mUrl && (
-          <section className="card">
-            <h2 className="font-extrabold">{t("share.manageTitle")}</h2>
-            <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{mUrl}</code>
-              <CopyButton value={mUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+        {/* Everything else, one line that says what is in it (DECIDING rule 1): each also lives on the match page or on My matches. */}
+        <details className="card group" data-testid="share-more">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block font-bold">{t("create.more")}</span>
+              <span className="block truncate text-xs text-muted">{t("share.moreSummary")}</span>
+            </span>
+            <span className="shrink-0 text-faint transition group-open:rotate-180" aria-hidden>
+              ⌄
+            </span>
+          </summary>
+          <div className="mt-4 flex flex-col gap-5">
+            <div className="grid grid-cols-2 gap-2">
+              <a href={telegramShareFor(url, text)} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
+                {t("share.telegram")}
+              </a>
+              <NativeShare url={url} text={text} />
             </div>
-          </section>
-        )}
+            <div>
+              <div className="text-sm font-bold">QR · {t("share.qrHint")}</div>
+              <div className="mt-3">
+                <QrPanel url={url} />
+              </div>
+            </div>
+            <div>
+              <h2 className="font-extrabold">📸 {t("share.story")}</h2>
+              <p className="mt-0.5 text-sm text-muted">{t("share.storyHint", { link: `${shortHost()}/${code}` })}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <a href={`/${code}/story`} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
+                  {t("share.storyOpen")}
+                </a>
+                <CopyButton value={taggedUrl(url, "ig")} label={t("share.storyCopy")} className="btn-ghost btn-sm" />
+              </div>
+            </div>
+            {pushHere && <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />}
+            <HomeScreenPrompt personalPath={token ? personalPath(token) : null} installed={Boolean(viewer.player?.homescreenAt)} />
+            {emailEnabled() && <EmailField initial={detail.creator.email} mode="creator" code={code} title={t("share.emailTitle")} help={t("share.emailHelp")} emailEnabled notifyOn={detail.creator.emailNotifications} />}
+            {mUrl && (
+              <div>
+                <h2 className="font-extrabold">{t("share.manageTitle")}</h2>
+                <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{mUrl}</code>
+                  <CopyButton value={mUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
       </main>
     </>
   );

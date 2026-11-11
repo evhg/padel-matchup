@@ -39,7 +39,8 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
         setState({ kind: "sent", channel: r.data.channel, reply: r.data.reply, feedback: r.data.kind === "feedback" });
         if (r.data.kind !== "feedback") setText("");
       }
-      else setState({ kind: "error", msg: r.error === "too_many" ? t("tooMany") : t("tooShort") });
+      // "A few more words" is for a note that is too short, and the form checks that before it sends.
+      else setState({ kind: "error", msg: r.error === "too_many" ? t("tooMany") : t("notSent") });
     });
   };
   return (

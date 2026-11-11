@@ -2,7 +2,7 @@
 // login callback rejects forged data, My matches shows the Telegram sign-in, and the way back from
 // Telegram (signed fields in the hash) signs the player in, in the same tab.
 import { createHash, createHmac } from "node:crypto";
-import { BASE, finish, iphone, launch, makeCheck, lessonDay } from "./lib.mjs";
+import { BASE, finish, iphone, launch, makeCheck, lessonDay, openSettings } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -331,6 +331,7 @@ try {
   await page.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
   const tiaCode = page.url().split("/").slice(-2)[0];
   await page.goto(`${BASE}/me`);
+  await openSettings(page); // behind "Settings" on My matches (the owner, 9 November 2026)
   check("signed-in My matches shows the Telegram row", (await page.getByText("Telegram", { exact: true }).count()) === 1 && (await page.getByText(/Sign in with Telegram on any device/).count()) === 1);
 
   // The match page's "stay updated" card, all the way through: the Telegram choice, the bot's answer

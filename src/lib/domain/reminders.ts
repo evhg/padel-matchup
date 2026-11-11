@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNotNull, lte, or, sql, isNull, type SQL } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player, type Slot } from "@/db/schema";
+import { emailOptOuts, events, players, scores, slots, tournamentMatches, tournamentRounds, type Event, type Player, type Slot } from "@/db/schema";
 import { INVITE_REMINDER_INTERVAL_MS, SECOND_SCORE_REMINDER_DELAY_MS } from "@/lib/config";
 import { isOver, SHORTEST_LENGTH } from "./matchLength";
 
@@ -44,6 +44,11 @@ export async function findInviteRemindersDue(db: Db, now = new Date()): Promise<
       and(
         eq(slots.status, "invited"),
         isNotNull(slots.invitedEmail),
+        // An address that opted out of organisers' mail gets no reminder, and so no "Reminded by email" on
+        // the organiser's row (review, 9 November 2026). Until then the job counted it as reminded every
+        // day and the row said so. One lookup down the opt-out list's primary key; the address is kept
+        // normalised (`reserveLocked`), as the list keeps it.
+        sql`not exists (select 1 from ${emailOptOuts} o where o.email = ${slots.invitedEmail})`,
         inArray(events.status, ["open", "full"]),
         gt(events.startsAt, now),
         or(

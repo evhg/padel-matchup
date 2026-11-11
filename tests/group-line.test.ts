@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { countParts, heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, TELL_MAX, tellGroupText } from "@/lib/domain/groupLine";
+import { countParts, heldSeats, lineupNames, namesThatFit, PREVIEW_MAX, previewText, shareMessage, shareMoment, TELL_MAX, tellGroupText, type ShareInput } from "@/lib/domain/groupLine";
 import { createTranslator } from "next-intl";
 import { catalogue } from "./helpers/render";
 import { formatWeekdayTime } from "@/lib/dates";
 import { createRequestStoreForRender } from "next/dist/server/async-storage/request-store";
-import { nativeShareData, tagForWhatsapp, tagMatchLinks, tagMatchUrl, telegramShareUrl, whatsappShareUrl } from "@/lib/share";
+import { nativeShareData, shareTextKey, tagForWhatsapp, tagMatchUrl, telegramShareFor, telegramShareUrl, whatsappShareUrl, withoutLink } from "@/lib/share";
 import { countedSource, isCrawler, isFullPageLoad, viewCounter, viewCounters } from "@/lib/source";
 import { organiserAlone } from "@/lib/domain/events";
 
@@ -93,11 +93,21 @@ describe("a WhatsApp link says it is one", () => {
 // the share button tags the link, the match page counts a view by somebody with no seat under that tag,
 // and the join and the new record count under the same tag.
 describe("every share button says where the link went", () => {
-  it("tags the Telegram share and the copied link as the WhatsApp share is tagged", () => {
+  it("tags the Telegram share and the copied link as the WhatsApp share is tagged, and the Telegram message holds the link once", () => {
     const url = "https://kicksma.sh/7KQ2";
-    const tg = telegramShareUrl(tagMatchUrl(url, "tg"), tagMatchLinks(`Padel Sat: ${url}`, url, "tg"));
+    const tg = telegramShareFor(url, `Padel Sat: ${url}`);
     expect(new URL(tg).searchParams.get("url")).toBe("https://kicksma.sh/7KQ2?s=tg");
-    expect(new URL(tg).searchParams.get("text")).toBe("Padel Sat: https://kicksma.sh/7KQ2?s=tg");
+    // Telegram puts the `url` beside the text, so the text carries no second copy (review, 9 November 2026).
+    expect(new URL(tg).searchParams.get("text")).toBe("Padel Sat:");
+    // A personal link's box: its own link once too.
+    const personal = "https://kicksma.sh/7KQ2/i/abc123";
+    const tgPersonal = new URL(telegramShareFor(personal, `Ana, I saved you a spot: ${personal}`));
+    expect([tgPersonal.searchParams.get("url"), tgPersonal.searchParams.get("text")]).toEqual([personal, "Ana, I saved you a spot:"]);
+    // "Send all invites in one message": the match link is the share's own, and the personal links in the text stay whole.
+    const invites = `Sat 18:00\nAna: ${url}/i/abc123\nBo: ${url}/i/def456`;
+    expect(new URL(telegramShareFor(url, invites)).searchParams.get("text")).toBe(invites);
+    expect(withoutLink(`Join: ${url} now ${url}`, url)).toBe("Join: now");
+    expect(telegramShareUrl("u", "t")).toBe("https://t.me/share/url?url=u&text=t");
     expect(tagMatchUrl(url, "link")).toBe("https://kicksma.sh/7KQ2?s=link");
     // Only a bare match link: a coach's student link or an invitation is copied as it is.
     expect(tagMatchUrl("https://kicksma.sh/c/olga", "link")).toBe("https://kicksma.sh/c/olga");
@@ -116,6 +126,14 @@ describe("every share button says where the link went", () => {
     expect(countedSource("share")).toBe("share");
     // A coach's page or an invitation is shared as it is.
     expect(nativeShareData("https://kicksma.sh/c/olga", "Book me").url).toBe("https://kicksma.sh/c/olga");
+    // A personal link that starts with the match link stays whole in the text (it lost its start before).
+    expect(nativeShareData(url, `Ana: ${url}/i/abc123`).text).toBe(`Ana: ${url}/i/abc123`);
+  });
+
+  it("the share page and the match page take one share text: a full match with a waiting list says so", () => {
+    expect(shareTextKey(0, "waitlist")).toBe("shareText.eventFull");
+    expect(shareTextKey(0, "closed")).toBe("shareText.event");
+    expect(shareTextKey(2, "waitlist")).toBe("shareText.event");
   });
 
   it("counts a match page view by a visitor with no seat, under the link's tag", () => {
@@ -224,5 +242,85 @@ describe("the match page's count line", () => {
     expect(say("en", tdsv.slice(0, 3).map((s) => ({ ...s, status: "joined" })).concat({ status: "joined", name: "Bo" }))).toBe("No spots left");
     const night = ["Ana", "Bo", "Cy", "Di"].map((name) => ({ status: "invited", name }));
     expect(say("en", night)).toBe("4 places held");
+  });
+});
+
+/**
+ * The one share (the owner, 9 November 2026: "Bottom bar (Recommended)"): one button, one message that fits
+ * the state. The audit of the same day found "No spots left. Tap to join" on the share page and three
+ * different messages for one match link on the organiser's page.
+ */
+describe("the one share's message, by the state of the match", () => {
+  type L = "en" | "ru" | "es";
+  const tr = (locale: L) => createTranslator({ locale, messages: catalogue(locale) as never }) as unknown as (key: string, values?: Record<string, string | number>) => string;
+  const base = (locale: L, o: Partial<ShareInput> = {}): ShareInput => ({
+    locale,
+    over: false,
+    result: null,
+    heldNames: [],
+    spots: 0,
+    url: "https://kicksma.sh/6WC9",
+    day: "Sun, Nov 15",
+    time: "19:00",
+    venue: "Club Padel Test",
+    when: "Sun 19:00",
+    venueName: "Club Padel Test",
+    names: ["Sofia"],
+    capacity: 4,
+    held: 0,
+    waitlist: true,
+    ...o,
+  });
+  const say = (locale: L, o: Partial<ShareInput>) => shareMessage(tr(locale), base(locale, o));
+
+  it("picks the state: held places first, then open spots, then full; after the match only a result has one", () => {
+    expect(shareMoment({ over: false, result: null, heldNames: ["Maria"], spots: 1 })).toBe("held");
+    expect(shareMoment({ over: false, result: null, heldNames: [], spots: 2 })).toBe("open");
+    expect(shareMoment({ over: false, result: null, heldNames: [], spots: 0 })).toBe("full");
+    expect(shareMoment({ over: true, result: { line: "x", url: "u" }, heldNames: ["Maria"], spots: 3 })).toBe("result");
+    expect(shareMoment({ over: true, result: null, heldNames: [], spots: 0 })).toBeNull();
+  });
+
+  it("held places the plain link fills: the held players' message, in every language", () => {
+    const held = { heldNames: ["Maria", "Jordi"], held: 3, names: ["Sofia"] };
+    expect(say("en", held)).toBe("🎾 Padel Sun, Nov 15 at 19:00 — Club Padel Test. I'm holding places for Maria and Jordi. Open the link and tap your name: https://kicksma.sh/6WC9");
+    expect(say("ru", held)).toContain("Держу места для: Maria и Jordi");
+    expect(say("es", held)).toContain("Guardo plazas para Maria y Jordi");
+  });
+
+  it("held places and an open spot: the message names both, and says how to join", () => {
+    const both = { heldNames: ["Maria"], held: 1, spots: 1 };
+    expect(say("en", both)).toBe("🎾 Padel Sun, Nov 15 at 19:00 — Club Padel Test. I'm holding a place for Maria, and 1 spot is open. Open the link: tap your name, or join: https://kicksma.sh/6WC9");
+    expect(say("ru", both)).toContain("Свободно ещё 1 место");
+    expect(say("es", both)).toContain("queda 1 plaza libre");
+  });
+
+  it("open spots: the spots left and \"Tap to join\"", () => {
+    expect(say("en", { spots: 2 })).toBe("🎾 Padel Sun, Nov 15 at 19:00 — Club Padel Test. 2 spots left. Tap to join: https://kicksma.sh/6WC9");
+    expect(say("ru", { spots: 2 })).toContain("2 места свободно. Записаться:");
+    expect(say("es", { spots: 1 })).toContain("1 plaza. Toca para apuntarte:");
+  });
+
+  it("full: the line-up line, never \"No spots left. Tap to join\" in any language", () => {
+    const full = { names: ["Sofia", "Maria", "Jordi", "Tim"] };
+    expect(say("en", full)).toBe("🎾 Sun 19:00 · Club Padel Test · 4/4: Sofia, Maria, Jordi, Tim · full, waiting list open\nhttps://kicksma.sh/6WC9");
+    expect(say("en", { ...full, waitlist: false })).toBe("🎾 Sun 19:00 · Club Padel Test · 4/4: Sofia, Maria, Jordi, Tim · full\nhttps://kicksma.sh/6WC9");
+    for (const l of ["en", "ru", "es"] as const) {
+      const text = say(l, full) ?? "";
+      expect(text).toContain("4/4: Sofia, Maria, Jordi, Tim");
+      for (const never of ["Tap to join", "No spots left", "Записаться", "мест нет.", "Toca para apuntarte"]) expect(text).not.toContain(never);
+    }
+  });
+
+  it("held places the link cannot fill and no spot: the line-up line with the held count", () => {
+    expect(say("en", { held: 3, waitlist: false })).toBe("🎾 Sun 19:00 · Club Padel Test · 1/4: Sofia · 3 held · full\nhttps://kicksma.sh/6WC9");
+  });
+
+  it("after the match: the result card's share, and nothing for a match with no result", () => {
+    const result = { line: "Sofia & Micky beat Adrian & Nicolai 6-3 6-4", url: "https://kicksma.sh/EeHT/card?s=card" };
+    expect(say("en", { over: true, result })).toBe("🎾 Sofia & Micky beat Adrian & Nicolai 6-3 6-4 · Sun, Nov 15\nhttps://kicksma.sh/EeHT/card?s=card");
+    expect(say("ru", { over: true, result })).toContain(result.url);
+    expect(say("es", { over: true, result })).toContain(result.line);
+    expect(say("en", { over: true, spots: 2 })).toBeNull();
   });
 });

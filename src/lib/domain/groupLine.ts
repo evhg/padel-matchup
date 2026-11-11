@@ -105,3 +105,82 @@ export function previewText(p: LineParts, max = PREVIEW_MAX): string {
   if (p.names.length === 0 || room < 8) return fixed.length <= max ? fixed : [p.spots, p.when].filter(Boolean).join(" · ");
   return `${namesThatFit(p.names, room)} · ${fixed}`;
 }
+
+/**
+ * The one share's message, by the state of the match (the owner, 9 November 2026: the one share lives in
+ * the bottom bar, "with a message that fits the state"). One function for every place that shares a
+ * match: the bar on the match page and the share page after a new match, so two screens never give
+ * one state two different words (the audit of 9 November 2026 found "No spots left. Tap to join" on
+ * the share page beside "Full, but the waitlist is open" on the match page).
+ *
+ * - `held`: the organiser holds places that the plain link fills (`heldMessageOf`): the held players'
+ *   message, and the open spots too when there are any. Only the organiser's view has these names.
+ * - `open`: spots are open: "1 spot left. Tap to join".
+ * - `full`: no spot is open: the line-up line ("4/4: Ana, Bo, Cy, Dee · full"). Never "Tap to join".
+ * - `result`: the match is over and has a result: the result card's share.
+ *
+ * A match over with no result, or called off, has no message (null). Pure: the words come from `t`.
+ */
+export type ShareMoment = "held" | "open" | "full" | "result";
+
+export type ShareFacts = {
+  /** The match is over (or the sweep said so). */
+  over: boolean;
+  /** The result card's line and its tagged link, once a score exists. */
+  result: { line: string; url: string } | null;
+  /** The held places the plain link fills, by name; empty for every viewer but the organiser. */
+  heldNames: readonly string[];
+  /** Open spots on the line-up. */
+  spots: number;
+};
+
+export function shareMoment(f: ShareFacts): ShareMoment | null {
+  if (f.over) return f.result ? "result" : null;
+  if (f.heldNames.length > 0) return "held";
+  if (f.spots > 0) return "open";
+  return "full";
+}
+
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+export type ShareInput = ShareFacts & {
+  locale: string;
+  /** The match's own link, untagged: the button tags it for its channel. */
+  url: string;
+  /** "Sun, Nov 15", "19:00" and the venue with its court, for the sentences. */
+  day: string;
+  time: string;
+  venue: string;
+  /** For the line-up line: "Sun 19:00", the club as typed, the names in, the capacity, the held count. */
+  when: string;
+  venueName: string | null;
+  names: readonly string[];
+  capacity: number;
+  held: number;
+  /** A full match takes a waiting list: the line-up line says so. */
+  waitlist: boolean;
+};
+
+/** The one share's text for this state, or null when there is nothing to share. */
+export function shareMessage(t: Translate, s: ShareInput): string | null {
+  const moment = shareMoment(s);
+  if (!moment) return null;
+  if (moment === "result") return t("shareText.result", { line: s.result!.line, day: s.day, url: s.result!.url });
+  if (moment === "held") {
+    const names = new Intl.ListFormat(s.locale, { type: "conjunction" }).format([...s.heldNames]);
+    const base = { day: s.day, time: s.time, venue: s.venue, count: s.heldNames.length, names, url: s.url };
+    return s.spots > 0 ? t("shareText.heldOpen", { ...base, open: s.spots }) : t("shareText.heldGroup", base);
+  }
+  if (moment === "open") return t("shareText.event", { day: s.day, time: s.time, venue: s.venue, spots: t("shareText.spotsLeft", { count: s.spots }), url: s.url });
+  return tellGroupText(
+    {
+      when: s.when,
+      venue: s.venueName,
+      names: s.names,
+      capacity: s.capacity,
+      held: s.held ? t("shareText.held", { count: s.held }) : null,
+      spots: t(s.waitlist ? "shareText.fullWaitlist" : "shareText.spots", { count: 0 }),
+    },
+    s.url,
+  );
+}

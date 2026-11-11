@@ -1,8 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { claimPaidAction, setPaidAction } from "@/actions/slots";
+import { errorLine } from "@/lib/errorLine";
 
 export type PaymentRow = { slotId: string; name: string; claimed: boolean; paid: boolean };
 
@@ -13,7 +14,17 @@ export type PaymentRow = { slotId: string; name: string; claimed: boolean; paid:
  */
 export function MatchPayments({ code, cost, rows, isOrganiser, mySlotId }: { code: string; cost: string; rows: PaymentRow[]; isOrganiser: boolean; /** The viewer's own seat, so a player id never reaches the browser. */ mySlotId: string | null }) {
   const t = useTranslations("event");
+  const tr = useTranslations();
   const [pending, start] = useTransition();
+  // A refused tap says why, under the list (`errors.<code>`).
+  const [error, setError] = useState<string | null>(null);
+  const act = (fn: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    setError(null);
+    start(async () => {
+      const r = await fn();
+      if (!r.ok) setError(tr(`errors.${errorLine(r.error)}`));
+    });
+  };
   const mine = mySlotId ? rows.find((r) => r.slotId === mySlotId) : undefined;
   const owing = rows.filter((r) => !r.paid).length;
 
@@ -33,7 +44,7 @@ export function MatchPayments({ code, cost, rows, isOrganiser, mySlotId }: { cod
                 className={r.paid ? "chip-open" : "chip-muted"}
                 disabled={pending}
                 data-testid={`paid-${r.slotId}`}
-                onClick={() => start(async () => void (await setPaidAction(code, r.slotId, !r.paid)))}
+                onClick={() => act(() => setPaidAction(code, r.slotId, !r.paid))}
               >
                 {r.paid ? t("paidYes") : r.claimed ? t("paidClaimed") : t("paidNot")}
               </button>
@@ -44,10 +55,11 @@ export function MatchPayments({ code, cost, rows, isOrganiser, mySlotId }: { cod
         ))}
       </ul>
       {mine && !mine.paid && !mine.claimed && (
-        <button type="button" className="btn-secondary" disabled={pending} data-testid="claim-paid" onClick={() => start(async () => void (await claimPaidAction(code)))}>
+        <button type="button" className="btn-secondary" disabled={pending} data-testid="claim-paid" onClick={() => act(() => claimPaidAction(code))}>
           {pending ? "…" : t("paidClaim")}
         </button>
       )}
+      {error && <p className="text-sm font-semibold text-danger">{error}</p>}
       <p className="text-xs text-faint">{t("paidNothingThrough")}</p>
     </section>
   );

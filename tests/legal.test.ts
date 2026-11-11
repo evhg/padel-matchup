@@ -563,6 +563,26 @@ describe("the privacy page tells the truth about the code", () => {
     }
   });
 
+  it("says that the download holds everything, and that a sign-in by name proves who it is before it downloads, in every language", () => {
+    // The owner, 9 November 2026: "Export holds everything" (`exportPlayerData`, `tests/export.test.ts` names each
+    // table) and "Name-only session: no export" (`/api/me/export` refuses a session by name with `proof_required`).
+    const WORDS = {
+      en: ["Download everything we hold about you", "came in by your name alone", "email code", "Telegram"],
+      ru: ["Скачайте всё, что мы о вас храним", "вошли по одному имени", "кодом из письма", "Telegram"],
+      es: ["Descarga todo lo que guardamos sobre ti", "entraste solo con tu nombre", "código por email", "Telegram"],
+    } as const;
+    const AFTER = { en: "then download or delete", ru: "а потом скачивайте или удаляйте", es: "y después descarga o borra" } as const;
+    for (const l of LOCALES) {
+      const rights = render(l, "privacy.rightsBody");
+      for (const words of WORDS[l]) expect(rights, `${l}: ${words}`).toContain(words);
+      // The proviso stands beside the download, before the deletion's sentence.
+      expect(rights.indexOf(WORDS[l][1]), l).toBeGreaterThan(rights.indexOf(WORDS[l][0]));
+      const about = render(l, "about.rightsBody");
+      for (const words of [WORDS[l][1], AFTER[l]]) expect(about, `${l}: ${words}`).toContain(words);
+    }
+    expect(LEGAL_UPDATED >= "2026-11-09").toBe(true);
+  });
+
   it("names the operator and the date, and no personal address", () => {
     for (const l of LOCALES) {
       for (const key of ["privacy.whoBody", "terms.whoBody"]) expect(render(l, key)).toContain(LEGAL_OPERATOR);

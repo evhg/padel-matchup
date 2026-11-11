@@ -31,7 +31,7 @@ export async function anonymizePlayer(
     .from(events)
     .where(and(eq(events.creatorPlayerId, playerId), gt(events.startsAt, now), inArray(events.status, ["open", "full"])));
   const cancelledEvents: Event[] = [];
-  for (const ev of upcomingOwn) cancelledEvents.push(await cancelEvent(db, ev.id, playerId));
+  for (const ev of upcomingOwn) cancelledEvents.push(await cancelEvent(db, ev.id, playerId, { now }));
 
   const mySlots = await db
     .select({ eventId: slots.eventId })

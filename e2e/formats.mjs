@@ -1,6 +1,6 @@
 // Formats and the Russian round: mexicano and King of the Court rounds, scores gating,
 // organizer-confirmed levels, opt-in rankings, city pages.
-import { BASE, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, openMore, finish, iphone, launch, makeCheck, shot, openSettings } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -66,7 +66,8 @@ try {
   await org.goto(BASE + "/");
   await org.getByPlaceholder("e.g. Alex").fill("Kira");
   check("format chips hidden for a plain match", (await org.getByRole("button", { name: "Mexicano", exact: true }).count()) === 0);
-  await org.getByRole("button", { name: /^Tournament/ }).click();
+  await openMore(org);
+  await org.getByTestId("type-line").click(); // "Tournament instead", the last line under More options
   check("tournament shows the three formats with americano selected", (await org.getByRole("button", { name: "Americano", exact: true }).getAttribute("aria-pressed")) === "true" && (await org.getByRole("button", { name: "King of the court", exact: true }).count()) === 1);
   await org.getByRole("button", { name: "Mexicano", exact: true }).click();
   check("mexicano explains itself and sets 24 points", (await org.getByText(/courts follow the standings/).count()) > 0 && (await org.locator("select").filter({ has: org.locator('option[value="p:21"]') }).inputValue()) === "p:24");
@@ -174,6 +175,7 @@ try {
   await org.goto(`${BASE}/v/rawai-padel-club/ranking`);
   check("club ranking exists but nobody opted in yet", (await org.getByRole("heading", { name: "Rawai Padel Club ranking" }).count()) === 1 && (await org.getByText(/nobody has opted in/).count()) > 0);
   await org.goto(`${BASE}/me`);
+  await openSettings(org); // behind "Settings" on My matches (the owner, 9 November 2026)
   const optIn = org.getByLabel(/Show me in rankings/);
   check("My matches offers the ranking opt-in, off by default", (await optIn.count()) === 1 && !(await optIn.isChecked()));
   await optIn.check();
@@ -197,7 +199,8 @@ try {
   check("public match shape carries the format", pub.json?.format === "king");
   // ---- First to N games: the other way a social tournament scores (the owner's note of 20 September) ----
   await org.goto(BASE + "/");
-  await org.getByRole("button", { name: /^Tournament/ }).click();
+  await openMore(org);
+  await org.getByTestId("type-line").click(); // "Tournament instead", the last line under More options
   await org.getByLabel("Score by").selectOption("g:4");
   // Sixteen at first to four games cannot rotate in two hours: the form says so before anybody books.
   await org.getByLabel("Players").selectOption("16");

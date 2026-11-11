@@ -12,7 +12,7 @@ import {
   type CompetitionStatus,
   type Player,
 } from "@/db/schema";
-import { isValidTimeZone } from "@/lib/dates";
+import { isValidTimeZone, utcToZonedParts } from "@/lib/dates";
 import { slugFrom } from "@/lib/translit";
 import { DomainError } from "./errors";
 import { LEVEL_MAX, LEVEL_MIN } from "./levels";
@@ -344,11 +344,32 @@ async function moveUp(db: Db, categoryId: string): Promise<CompetitionPair | nul
 export type Withdrawn = { pair: CompetitionPair; movedUp: CompetitionPair | null };
 
 /** Either player of the pair, or the organiser, takes the pair out; a spot that was held goes to the first pair waiting. */
-export async function withdrawPair(db: Db, input: { pairId: string; actorPlayerId: string; now?: Date }): Promise<Withdrawn> {
+/**
+ * Whether a player may still take their own pair out: not once the category's draw is done, and not
+ * after the last day of play. Before this the button showed in every state: a tap after the event
+ * moved a waiting pair up and told it so, for a tournament that was over. The organiser's desk is not
+ * held to it, and neither is an account that goes (`withdrawEntriesOf`).
+ */
+export function withdrawRefusal(c: Pick<Competition, "endsOn" | "tz">, category: Pick<CompetitionCategory, "drawStatus">, now: Date): "done" | "over" | null {
+  if (category.drawStatus === "done") return "done";
+  return utcToZonedParts(now, c.tz).date > c.endsOn ? "over" : null;
+}
+
+/** Whether a category shows its entry form to this viewer: open entries, no draw yet, and not a player already entered in it (the server answers `already_in`). */
+export const enterShown = (c: Pick<Competition, "status">, category: Pick<CompetitionCategory, "id" | "drawStatus">, mine: readonly Pick<CompetitionPair, "categoryId" | "status">[]): boolean =>
+  c.status === "open" && category.drawStatus === "none" && !mine.some((e) => e.categoryId === category.id && e.status !== "withdrawn");
+
+export async function withdrawPair(db: Db, input: { pairId: string; actorPlayerId: string; now?: Date; /** The account goes: every entry leaves, whatever the state. */ always?: boolean }): Promise<Withdrawn> {
   const { pair, competition } = await loadPair(db, input.pairId);
   const mine = pair.p1PlayerId === input.actorPlayerId || pair.p2PlayerId === input.actorPlayerId;
-  if (!mine && !isOrganizer(competition, input.actorPlayerId)) throw new DomainError("forbidden");
+  const organizer = isOrganizer(competition, input.actorPlayerId);
+  if (!mine && !organizer) throw new DomainError("forbidden");
   if (!inPlay(pair)) return { pair, movedUp: null };
+  if (!organizer && !input.always) {
+    const [category] = await db.select({ drawStatus: competitionCategories.drawStatus }).from(competitionCategories).where(eq(competitionCategories.id, pair.categoryId)).limit(1);
+    const refusal = category ? withdrawRefusal(competition, category, input.now ?? new Date()) : null;
+    if (refusal) throw new DomainError("closed", refusal);
+  }
   const [withdrawn] = await db
     .update(competitionPairs)
     .set({ status: "withdrawn", withdrawnAt: input.now ?? new Date(), claimToken: null })
@@ -365,7 +386,7 @@ export async function withdrawEntriesOf(db: Db, playerId: string, now = new Date
     .from(competitionPairs)
     .where(and(ne(competitionPairs.status, "withdrawn"), playerIn(playerId)));
   const out: Withdrawn[] = [];
-  for (const r of rows) out.push(await withdrawPair(db, { pairId: r.id, actorPlayerId: playerId, now }));
+  for (const r of rows) out.push(await withdrawPair(db, { pairId: r.id, actorPlayerId: playerId, now, always: true }));
   return out;
 }
 

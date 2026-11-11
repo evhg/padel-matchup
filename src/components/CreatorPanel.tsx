@@ -3,12 +3,14 @@
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { cancelEventAction, setBanterAction } from "@/actions/events";
+import { leaveAction } from "@/actions/slots";
+import { errorLine } from "@/lib/errorLine";
 import { EmailField } from "./EmailField";
 import { EditMatch } from "./EditMatch";
 import { PasteNames } from "./PasteNames";
 import type { PastView } from "@/lib/domain/pastAsk";
 import type { EventFormValues } from "./EventFields";
-import { CopyButton, ShareButtons, WhatsAppShare } from "./ShareSheet";
+import { CopyButton } from "./ShareSheet";
 import type { VenueOption } from "./VenueCombobox";
 
 export function CreatorPanel({
@@ -21,9 +23,9 @@ export function CreatorPanel({
   emailEnabled,
   manageUrl,
   isCancelled,
-  groupInvite,
+  isOver = false,
   paste = null,
-  unreached = null,
+  leave = null,
 }: {
   code: string;
   initial: EventFormValues;
@@ -36,34 +38,52 @@ export function CreatorPanel({
   /** Null for a session by name that proved nothing (`manageUrlFor`): the link is a lasting credential. */
   manageUrl: string | null;
   isCancelled: boolean;
-  groupInvite: { text: string; count: number; url: string } | null;
+  /** The match is over: it can no longer be called off (`cancelEvent` refuses it), so "Cancel match" is not offered. */
+  isOver?: boolean;
   /** The names already in the match and the open spots, while there are any: "Paste the names from the group". */
   /** `past`: the organiser's past players as names, days and clubs, for "Is this Danny…?" before a pasted name is held. */
   paste?: { namesHere: readonly string[]; spots: number; past?: readonly PastView[] } | null;
   /**
-   * "Kicksmash can't reach Tim and Adrian. Send them the link." (the owner, 15 October 2026): the line,
-   * worded on the server with first names only, and the match's link and share text for its one
-   * action, the WhatsApp share. Null when nobody is unreached, and for every viewer but the organiser
-   * (`unreachedPartners` on the match page).
+   * The organiser's own seat, before the match: "Give up my place" (the owner, 9 November 2026: the
+   * organiser's "Leave" moves out of the bottom bar, which carries the one share). `question` is the
+   * confirmation the bar's Leave asked, worded on the page (a fixed-pairs night names the partner).
    */
-  unreached?: { text: string; url: string; shareText: string } | null;
+  leave?: { question: string } | null;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
   const [banter, setBanter] = useState(banterInitial);
+  // A refused banter switch or cancel says why, under its own control (`errors.<code>`).
+  const [banterError, setBanterError] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
+  const giveUp = () => {
+    if (!leave || !confirm(leave.question)) return;
+    setLeaveError(null);
+    start(async () => {
+      const r = await leaveAction(code);
+      if (!r.ok) setLeaveError(t(`errors.${errorLine(r.error)}`));
+    });
+  };
   const toggleBanter = () => {
     const next = !banter;
     setBanter(next);
+    setBanterError(null);
     start(async () => {
       const r = await setBanterAction(code, next);
-      if (!r.ok) setBanter(!next);
+      if (!r.ok) {
+        setBanter(!next);
+        setBanterError(t(`errors.${errorLine(r.error)}`));
+      }
     });
   };
 
   const cancel = () => {
     if (!confirm(t("creator.cancelEventConfirm"))) return;
+    setCancelError(null);
     start(async () => {
-      await cancelEventAction(code);
+      const r = await cancelEventAction(code);
+      if (!r.ok) setCancelError(t(`errors.${errorLine(r.error)}`));
     });
   };
 
@@ -74,26 +94,12 @@ export function CreatorPanel({
         <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
       </div>
 
-      {!isCancelled && unreached && (
-        <div className="mt-4 border-t border-line pt-4" data-testid="unreached">
-          <p className="text-sm text-muted">{unreached.text}</p>
-          <WhatsAppShare url={unreached.url} text={unreached.shareText} label={t("creator.unreachedSend")} className=" mt-1.5" testId="unreached-send" quiet />
-        </div>
-      )}
-
       {!isCancelled && paste && paste.spots > 0 && <PasteNames code={code} namesHere={paste.namesHere} spots={paste.spots} past={paste.past} />}
-
-      {!isCancelled && groupInvite && groupInvite.count > 1 && (
-        <div className="mt-4 border-t border-line pt-4">
-          <div className="font-bold">{t("creator.inviteAll")}</div>
-          <p className="mb-2 text-sm text-muted">{t("creator.inviteAllHelp")}</p>
-          <ShareButtons url={groupInvite.url} text={groupInvite.text} size="sm" copy="message" />
-        </div>
-      )}
 
       {emailEnabled && (
         <div className="mt-4 border-t border-line pt-4">
-          <EmailField initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help={t("share.emailHelp")} emailEnabled={emailEnabled} notifyOn={creatorNotify} />
+          {/* The one email switch for the organiser (the owner, 9 November 2026). Keyed by the address, so an email saved elsewhere on the page (Stay updated) shows here as the switch at once. */}
+          <EmailField key={creatorEmail ?? ""} initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help={t("share.emailHelp")} emailEnabled={emailEnabled} notifyOn={creatorNotify} />
         </div>
       )}
 
@@ -116,6 +122,7 @@ export function CreatorPanel({
           </button>
         </div>
       )}
+      {!isCancelled && banterError && <p className="mt-1 text-sm font-semibold text-danger">{banterError}</p>}
 
       {!isCancelled && (
         <div className="mt-4 border-t border-line pt-4">
@@ -124,13 +131,26 @@ export function CreatorPanel({
             initial={initial}
             venues={venues}
             beside={
-              <button type="button" className="btn-danger btn-sm" disabled={pending} onClick={cancel}>
-                {t("creator.cancelEvent")}
-              </button>
+              isOver ? undefined : (
+                <button type="button" className="btn-danger btn-sm" disabled={pending} onClick={cancel}>
+                  {t("creator.cancelEvent")}
+                </button>
+              )
             }
           />
+          {cancelError && <p className="mt-2 text-sm font-semibold text-danger">{cancelError}</p>}
         </div>
       )}
+
+      {!isCancelled && leave && (
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4" data-testid="organiser-leave">
+          <p className="min-w-0 text-sm text-muted">{t("creator.leaveSeatHelp")}</p>
+          <button type="button" className="btn-ghost btn-sm shrink-0" disabled={pending} onClick={giveUp}>
+            {t("creator.leaveSeat")}
+          </button>
+        </div>
+      )}
+      {leaveError && <p className="mt-1 text-sm font-semibold text-danger">{leaveError}</p>}
 
       {manageUrl && (
         <div className="mt-4 border-t border-line pt-4">

@@ -420,23 +420,14 @@ export async function reserveNames(db: Db, input: { eventId: string; actorPlayer
 export const SEAT_NAMES_MAX = 24;
 
 /**
- * Seats a list of names in a new event, each in the next free spot, as reserved invites — the same
- * row the organiser's "reserve for someone" makes, so each one keeps a link to pass on.
- *
- * It exists for the americano generator. Somebody types eight names, builds the rotation, taps "run
- * it live", and those eight must not be typed a second time. `skipName` is the organiser's own name:
- * they are seated already, so their name in the list is theirs, not a ninth player.
- *
- * Bounded by the free spots and by SEAT_NAMES_MAX. A name that finds no spot is dropped rather than
- * failing the create, because the tournament itself is what the person asked for. The whole list is
- * one transaction under the event's lock (`reserveNames`, as the organiser's pasted names), where it
- * was one transaction for each name; a pasted booking's players come this way too (`settleNewMatch`).
+ * The names a new match holds places for, as `seatNames` reads the list: each cleaned, blank ones
+ * dropped, the organiser's own name (`skipName`) left out once, and at most SEAT_NAMES_MAX. Pure.
  */
-export async function seatNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; skipName?: string | null; records?: ReadonlyMap<string, string>; now?: Date }): Promise<number> {
-  const skip = normalizeName(input.skipName ?? "").toLowerCase();
+export function namesToSeat(list: readonly string[], skipName?: string | null): string[] {
+  const skip = normalizeName(skipName ?? "").toLowerCase();
   let skipped = false;
   const names: string[] = [];
-  for (const raw of input.names.slice(0, SEAT_NAMES_MAX)) {
+  for (const raw of list.slice(0, SEAT_NAMES_MAX)) {
     const name = normalizeName(raw);
     if (!name) continue;
     // The organiser's own name, once. The rest of the list is other people.
@@ -446,6 +437,32 @@ export async function seatNames(db: Db, input: { eventId: string; actorPlayerId:
     }
     names.push(name);
   }
+  return names;
+}
+
+/**
+ * How many of the organiser's names a new match has room for: its places, less the organiser's own
+ * when they play. "Players you already have" used to hold the first ones and drop the rest without a
+ * word (button audit, 9 November 2026); the create now refuses a longer list and says this number.
+ */
+export const roomForNames = (capacity: number, joinSelf: boolean): number => Math.max(0, capacity - (joinSelf ? 1 : 0));
+
+/**
+ * Seats a list of names in a new event, each in the next free spot, as reserved invites — the same
+ * row the organiser's "reserve for someone" makes, so each one keeps a link to pass on.
+ *
+ * It exists for the americano generator. Somebody types eight names, builds the rotation, taps "run
+ * it live", and those eight must not be typed a second time. `skipName` is the organiser's own name:
+ * they are seated already, so their name in the list is theirs, not a ninth player.
+ *
+ * Bounded by the free spots and by SEAT_NAMES_MAX. A name that finds no spot is dropped rather than
+ * failing the create, because the tournament itself is what the person asked for. The web's create
+ * refuses a longer list before it makes the match (`roomForNames`), so there the drop is a safety net. The whole list is
+ * one transaction under the event's lock (`reserveNames`, as the organiser's pasted names), where it
+ * was one transaction for each name; a pasted booking's players come this way too (`settleNewMatch`).
+ */
+export async function seatNames(db: Db, input: { eventId: string; actorPlayerId: string | null; names: string[]; skipName?: string | null; records?: ReadonlyMap<string, string>; now?: Date }): Promise<number> {
+  const names = namesToSeat(input.names, input.skipName);
   if (names.length === 0) return 0;
   // A full event ends the list; anything else (a match already over) holds nobody and fails nothing.
   const done = await reserveNames(db, { eventId: input.eventId, actorPlayerId: input.actorPlayerId, names, records: input.records, now: input.now }).catch(() => null);

@@ -1,6 +1,6 @@
 // Levels: ranged match (Gold preset), level chips, out-of-range request → approve/decline,
 // in-range direct join, level editor on My matches, the "Your level?" card after an open join.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot, switchLang } from "./lib.mjs";
+import { BASE, openMore, openSettings, crashed, finish, iphone, launch, makeCheck, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -18,6 +18,7 @@ try {
   const org = await newPage();
   await org.goto(BASE + "/");
   await org.getByPlaceholder("e.g. Alex").fill("Olga");
+  await openMore(org); // the level chip is under More options (the owner, 9 November 2026)
   check("level presets stay behind the level chip until asked", (await org.getByRole("button", { name: "Gold", exact: true }).count()) === 0 && /any level/i.test(await org.getByTestId("level-chip").innerText()));
   await org.getByTestId("level-chip").click();
   await org.getByRole("button", { name: "Gold", exact: true }).click();
@@ -39,7 +40,14 @@ try {
   check("no-identity join on a ranged event asks name and level inline", (await bea.locator("main form input").count()) > 0 && (await bea.locator("main form select").count()) === 1);
   await bea.getByPlaceholder("e.g. Alex").fill("Bea");
   await bea.locator("main form").getByLabel("Your level").selectOption({ label: "2.0" });
-  await bea.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  // A level outside the range: the form says so and its button asks, as the bar does (review, 9 November 2026).
+  check(
+    "a level picked outside the range turns the open spot's Join into Ask to join, with the reason",
+    (await bea.locator("main form").getByRole("button", { name: "Ask to join", exact: true }).count()) === 1 &&
+      (await bea.locator("main form").getByRole("button", { name: "Join", exact: true }).count()) === 0 &&
+      (await bea.getByTestId("open-spot-asks").getByText("Your level (2.0) is outside 3.0–4.5.").count()) === 1,
+  );
+  await bea.locator("main form").getByRole("button", { name: "Ask to join", exact: true }).click();
   await bea.getByText("Request sent").waitFor({ timeout: 20000 });
   await shot(bea, "l3-request-sent");
   check("out-of-range join becomes a request", (await bea.getByText("Waiting for Olga").count()) > 0 && (await bea.getByText("You're in").count()) === 0);
@@ -72,7 +80,7 @@ try {
   await dee.getByRole("button", { name: "Join this match" }).click();
   await dee.getByPlaceholder("e.g. Alex").fill("Dee");
   await dee.locator("main form").getByLabel("Your level").selectOption({ label: "5.0" });
-  await dee.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  await dee.locator("main form").getByRole("button", { name: "Ask to join", exact: true }).click();
   await dee.getByText("Request sent").waitFor({ timeout: 20000 });
   check("declared level shows as out of range in the bar", (await dee.getByText("Request sent").count()) > 0);
   await org.reload();
@@ -90,14 +98,16 @@ try {
   await eve.getByRole("button", { name: "Join this match" }).click();
   await eve.getByPlaceholder("e.g. Alex").fill("Eve");
   await eve.locator("main form").getByLabel("Your level").selectOption({ label: "1.0" });
-  await eve.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
+  await eve.locator("main form").getByRole("button", { name: "Ask to join", exact: true }).click();
   await eve.getByText("Request sent").waitFor({ timeout: 20000 });
   await eve.getByRole("button", { name: "Withdraw" }).click();
-  await eve.getByRole("button", { name: "Ask to join" }).waitFor({ timeout: 20000 });
+  // The bar's button is the page's last: the open spots above say "Ask to join" for Eve too now.
+  await eve.getByRole("button", { name: "Ask to join", exact: true }).last().waitFor({ timeout: 20000 });
   check("withdrawn request returns to 'Ask to join' with the out-of-range note", (await eve.getByText("Your level (1.0) is outside 3.0–4.5.").count()) > 0);
 
   // ---- My matches: level editor ----
   await cal.goto(`${BASE}/me`);
+  await openSettings(cal);
   check("my matches shows the declared level", (await cal.getByText("Self-declared").count()) > 0 && (await cal.locator("section", { hasText: "Your level" }).getByText("4.0", { exact: true }).count()) > 0);
   await cal.locator("section", { hasText: "Your level" }).getByRole("button", { name: "Edit", exact: true }).click();
   await cal.getByLabel("Your level").selectOption({ label: "3.75" });
@@ -156,6 +166,7 @@ try {
   await fay.locator("li", { hasText: "Fay" }).getByText("3.0", { exact: true }).waitFor({ timeout: 20000 });
   check("one tap on Intermediate puts the 3.0 chip on her roster row and the card is gone", (await fay.getByTestId("level-after-join").count()) === 0);
   await fay.goto(`${BASE}/me`);
+  await openSettings(fay);
   check("the tap saved it as self-declared, as My matches does", (await fay.getByText("Self-declared").count()) > 0 && (await fay.locator("section", { hasText: "Your level" }).getByText("3.0", { exact: true }).count()) > 0);
 
   // ---- Played together (DECIDING rule 21, the owner, 11 October 2026): Quin (1.5) sat in a scored match

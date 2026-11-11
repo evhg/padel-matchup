@@ -17,13 +17,18 @@ export function LevelEditor({ level, source, log, verified = false, rankingOptIn
   const [pending, start] = useTransition();
   const [optIn, setOptIn] = useState(rankingOptIn);
   const [optPending, startOpt] = useTransition();
+  // A refused save says so, where it used to close as if it had worked: the level form, or the ranking box.
+  const [error, setError] = useState(false);
+  const [optError, setOptError] = useState(false);
   const last = log?.at(-1) ?? null;
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     if (value == null) return;
+    setError(false);
     start(async () => {
-      await setMyLevelAction(value);
-      setEditing(false);
+      const r = await setMyLevelAction(value);
+      if (r.ok) setEditing(false);
+      else setError(true);
     });
   };
   const view = (
@@ -68,14 +73,21 @@ export function LevelEditor({ level, source, log, verified = false, rankingOptIn
           onChange={(e) => {
             const on = e.target.checked;
             setOptIn(on);
+            setOptError(false);
             startOpt(async () => {
-              await setRankingOptInAction(on);
+              const r = await setRankingOptInAction(on);
+              // Not saved: the box goes back to what is stored, and the line under it says why.
+              if (!r.ok) {
+                setOptIn(!on);
+                setOptError(true);
+              }
             });
           }}
         />
         <span>
           <span className="font-semibold">{t("ranking.optInCta")}</span>
           <span className="block text-xs text-faint">{t("ranking.optInHelp")}</span>
+          {optError && <span className="mt-1 block text-xs font-semibold text-danger">{t("errors.generic")}</span>}
         </span>
       </label>
     ) : null;
@@ -97,6 +109,7 @@ export function LevelEditor({ level, source, log, verified = false, rankingOptIn
           {pending ? t("common.saving") : t("common.save")}
         </button>
       </div>
+      {error && <p className="text-sm font-semibold text-danger">{t("errors.generic")}</p>}
       <LevelGuide />
       <LevelImport onPick={(lvl) => setValue(lvl)} />
       <button type="button" className="self-start text-sm link" onClick={() => setEditing(false)}>

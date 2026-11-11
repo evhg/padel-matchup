@@ -122,7 +122,8 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
                     setError(null);
                     const r = await resendCalendarInviteAction(code);
                     if (r.ok) setResent(true);
-                    else setError(t("common.somethingWrong"));
+                    // Six resends a day: that one says so, every other refusal the plain line.
+                    else setError(r.error === "too_many" ? t("errors.too_many") : t("common.somethingWrong"));
                   })
                 }
               >

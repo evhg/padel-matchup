@@ -33,6 +33,7 @@ export function VenueCombobox({
   mapUrl,
   onChange,
   enterKeyHint,
+  mapField = true,
 }: {
   venues: VenueOption[];
   value: string;
@@ -40,6 +41,12 @@ export function VenueCombobox({
   onChange: (v: { name: string; mapUrl: string }) => void;
   /** "next" on the create form, where Go moves on to the next field. */
   enterKeyHint?: "next";
+  /**
+   * The map link under the field, and the list over what follows. The create form keeps the map link
+   * under "More options" (the owner, 9 November 2026), and its create button sits right under the field,
+   * so there the list takes its own room and pushes the button down instead of covering it.
+   */
+  mapField?: boolean;
 }) {
   const t = useTranslations();
   const locale = useLocale();
@@ -110,7 +117,7 @@ export function VenueCombobox({
         maxLength={80}
       />
       {listShown && (
-        <ul className="absolute z-20 mt-1 max-h-80 w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-line bg-card shadow-card">
+        <ul className={`${mapField ? "absolute z-20 " : ""}mt-1 max-h-80 w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-line bg-card shadow-card`}>
           {rows.map(({ venue: v, heading }) => (
             <li key={v.name}>
               {heading && <div className="bg-bg px-4 py-1 text-xs font-bold uppercase tracking-wider text-faint">{heading}</div>}
@@ -135,7 +142,7 @@ export function VenueCombobox({
         </ul>
       )}
       {!value.trim() && <p className="mt-1 text-xs text-faint">{t("create.venueHint")}</p>}
-      {showMap ? (
+      {!mapField ? null : showMap ? (
         <div className="mt-2">
           <label className="label">{t("create.venueMapUrl")}</label>
           <input className="input" type="url" inputMode="url" placeholder={t("create.venueMapUrlPlaceholder")} value={mapUrl} onChange={(e) => onChange({ name: value, mapUrl: e.target.value })} />

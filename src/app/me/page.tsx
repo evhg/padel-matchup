@@ -114,11 +114,25 @@ async function MePage({ searchParams }: Props) {
         {/* The card stays mounted with `offer` false once the record has a passkey, so the save's own
             confirmation outlives the render that the action's cookie change brings. */}
         {canSavePasskey && <RememberPhone offer={phones.length === 0} where="me" />}
+        <MomentsStrip db={db} playerId={me.id} />
+        {/* The screen is the inbox, the matches and "New match"; everything you set is behind one line, in the
+            order it always had (the owner, 9 November 2026: "Tidy both"). `e2e/player-states.mjs` reads that
+            order inside the fold. Open on the way back from Telegram, whose sign-in lives in here. */}
+        <details className="group" data-testid="me-settings" open={note !== null}>
+          <summary className="card flex cursor-pointer list-none items-center justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block text-lg font-extrabold">{t("me.settings")}</span>
+              <span className="block truncate text-xs text-muted">{t("me.settingsSummary")}</span>
+            </span>
+            <span className="shrink-0 text-faint transition group-open:rotate-180" aria-hidden>
+              ⌄
+            </span>
+          </summary>
+          <div className="mt-5 flex flex-col gap-5" data-testid="me-settings-body">
         <MyPhones rows={phones} canSave={canSavePasskey} />
         <MyHints rows={hints} off={Boolean(me.hintsOff)} locked={byNameOnly} doors={proofDoors} enabled={deviceHintMode() !== "off"} />
         <WhenIPlay initial={wants} suggestedPlace={lastVenue} />
-        <MomentsStrip db={db} playerId={me.id} />
-        <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} />
+        <PassportCard publicOn={me.publicProfile} slug={me.publicSlug} base={baseUrl()} byName={byNameOnly ? proofDoors : null} />
         {myClubs.length > 0 && (
           <section className="card">
             <h2 className="text-lg font-extrabold">{t("club.yourClubs")}</h2>
@@ -148,6 +162,8 @@ async function MePage({ searchParams }: Props) {
         <MySettings player={me} personalToken={token} hasMatches={hasMatches} signOut />
         {/* Last on the page, always: the one action that cannot be undone. */}
         <DeleteAccount byName={byNameOnly ? proofDoors : null} />
+          </div>
+        </details>
       </main>
       <Footer />
     </>

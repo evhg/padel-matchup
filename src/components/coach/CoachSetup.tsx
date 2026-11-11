@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { coachErrorKey } from "@/lib/coach/errorKey";
 import { useRouter } from "next/navigation";
 import { savePaymentAction, setupCoachAction } from "@/actions/coach";
 import { ShareButtons } from "@/components/ShareSheet";
@@ -114,7 +115,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
       const r = await setupCoachAction({ clubs, clubSlugs, minutes, hoursLines, tz, minNoticeHours: notice });
       if (!r.ok) {
         if (r.error === "invalid" && r.detail && /^\d$/.test(r.detail)) setBadDay(Number(r.detail));
-        else setError(t("errors.no_coach"));
+        else setError(t(coachErrorKey(r.error)));
         return;
       }
       setLink(r.data.studentUrl);
@@ -150,7 +151,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
         payLink: payLink.trim() || undefined,
       });
       if (!r.ok) {
-        setError(r.error === "invalid" && r.detail === "payLink" ? t("setup.badPayLink") : t("errors.no_coach"));
+        setError(r.error === "invalid" && r.detail === "payLink" ? t("setup.badPayLink") : r.error === "invalid" && r.detail === "promptpay" ? t("setup.badPromptpay") : t(coachErrorKey(r.error)));
         return;
       }
       goNext();

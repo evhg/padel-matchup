@@ -89,13 +89,10 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
           <section className="card" data-testid="clubs-none-here">
             <p className="text-sm font-bold">{t("club.noneHere", { country: hereName })}</p>
             <p className="mt-1 text-sm text-muted">{t("club.noneHereCta")}</p>
-            {/* Two doors, and the wide one first. Anybody may list a club; only the club may claim
-                the page, which is why the claim keeps its own checks and its own button. */}
+            {/* Anybody may list a club here. Only the club may claim the page, and "Claim your club" is
+                the button at the top of this page: a second one here said the same words twice. */}
             <Link href="/clubs/add" prefetch={false} className="btn-secondary mt-3 w-full" data-testid="clubs-add-door">
               {t("club.addDoor")}
-            </Link>
-            <Link href="/clubs/claim" prefetch={false} className="btn-ghost mt-2 w-full">
-              {t("club.claimCta")}
             </Link>
           </section>
         )}
@@ -110,7 +107,8 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
               </span>
             )}
             {CITIES.map((city) => {
-              const taken = (byCity.get(city.slug) ?? []).filter((c) => c.founding).length;
+              // From every club, not the search's: a search changes what is listed, never what is left.
+              const taken = all.filter((c) => c.city === city.slug && c.founding).length;
               return (
                 <span key={city.slug} className="chip-muted">
                   {t("club.foundingLeft", { count: Math.max(0, CLUB_LIMITS.foundingPerCity - taken), city: city.name })}
@@ -122,6 +120,9 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
 
         {CITIES.map((c) => ({ key: c.slug, name: c.name, href: `/${c.slug}` })).map(({ key, name, href }) => {
           const list = byCity.get(key) ?? [];
+          // While a search is on, a city it found nothing in shows no card: "No club has claimed its
+          // page here yet" was false there, and the line under the search already says what it found.
+          if (q && list.length === 0) return null;
           return (
             <section key={key} className="card">
               <div className="flex items-center justify-between gap-2">

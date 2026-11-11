@@ -11,7 +11,7 @@ import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
 import { coaches, lessons } from "@/db/schema";
 import { isValidTimeZone, zonedTimeToUtc } from "@/lib/dates";
-import { acceptByInvite, addStudentByName, setCoachPhoto, removeCoachPhoto, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
+import { acceptByInvite, addStudentByName, setCoachPhoto, removeCoachPhoto, bookLesson, cancelLesson, createPackage, extendPackage, getCoachByHandle, getCoachForActor, getPlayerById, hoursFromLines, insertCoach, inviteMatches, isPayLink, LESSON_MINUTES, listStudents, markNoShow, presetHours, removeCoachQr, requestStudent, setCoachQr, setPackagePaid, setStudentStatus, studentStatus, type CancelOutcome, type Hours, type HoursPreset, type StudentStatus, updateCoach , type CoachPatch, blockTime, unblockTime, studentLink, inviteCode, moveLesson, claimLessonPaid, markLessonPaid, setLessonPaid, deleteCoachBook, type CoachBookContents, leaveCoach, compLesson, openHour, attachSlip, unmarkNoShow, setLessonAmount, setPackageAmount, listOffers, saveOffers, takeOffer, type OfferInput} from "@/lib/domain/coaching";
 import { countCoachWants, recordCoachWant, shownCount, tellCoachListed } from "@/lib/domain/coachWants";
 import { DomainError } from "@/lib/domain/errors";
 import { checkCalendarAccess, type CalendarAccess } from "@/lib/coach/gcal";
@@ -19,7 +19,7 @@ import { fetchSheet, importPackages, looksLikeLink, parsePackageSheet, sheetCsvU
 import { notifyPackageTaken, notifyPaidConfirmed, notifyPaidClaimed, notifyLessonMoved, notifyLessonBooked, notifyLessonCancelled, notifyStudentAccepted, notifyStudentInvited, notifyStudentJoined, notifyStudentRequest } from "@/lib/coach/notify";
 import { cleanCalendarSettings, setCoachCalendar, syncGoogleCalendar, syncIcal } from "@/lib/coach/sync";
 import { reachFor, type Reach } from "@/lib/coach/reach";
-import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, managerCode, removeManager, requestOrBook, withdrawWaitlist } from "@/lib/coach/chains";
+import { acceptOffer, afterLessonFreed, claimManager, decideRequest, joinWaitlist, leaveWaitlist, managerCode, removeManager, requestOrBook } from "@/lib/coach/chains";
 import { notifyManagerJoined, notifyOffer, notifyRequest, notifyRequestDecided } from "@/lib/coach/notify";
 import { pingIndexNow } from "@/lib/indexnow";
 import { getSessionPlayer } from "@/lib/session";
@@ -778,11 +778,12 @@ export async function coachSetLessonPaidAction(lessonId: string, paid: boolean):
   return runA(async () => {
     const db = await getDb();
     const { coach } = await requireCoach(db);
-    const lesson = await setLessonPaid(db, coach.id, lessonId, paid);
+    // `markLessonPaid` says whether this tap changed anything: a lesson paid already is not confirmed twice.
+    const { lesson, changed } = paid ? await markLessonPaid(db, coach.id, lessonId) : { lesson: await setLessonPaid(db, coach.id, lessonId, false), changed: false };
     if (!lesson) throw new ActionFailure("not_found");
     // Only the confirmation is worth a message. Un-marking is a correction the coach makes to their
     // own book, and telling a student their payment was un-confirmed would read as an accusation.
-    if (paid && lesson.studentPlayerId) {
+    if (paid && changed && lesson.studentPlayerId) {
       const student = await getPlayerById(db, lesson.studentPlayerId);
       if (student) await notifyPaidConfirmed(db, { coach, student, lesson }).catch(() => undefined);
     }
@@ -839,7 +840,9 @@ export async function leaveWaitlistAction(handle: string, entryId: string): Prom
   return runA(async () => {
     const db = await getDb();
     const { coach, me } = await studentOf(db, handle);
-    await withdrawWaitlist(db, coach.id, entryId, me.id);
+    // "No thanks" on a spot held for this student hands it to the next student waiting, who hears after the answer.
+    const { next } = await leaveWaitlist(db, coach, entryId, me.id);
+    if (next) after(() => notifyOffer(db, coach, next).catch(() => undefined));
     revalidateCoach(coach.handle);
     return null;
   });

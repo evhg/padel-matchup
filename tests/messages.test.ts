@@ -89,7 +89,7 @@ describe("what a notification may say", () => {
     const plural: Record<(typeof LOCALES)[number], RegExp> = { en: /each of them/, ru: /каждому/, es: /cada uno/ };
     for (const l of LOCALES) {
       const t = createTranslator({ locale: l, messages: raw[l] as never }) as unknown as (key: string, values?: Record<string, string | number>) => string;
-      for (const key of ["creator.heldMessageHelp", "creator.heldMessageNot", "creator.heldMessageNotShare"]) {
+      for (const key of ["creator.heldMessageNot", "creator.heldMessageNotShare"]) {
         const [one, two, many] = [1, 2, 21].map((count) => t(key, { count, names: "Alex" }));
         expect(one, `${l} ${key}: one name`).not.toMatch(plural[l]);
         expect(two, `${l} ${key}: two names`).toMatch(plural[l]);

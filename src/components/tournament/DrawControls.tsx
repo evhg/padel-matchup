@@ -9,7 +9,7 @@ export type DrawSettingsView = { format: string; groupSize: number; groupsThroug
 const SCORING = ["set6tb", "set9", "sets2stb", "sets3"] as const;
 
 /** The draw's settings while there is no draw; then make it, look at it, publish it, or clear it. */
-export function DrawControls({ slug, categoryId, categoryName, settings }: { slug: string; categoryId: string; categoryName: string; settings: DrawSettingsView }) {
+export function DrawControls({ slug, categoryId, categoryName, settings, scored = false }: { slug: string; categoryId: string; categoryName: string; settings: DrawSettingsView; /** A match of this draw has a result: the draw stays, so "Clear the draw" goes. */ scored?: boolean }) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -20,7 +20,7 @@ export function DrawControls({ slug, categoryId, categoryName, settings }: { slu
     setError(null);
     start(async () => {
       const r = await fn();
-      if (!r.ok) setError(r.error === "invalid" && r.detail === "few" ? t("tournament.drawFew") : r.error === "invalid" && r.detail === "scored" ? t("tournament.errLocked") : t("common.somethingWrong"));
+      if (!r.ok) setError(r.error === "invalid" && r.detail === "few" ? t("tournament.drawFew") : r.error === "invalid" && r.detail === "scored" ? t("tournament.clearDrawScored") : t("common.somethingWrong"));
       router.refresh();
     });
   };
@@ -89,13 +89,13 @@ export function DrawControls({ slug, categoryId, categoryName, settings }: { slu
             </button>
           </>
         )}
-        {locked && settings.drawStatus !== "done" && (
+        {locked && settings.drawStatus !== "done" && !scored && (
           <button
             type="button"
             className="btn-ghost btn-sm"
             disabled={pending}
             onClick={() => {
-              if (confirm(t("tournament.clearDraw"))) act(() => clearDrawAction(slug, categoryId));
+              if (confirm(t("tournament.clearDrawConfirm", { category: categoryName }))) act(() => clearDrawAction(slug, categoryId));
             }}
           >
             {t("tournament.clearDraw")}

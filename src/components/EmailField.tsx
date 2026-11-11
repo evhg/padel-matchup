@@ -9,6 +9,7 @@ import { EmailCodeStep } from "./EmailCodeStep";
 import { RestoreWithEmail } from "./RestoreWithEmail";
 import { placeholderWidth } from "@/lib/fieldWidth";
 import { readDeviceSignals } from "@/lib/deviceSignals";
+import { errorLine } from "@/lib/errorLine";
 
 /**
  * Decision 9: email is optional, never required, and always explained with the
@@ -65,36 +66,42 @@ export function EmailField({
   const [codeTo, setCodeTo] = useState<string | null>(null);
   const router = useRouter();
   const [pending, start] = useTransition();
+  // A refused save or switch says why (`errors.<code>`: a day's address changes used up is `too_many`), never nothing.
+  const [error, setError] = useState<string | null>(null);
+  const refused = (code: string) => setError(t(`errors.${errorLine(code)}`));
   const toggleNotify = () => {
     const next = !notify;
     setNotify(next);
+    setError(null);
     start(async () => {
       const r = mode === "creator" ? await setCreatorEmailNotificationsAction(code, next) : await setEmailNotificationsAction(next);
-      if (!r.ok) setNotify(!next);
+      if (!r.ok) {
+        setNotify(!next);
+        refused(r.error);
+      }
     });
   };
   if (!emailEnabled) return null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     start(async () => {
       if (mode === "creator") {
         const r = await setCreatorEmailAction(code, email);
-        if (r.ok && r.data.code === "sent") return setCodeTo(email.trim());
-        if (r.ok) {
-          setSaved(true);
-          setEditing(!email);
-        }
+        if (!r.ok) return refused(r.error);
+        if (r.data.code === "sent") return setCodeTo(email.trim());
+        setSaved(true);
+        setEditing(!email);
         return;
       }
       const r = await updateMyEmail(email, code);
-      if (r.ok && r.data.code === "sent") return setCodeTo(email.trim());
-      if (r.ok) {
-        setSaved(true);
-        setEditing(!email);
-        setKnownElsewhere(r.data.knownElsewhere);
-        setInvited(r.data.welcome === "invite");
-      }
+      if (!r.ok) return refused(r.error);
+      if (r.data.code === "sent") return setCodeTo(email.trim());
+      setSaved(true);
+      setEditing(!email);
+      setKnownElsewhere(r.data.knownElsewhere);
+      setInvited(r.data.welcome === "invite");
     });
   };
 
@@ -162,6 +169,7 @@ export function EmailField({
           </button>
         </div>
         )}
+        {error && <p className="text-sm font-semibold text-danger">{error}</p>}
         {restoreBlock}
       </div>
     );
@@ -210,6 +218,7 @@ export function EmailField({
           </button>
         )}
       </div>
+      {error && <p className="text-sm font-semibold text-danger">{error}</p>}
       {initial && <p className="text-xs text-faint">{t("identity.emailKeepNote")}</p>}
       {saved && <p className="text-sm font-semibold text-ok">{mode === "creator" ? t("share.emailSaved") : email ? t("event.emailSaved") : t("event.emailSavedNoMail")}</p>}
       {restoreBlock}

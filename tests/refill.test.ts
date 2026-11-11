@@ -305,7 +305,8 @@ describe("a free spot, offered to past partners", () => {
     await played([lea, old], 61); // before the sixty days
     const off = await makePlayer(db, "Off", { telegramId: 5104 });
     const cancelled = await played([lea, off], 5);
-    await cancelEvent(db, cancelled.id, lea.id); // never played
+    // Called off after its end, as the organiser's "We didn't play" does: `cancelEvent` refuses any other cancel of a match that is over.
+    await cancelEvent(db, cancelled.id, lea.id, { didntPlay: true }); // never played
     const soon = await makePlayer(db, "Soon", { telegramId: 5105 });
     await played([lea, soon], -1); // tomorrow: not played yet
     const draw = await makePlayer(db, "Draw", { telegramId: 5106 });

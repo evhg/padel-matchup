@@ -1,6 +1,6 @@
 // Viral pieces: robots/sitemap, the public americano generator with its prefill link,
 // and the shareable result card.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot, switchLang, widestDayFits } from "./lib.mjs";
+import { BASE, openMore, crashed, finish, iphone, launch, makeCheck, shot, switchLang, widestDayFits } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -45,7 +45,8 @@ try {
 
   // ---- Prefill on the landing page: it says what arrived, and the players come with it ----
   await p.goto(`${BASE}/?type=tournament&capacity=12`);
-  check("landing prefilled as a 12-player tournament", (await p.locator('button[aria-pressed="true"]', { hasText: "Tournament" }).count()) === 1 && (await p.locator("main select").first().inputValue()) === "12");
+  // "Tournament" is a line under More options now, not a segment (the owner, 9 November 2026): the formats say it is one.
+  check("landing prefilled as a 12-player tournament", (await p.getByRole("button", { name: "Americano", exact: true }).getAttribute("aria-pressed")) === "true" && (await p.locator("main select").first().inputValue()) === "12");
   check("the prefilled page says it is the americano, not 'set up a match'", (await p.getByRole("heading", { name: "Your americano, live" }).count()) === 1);
   // By its address, not by its sales line: the tile's words change whenever the two organiser doors
   // are re-cut, and a marketing sentence is not the contract the landing page owes the generator.
@@ -151,6 +152,8 @@ try {
   // person's own zone. Until 11 October 2026 the link said tz=UTC, and 11:00 in Phuket became 18:00.
   await kim.goto(`${BASE}/?src=paste&date=${bkDay}&time=11%3A00&booked=1`);
   await kim.getByTestId("booked-by-me").waitFor({ timeout: 20000 });
+  // The zone is under More options, which a booking with no names leaves closed.
+  await openMore(kim);
   await kim.getByRole("button", { name: kimZone, exact: true }).waitFor({ timeout: 10000 }).catch(() => undefined);
   const noZone = { date: await kim.locator('main input[type="date"]').inputValue(), time: await kim.locator('main input[type="time"]').inputValue(), zone: await kim.getByRole("button", { name: kimZone, exact: true }).count(), utc: await kim.getByRole("button", { name: "UTC", exact: true }).count() };
   check("a booking with no zone keeps its day and hour, in the person's own zone and never UTC", JSON.stringify(noZone) === JSON.stringify({ date: bkDay, time: "11:00", zone: 1, utc: 0 }), JSON.stringify(noZone));
@@ -159,7 +162,8 @@ try {
   // ---- Result card ----
   await p.goto(`${BASE}/PAST`);
   // The match page leads with the card once the score is in: the picture, and WhatsApp one tap away (a WhatsApp group only ever gets it by hand).
-  check("finished match shows its result card, with WhatsApp one tap away", (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByTestId("result-card").getByRole("link", { name: /WhatsApp/ }).count()) === 1);
+  // A viewer with no seat finds WhatsApp under "Other ways to share"; a seated player has it in the bar (the owner, 9 November 2026).
+  check("finished match shows its result card, with WhatsApp under Other ways to share", (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.locator('[data-testid="other-shares"] a[href^="https://wa.me"]').count()) === 1);
   await p.goto(`${BASE}/PAST/card`);
   await shot(p, "v2-card");
   check("card page shows the image and the result line", (await p.locator('img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByText(/beat|drew|Result/).count()) > 0);
@@ -253,7 +257,8 @@ try {
   await p.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();
   // The owner's report of 9 November 2026: "when erik clicked play again, he had to add the players again".
   // The tap now holds a place for each player of the last game, and the organiser lands on the new
-  // match, where the line-up shows them and one message names them.
+  // match, where the line-up shows them and one message names them: since 9 November 2026 that message is
+  // the bar's one share, and the line-up says in words whom it asks.
   await p.waitForURL((u) => /^\/[^/]{4}$/.test(u.pathname) && u.pathname !== `/${mcode}`, { timeout: 30000 });
   const nextCode = new URL(p.url()).pathname.slice(1);
   check("Play again makes the next game on the day and at the time picked", nextCode !== mcode && (await p.getByText(/19:30/).count()) > 0, nextCode);
@@ -263,7 +268,7 @@ try {
   const heldLine = (await playedHeld.textContent()) ?? "";
   check(
     "Play again holds a place for each player of the last game: the line-up shows Bo, Cy and Di held, and one message names them",
-    heldRows.every((c) => c === 1) && /One message for Bo, Cy,? and Di/.test(heldLine),
+    heldRows.every((c) => c === 1) && /asks Bo, Cy,? and Di to open the link and tap their name/.test(heldLine),
     JSON.stringify({ heldRows, heldLine }),
   );
   await shot(p, "v3c-play-again-held");

@@ -262,8 +262,23 @@ export function CreateEventForm({
         invite: invite?.url,
       }, { hint: await readDeviceSignals() });
       // On success the action redirects to the share screen.
+      // Each refusal says its cause: the date, the name, more names than places (`detail` is how many fit),
+      // the day's limit of matches, or a crew the organiser no longer belongs to.
       if (r && !r.ok && noBookingLink(r)) setBookingError(t("create.bookingUrlNoLink"));
-      else if (r && !r.ok) setError(r.error === "invalid" ? t("create.errDate") : r.error === "name_required" ? t("identity.nameRequired") : t("common.somethingWrong"));
+      else if (r && !r.ok)
+        setError(
+          r.error === "invalid"
+            ? t("create.errDate")
+            : r.error === "name_required"
+              ? t("identity.nameRequired")
+              : r.error === "full"
+                ? t("create.namesTooMany", { count: Number(r.detail ?? 0) })
+                : r.error === "too_many"
+                  ? t("create.tooManyToday")
+                  : r.error === "forbidden"
+                    ? t("create.notInGroup")
+                    : t("common.somethingWrong"),
+        );
     });
   };
 
@@ -291,34 +306,39 @@ export function CreateEventForm({
           past={hasIdentity ? { state: past, answers, onLoad: loadPast, onAdd: addPast, onAnswer: answer, reveal } : undefined}
           enterNext
           bookingError={bookingError}
+          compact
+          beforeMore={
+            <>
+              {booking && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ok-soft px-4 py-3">
+                  <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={bookedByMe} onChange={(e) => setBookedByMe(e.target.checked)} data-testid="booked-by-me" />
+                  <span className="min-w-0">
+                    <span className="block font-bold">🎟 {t("create.bookedByMe")}</span>
+                    <span className="block text-xs text-muted">{t("create.bookedByMeHelp")}</span>
+                  </span>
+                </label>
+              )}
+              {invite && (
+                <div className="-mt-2 px-1 text-xs text-muted" data-testid="paste-invite">
+                  <p>🔗 {t("create.inviteShown", { platform: invite.platform })}</p>
+                  <p className="mt-1 flex items-start gap-3">
+                    <span className="min-w-0 flex-1 break-all font-semibold text-ink" data-testid="paste-invite-link">
+                      {invite.url.replace(/^https:\/\//, "")}
+                    </span>
+                    <button type="button" className="shrink-0 font-semibold underline" onClick={() => setInvite(null)}>
+                      {t("create.inviteRemove")}
+                    </button>
+                  </p>
+                </div>
+              )}
+              {error && <p className="text-sm font-semibold text-danger" data-testid="create-error">{error}</p>}
+              <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>
+                {pending ? t("create.creating") : t("create.submit")}
+              </button>
+            </>
+          }
         />
       </div>
-      {booking && (
-        <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ok-soft px-4 py-3">
-          <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={bookedByMe} onChange={(e) => setBookedByMe(e.target.checked)} data-testid="booked-by-me" />
-          <span className="min-w-0">
-            <span className="block font-bold">🎟 {t("create.bookedByMe")}</span>
-            <span className="block text-xs text-muted">{t("create.bookedByMeHelp")}</span>
-          </span>
-        </label>
-      )}
-      {invite && (
-        <div className="-mt-2 px-1 text-xs text-muted" data-testid="paste-invite">
-          <p>🔗 {t("create.inviteShown", { platform: invite.platform })}</p>
-          <p className="mt-1 flex items-start gap-3">
-            <span className="min-w-0 flex-1 break-all font-semibold text-ink" data-testid="paste-invite-link">
-              {invite.url.replace(/^https:\/\//, "")}
-            </span>
-            <button type="button" className="shrink-0 font-semibold underline" onClick={() => setInvite(null)}>
-              {t("create.inviteRemove")}
-            </button>
-          </p>
-        </div>
-      )}
-      {error && <p className="text-sm font-semibold text-danger" data-testid="create-error">{error}</p>}
-      <button type="submit" className="btn-primary w-full text-lg" disabled={pending}>
-        {pending ? t("create.creating") : t("create.submit")}
-      </button>
     </form>
   );
 }

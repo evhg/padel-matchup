@@ -17,7 +17,9 @@ export function SameNameButtons({ rowId, notMine, blocked = null }: { rowId: str
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState(false);
-  const claim = () =>
+  // The tap folds the other record into this one, and nothing undoes it: it asks first.
+  const claim = () => {
+    if (!confirm(t("sameConfirm"))) return;
     start(async () => {
       setError(false);
       const r = await claimSameNameAction(rowId);
@@ -27,6 +29,7 @@ export function SameNameButtons({ rowId, notMine, blocked = null }: { rowId: str
       }
       router.refresh();
     });
+  };
   const dismiss = () => {
     const ids = [...new Set([...notMine, rowId])].slice(-20).join(",");
     document.cookie = `ks_notmine=${ids}; path=/me; max-age=${60 * 60 * 24 * 365}; samesite=lax`;

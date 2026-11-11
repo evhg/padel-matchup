@@ -1,7 +1,7 @@
 // A series, an Open that repeats (see e2e/run.mjs): a finished tournament becomes a series from its page,
 // the series page carries the next edition and the podium, a player signs up through it, the hourly job
 // makes nothing twice, the organizer pauses and resumes, the city page and the API list it.
-import { BASE, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, openMore, crashed, finish, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
 const iphone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: "en-US", timezoneId: "Asia/Bangkok", reducedMotion: "reduce" };
@@ -23,7 +23,8 @@ try {
   const a = await newPage();
   await a.goto(BASE + "/");
   await a.getByPlaceholder("e.g. Alex").fill("Org");
-  await a.getByRole("button", { name: /Tournament/ }).click();
+  await openMore(a);
+  await a.getByTestId("type-line").click(); // "Tournament instead", the last line under More options
   const past = new Date(Date.now() - 60 * 60 * 1000);
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(past);
   const g = (t) => parts.find((p) => p.type === t).value;

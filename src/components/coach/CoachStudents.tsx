@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { coachErrorKey } from "@/lib/coach/errorKey";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { addPackageAction, addStudentAction, blockStudentAction, coachSetLessonPaidAction, extendPackageAction, setLessonAmountAction, setPackageAmountAction, setPackagePaidAction, setStudentStatusAction } from "@/actions/coach";
@@ -39,9 +40,13 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
 
   const requests = students.filter((s) => s.status === "requested");
   const rest = students.filter((s) => s.status !== "requested");
+  const [error, setError] = useState<string | null>(null);
+  // Every tap reads its answer: a refusal is said on the screen, where it used to vanish.
   const act = (fn: () => Promise<unknown>) =>
     start(async () => {
-      await fn();
+      setError(null);
+      const r = (await fn()) as { ok?: boolean; error?: string } | undefined;
+      if (r && r.ok === false) setError(t(coachErrorKey(r.error)));
       router.refresh();
     });
 
@@ -96,6 +101,11 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
               ))}
             </ul>
           </div>
+        )}
+        {error && (
+          <p className="mt-3 text-sm font-semibold text-danger" role="alert" data-testid="students-error">
+            {error}
+          </p>
         )}
         {rest.length === 0 && requests.length === 0 && <p className="mt-3 text-sm text-muted">{t("students.none")}</p>}
         <ul className="mt-3 flex flex-col gap-2">
@@ -254,10 +264,12 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
               e.preventDefault();
               if (!newName.trim()) return;
               act(async () => {
-                await addStudentAction(newName, newEmail);
+                const r = await addStudentAction(newName, newEmail);
+                if (!r.ok) return r;
                 setNewName("");
                 setNewEmail("");
                 setAdding(false);
+                return r;
               });
             }}
           >

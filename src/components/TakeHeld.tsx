@@ -159,7 +159,12 @@ export function HeldRowButton({ code, offer, doors }: { code: string; offer: Hel
             setOwn(readDoors(r.data.doors));
             setOpen(true);
           } else if (r.error === "too_many") setError(t("errors.too_many"));
-          else requestBackIn();
+          else {
+            // The record changed since the page read it: say so on the row, then open the way back in where
+            // the page has one. Where the join form is shut, nothing answers `requestBackIn`, and the tap said nothing at all.
+            setError(t("identity.takeHeldNo", { name: offer.name }));
+            requestBackIn();
+          }
         });
       });
     }

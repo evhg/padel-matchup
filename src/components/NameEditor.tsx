@@ -9,13 +9,22 @@ export function NameEditor({ name }: { name: string }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   const [pending, start] = useTransition();
+  const [error, setError] = useState(false);
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     if (!value.trim()) return;
+    setError(false);
     start(async () => {
-      await updateMyName(value);
-      setEditing(false);
+      const r = await updateMyName(value);
+      // A refused save keeps the field open with the words typed, and says so.
+      if (r.ok) setEditing(false);
+      else setError(true);
     });
+  };
+  const cancel = () => {
+    setValue(name);
+    setError(false);
+    setEditing(false);
   };
   if (!editing) {
     return (
@@ -31,10 +40,16 @@ export function NameEditor({ name }: { name: string }) {
     );
   }
   return (
-    <form onSubmit={save} className="flex gap-2">
-      <input className="input" value={value} onChange={(e) => setValue(e.target.value)} maxLength={40} autoFocus />
-      <button type="submit" className="btn-secondary" disabled={pending}>
-        {t("common.save")}
+    <form onSubmit={save} className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <input className="input" value={value} onChange={(e) => setValue(e.target.value)} maxLength={40} autoFocus />
+        <button type="submit" className="btn-secondary" disabled={pending}>
+          {t("common.save")}
+        </button>
+      </div>
+      {error && <p className="text-sm font-semibold text-danger">{t("errors.generic")}</p>}
+      <button type="button" className="self-start text-sm link" onClick={cancel} disabled={pending}>
+        {t("common.cancel")}
       </button>
     </form>
   );

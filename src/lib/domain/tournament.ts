@@ -319,10 +319,14 @@ export async function addWalkIn(db: Db, input: { eventId: string; actorPlayerId:
   });
 }
 
-/** Removes the latest round (scores in it are lost; the organizer confirms in the UI). */
+/**
+ * Removes the latest round (scores in it are lost; the organizer confirms in the UI). Never on a night
+ * called off: its rounds are its record, and the page offers no "Delete round" there (9 November 2026).
+ */
 export async function deleteLastRound(db: Db, input: { eventId: string }): Promise<number | null> {
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
+    if (ev.status === "cancelled") throw new DomainError("cancelled");
     if (ev.scoreLockedByCreator) throw new DomainError("locked");
     const rounds = await loadRounds(tx, ev.id);
     const last = rounds.at(-1);

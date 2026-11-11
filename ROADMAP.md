@@ -1445,6 +1445,81 @@ Everything in this list is live. The README describes each in detail.
   `src/lib/booking/scrape.ts`, `drizzle/0104_push_job_gate.sql`, `src/lib/ops/services.ts`; proven in
   `tests/push-gate.test.ts`, `tests/cron-jobs.test.ts`, `tests/scrape.test.ts` and
   `tests/services.test.ts`.
+- **The buttons on the match page do what they say (9 November 2026).** The owner asked: "check all
+  the buttons in the app so they are actually doing what they are supposed to do". Two audits checked
+  the match page, one for the organiser and one for the player. These are the fixes.
+  - The edit form sends only the fields that the person changed. Before, a save sent every field as it
+    was at the first page load. A note-only save took the match off the venue board, put back a
+    venue that a player had changed, or made a grown tournament smaller. Open and Cancel start the
+    form from the page again.
+  - The edit form shows no "Players you already have", because it held nobody. A refused edit names
+    its cause: a match called off, or a tournament smaller than its list.
+  - "Cancel match" goes away when the match is over, and the server refuses it. The Telegram button
+    "We didn't play" still calls a match off after it ends.
+  - The organiser on the organizer link can set "Paid". Before, each tap failed with no word.
+  - A refused tap now shows its line: Cancel match, Banter, Remove, Keep the record, Paid, I booked it,
+    Undo, Make it weekly, Remove the photo, and the email field with its switch.
+  - A held place whose address asked for no email says so. It no longer shows "Invite emailed" or
+    "Reminded by email", and the reminder job skips that address.
+  - The reserve form says that Done emails the invite at once when an address is typed.
+  - The email help, the cancel question, the push help, the banter help and both email switches say
+    what they really do. Each email switch now reads "Email me about all my matches". The two switches stay two; merging them
+    is part of a screen change for the owner.
+  - Join requests show only while the match is open, with other help where the match has no waiting
+    list. The share page uses the full-match text, as the match page does.
+  - A tournament that is called off has no "Delete round", and the server refuses it. The edit form's
+    help names the night's own format.
+  - The Telegram share carries the link once. The phone's own share no longer cuts the start off a
+    personal link in the text.
+  - A wrong organizer link says that it did not work.
+  - A player on the waiting list sees no "Leave waitlist" after the start, because the server refuses
+    it. The personal link of a match that is over offers no "I'm in" and no "Can't make it".
+  - "Can't make it" asks first, except for the second tap after the email's own link. That link now
+    says one line: tap Can't make it below.
+  - A place held for the player's own record says Join and asks no level. The open spot says "Ask to
+    join" where the tap only sends a request, and says why.
+  - "Be their partner" shows only where the server lets the player in. The server now checks the name
+    and the level before it makes a record.
+  - "Danny is in this match" names the way in when Danny has no door to sign in with. The calendar
+    resend names the daily limit, and the invite page asks for no calendar where mail is off.
+  The owner still decides these: a "Confirm score" button, a confirm or a dispute of a score, a
+  calendar button on the match page, and merging the two "one message" blocks and the two email
+  switches. `src/lib/editMatchForm.ts`, `src/lib/errorLine.ts`,
+  `src/lib/domain/joinState.ts`, `src/lib/share.ts`; proven in `tests/button-truth.test.ts`,
+  `tests/match-edit.test.ts`, `tests/group-line.test.ts`, `tests/seated-doors.test.ts` and
+  `e2e/levels.mjs`.
+- **The buttons on create, home, My matches, clubs, groups and series do what they say (9 November
+  2026).** The owner asked us to check every button in the app. This part fixes what the audit found
+  on these screens. The club's manage form clears an emptied field: it sent no key for an empty field,
+  so the old booking link came back after "Saved". The create form refuses more names than free
+  places, and it says how many fit. Before, the extra names went without a word. A closed full match
+  says "Full", not "Full · waitlist". A club search hides the city cards it found nothing in, and
+  /clubs and an empty club board show each door once. The claim screens, the crew help and the
+  feedback help say only what happens. Each refusal now shows its cause: delete account, reset link,
+  email me this link, notices, name, level, ranking, the claim code, "When do you want to play" and
+  feedback. A crew admin's Remove and "Yes, these are mine" ask first. The thank-you for a note knows
+  a player's own address and phone, as the answer does. `src/components/ClubManageForm.tsx`,
+  `src/actions/events.ts`, `src/lib/feedback/store.ts`; proven in `tests/club-manage-clear.test.ts`,
+  `tests/new-match.test.ts` and `tests/feedback.test.ts`.
+- **Buttons that do what their words say: the coach's book, the tournament, the chat bot and the
+  emails (9 November 2026).** The owner asked: "check all the buttons in the app so they are actually
+  doing what they are supposed to do". An audit read every button and found eighteen faults; this
+  change fixes them. The PromptPay keypad in Telegram takes thirteen digits, and the book refuses an ID
+  that no bank reads. A lesson notice by email or push opens the student's lessons or the coach's
+  students screen, under a label that says so, and a tournament notice has its own label.
+  "No thanks" on an offered spot offers it to the next student at once, on the web and in Telegram.
+  "✓ Paid" and "Not paid → Paid" change only the tapped button, also under a QR photo. A second tap
+  does not send the student a second message. A player cannot withdraw from a category after its draw
+  is done or after the last day, and the question says what happens to the spot.
+  These buttons now ask once before they act: the student's Cancel and "Take a package" in Telegram,
+  "✕" on a package, "Remove" on a helper, and "We didn't play", which says that every player is told.
+  The opt-out page asks before it stops email, with a button that posts. So a mail scanner that opens
+  the link changes nothing, which is the promise `src/lib/notify.ts` already made for "I'm in".
+  "Clear the draw" asks a real question and goes once a match has a result. Each error on the coach's
+  pages names its cause (`src/lib/coach/errorKey.ts`), and refusals that were silent show on the screen.
+  A Telegram tap whose handler fails gets an answer, and a tap on a cancelled match says "Cancelled".
+  Proven in `tests/coach-buttons.test.ts`, `tests/button-screens.test.ts`, `tests/coach-taps.test.ts`,
+  `tests/score-nudge.test.ts`, `tests/competitions.test.ts` and `tests/hardening.test.ts`.
 - **"Play again" keeps the players (9 November 2026, no migration).** The owner reported: "when erik
   clicked play again, he had to add the players again". The new match had only Erik, and Erik held
   Jakob, Nicolai and Tim one at a time. Now the tap holds a place for each player who sat in the last
@@ -1467,6 +1542,37 @@ Everything in this list is live. The README describes each in detail.
   invitation goes here, and that on The Padel Society or Playtomic each player pays their own share
   there. "Play again" still does not copy an invitation to last week's game. `bookingLinkOf` in
   `src/lib/domain/bookingLink.ts`; proven in `tests/booking-link.test.ts`.
+- **What a player may change, a whole export, and no export by name alone (9 November 2026).** The
+  owner decided three questions of the button audits (DECIDING rules 7 and 34).
+  - "Players edit only time/place/note": a seated player who is not the organiser changes the day, the
+    time, the length, the place, the court, the map and the note. The server refuses any other field
+    from such a player (`organiserOnly`), and the form shows only these. The organiser keeps every
+    field, by the session or by the manage link. The help says that a new note tells nobody.
+  - "Export holds everything": "Download my data" now holds the wishes, the feedback notes, the coach's
+    page and lessons, the asks to join, the recovery email, the chat ids, the email switch, the level
+    checks and more. Each table about a player is in the file or out of it with a reason
+    (`tests/export.test.ts`). It costs 19 more bounded reads a file, 23 for a coach, on a cold path.
+  - "Name-only session: no export": a session by name that proved nothing gets no file
+    (`proof_required`). My matches says why and names the doors that prove it. The privacy page and
+    /about say so in three languages.
+  `src/lib/domain/events.ts`, `src/lib/domain/profile.ts`, `src/app/api/me/export/route.ts`; proven in
+  `tests/player-edit-fields.test.ts`, `tests/export.test.ts`, `tests/legal.test.ts` and `e2e/core.mjs`.
+- **One share, and quieter screens for the organiser (9 November 2026).** An audit counted 4
+  WhatsApp links on Erik's match page, and 3 of them sent the same match link with 3 different
+  messages. The owner chose "Bottom bar": the bar's WhatsApp button is now the only share for the
+  organiser and every seated player. One pure function writes its message by the state of the match:
+  the held players, the open spots, the line-up when full, or the result (`shareMessage` in
+  `src/lib/domain/groupLine.ts`). Telegram, Copy link, the QR code and the story image are under
+  "Other ways to share". The organiser's "Leave" is "Give up my place" in Organizer tools. These went:
+  the Share card, the box of the held players' message, "Send all invites in one message", the
+  WhatsApp link of the unreached line, and the second email switch. The share page after a new match
+  shows the link, WhatsApp, Copy link and "Go to match", and the rest under "More options". The create
+  form shows the day, the time, the venue and Create above the fold; the length, the court, the map
+  link, the time zone, the level and "Tournament instead" are under "More options". My matches keeps
+  its settings behind one "Settings" line. After a match there is one primary and no "Create your own
+  match" for the people in it. DECIDING rule 1 holds the owner's three answers. Proven in
+  `tests/group-line.test.ts` and in the browser suites core, player-states, levels, clubs, venues,
+  viral, americano, pairs, series, agents, groups and formats.
 
 ## The finish line
 

@@ -40,18 +40,44 @@ export const tagMatchUrl = (url: string, tag: string) => (MATCH_LINK.test(url) ?
 export const copiedValue = (url: string, text: string, what: "link" | "message"): string => (what === "message" ? tagMatchLinks(text, url, "link") : tagMatchUrl(url, "link"));
 
 /**
+ * The text without the link the share already carries as its own: the link itself only, never a longer
+ * link that starts with it (a personal link `/7KQ2/i/…` in "Send all invites in one message" starts with
+ * the match link), so the same bound as `tagMatchLinks`.
+ */
+export const withoutLink = (text: string, url: string): string =>
+  text
+    .replace(new RegExp(`${escapeRe(url)}(?![\\w/?#])`, "g"), "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+
+/**
  * What the phone's own share sheet gets: the link tagged `?s=share`, and the text without it. With a
  * picture the sheet takes text only, so `textWithLink` carries the tagged link.
  */
 export function nativeShareData(url: string, text: string): { url: string; text: string; textWithLink: string } {
   const tagged = tagMatchUrl(url, "share");
-  const plain = text.replace(url, "").trim();
+  const plain = withoutLink(text, url);
   return { url: tagged, text: plain, textWithLink: `${plain} ${tagged}`.trim() };
 }
 
 export function telegramShareUrl(url: string, text: string): string {
   return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
 }
+
+/**
+ * The Telegram share button's address: the link tagged `?s=tg` as the share's own `url`, and the text
+ * without it, as the phone's share sheet gets it (`nativeShareData`). Telegram shows the `url` beside the
+ * text, so a text that kept the link put it in the message twice (review, 9 November 2026).
+ */
+export const telegramShareFor = (url: string, text: string): string => telegramShareUrl(tagMatchUrl(url, "tg"), withoutLink(text, url));
+
+/**
+ * Which share text a match's link goes with: on a full match with a waiting list it says so ("Full, but
+ * the waitlist is open"), elsewhere the spots left. The match page and the share page ask this one rule;
+ * the share page said "No spots left. Tap to join" on a full match until 9 November 2026.
+ */
+export const shareTextKey = (spotsLeft: number, whenFull: "waitlist" | "closed"): "shareText.eventFull" | "shareText.event" =>
+  spotsLeft === 0 && whenFull === "waitlist" ? "shareText.eventFull" : "shareText.event";
 
 export const eventUrl = (base: string, code: string) => `${base}/${code}`;
 export const inviteUrl = (base: string, code: string, inviteCode: string) => `${base}/${code}/i/${inviteCode}`;

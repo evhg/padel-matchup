@@ -13,7 +13,7 @@ import { ManagePanel } from "@/components/tournament/ManagePanel";
 import { getDb } from "@/db";
 import { CITIES } from "@/lib/domain/cities";
 import { listClubsForPicking } from "@/lib/domain/clubs";
-import { competitionDraws } from "@/lib/domain/competitionDraw";
+import { competitionDraws, drawScored } from "@/lib/domain/competitionDraw";
 import { COURTS, orderOfPlay } from "@/lib/domain/competitionSchedule";
 import { competitionPage, getCompetition, isOrganizer } from "@/lib/domain/competitions";
 import { utcToZonedParts } from "@/lib/dates";
@@ -95,6 +95,7 @@ async function ManageTournamentPage({ params }: Props) {
                 slug={c.slug}
                 categoryId={category.id}
                 categoryName={category.name}
+                scored={view ? drawScored(view) : false}
                 settings={{ format: category.format, groupSize: category.groupSize, groupsThrough: category.groupsThrough, consolation: category.consolation, qualifyingSpots: category.qualifyingSpots, scoringGroup: category.scoringGroup, scoringKnockout: category.scoringKnockout, scoringFinal: category.scoringFinal, goldenPoint: category.goldenPoint, drawStatus: category.drawStatus, maxPairs: category.maxPairs }}
               />
               {view && (

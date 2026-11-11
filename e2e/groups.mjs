@@ -2,7 +2,7 @@
 // linked back), anyone with the link joins, admin sets the weekly slot, a member leaves; a visitor
 // sees names but no levels, and a group that asks to join takes an ask: withdrawn and asked again,
 // approved for one person, declined for another, who then sees the day she may ask again.
-import { BASE, crashed, finish, iphone, launch, makeCheck, shot, sitsInside } from "./lib.mjs";
+import { BASE, openMore, openSettings, crashed, finish, iphone, launch, makeCheck, shot, sitsInside } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -63,6 +63,7 @@ try {
   await bea.waitForURL(/\/\?group=/, { timeout: 20000 });
   check("create form is prefilled for the group", (await bea.getByRole("heading", { name: "For Club Nine" }).count()) === 1 && (await bea.locator("input[value='Club Nine']").count()) === 1);
   // A crowded row on purpose: the seats, a level and a tag side by side must wrap at 390px, never clip.
+  await openMore(bea); // the level chip is under More options (the owner, 9 November 2026)
   await bea.getByTestId("level-chip").click();
   await bea.getByRole("button", { name: "Gold", exact: true }).click();
   await bea.getByTestId("tag-category").getByRole("button", { name: "Mixed", exact: true }).click();
@@ -130,6 +131,7 @@ try {
   // Decision E (9 October 2026): names visible, levels hidden, optional Ask to join.
   // Bea declares a level on My matches: a member sees it on the group page, a visitor never does.
   await bea.goto(`${BASE}/me`);
+  await openSettings(bea);
   const beaLevel = bea.locator("section", { hasText: "Your level" });
   await beaLevel.getByRole("button", { name: "Set my level" }).click();
   await bea.getByLabel("Your level").selectOption({ label: "3.5" });

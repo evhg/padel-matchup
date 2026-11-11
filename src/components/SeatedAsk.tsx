@@ -144,9 +144,12 @@ export function SeatedAsk({
   const name = ask.kind === "unreached" ? ask.first : seatedNameOf(typed, namesHere);
   const thatsMe = thatsMeTapOf(ask, typed, claimable);
   const own = ask.kind === "seated" ? ask.own : null;
+  // A seated record with no "That's me" and no door of its own (the owner's decision D4): "Sign in as Danny?"
+  // offered no way to do it, so the question says where the way in is instead (review, 9 November 2026).
+  const noWayIn = !unreached && !thatsMe && !(own && anyDoor(own));
   return (
     <div ref={box} data-testid="seated-ask" data-ask={ask.kind} className="rounded-2xl border border-court/30 bg-card px-3 py-3 animate-pop">
-      <p className="text-sm font-bold">{t(unreached ? "identity.unreachedAsk" : "identity.seatedAsk", { name })}</p>
+      <p className="text-sm font-bold">{t(unreached ? "identity.unreachedAsk" : noWayIn ? "identity.seatedAskNoDoor" : "identity.seatedAsk", { name })}</p>
       {thatsMe ? (
         <div className="mt-2">
           <ThatsMeButton code={code} name={thatsMe.name} label={thatsMe.label} className="btn-primary btn-sm" armedClassName="btn-primary btn-sm whitespace-normal leading-tight ring-2 ring-ink" />

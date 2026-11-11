@@ -271,7 +271,13 @@ describe("the coach books, cancels, moves and settles with taps", () => {
     expect(await tap(coachChat, tgCoach, button(/Done/))).toBe("coach:tap:offers");
     expect(last().buttons.some((b) => /✕ 20 × 90 min · 2 · 800 THB$/.test(b.text))).toBe(true);
     const removeNew = last().buttons.find((b) => /20 × 90/.test(b.text))!.callback_data!;
-    expect(await tap(coachChat, tgCoach, removeNew)).toBe("coach:tap:offers");
+    // ✕ asks once before the package leaves the page; "Back" keeps it.
+    expect(await tap(coachChat, tgCoach, removeNew)).toBe("coach:tap:offer_remove_ask");
+    expect(last().text).toMatch(/Take 20 × 90 min · 2 · 800 THB off your page\?/);
+    expect(await tap(coachChat, tgCoach, button(/Back/))).toBe("coach:tap:offers");
+    expect(last().buttons.some((b) => /20 × 90/.test(b.text))).toBe(true);
+    expect(await tap(coachChat, tgCoach, removeNew)).toBe("coach:tap:offer_remove_ask");
+    expect(await tap(coachChat, tgCoach, button(/Yes, remove/))).toBe("coach:tap:offers");
     expect(last().buttons.some((b) => /20 × 90/.test(b.text))).toBe(false);
     expect(await tap(coachChat, tgCoach, button(/Back/))).toBe("coach:tap:settings");
   });
@@ -332,7 +338,11 @@ describe("the student books, moves, pays and takes a package with taps", () => {
     await db.update(lessonPackages).set({ closedAt: new Date() }).where(eq(lessonPackages.studentPlayerId, studentId));
     await say(studentChat, tgStudent, "💳 Pay & package");
     expect(await tap(studentChat, tgStudent, button(/Take a package/))).toBe("student:tap:packages");
-    expect(await tap(studentChat, tgStudent, button(/10 × 60 min/))).toBe("student:tap:package_taken");
+    // One question first, as on the web: a package is money owed from the tap on.
+    expect(await tap(studentChat, tgStudent, button(/10 × 60 min/))).toBe("student:tap:package_ask");
+    expect(last().text).toMatch(/^Take 10 × 60 min · 7000 THB\? You pay Olga directly/);
+    expect(await db.select().from(lessonPackages).where(eq(lessonPackages.studentPlayerId, studentId)).then((r) => r.filter((p) => !p.closedAt).length)).toBe(0);
+    expect(await tap(studentChat, tgStudent, button(/Yes, take it/))).toBe("student:tap:package_taken");
     expect(last().text).toMatch(/Your package has started: 10 lessons\. Pay 7000 THB to Olga/);
     expect(last().text).toMatch(/PromptPay/);
     // The coach heard.

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
-import { canEditMatchDetails, createEvent, editFormsShown, mayMoveStart, updateEvent } from "@/lib/domain/events";
-import { editErrorKey, shownStart, startToSend } from "@/lib/editMatchForm";
+import { canEditMatchDetails, createEvent, editFormsShown, mayMoveStart, updateEvent, type UpdateEventInput } from "@/lib/domain/events";
+import { editErrorKey, editPatch, shownStart, startToSend, type EditFields } from "@/lib/editMatchForm";
 import { utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent, leaveEvent } from "@/lib/domain/slots";
@@ -114,6 +114,49 @@ describe("who may change a match's details", () => {
     expect([saved.event.note, saved.event.startsAt.toISOString()]).toEqual(["Court 4", corrected.startsAt.toISOString()]);
     // Not locked, the form keeps what the viewer typed.
     expect(shownStart(kept, page, false)).toBe(kept);
+  });
+
+  it("a save sends only what the person changed since the form opened, so the page's newer values stay", async () => {
+    // The review of 9 November 2026: the form sent every field as it was at the first page load.
+    const org = await makePlayer(db, "Org5");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: SAT, tz: TZ, venueName: "Rawai Padel", whenFull: "waitlist", note: "Bring balls" });
+    const bo = await makePlayer(db, "Bo5");
+    await joinEvent(db, { eventId: ev.id, playerId: bo.id });
+    const formOf = (e: typeof ev): EditFields => ({ type: e.type, ...utcToZonedParts(e.startsAt, TZ), tz: e.tz, title: e.title ?? "", durationMinutes: e.durationMinutes, venueName: e.venueName ?? "", venueMapUrl: e.venueMapUrl ?? "", court: e.court ?? "", note: e.note ?? "", whenFull: e.whenFull, capacity: e.capacity, levelMin: e.levelMin, levelMax: e.levelMax, levelVerifiedOnly: e.levelVerifiedOnly, category: e.category, ageMin: e.ageMin, publicListing: e.publicListing, bookingUrl: e.bookingUrl ?? "", cost: e.cost ?? "", payNote: e.payNote ?? "" });
+    // The organiser's form opens; meanwhile Bo puts the match on another court for two hours.
+    const opened = formOf(ev);
+    const moved = (await updateEvent(db, ev.id, bo.id, { court: "7", durationMinutes: 120 })).event;
+    expect([moved.court, moved.durationMinutes]).toEqual(["7", 120]);
+    // The organiser changes the note only: the save carries the note and nothing else.
+    const patch = editPatch({ ...opened, note: "Bring two tubes" }, opened, false);
+    expect(patch).toEqual({ note: "Bring two tubes" });
+    // The form's own types are the page's (`EventFormValues`); this test's plain form widens the tag, so it narrows it back.
+    const saved = (await updateEvent(db, ev.id, org.id, patch as UpdateEventInput, SAT, { asOrganiser: true })).event;
+    expect([saved.note, saved.court, saved.durationMinutes]).toEqual(["Bring two tubes", "7", 120]);
+    // A range goes as a pair; a start only when moved, and never from a viewer who may not move it.
+    expect(editPatch({ ...opened, levelMin: 3 }, opened, false)).toEqual({ levelMin: 3, levelMax: null });
+    expect(editPatch({ ...opened, time: "19:00" }, opened, false)).toEqual({ date: opened.date, time: "19:00", tz: TZ });
+    expect(editPatch({ ...opened, time: "19:00", note: "x" }, opened, true)).toEqual({ note: "x" });
+    expect(editPatch(opened, opened, false)).toEqual({});
+  });
+
+  it("a tournament's form sends its capacity only when changed, so a walk-in's larger field is not undone", () => {
+    const night: EditFields = { type: "tournament", date: "2030-06-01", time: "18:00", tz: TZ, title: "", durationMinutes: 120, venueName: "Rawai Padel", venueMapUrl: "", court: "", note: "", whenFull: "waitlist", capacity: 12, levelMin: null, levelMax: null, levelVerifiedOnly: false, category: null, ageMin: null, publicListing: false, bookingUrl: "", cost: "", payNote: "" };
+    // The form opened after the walk-in grew the night from 8 to 12: a note-only save sends no 12, and never the old 8.
+    expect(editPatch({ ...night, note: "Courts 1-3" }, night, false)).toEqual({ note: "Courts 1-3" });
+    expect(editPatch({ ...night, capacity: 16 }, night, false)).toEqual({ capacity: 16 });
+    expect(editPatch({ ...night, type: "match", capacity: 16 }, { ...night, type: "match" }, false)).toEqual({});
+  });
+
+  it("a refused edit names its cause: a tournament smaller than its list, a match called off", async () => {
+    const org = await makePlayer(db, "Org6");
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "tournament", capacity: 8, startsAt: SAT, tz: TZ, venueName: "Rawai Padel", whenFull: "waitlist" });
+    for (let i = 0; i < 6; i++) await joinEvent(db, { eventId: ev.id, playerId: (await makePlayer(db, `Pl${i}`)).id });
+    await expect(updateEvent(db, ev.id, org.id, { capacity: 4 }, SAT, { asOrganiser: true })).rejects.toMatchObject({ code: "invalid", message: "capacity_in_use" });
+    expect(editErrorKey({ error: "invalid", detail: "capacity_in_use" })).toBe("creator.editCapacityInUse");
+    expect(editErrorKey({ error: "cancelled" })).toBe("errors.cancelled");
+    expect(editErrorKey({ error: "invalid", detail: "tz" })).toBe("errors.invalid");
+    expect(en.creator.editCapacityInUse).toMatch(/^Players hold places/);
   });
 
   it("the change notice does not claim the organiser made it", () => {

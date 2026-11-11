@@ -29,7 +29,7 @@ export type PlayAgainOffer = {
  * wrap into a half-width button, so the field takes its line and the button keeps the full width. The
  * input is uncontrolled: a value typed before the page hydrates is not wiped by the first render.
  */
-export function PlayAgainButton({ code, offer }: { code: string; offer: PlayAgainOffer }) {
+export function PlayAgainButton({ code, offer, quiet = false }: { code: string; offer: PlayAgainOffer; /** A seated player, whose one primary is the result share in the bar. */ quiet?: boolean }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function PlayAgainButton({ code, offer }: { code: string; offer: PlayAgai
         max={offer.maxWhen}
         data-testid="play-again-when"
       />
-      <button type="button" className="btn-primary w-full" disabled={pending} onClick={go}>
+      <button type="button" className={`${quiet ? "btn-ghost" : "btn-primary"} w-full`} disabled={pending} onClick={go}>
         {pending ? t("common.working") : t("event.playAgainShort")}
       </button>
       <p className="text-center text-xs text-faint">{offer.sent ? t("event.playAgainSent") : offer.sends ? t("event.playAgainOne") : t("event.playAgainPlain")}</p>

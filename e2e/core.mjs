@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, BASE_RE, crashed, finish, iphone, launch, makeCheck, rawKeysOn, resendEvent, shot, switchLang } from "./lib.mjs";
+import { BASE, BASE_RE, openMore, openOtherShares, openSettings, crashed, finish, iphone, launch, makeCheck, rawKeysOn, resendEvent, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -90,6 +90,7 @@ try {
   check("Bigger text holds after a reload, and nothing runs off a phone", (await rootSize()) === "18px" && (await a.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)));
   // The pictures of /me at the big size, in the light theme and the dark one; then back to the landing page.
   await a.goto(BASE + "/me");
+  await openSettings(a); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   // The e-mail field holds its whole placeholder at the big size: it read "you@example.c" beside "Send code".
   const placeholderFits = () => a.locator('main input[type="email"]').first().evaluate((e) => { const v = e.value; e.value = e.placeholder; const ok = e.scrollWidth <= e.clientWidth; e.value = v; return ok; }).catch(() => false);
   check("with Bigger text the e-mail field on My matches shows its whole placeholder", await placeholderFits());
@@ -120,6 +121,7 @@ try {
   check("joined → 3/4 players", (await a.getByText("3/4 players").count()) > 0);
 
   await a.goto(BASE + "/me");
+  await openSettings(a); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   await shot(a, "04-me");
   await noRawKeys(a, "My matches, as a player");
   // A player's My matches at the big size, with its own switch on, in both themes; then the normal size again.
@@ -138,6 +140,7 @@ try {
   await shot(a, "04e-me-player-bigger-text-dark");
   await a.emulateMedia({ colorScheme: "light" });
   await a.reload();
+  await openSettings(a); // a reload closes the "Settings" line again
   await a.getByTestId("text-size-switch").click();
   check("switched off on My matches, the text is back to 16px", (await rootSize()) === "16px");
   check("/me lists PLAY", (await a.content()).includes('href="/PLAY"'));
@@ -157,6 +160,8 @@ try {
   await a.locator("input[type=date]").fill(`${g("year")}-${g("month")}-${g("day")}`);
   await a.locator("input[type=time]").fill(`${g("hour")}:${g("minute")}`);
   await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+  // The court is under More options (the owner, 9 November 2026: the create form above the fold is the day, the time, the venue and Create).
+  await openMore(a);
   await a.getByPlaceholder("e.g. 3 or Centre court").fill("3");
   await a.getByRole("button", { name: "Create & get the link" }).click();
   await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
@@ -183,6 +188,8 @@ try {
     if (location.pathname.endsWith("/share")) navigator.share = async (d) => void (window.__shared = d);
   });
   await a.reload();
+  // Telegram, the phone's own sheet, the QR, the story image and the rest are under one "More options" fold (the owner, 9 November 2026).
+  await a.locator("[data-testid=share-more] > summary").click();
   await a.getByTestId("native-share").click({ timeout: 10000 }).catch(() => undefined);
   await a.waitForFunction(() => typeof window.__shared === "object", null, { timeout: 5000 }).catch(() => undefined);
   check("the phone's share sheet sends the link tagged ?s=share", String(await a.evaluate(() => window.__shared?.url)).endsWith(`/${code}?s=share`), code);
@@ -294,6 +301,8 @@ try {
   // holds: the list opens on the focus, and one press moves on to the court (review, 15 October 2026).
   const venueBox = a.getByPlaceholder("Court TBD · or pick a club");
   const prefilledVenue = await venueBox.inputValue();
+  // The court is under More options: open, so Go has a field to move on to.
+  await openMore(a);
   await venueBox.focus();
   await a.locator("ul button", { hasText: "Club Padel Test" }).first().waitFor({ timeout: 10000 });
   actionsSent.length = 0;
@@ -342,12 +351,13 @@ try {
   // messages one at a time, because the personal link opened after each hold. Under the line-up, one
   // message with the plain match link names every held player who can take the place from it.
   check("after the hold nothing opens by itself: no \"Send them their personal link\"", (await a.getByText("Send them their personal link").count()) === 0);
+  // Since 9 November 2026 that message is the bar's one share (the owner: "Bottom bar"), and the line-up says whom it asks.
   const heldMessage = a.getByTestId("held-message");
   await heldMessage.waitFor({ timeout: 10000 });
-  const heldMessageHref = decodeURIComponent((await heldMessage.getByTestId("held-message-send").getAttribute("href")) ?? "");
+  const heldMessageHref = decodeURIComponent((await a.getByTestId("tell-group").getAttribute("href")) ?? "");
   check(
-    "under the line-up, \"One message for Jordi\": its WhatsApp link carries the plain match link tagged ?s=wa, \"tap your name\", and no personal link",
-    ((await heldMessage.textContent()) ?? "").includes("One message for Jordi") && heldMessageHref.includes(`/${code}?s=wa`) && heldMessageHref.includes("tap your name") && !heldMessageHref.includes("/i/"),
+    "under the line-up, \"The WhatsApp message in the bar asks Jordi…\": the bar's share carries the plain match link tagged ?s=wa, \"tap your name\", and no personal link",
+    ((await heldMessage.textContent()) ?? "").includes("asks Jordi to open the link and tap their name") && heldMessageHref.includes(`/${code}?s=wa`) && heldMessageHref.includes("tap your name") && !heldMessageHref.includes("/i/") && (await heldMessage.locator("a, button").count()) === 0,
     heldMessageHref,
   );
   await heldMessage.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -475,6 +485,7 @@ try {
   // matches shows that browser no personal link and no way to mail it, and the manifest gives it the
   // plain start page instead of the personal link.
   await j2.goto(`${BASE}/me`);
+  await openSettings(j2); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   const byNameManifest = await j2.request.get(`${BASE}/manifest.webmanifest`).then((r) => r.json());
   check(
     "after \"That's me\", My matches shows no personal link and the manifest no personal start page",
@@ -901,6 +912,7 @@ try {
   await b.reload();
   check("player locked out after organizer confirms", (await b.getByText("Only they can change it").count()) > 0);
   await a.goto(BASE + "/me");
+  await openSettings(a); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   check("/me shows the entered score", (await a.getByText("6-3").count()) > 0);
   check("/me shows the personal link card", (await a.getByText("Your personal link").count()) > 0);
   const meOrder = await headingOrder(a, "Upcoming", "Your personal link");
@@ -919,6 +931,7 @@ try {
   await a.getByText("dana2@example.com").first().waitFor({ timeout: 20000 });
   check("email changed to dana2@example.com", (await a.getByText("dana2@example.com").count()) > 0);
   await a.goto(`${BASE}/me`);
+  await openSettings(a); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   check("service worker registered", await a.evaluate(() => navigator.serviceWorker.getRegistration("/").then((r) => Boolean(r))));
   // The other half of the by-name check above: a full session sees the reminder switch (or why it cannot).
   check("a full session's My matches offers reminders on this browser", await a.getByText(PUSH_SWITCH).first().waitFor({ timeout: 10000 }).then(() => true, () => false));
@@ -939,6 +952,7 @@ try {
   // back in (28 October 2026). So the page has none; My matches has it.
   check("the personal-link page offers no \"Sign out on this browser\"", (await nd.getByTestId("me-signout").count()) === 0);
   await nd.goto(BASE + "/me");
+  await openSettings(nd); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   check("new device is now signed in as Dana via cookie", (await nd.getByText("Dana").count()) > 0 && (await nd.content()).includes('href="/PLAY"'));
   check("My matches offers \"Sign out on this browser\" under the name", (await nd.getByTestId("me-signout").count()) === 1);
   await nd.context().close();
@@ -962,6 +976,7 @@ try {
 
   // ---- Line-up complete → calendar entry updated (title suffix, players, SEQUENCE) ----
   await a.goto(BASE + "/");
+  await openMore(a); // the length is under More options, "90 min" in its summary (the owner, 9 November 2026)
   // How long: three taps under the time, 90 already chosen (the owner, 30 September 2026, after Erik
   // could not tell whether his match was 60 or 90 minutes). Dana books an hour.
   const lengths = a.getByTestId("length-choice");
@@ -1048,7 +1063,8 @@ try {
   await ed.locator("main form").getByRole("button", { name: "Join", exact: true }).click();
   await ed.getByText("You're in").waitFor({ timeout: 20000 });
   await ed.getByTestId("player-edit").getByRole("button", { name: "Edit match" }).click();
-  await ed.getByRole("button", { name: /More options/ }).click();
+  // The owner, 9 November 2026: a player changes the day, the time, the length, the place, the court and the note, nothing else.
+  check("a player's form shows the note at once, and no level range and no \"More options\"", (await ed.getByTestId("player-edit").getByRole("button", { name: /More options/ }).count()) === 0 && (await ed.getByTestId("level-chip").count()) === 0);
   await ed.getByPlaceholder("Bring balls, level 3.5, parking tips…").fill("Court 3 tonight, Ed brings balls");
   await ed.getByRole("button", { name: "Save changes" }).click();
   await ed.getByText("Court 3 tonight, Ed brings balls").waitFor({ timeout: 20000 });
@@ -1246,6 +1262,7 @@ try {
   const marias = (lineup4.players ?? []).filter((p) => p.name === "Maria");
   check("the place is Maria's, confirmed, and the match holds one Maria", marias.length === 1 && marias[0].status === "confirmed", JSON.stringify(lineup4.players ?? []));
   await mariaPage.goto(`${BASE}/me`);
+  await openSettings(mariaPage); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   check(
     "that browser is the Maria who played PAST, signed in by name: PAST on My matches, and no personal link",
     (await mariaPage.content()).includes('href="/PAST"') && (await mariaPage.getByRole("heading", { name: /Your personal link/ }).count()) === 0,
@@ -1415,48 +1432,41 @@ try {
   await sofia.getByRole("button", { name: "Done", exact: true }).click();
   await sofia.getByText("Reserved for Alex", { exact: true }).waitFor({ timeout: 20000 });
   // Alex organises PLAY, so "That's me" refuses him, and he has no door of his own: his personal link only.
+  // Since 9 November 2026 the one message is the bar's one share (the owner: "Bottom bar"), and the line-up
+  // says in words whom it asks and whom it leaves out; no box, no second WhatsApp, no "Send all invites".
   const msg6 = sofia.getByTestId("held-message");
   await msg6.waitFor({ timeout: 10000 });
-  const href6 = decodeURIComponent((await msg6.getByTestId("held-message-send").getAttribute("href")) ?? "");
+  const href6 = decodeURIComponent((await sofia.getByTestId("tell-group").getAttribute("href")) ?? "");
   const not6 = ((await msg6.getByTestId("held-message-not").textContent().catch(() => "")) ?? "").trim();
   check(
-    "\"One message for Maria and Jordi\", and the line under it names Alex as one person: the WhatsApp link has both names, the plain match link tagged ?s=wa, and no personal link",
-    ((await msg6.textContent()) ?? "").includes("One message for Maria and Jordi") && ((await msg6.textContent()) ?? "").includes("Send it to the group, or to each of them.") && not6 === "Not in this message: Alex. Send them their personal link from their row." && href6.includes("Maria and Jordi") && !href6.includes("Alex") && href6.includes(`/${code6}?s=wa`) && !href6.includes("/i/"),
+    "the line-up says the bar's WhatsApp asks Maria and Jordi, and names Alex as one person; the bar's link has both names, the plain match link tagged ?s=wa, and no personal link",
+    ((await msg6.textContent()) ?? "").includes("The WhatsApp message in the bar asks Maria and Jordi to open the link and tap their name.") && not6 === "Not in this message: Alex. Send them their personal link from their row." && href6.includes("Maria and Jordi") && href6.includes(`/${code6}?s=wa`) && !href6.includes("/i/"),
     `${not6} | ${href6}`,
   );
   check("the organiser sees no \"I'm …\" on any held row", (await sofia.getByTestId("held-row").count()) === 0);
   await msg6.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await viewShot(sofia, "12n-held-message");
-  // "Copy this message" copies the whole message, its match link tagged ?s=link. Its name is its own:
-  // "Send all invites in one message" on the same page keeps "Copy message", which copies other words.
   check(
-    "the one message's Copy is \"Copy this message\", and the page has one \"Copy message\" (Send all invites)",
-    (await msg6.getByRole("button", { name: "Copy this message", exact: true }).count()) === 1 && (await sofia.getByRole("button", { name: "Copy message", exact: true }).count()) === 1,
+    "one WhatsApp link on the organiser's page, the bar's: no \"Send all invites in one message\", no \"Copy this message\", and the held rows keep \"Invite now\"",
+    (await sofia.locator('main a[href^="https://wa.me"], a[data-testid="tell-group"]').count()) === 1 && (await sofia.getByText("Send all invites in one message").count()) === 0 && (await sofia.getByRole("button", { name: "Copy this message" }).count()) === 0 && (await sofia.locator("main li").getByRole("button", { name: "Invite now", exact: true }).count()) === 3,
   );
+  // Telegram and Copy link send the same message from "Other ways to share".
+  await openOtherShares(sofia);
+  const tg6 = decodeURIComponent((await sofia.locator('[data-testid="other-shares"] a[href^="https://t.me/share"]').getAttribute("href")) ?? "");
+  check("\"Other ways to share\" opens Telegram with the same message, its link tagged ?s=tg", tg6.includes("Maria and Jordi") && tg6.includes(`/${code6}?s=tg`), tg6);
   await sofia.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (v) => void (window.__copied = v) } }));
-  await msg6.getByRole("button", { name: "Copy this message", exact: true }).click();
+  await sofia.getByTestId("other-shares").getByRole("button", { name: "Copy link", exact: true }).click();
   await sofia.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
   const copied6 = String(await sofia.evaluate(() => window.__copied));
-  check("\"Copy this message\" puts the whole message on the clipboard, with the match link tagged ?s=link", copied6.includes("I'm holding places for Maria and Jordi") && copied6.includes(`/${code6}?s=link`) && !copied6.includes("/i/"), copied6);
-  // The Copy fix: "Send all invites in one message" copies its whole message, every personal link in it.
-  await sofia.evaluate(() => void delete window.__copied);
-  const inviteAll = sofia.getByText("Send all invites in one message", { exact: true }).locator("..");
-  await inviteAll.getByRole("button", { name: "Copy message", exact: true }).click();
-  await sofia.waitForFunction(() => typeof window.__copied === "string", null, { timeout: 5000 }).catch(() => undefined);
-  const copiedAll = String(await sofia.evaluate(() => window.__copied));
-  check(
-    "\"Send all invites in one message\" copies the whole message: \"Confirm with your personal link\" and three personal links",
-    copiedAll.includes("Confirm with your personal link") && (copiedAll.match(new RegExp(`/${code6}/i/`, "g")) ?? []).length === 3,
-    copiedAll,
-  );
+  check("its Copy link copies the match link tagged ?s=link", copied6.endsWith(`/${code6}?s=link`), copied6);
+  await viewShot(sofia, "12n2-other-ways");
   await sofia.goto(`${BASE}/${code6}/share`);
-  const shareMsg6 = sofia.getByTestId("held-message");
-  await shareMsg6.waitFor({ timeout: 10000 });
-  check("the share page shows the same one message for Maria and Jordi", ((await shareMsg6.textContent()) ?? "").includes("One message for Maria and Jordi"));
+  const shareWa6 = decodeURIComponent((await sofia.getByTestId("share-whatsapp").getAttribute("href")) ?? "");
+  check("the share page's one WhatsApp sends the same message for Maria and Jordi", shareWa6.includes("I'm holding places for Maria and Jordi") && shareWa6.includes(`/${code6}?s=wa`), shareWa6);
   // The share page has no rows: its line for Alex says to open the match first.
-  const shareNot6 = ((await shareMsg6.getByTestId("held-message-not").textContent().catch(() => "")) ?? "").trim();
+  const shareNot6 = ((await sofia.getByTestId("held-message-not").textContent().catch(() => "")) ?? "").trim();
   check("the share page's line for Alex says to open the match, then send the personal link from the row", shareNot6 === "Not in this message: Alex. Open the match and send them their personal link from their row.", shareNot6);
-  await shareMsg6.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await sofia.getByTestId("held-message-not").evaluate((el) => el.scrollIntoView({ block: "center" }));
   await viewShot(sofia, "12q-share-held-message");
 
   // A browser that knows nobody opens the one message's link. The match is full and its waiting list
@@ -1511,21 +1521,18 @@ try {
   await viewShot(crew, "12p-held-row-taken");
   await crew.close();
   await sofia.goto(`${BASE}/${code6}`);
-  const msgAfter = ((await sofia.getByTestId("held-message").locator("div").first().textContent().catch(() => "")) ?? "").trim();
-  check("Sofia's one message now names Maria alone", msgAfter === "One message for Maria", msgAfter);
-  const helpAfter = ((await sofia.getByTestId("held-message").locator("p").first().textContent().catch(() => "")) ?? "").trim();
-  check("with one name the help speaks of one person", helpAfter === "Send it to them, or to the group. They open the match link and tap their name.", helpAfter);
-  // The same in Russian, with the organiser panel's "Send all invites" grid in view.
+  const msgAfter = ((await sofia.getByTestId("held-message").locator("p").first().textContent().catch(() => "")) ?? "").trim();
+  check("the line-up now says the bar's message asks Maria alone", msgAfter === "The WhatsApp message in the bar asks Maria to open the link and tap their name.", msgAfter);
+  check("and the bar's message names Maria alone", decodeURIComponent((await sofia.getByTestId("tell-group").getAttribute("href")) ?? "").includes("I'm holding a place for Maria."));
+  // The same in Russian.
   await sofia.context().addCookies([{ name: "NEXT_LOCALE", value: "ru", url: BASE }]);
   await sofia.reload();
   const msgRu = sofia.getByTestId("held-message");
   await msgRu.waitFor({ timeout: 15000 });
   const ruFits = await sofia.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-  check("in Russian the one message reads \"Одно сообщение: Maria\", and the page does not scroll sideways", ((await msgRu.textContent()) ?? "").includes("Одно сообщение: Maria") && ruFits, ((await msgRu.textContent()) ?? "").slice(0, 120));
+  check("in Russian the line reads \"Сообщение WhatsApp внизу экрана просит Maria…\", and the page does not scroll sideways", ((await msgRu.textContent()) ?? "").includes("просит Maria открыть ссылку") && ruFits, ((await msgRu.textContent()) ?? "").slice(0, 120));
   await msgRu.evaluate((el) => el.scrollIntoView({ block: "start" }));
   await viewShot(sofia, "12r-held-message-ru");
-  await sofia.getByText("Отправить все приглашения одним сообщением", { exact: true }).evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => undefined);
-  await viewShot(sofia, "12r2-invite-all-ru");
   await sofia.context().addCookies([{ name: "NEXT_LOCALE", value: "en", url: BASE }]);
   await sofia.close();
 
@@ -1557,6 +1564,7 @@ try {
   await a.locator("#feedback-text").waitFor({ timeout: 10000 });
   check("feedback opens in place on the match page", a.url() === urlBefore && (await a.locator("#feedback-text").count()) === 1);
   await a.goto(`${BASE}/me`);
+  await openSettings(a); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   await switchLang(a, "es");
   await a.getByText("Mis partidos").first().waitFor({ timeout: 20000 });
   check("Spanish locale switch", true);
@@ -1568,6 +1576,7 @@ try {
   const bounce = await resendEvent(a, { type: "email.bounced", data: { email_id: "e2e-bounce", to: ["dana2@example.com"], bounce: { type: "Permanent", subType: "General" } } });
   check("a signed bounce from Resend marks the address", bounce.status === 200 && bounce.body?.marked === 1, JSON.stringify(bounce));
   await a.reload();
+  await openSettings(a); // a reload closes the "Settings" line again
   check("My matches says the address stopped working, where it can be fixed", (await a.getByTestId("email-marked").count()) === 1);
   check("delete link is faint and at the bottom", (await a.getByRole("button", { name: "Eliminar mi cuenta" }).count()) === 1);
   await a.getByRole("button", { name: "Eliminar mi cuenta" }).click(); // dialog auto-accepted

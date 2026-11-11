@@ -1,6 +1,6 @@
 // Passport: the public page switch on My matches, the profile page, the signed level verified against the
 // well-known key, the data export without secrets, the level import from another scale, and the scales table.
-import { BASE, finish, HOST_RE, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, finish, HOST_RE, iphone, launch, makeCheck, shot, openSettings } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -28,6 +28,7 @@ try {
   await page.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
 
   await page.goto(`${BASE}/me`);
+  await openSettings(page); // behind "Settings" on My matches (the owner, 9 November 2026)
   check("My matches carries the passport card, off by default", (await page.getByText("Passport").count()) >= 1 && (await page.getByText(/Public page · off/).count()) === 1);
   await page.getByLabel(/Public page/).check();
   await page.getByText(new RegExp(`kicksma\\.sh/u/|${HOST_RE}/u/`)).waitFor({ timeout: 15000 });
@@ -64,6 +65,7 @@ try {
 
   // Level import from a 1–10 scale.
   await page.goto(`${BASE}/me`);
+  await openSettings(page); // behind "Settings" on My matches (the owner, 9 November 2026)
   await page.getByRole("button", { name: "Set my level" }).click();
   await page.getByRole("button", { name: "Have a level in another app?" }).click();
   await page.getByLabel("Scale").selectOption("ten");
@@ -83,6 +85,7 @@ try {
   check("/levels shows the scales table", (await page.getByText("Other apps' scales").count()) === 1 && (await page.getByText("1 to 10 (club systems)").count()) === 1);
 
   await page.goto(`${BASE}/me`);
+  await openSettings(page); // behind "Settings" on My matches (the owner, 9 November 2026)
   await page.getByLabel(/Public page/).uncheck();
   await page.getByText(/Public page · off/).waitFor({ timeout: 15000 });
   const gone = await fetch(`${BASE}/u/${slug}`);

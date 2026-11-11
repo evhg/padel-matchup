@@ -16,7 +16,8 @@ import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { clientKeyFrom } from "@/lib/ipKey";
 import { getSessionPlayer } from "@/lib/session";
 import { setBanter } from "@/lib/domain/banter";
-import { bookingLinkFor, cancelEvent, createEvent, isSeated, updateEvent } from "@/lib/domain/events";
+import { bookingLinkFor, cancelEvent, createEvent, isSeated, resolveCapacity, updateEvent } from "@/lib/domain/events";
+import { namesToSeat, roomForNames } from "@/lib/domain/slots";
 import { getGroupByCode, getGroupMember } from "@/lib/domain/groups";
 import { AGE_MINS, EVENT_CATEGORIES } from "@/lib/domain/eventTags";
 import { MATCH_LENGTHS } from "@/lib/domain/matchLength";
@@ -99,6 +100,10 @@ export async function createEventAction(raw: CreateEventInput, o: { hint?: unkno
     bookingLinkFor(input);
     const db = await getDb();
     const me = await requirePlayer(db, input.name);
+    // "Players you already have": a list longer than the room is refused with the room, before anything
+    // is made, so no name is dropped without a word (`roomForNames`). The detail is the number that fit.
+    const room = roomForNames(resolveCapacity(input.type, input.capacity), input.joinSelf !== false);
+    if (input.names?.length && namesToSeat(input.names, me.displayName).length > room) throw new ActionFailure("full", String(room));
     await assertRate(db, "create", me.id, LIMITS.eventsPerPlayerPerDay);
     const startsAt = zonedTimeToUtc(input.date, input.time, input.tz);
     if (Number.isNaN(startsAt.getTime())) throw new ActionFailure("invalid");

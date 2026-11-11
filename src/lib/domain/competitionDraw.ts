@@ -204,12 +204,19 @@ export async function publishDraw(db: Db, input: { categoryId: string; organizer
   return updated;
 }
 
+/** A match with a result: a score or a walkover. The draw cannot be cleared once one exists. */
+const hasResult = (m: Pick<CompetitionMatch, "scoreA" | "status">) => m.scoreA !== null || m.status === "walkover";
+
+/** Whether any match of a drawn category has a result: the desk then hides "Clear the draw", which the server would refuse. */
+export const drawScored = (view: Pick<DrawView, "groups" | "qualifying" | "main" | "consolation">): boolean =>
+  [...view.groups.flatMap((g) => g.matches), ...view.qualifying.flat(), ...view.main.flat(), ...view.consolation.flat()].some(hasResult);
+
 /** Back to no draw: allowed until a score is entered. */
 export async function clearDraw(db: Db, input: { categoryId: string; organizerPlayerId: string }): Promise<CompetitionCategory> {
   const { category } = await ownCategory(db, input.categoryId, input.organizerPlayerId);
   if (category.drawStatus === "none") return category;
   const rows = await matchesOf(db, category.id);
-  if (rows.some((m) => m.scoreA !== null || m.status === "walkover")) throw new DomainError("invalid", "scored");
+  if (rows.some(hasResult)) throw new DomainError("invalid", "scored");
   await db.delete(competitionMatches).where(eq(competitionMatches.categoryId, category.id));
   const [updated] = await db.update(competitionCategories).set({ drawStatus: "none", drawnAt: null }).where(eq(competitionCategories.id, category.id)).returning();
   return updated;

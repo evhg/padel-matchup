@@ -20,7 +20,8 @@
     "courtTitle": "Hay una pista libre en {club} hoy a las {time}",
     "courtBody": "Dijiste que querías jugar sobre esta hora en {club}. Reserva la pista con el club, crea el partido aquí y comparte el enlace. Para dejar de recibirlos, quita la petición en tu página.",
     "courtButton": "Crear el partido",
-    "courtTitleTomorrow": "Hay una pista libre en {club} mañana a las {time}"
+    "courtTitleTomorrow": "Hay una pista libre en {club} mañana a las {time}",
+    "notSaved": "No se guardó. Inténtalo de nuevo."
   },
   "common": {
     "appName": "Kicksmash",
@@ -155,7 +156,10 @@
     "signOutConfirm": "¿Cerrar sesión en este navegador? Te olvidará y no recibirás más notificaciones aquí. Tu enlace personal y el icono de la pantalla de inicio siguen abriendo tu sesión.",
     "signedInAs": "Has entrado como {name}",
     "heldRowMe": "Soy {name}",
-    "heldRowProve": "¿Eres {name}? Primero entra con tu cuenta y luego vuelve a tocar tu nombre."
+    "heldRowProve": "¿Eres {name}? Primero entra con tu cuenta y luego vuelve a tocar tu nombre.",
+    "seatedAskNoDoor": "{name} ya está en este partido. ¿Eres tú? Abre tu enlace personal o pregunta al organizador.",
+    "linkMailLimit": "Hoy ya te enviaste este enlace el máximo de veces. Cópialo o vuelve a intentarlo mañana.",
+    "linkNotSent": "El correo a {email} no salió. Copia el enlace o revisa la dirección abajo."
   },
   "landing": {
     "headline": "Pádel en un enlace.",
@@ -235,7 +239,6 @@
     "courtsAuto": "Auto",
     "pointsPerMatch": "Puntos por partido",
     "pointsFree": "Libre",
-    "tournamentHelp": "Americano: las parejas rotan cada ronda, gana quien sume más puntos. Las rondas se generan el mismo día.",
     "court": "Pista",
     "courtPlaceholder": "p. ej. 3 o Pista central",
     "capacityHelp": "Las plazas libres al empezar la ronda 1 se eliminan: el torneo lo juegan los presentes.",
@@ -306,7 +309,12 @@
     "playedWithYou": "Jugaron contigo",
     "keepsRecord": "Mantiene los partidos de {name}",
     "pasteTotal": "La reserva dice {total} por la pista. Añade el precio por jugador en «Más opciones».",
-    "bookingUrlNoLink": "Aquí no hay ningún enlace. Pega el enlace del club o de la app. Empieza por https://"
+    "namesTooMany": "{count, plural, =0 {El partido no tiene plazas libres para los nombres de «Jugadores que ya tienes». Quítalos.} one {Solo cabe un nombre de «Jugadores que ya tienes» en este partido. Quita los demás.} other {Solo caben # nombres de «Jugadores que ya tienes» en este partido. Quita los demás.}}",
+    "tooManyToday": "Hoy creaste el máximo de partidos para un día. Vuelve a intentarlo mañana.",
+    "notInGroup": "Solo los miembros de este grupo pueden crear sus partidos.",
+    "bookingUrlNoLink": "Aquí no hay ningún enlace. Pega el enlace del club o de la app. Empieza por https://",
+    "tournamentLine": "Mejor un torneo: de 4 a 64 jugadores",
+    "matchLine": "Mejor un partido: exactamente 4 jugadores"
   },
   "share": {
     "title": "Tu partido está en marcha",
@@ -320,7 +328,7 @@
     "manageTitle": "Enlace de organizador",
     "manageHint": "Privado: no lo compartas. Ábrelo en otro dispositivo para gestionar este partido.",
     "emailTitle": "Guarda tu enlace de organizador + recibe avisos",
-    "emailHelp": "Deja tu email y te enviamos tu enlace de organizador (este partido, un toque, cualquier dispositivo) y lo ponemos en tu Google Calendar. Llegar tarde, o peor, olvidar tu propio partido, es imperdonable en el pádel. También te avisamos cuando alguien se apunta, se borra o confirma.",
+    "emailHelp": "Añade tu email. Con plaza en este partido recibes su invitación de calendario; si no, un enlace a tus partidos. También te escribimos cuando alguien se apunta, se borra o confirma.",
     "emailPlaceholder": "tu@ejemplo.com",
     "emailSaved": "Guardado. Te escribimos cuando pase algo.",
     "titleMatch": "Tu partido está en marcha",
@@ -334,7 +342,10 @@
     "storyCopy": "Copiar el enlace para el sticker",
     "nativeShareImage": "Compartir la imagen…",
     "copyMessage": "Copiar mensaje",
-    "copyThisMessage": "Copiar este mensaje"
+    "otherWays": "Otras formas de compartir",
+    "otherWaysSummary": "Telegram, copiar el enlace, código QR, imagen para historias",
+    "moreSummary": "Telegram, código QR, imagen para historias, recordatorio, email, enlace de organizador",
+    "otherWaysSummaryShort": "Telegram, copiar el enlace, código QR"
   },
   "event": {
     "match": "Partido de pádel",
@@ -357,7 +368,7 @@
     "youAreOnWaitlist": "Eres el n.º {position} en la lista de espera",
     "waitlistHelp": "Te pasamos dentro automáticamente si se libera una plaza.",
     "full": "Este partido está completo",
-    "fullHelp": "Todas las plazas están ocupadas. Pregunta al organizador o crea tu propio partido.",
+    "fullHelp": "Todas las plazas están ocupadas y este partido no tiene lista de espera.",
     "cancelled": "Este partido se ha cancelado",
     "cancelledHelp": "El organizador lo ha anulado. Nada que hacer aquí.",
     "past": "Este partido ha terminado",
@@ -398,7 +409,7 @@
     "joinShort": "Entrar",
     "inviteNotAccepted": "Invitación aún sin aceptar",
     "inviteSent": "Invitación enviada",
-    "notifyMe": "Avisarme por email cuando cambie la alineación",
+    "notifyMe": "Avisarme por email de todos mis partidos",
     "openBooking": "Reserva",
     "costPerPlayer": "{cost} por jugador",
     "paidTitle": "Quién ha pagado",
@@ -412,7 +423,7 @@
     "minutes": "{minutes} min",
     "until": "hasta las {time}",
     "changeDetails": "Cambiar los detalles",
-    "changeDetailsHelp": "Cualquier jugador puede cambiar la hora, el lugar o la nota. Todos se enteran.",
+    "changeDetailsHelp": "Puedes cambiar el día, la hora, la duración, el lugar, la pista y la nota. Un día, una hora, una duración, un lugar o una pista nuevos llegan a todos los que juegan. Una nota nueva solo se ve en esta página.",
     "tellGroup": "Avisar al grupo",
     "bookCourt": "Reservar esta pista",
     "bookedIt": "Ya reservé la pista",
@@ -438,7 +449,11 @@
     "courtBookedUndoName": "Deshacer: marcar la pista como no reservada",
     "startedAgo": "Empezó {when}",
     "leaveWaitlistConfirm": "¿Salir de la lista de espera?",
-    "fullHeldHelp": "Todas las plazas están ocupadas. ¿Te guardan una plaza? Toca tu nombre arriba."
+    "fullHeldHelp": "Todas las plazas están ocupadas. ¿Te guardan una plaza? Toca tu nombre arriba.",
+    "organiserOnly": "Eso solo lo cambia el organizador. Puedes cambiar el día, la hora, la duración, el lugar, la pista y la nota.",
+    "shareInvite": "Invitar por WhatsApp",
+    "shareResult": "Compartir el resultado",
+    "heldStranger": "¿Te guardan una plaza? Toca tu nombre arriba."
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -460,14 +475,12 @@
     "cancelInviteConfirm": "¿Quitar a {name}? Su enlace de invitación dejará de funcionar.",
     "edit": "Editar partido",
     "cancelEvent": "Cancelar partido",
-    "cancelEventConfirm": "¿Cancelar este partido para todos? Los jugadores con email reciben la cancelación.",
+    "cancelEventConfirm": "¿Cancelar este partido para todos? Cada jugador con plaza se entera: por email, Telegram, WhatsApp o una notificación. Las plazas guardadas y la lista de espera no reciben nada.",
     "saveChanges": "Guardar cambios",
-    "notifications": "Avisarme por email cuando alguien se apunte, se borre o responda",
+    "notifications": "Avisarme por email de todos mis partidos",
     "scoreReminderBanner": "¿Qué tal fue? Introduce el resultado final.",
     "manageLinkTitle": "Enlace de organizador",
     "rolodexHint": "Empieza a escribir para elegir entre jugadores con los que ya has jugado.",
-    "inviteAll": "Enviar todas las invitaciones en un mensaje",
-    "inviteAllHelp": "Un mensaje con el enlace personal de cada persona. Envíalo solo a esas personas. En el grupo, publica el enlace del partido.",
     "reserveSpot": "Reservar plaza {n}",
     "reserveSheetHelp": "Guarda esta plaza para alguien. Recibirás un enlace personal para reenviárselo.",
     "reserveInline": "Reservar esta plaza para…",
@@ -479,7 +492,7 @@
     "emailBounced": "El correo rebota",
     "inviteBounced": "La invitación por correo rebotó. Envía el enlace de otra forma.",
     "banter": "Bromas en el chat",
-    "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública.",
+    "banterHelp": "Una línea en broma sobre los partidos de tu grupo, como tres victorias seguidas o una tercera baja de última hora. Solo en el chat del grupo y en la tarjeta del resultado, nunca en una página pública. El interruptor vale para todos los partidos que organizas.",
     "scoreReminderTournament": "La ronda {n} espera los resultados. Introdúcelos en la tarjeta de abajo.",
     "pasteTitle": "Pegar los nombres del grupo",
     "pasteHelp": "¿Quién ha dicho que viene? Copia las respuestas del chat del grupo y pégalas aquí: «1. Ana 2. Bo», «+1 Lucía» o un nombre por línea. Cada nombre recibe una plaza reservada y nadie recibe ningún mensaje.",
@@ -493,18 +506,22 @@
     "playedWithYou": "Jugaron contigo",
     "keepRecord": "Mantener los partidos de {name}",
     "keepsRecord": "Mantiene los partidos de {name}",
-    "unreached": "Kicksmash no puede avisar a {names}. Envía tú el enlace.",
+    "unreached": "Kicksmash no puede avisar a {names}. Envíales también el enlace del partido.",
     "unreachedMore": "{count} más",
-    "unreachedSend": "Enviar el enlace por WhatsApp",
-    "unreachedSignIn": "Kicksmash no puede avisar a {names}. Envía tú el enlace: con él entran con su propio nombre.",
+    "unreachedSignIn": "Kicksmash no puede avisar a {names}. Envíales también el enlace del partido: con él entran con su propio nombre.",
     "keepsRecords": "Mantiene los partidos de {names}",
     "pickMore": "Toca más nombres para reservar más plazas.",
     "picksFull": "Ya has elegido todas las plazas libres.",
     "picksNoSpot": "No queda plaza para {names}.",
-    "heldMessage": "Un mensaje para {names}",
-    "heldMessageHelp": "{count, plural, one {Envíaselo directamente o al grupo. Abre el enlace del partido y toca su nombre.} other {Envíalo al grupo o a cada uno de ellos. Abren el enlace del partido y tocan su nombre.}}",
     "heldMessageNot": "{count, plural, one {No va en este mensaje: {names}. Envíale su enlace personal desde su fila.} other {No van en este mensaje: {names}. Envía a cada uno su enlace personal desde su fila.}}",
-    "heldMessageNotShare": "{count, plural, one {No va en este mensaje: {names}. Abre el partido y envíale su enlace personal desde su fila.} other {No van en este mensaje: {names}. Abre el partido y envía a cada uno su enlace personal desde su fila.}}"
+    "heldMessageNotShare": "{count, plural, one {No va en este mensaje: {names}. Abre el partido y envíale su enlace personal desde su fila.} other {No van en este mensaje: {names}. Abre el partido y envía a cada uno su enlace personal desde su fila.}}",
+    "editCapacityInUse": "Hay jugadores en las plazas que quieres quitar. Sácalos primero de la lista o deja más plazas.",
+    "inviteOptedOut": "Esta dirección pidió no recibir emails. Envía el enlace de otra forma.",
+    "reserveEmailsNow": "Al pulsar Listo, la invitación sale por email al momento.",
+    "manageWrong": "Este enlace de organizador no funciona. Comprueba que lo copiaste entero.",
+    "heldInShare": "El mensaje de WhatsApp de la barra pide a {names} que abran el enlace y toquen su nombre.",
+    "leaveSeat": "Dejar mi plaza",
+    "leaveSeatHelp": "Sigues como organizador. Tu plaza pasa al siguiente jugador."
   },
   "score": {
     "title": "Resultado",
@@ -547,7 +564,7 @@
     "noScore": "Sin resultado",
     "cancelled": "Cancelado",
     "you": "Tú",
-    "identityHelp": "Tu identidad vive en este navegador, sin contraseña. Guarda abajo tu enlace personal para usarla en cualquier sitio.",
+    "identityHelp": "Tu identidad vive en este navegador, sin contraseña. Guarda arriba tu enlace personal para usarla en cualquier sitio.",
     "placement": "#{place} de {total}",
     "restoreCta": "¿Jugaste antes desde otro móvil? Recuperar",
     "deleteAccount": "Eliminar mi cuenta",
@@ -576,7 +593,10 @@
     "identityByName": "Entraste tocando tu nombre, así que tu enlace personal y los recordatorios en este navegador quedan ocultos hasta que confirmes un email con un código o vincules Telegram.",
     "sameNameOnly": "Un nombre solo no basta para añadir estos partidos. Son de un miembro de un grupo que pide aprobación para entrar.",
     "sameRunsCrew": "Un nombre solo no basta para añadir estos partidos. Son de alguien que lleva un grupo.",
-    "deleteByName": "Entraste tocando tu nombre, así que desde este navegador no puedes eliminar la cuenta. {doors, select, both {Primero demuestra que es tuya: confirma tu email con el código que te enviamos o vincula Telegram, más arriba. Después elimínala.} email {Primero demuestra que es tuya: confirma tu email con el código que te enviamos, más arriba. Después elimínala.} telegram {Primero demuestra que es tuya: vincula Telegram más arriba. Después elimínala.} other {Elimínala desde el navegador en el que te uniste por primera vez.}}"
+    "deleteByName": "Entraste tocando tu nombre, así que desde este navegador no puedes eliminar la cuenta. {doors, select, both {Primero demuestra que es tuya: confirma tu email con el código que te enviamos o vincula Telegram, más arriba. Después elimínala.} email {Primero demuestra que es tuya: confirma tu email con el código que te enviamos, más arriba. Después elimínala.} telegram {Primero demuestra que es tuya: vincula Telegram más arriba. Después elimínala.} other {Elimínala desde el navegador en el que te uniste por primera vez.}}",
+    "sameConfirm": "¿Añadir estos partidos a tu registro? Los dos registros pasan a ser uno y no se puede deshacer.",
+    "settings": "Ajustes",
+    "settingsSummary": "Teléfonos, cuándo juegas, pasaporte, opiniones, avisos, enlace personal, nombre, nivel, email"
   },
   "notFound": {
     "title": "Enlace no encontrado",
@@ -605,7 +625,10 @@
     "asRecord": "Entras como {name}, con los partidos que ya jugaste.",
     "signInFirst": "¿Eres {name}? Primero entra con tu cuenta.",
     "signInFirstHelp": "Esta plaza guarda los partidos de {name}. Vuelve a entrar con el email o el Telegram que usaste antes y pulsa Me apunto.",
-    "askOrganiserHelp": "¿Eres {name}? Abre este enlace en el teléfono que usaste antes o pregunta al organizador."
+    "askOrganiserHelp": "¿Eres {name}? Abre este enlace en el teléfono que usaste antes o pregunta al organizador.",
+    "declineHint": "Pulsa No puedo abajo para liberar tu plaza.",
+    "declineConfirm": "¿Dejar tu plaza? Otra persona podrá ocuparla.",
+    "confirmedHelpNoMail": "Nos vemos en la pista."
   },
   "shareText": {
     "event": "🎾 Pádel {day} a las {time} — {venue}. {spots}. Toca para apuntarte: {url}",
@@ -613,12 +636,13 @@
     "invite": "🎾 ¡Hola {name}! Te he guardado una plaza para pádel {day} a las {time} en {venue}. Confirma aquí: {url}",
     "nudge": "🎾 {name}, ¿sigue en pie el pádel {day} a las {time} en {venue}? Confirma o rechaza aquí: {url}",
     "spotsLeft": "{count, plural, =0 {No quedan plazas} one {Queda # plaza} other {Quedan # plazas}}",
-    "inviteGroup": "🎾 Pádel {day} a las {time} — {venue}. Os he reservado plazas. Confirmad con vuestro enlace personal:\n{lines}",
     "result": "🎾 {line} · {day}\n{url}",
     "group": "🎾 Únete a nuestro grupo de pádel {name}: {url}",
     "spots": "{count, plural, =0 {completo} one {# plaza} other {# plazas}}",
     "held": "{count, plural, one {# reservada} other {# reservadas}}",
-    "heldGroup": "🎾 Pádel {day} a las {time} — {venue}. {count, plural, one {Guardo una plaza para {names}} other {Guardo plazas para {names}}}. Abrid el enlace y tocad vuestro nombre: {url}"
+    "heldGroup": "🎾 Pádel {day} a las {time} — {venue}. {count, plural, one {Guardo una plaza para {names}} other {Guardo plazas para {names}}}. Abrid el enlace y tocad vuestro nombre: {url}",
+    "heldOpen": "🎾 Pádel {day} a las {time} — {venue}. {count, plural, one {Guardo una plaza para {names}} other {Guardo plazas para {names}}}, y {open, plural, one {queda # plaza libre} other {quedan # plazas libres}}. Abrid el enlace: tocad vuestro nombre o apuntaos: {url}",
+    "fullWaitlist": "completo, lista de espera abierta"
   },
   "og": {
     "players": "{count}/{capacity} jugadores",
@@ -1030,7 +1054,7 @@
     "refillTitle": "Se ha liberado un sitio · {day} {time}",
     "refillBody": "{venue} · {spots}. Toca para cogerlo.",
     "enable": "Recordármelo 1 hora antes",
-    "enableHelp": "Una notificación una hora antes de cada partido. Llegar tarde es imperdonable, recuerda.",
+    "enableHelp": "Cambios en tus partidos, plazas libres, partidos nuevos de tu grupo y un aviso una hora antes de cada partido.",
     "on": "Recordatorios activados · 1 hora antes de cada partido",
     "off": "Desactivar",
     "denied": "Las notificaciones están bloqueadas para este sitio en los ajustes del navegador.",
@@ -1070,7 +1094,7 @@
     "cookiesTitle": "Cookies",
     "cookiesBody": "Solo cookies funcionales: quién eres, tu idioma, tu tamaño de texto, los partidos que organizas y de dónde llegaste. Sin rastreo en otras webs, sin cookies de terceros, sin banner.",
     "rightsTitle": "Tus derechos",
-    "rightsBody": "Cambia tu nombre o email cuando quieras. Apaga las notificaciones. Descarga todo lo que guardamos sobre ti en un solo archivo desde Mis partidos → Pasaporte. Borra tu cuenta desde Mis partidos: tus datos personales desaparecen y tus resultados antiguos quedan como «Jugador eliminado» para que el historial de tus amigos siga cuadrando.",
+    "rightsBody": "Cambia tu nombre o email cuando quieras. Apaga las notificaciones. Descarga todo lo que guardamos sobre ti en un solo archivo desde Mis partidos → Pasaporte. Borra tu cuenta desde Mis partidos: tus datos personales desaparecen y tus resultados antiguos quedan como «Jugador eliminado» para que el historial de tus amigos siga cuadrando. Si entraste solo con tu nombre, primero demuestra quién eres con un código por email o con Telegram, y después descarga o borra.",
     "termsTitle": "Condiciones",
     "termsBody": "Es gratis. Sé amable, aparece, apunta el resultado. La app se ofrece tal cual, sin garantías; si un enlace falla o una pista se reserva dos veces, eso queda entre tú y tus compañeros de pádel. Podemos retirar contenido o cuentas abusivas.",
     "openTitle": "Código abierto",
@@ -1114,7 +1138,8 @@
     "inboxHelp": "Todos los avisos que te enviamos o te guardamos. Cada uno se queda {days} días.",
     "unread": "Nuevo",
     "awayTitle": "{count, plural, one {# novedad} other {# novedades}} mientras descansabas",
-    "awayBody": "Están en tu bandeja de Mis partidos."
+    "awayBody": "Están en tu bandeja de Mis partidos.",
+    "notSaved": "No se guardó. Recarga la página e inténtalo de nuevo."
   },
   "noticeItem": {
     "matchUpdated": "Tu partido cambió: {day} {time}, {venue}",
@@ -1193,7 +1218,7 @@
     "deleteTitle": "Cuando borras tu cuenta",
     "deleteBody": "Bórrala al final de Mis partidos. Si entraste solo con tu nombre, primero demuestra quién eres con un código por email o con Telegram. Al instante borramos tu nombre, email y teléfono (también las copias que un organizador escribió para tu plaza), tu enlace personal, cuentas de chat vinculadas, página pública, dispositivos de notificación, los teléfonos que te recuerdan, los teléfonos que reconocemos, los horarios en que querías jugar, tu bandeja y tu página de entrenador con sus clases. Tus plazas futuras se liberan y los partidos que organizas se cancelan. Tus resultados antiguos y tu nivel quedan como «Jugador eliminado», para que el historial de tus compañeros siga cuadrando. Los mensajes que enviaste por el formulario de opiniones se quedan, con el nombre y el contacto que llevan, porque tratan de la app: pídenoslo y también los borramos. Tu nombre sale de la página de ideas que se hicieron realidad en la app. Las copias hechas antes de borrar la cuenta desaparecen de nuestro repositorio privado de copias de seguridad al cabo de unos {backupDays, plural, one {# día} other {# días}}. Después, las copias más antiguas ya no están en su historial, y GitHub las borra más adelante. Hasta entonces, solo nosotros podemos abrirlas.",
     "rightsTitle": "Tus derechos",
-    "rightsBody": "Mira y cambia tu nombre, tu email y tus avisos en Mis partidos. Descarga todo lo que guardamos sobre ti en un solo archivo desde Mis partidos → Pasaporte. Bórralo todo al final de Mis partidos. Allí también puedes olvidar un teléfono que reconocemos, cuando quieras, u oponerte a la clave con «No reconocer mis teléfonos»: vale para esa cuenta hasta que lo desactives. Para cualquier otra cosa, una pregunta, una corrección o una queja, escríbenos por el formulario de opiniones.",
+    "rightsBody": "Mira y cambia tu nombre, tu email y tus avisos en Mis partidos. Descarga todo lo que guardamos sobre ti en un solo archivo desde Mis partidos → Pasaporte. Si entraste solo con tu nombre, primero demuestra quién eres con un código por email o con Telegram. Bórralo todo al final de Mis partidos. Allí también puedes olvidar un teléfono que reconocemos, cuando quieras, u oponerte a la clave con «No reconocer mis teléfonos»: vale para esa cuenta hasta que lo desactives. Para cualquier otra cosa, una pregunta, una corrección o una queja, escríbenos por el formulario de opiniones.",
     "lawTitle": "La ley",
     "lawBody": "Se aplica la Ley de Protección de Datos Personales de Tailandia (PDPA). Usamos tus datos para que funcione la app que viniste a usar (nuestro acuerdo contigo), y para ayudarte a iniciar sesión desde tu propio teléfono y evitar jugadores duplicados en la app (nuestro interés legítimo). Para nada más: nunca los vendemos, nunca mostramos anuncios y nunca creamos un perfil tuyo para nadie.",
     "termsLink": "Condiciones de uso →",
@@ -1223,7 +1248,10 @@
     "doneTitle": "Hecho. Se acabaron los emails.",
     "doneBody": "Los organizadores ya no pueden escribir a {email} a través de Kicksmash. Si algún día añades tú esta dirección en la página de un partido, cuenta como un sí y los emails vuelven.",
     "badLinkTitle": "Ese enlace no cuadra",
-    "badLinkBody": "Puede estar incompleto o caducado. Usa el enlace del email que recibiste."
+    "badLinkBody": "Puede estar incompleto o caducado. Usa el enlace del email que recibiste.",
+    "askTitle": "¿Dejar de recibir emails de Kicksmash?",
+    "askBody": "Los organizadores ya no podrán escribir a {email} a través de Kicksmash. Nada cambia hasta que toques el botón.",
+    "askYes": "Sí, no quiero más emails"
   },
   "levelCheck": {
     "alreadyAnswered": "Alguien ya respondió a esta; la lista está actualizada.",
@@ -1362,7 +1390,8 @@
     "tagAgeLabel": "Edad",
     "tagAnyAge": "Cualquier edad",
     "tagAge": "{age}+",
-    "tagHelp": "La etiqueta ayuda a los jugadores adecuados a encontrar el partido. No se comprueba a nadie."
+    "tagHelp": "La etiqueta ayuda a los jugadores adecuados a encontrar el partido. No se comprueba a nadie.",
+    "requestsHelpClosed": "Fuera del rango de nivel. Al aprobar entran mientras quede una plaza libre."
   },
   "card": {
     "title": "Tarjeta de resultado",
@@ -1389,7 +1418,8 @@
     "photoFailed": "No se pudo usar esa imagen. Prueba con otra.",
     "removePhoto": "Quitar la foto",
     "waiting": "Esperando el resultado",
-    "makeWeekly": "Hacerlo semanal"
+    "makeWeekly": "Hacerlo semanal",
+    "removePhotoConfirm": "¿Quitar la foto de la tarjeta del resultado?"
   },
   "group": {
     "title": "Grupo",
@@ -1410,14 +1440,14 @@
     "remove": "Quitar",
     "admin": "Admin",
     "nextMatch": "Crear el siguiente partido",
-    "nextMatchHelp": "Rellenado con los ajustes habituales del grupo. Todos los miembros reciben un aviso.",
+    "nextMatchHelp": "Rellenado con los ajustes habituales del grupo. Cada miembro ve el partido en Mis partidos y recibe un correo o una notificación en el móvil si los activó.",
     "upcoming": "Próximos",
     "past": "Pasados",
     "noUpcoming": "Nada programado todavía.",
     "repeats": "Hueco semanal",
     "none": "Sin partidos automáticos",
     "every": "Cada {day} a las {time}",
-    "autoHelp": "El siguiente partido se crea {n} días antes y se avisa a todos. Cualquier miembro puede seguir creando uno a mano.",
+    "autoHelp": "El siguiente partido se crea {n} días antes. Cada miembro lo ve en Mis partidos y recibe un correo o una notificación en el móvil si los activó. Cualquier miembro puede seguir creando uno a mano.",
     "leadDays": "Crearlo {n} días antes",
     "settings": "Ajustes del grupo",
     "save": "Guardar",
@@ -1470,7 +1500,8 @@
     "askToJoinSetting": "Entrar con aprobación",
     "telegramRun": "Abrir un chat de Telegram para este grupo",
     "telegramRunHelp": "Primero crea un chat de Telegram nuevo solo para el pádel de este grupo; luego toca el botón de arriba y elígelo. Kicksmash entra como administrador, mantiene allí una tarjeta por partido y lee el chat para entender «me apunto» y «no puedo». Guarda los nombres, los nombres de usuario de Telegram, quién juega y quién no, la pista y el resultado, nunca el texto. Para pararlo, un administrador del chat puede escribir /quiet o quitar el bot.",
-    "telegramJoin": "Unirse al chat de Telegram del grupo"
+    "telegramJoin": "Unirse al chat de Telegram del grupo",
+    "removeConfirm": "¿Quitar a {name} del grupo? Deja de recibir sus partidos."
   },
   "venue": {
     "board": "Tablón del club",
@@ -1496,7 +1527,8 @@
     "listNow": "Mostrar en el tablón de {venue}",
     "recentResults": "Resultados recientes",
     "recentWon": "Ganó",
-    "recentPlayer": "Jugador"
+    "recentPlayer": "Jugador",
+    "fullClosed": "Completo"
   },
   "ranking": {
     "title": "Ranking",
@@ -1671,7 +1703,7 @@
     "feedJson": "Lista JSON de huecos libres",
     "submit": "Reclamar esta página",
     "claimed": "Solicitud recibida",
-    "claimedHelp": "Abajo está tu enlace de gestión; guárdalo, también aparece en Mis partidos. Confirmamos la solicitud con el contacto que diste, normalmente en un día; te avisamos por Telegram o correo y la página se publica.",
+    "claimedHelp": "Abajo está tu enlace de gestión. Guárdalo: también aparece en Mis partidos. Comprobamos la solicitud con el contacto que diste, normalmente en un día. Abre tu enlace de gestión para ver nuestra respuesta. Cuando aprobemos la solicitud, la página se publica.",
     "manageLink": "Enlace de gestión",
     "manageTitle": "Gestionar {club}",
     "statusPending": "Pendiente de nuestra revisión",
@@ -1739,13 +1771,13 @@
     "contactHelp": "Un correo de trabajo en el dominio del club se confirma con un código al momento y la página se publica. Todo lo demás lo comprobamos a mano, normalmente en un día.",
     "attest": "Al reclamar, confirmas que trabajas en {club} y puedes gestionar su página.",
     "claimedHelpCode": "Enviamos un código de 6 cifras a tu correo de trabajo. Introdúcelo abajo y la página se publica.",
-    "claimedHelpVerified": "Tu correo de trabajo está confirmado y la página está publicada. Te avisamos por Telegram o correo.",
+    "claimedHelpVerified": "Tu correo de trabajo está confirmado y la página está publicada.",
     "codeTitle": "Confirma tu correo de trabajo",
     "codeSentTo": "Código enviado a {email}",
     "codeLabel": "Código de 6 cifras",
     "codeConfirm": "Confirmar",
     "codeConfirmed": "Correo de trabajo confirmado. La página está publicada.",
-    "codeWrong": "Ese código no es correcto o ha caducado. Envía uno nuevo.",
+    "codeWrong": "Ese código no es correcto. Revísalo e inténtalo de nuevo.",
     "codeAgain": "Enviar un código nuevo",
     "country": "País",
     "placePlaceholder": "Kuala Lumpur, Moscú, Phuket…",
@@ -1776,7 +1808,10 @@
     "dayLesson": "Clase",
     "dayNoCourt": "Sin pista indicada",
     "freeFromPlatform": "De la página pública de {platform} · Actualizado {time}",
-    "freePlatformDown": "Las horas libres de {platform} no están disponibles ahora mismo."
+    "freePlatformDown": "Las horas libres de {platform} no están disponibles ahora mismo.",
+    "codeExpired": "Ese código caducó o tuvo demasiados intentos. Envía un código nuevo.",
+    "codeLimit": "Hoy pediste el máximo de códigos. Vuelve a intentarlo mañana.",
+    "codeNotSent": "No salió ningún código nuevo. Espera una hora y vuelve a intentarlo."
   },
   "passport": {
     "title": "Pasaporte",
@@ -1833,7 +1868,8 @@
     "docCopyLink": "Copiar enlace JSON",
     "docOpenJson": "Abrir JSON",
     "docShow": "Ver el documento",
-    "docBack": "Volver a {name}"
+    "docBack": "Volver a {name}",
+    "exportByName": "Entraste tocando tu nombre, así que desde este navegador no puedes descargar tus datos. {doors, select, both {Primero demuestra que eres tú: confirma tu email con el código que te enviamos o vincula Telegram, más abajo. Después descárgalos.} email {Primero demuestra que eres tú: confirma tu email con el código que te enviamos, más abajo. Después descárgalos.} telegram {Primero demuestra que eres tú: vincula Telegram más abajo. Después descárgalos.} other {Descárgalos desde el navegador en el que te uniste por primera vez.}}"
   },
   "feedback": {
     "title": "Cuéntanos qué debería cambiar",
@@ -1841,7 +1877,7 @@
     "sub": "Una idea, un error, un deseo. Leo cada nota yo mismo. Si cambia Kicksmash, lo sabrás, con lo que cambió.",
     "placeholder": "¿Qué debería ser distinto?",
     "contactLabel": "Email, para poder responderte (opcional)",
-    "contactHelp": "Sin él lo leo igual, pero no puedo escribirte.",
+    "contactHelp": "Sin él, igual leo tu nota. Solo puedo responder donde Kicksmash ya te alcanza.",
     "send": "Enviar",
     "sent": "Recibido, gracias.",
     "tooShort": "Unas palabras más, por favor.",
@@ -1858,7 +1894,8 @@
     "builtEmpty": "Aquí aún no hay nada. La primera idea puede ser tuya.",
     "builtSeeAll": "Ver qué cambiaron",
     "builtSince": "En la app desde el {date}",
-    "builtFrom": "Idea de {name}"
+    "builtFrom": "Idea de {name}",
+    "notSent": "Tu nota no se envió. Inténtalo de nuevo."
   },
   "coach": {
     "invite": {
@@ -1964,7 +2001,8 @@
       "offerAdd": "Añadir un bono",
       "offerRemove": "Quitar",
       "persons": "{n, plural, one {# persona} other {# personas}}",
-      "notifyWaiting": "{channels}: listos, a la espera de sus cuentas. Hasta entonces también sirve un correo que leas más tarde."
+      "notifyWaiting": "{channels}: listos, a la espera de sus cuentas. Hasta entonces también sirve un correo que leas más tarde.",
+      "badPromptpay": "Un PromptPay es un número de teléfono (10 dígitos) o un número de identidad (13 dígitos)."
     },
     "done": {
       "title": "Tu asistente está listo",
@@ -2264,7 +2302,12 @@
       "already_paid": "Esta clase ya está pagada. Una devolución se hace en el banco, no aquí.",
       "has_package": "Ya tienes un bono con clases por usar. Úsalo primero.",
       "blocked": "Este entrenador no acepta reservas tuyas.",
-      "not_taking_bookings": "Este entrenador aún no acepta reservas."
+      "not_taking_bookings": "Este entrenador aún no acepta reservas.",
+      "too_late": "Ya es tarde para mover esta clase: está dentro de la regla de cancelación del entrenador. Cancélala.",
+      "cancelled": "Eso ya no está disponible: se canceló o se acabó el tiempo. Recarga la página.",
+      "forbidden": "Eso no lo puedes cambiar tú.",
+      "not_found": "Eso ya no existe. Recarga la página.",
+      "generic": "No ha funcionado. Inténtalo otra vez."
     },
     "email": {
       "paidSubject": "{student} dice que pagó",
@@ -2374,7 +2417,8 @@
       "joinButton": "Unirme a la agenda de {name}",
       "joinGone": "Ese enlace ya no vale. Pide otro al entrenador.",
       "how": "Cualquiera con el enlace puede unirse una vez creado; crea uno nuevo y el anterior deja de funcionar. Un gestor ve y hace todo lo que tú haces aquí, salvo esta sección.",
-      "fold": "¿Alguien más gestiona tus reservas?"
+      "fold": "¿Alguien más gestiona tus reservas?",
+      "removeConfirm": "¿Quitar a {name}? Ya no podrá reservar por ti."
     }
   },
   "coachFront": {
@@ -2720,7 +2764,11 @@
         "live": "Los resultados llegan de los jugadores o del mostrador; la pantalla y la página los siguen.",
         "results": "El archivo de resultados y el podio de cada categoría."
       }
-    }
+    },
+    "withdrawConfirmEmpty": "¿Retirar esta pareja? No hay nadie en espera, así que la plaza queda vacía. Si el cuadro ya está hecho, tus rivales pasan sin jugar.",
+    "withdrawClosed": "Ya no puedes retirarte: esta categoría ha terminado. Habla con el organizador.",
+    "clearDrawConfirm": "¿Borrar el cuadro de {category}? Se borran todos sus partidos. Después puedes hacer el cuadro otra vez.",
+    "clearDrawScored": "Un partido de este cuadro ya tiene resultado, así que el cuadro se queda. Cambia ese resultado."
   },
   "series": {
     "eyebrow": "Serie",

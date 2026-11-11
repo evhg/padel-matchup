@@ -192,10 +192,11 @@ describe("the nudge is closed by whoever answers it", () => {
     await db.update(players).set({ telegramId: 9106 }).where(eq(players.id, micky.id));
     await db.insert(telegramChats).values({ chatId: 9106, type: "private", locale: "en" }).onConflictDoNothing();
     // The nudge is a picture, and a picture's words are its caption: editMessageText would be refused.
-    const tap = (chatId: number) =>
+    const nudgeKeys = { inline_keyboard: [[{ text: "🏁 Result", callback_data: `r:${past.code}` }, { text: "We didn't play", callback_data: `x:${past.code}` }]] };
+    const tap = (chatId: number, data = `x:${past.code}`) =>
       handleTelegramUpdate(
         db,
-        { update_id: 2, callback_query: { id: "cb", from: { id: chatId, first_name: "X", language_code: "en" }, message: { message_id: 1, date: 0, chat: { id: chatId, type: "private" }, photo: [{ file_id: "card" }], caption: "how did it go?" }, data: `x:${past.code}` } },
+        { update_id: 2, callback_query: { id: "cb", from: { id: chatId, first_name: "X", language_code: "en" }, message: { message_id: 1, date: 0, chat: { id: chatId, type: "private" }, photo: [{ file_id: "card" }], caption: "how did it go?", reply_markup: nudgeKeys }, data } },
         NO_SIDE_EFFECTS,
       );
 
@@ -205,8 +206,20 @@ describe("the nudge is closed by whoever answers it", () => {
     const [untouched] = await db.select().from(events).where(eq(events.id, past.id));
     expect(untouched.status).toBe("past");
 
+    // One question first: the organiser's tap cancels the match and every player is told, so it asks
+    // in a box the organiser closes, and the button becomes the answer. Nothing is cancelled yet.
     calls = [];
-    expect(await tap(9006)).toBe(`cancelled:${past.code}`);
+    expect(await tap(9006)).toBe("cancel_ask");
+    const asked = sent("answerCallbackQuery").at(-1)!;
+    expect(String(asked.body.text)).toContain("Every player is told");
+    expect(asked.body.show_alert).toBe(true);
+    const yes = sent("editMessageReplyMarkup").at(-1)!.body.reply_markup as typeof nudgeKeys;
+    expect(yes.inline_keyboard).toEqual([[{ text: "🏁 Result", callback_data: `r:${past.code}` }, { text: "✕ Yes, cancel it", callback_data: `x:${past.code}:y` }]]);
+    const [stillOn] = await db.select().from(events).where(eq(events.id, past.id));
+    expect(stillOn.status).toBe("past");
+
+    calls = [];
+    expect(await tap(9006, `x:${past.code}:y`)).toBe(`cancelled:${past.code}`);
     const [closed] = await db.select().from(events).where(eq(events.id, past.id));
     expect(closed.status).toBe("cancelled");
     // Eriik, 22 September: "when I clicke We didn't play the button doesn't change it remains there."

@@ -1,6 +1,6 @@
 // Clubs: the claim in the browser, the owner's approval through the Telegram callback, the club page,
 // the city page, the public API and My matches.
-import { BASE, finish, iphone, launch, lessonDay, makeCheck, shot, sitsInside } from "./lib.mjs";
+import { BASE, openMore, finish, iphone, launch, lessonDay, makeCheck, shot, sitsInside, openSettings } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 /** Every email the build wrote instead of sending, oldest first. */
 const mails = () => (process.env.EMAIL_SINK_FILE && existsSync(process.env.EMAIL_SINK_FILE) ? readFileSync(process.env.EMAIL_SINK_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -96,6 +96,7 @@ try {
   await page.goto(`${BASE}/v/${SLUG}/manage/${token}`);
   check("the manage page shows the live status", (await painted(page.getByText("✓ Live"))) === 1 && (await page.getByText("Waiting for our check").count()) === 0);
   await page.goto(`${BASE}/me`);
+  await openSettings(page); // behind "Settings" on My matches (the owner, 9 November 2026)
   check("My matches lists the club", (await painted(page.getByText("Your clubs"))) === 1 && (await painted(page.getByText(CLUB))) >= 1);
 
   const stranger = await hook({ update_id: 91, callback_query: { id: "x1", from: { id: 1, first_name: "Eve" }, data: `ca:${token}` } });
@@ -396,6 +397,7 @@ try {
   // The create form: the platform's free times as chips, and no platform's name on them or under the
   // time (the owner, 11 October 2026: "The chat reply and the time chips show no platform name").
   await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
+  await openMore(page); // the length and the time zone are under More options (the owner, 9 November 2026)
   await page.getByTestId("length-choice").getByRole("button", { name: "90 min" }).click();
   await page.getByTestId("free-times").waitFor({ timeout: 15000 });
   const ptChip = page.getByTestId("free-chip").first();
@@ -452,6 +454,7 @@ try {
   const feedNow = await fetch(`${BASE}/api/v1/clubs/${SLUG}`).then((r) => r.json());
   const reachable = (feedNow.freeCourts?.slots ?? []).filter((s) => new Date(s.start).getTime() >= Date.now() + 2 * 3600_000 + 5 * 60_000);
   await page.goto(`${BASE}/?venue=${encodeURIComponent(CLUB)}`);
+  await openMore(page); // the length and the time zone are under More options (the owner, 9 November 2026)
   await page.getByTestId("length-choice").getByRole("button", { name: "60 min" }).click();
   if (reachable.length > 0) {
     await page.getByTestId("free-times").waitFor({ timeout: 15000 });

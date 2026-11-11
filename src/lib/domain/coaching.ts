@@ -6,6 +6,7 @@ import { clubs, coachAssets, coachBlocks, coachManagers, coachOpenings, coachPac
 import { isValidTimeZone, utcToZonedParts, zonedTimeToUtc } from "@/lib/dates";
 import { DomainError } from "./errors";
 import { COURT_LIMITS } from "./courts";
+import { promptPayTarget } from "@/lib/promptpay";
 import { venueSlug, venueSlugFor } from "./venueBoard";
 import { CITIES, cityInText, cityOf, type City } from "./cities";
 import { channelOf, recordFact } from "./facts";
@@ -345,6 +346,9 @@ export async function updateCoach(db: Db, coachId: string, patch: CoachPatch): P
     }
   }
   if (clean.promptpayId !== undefined) clean.promptpayId = (clean.promptpayId ?? "").replace(/[^\d+]/g, "").slice(0, 20) || null;
+  // A PromptPay ID no bank reads makes every QR from it invalid, so it is refused here and not saved:
+  // a phone (ten digits, or +66 and nine), an ID number (thirteen) or an e-wallet (fifteen).
+  if (clean.promptpayId && !promptPayTarget(clean.promptpayId)) throw new DomainError("invalid", "promptpay");
   if (clean.payLink !== undefined) clean.payLink = isPayLink((clean.payLink ?? "").trim()) ? (clean.payLink ?? "").trim() : null;
   if (clean.bio !== undefined) clean.bio = (clean.bio ?? "").replace(/\s+/g, " ").trim().slice(0, 240) || null;
   // The same trim and the same length a club's own court rows take (COURT_LIMITS.nameMax), so the
@@ -881,6 +885,22 @@ export async function setLessonPaid(db: Db, coachId: string, lessonId: string, p
     .where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId)))
     .returning();
   return row ?? null;
+}
+
+/**
+ * The coach's "Paid", once. `changed` is false when the lesson was paid already: a second tap on an old
+ * message, or the web and the chat at once. The caller tells the student only on a change, so one
+ * payment never reaches them as two "paid" messages.
+ */
+export async function markLessonPaid(db: Db, coachId: string, lessonId: string, now = new Date()): Promise<{ lesson: Lesson | null; changed: boolean }> {
+  const [row] = await db
+    .update(lessons)
+    .set({ paidAt: now })
+    .where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId), isNull(lessons.paidAt)))
+    .returning();
+  if (row) return { lesson: row, changed: true };
+  const [was] = await db.select().from(lessons).where(and(eq(lessons.id, lessonId), eq(lessons.coachId, coachId))).limit(1);
+  return { lesson: was ?? null, changed: false };
 }
 
 export async function availableSlots(db: Db, coach: Coach, from: Date, to: Date, now = new Date(), minutes?: number): Promise<Date[]> {

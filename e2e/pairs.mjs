@@ -2,7 +2,7 @@
 // the organiser ticks "Fixed pairs", Ana joins with Bo's name and Bo claims the spot by link, Cy joins
 // alone as "Partner needed" and Di taps "Be their partner", the organiser names Zed as theirs. Three
 // pairs, so round 1 is one court with one pair resting; a score goes in and the table ranks pairs.
-import { BASE, BASE_RE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
+import { BASE, openMore, BASE_RE, crashed, finish, iphone, launch, makeCheck, shot } from "./lib.mjs";
 process.on("unhandledRejection", () => {});
 const browser = await launch();
 const phone = { ...iphone, timezoneId: "Asia/Bangkok" };
@@ -27,7 +27,8 @@ try {
   const org = await newPage();
   await org.goto(BASE + "/");
   await org.getByPlaceholder("e.g. Alex").fill("Org");
-  await org.getByRole("button", { name: /Tournament/ }).click();
+  await openMore(org);
+  await org.getByTestId("type-line").click(); // "Tournament instead", the last line under More options
   // Tomorrow evening, computed from the moment the suite runs (rule 11): joining and leaving stay open.
   const at = new Date(Date.now() + 26 * 60 * 60 * 1000);
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(at);

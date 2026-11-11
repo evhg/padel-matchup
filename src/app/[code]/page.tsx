@@ -19,7 +19,8 @@ import type { EventFormValues } from "@/components/EventFields";
 import { EmailField } from "@/components/EmailField";
 import { Footer, Header } from "@/components/Header";
 import { SourceTag } from "@/components/SourceTag";
-import { JoinBar, type JoinState } from "@/components/JoinBar";
+import { JoinBar } from "@/components/JoinBar";
+import { joinStateOf } from "@/lib/domain/joinState";
 import { JoinInline } from "@/components/JoinInline";
 import { KeepTogether } from "@/components/KeepTogether";
 import { ReturningPlayer } from "@/components/ReturningPlayer";
@@ -46,8 +47,7 @@ import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { SeriesDoor } from "@/components/SeriesBits";
-import { CopyButton, QrFold, ShareButtons } from "@/components/ShareSheet";
-import { HeldMessage } from "@/components/HeldMessage";
+import { CopyButton, OtherShares } from "@/components/ShareSheet";
 import { HeldRowButton } from "@/components/TakeHeld";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
@@ -60,7 +60,7 @@ import { stayUpdated } from "@/lib/domain/stayUpdated";
 import { bindDeepLink } from "@/lib/telegram/deepLinks";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
-import { baseUrl, emailEnabled, shortHost } from "@/lib/config";
+import { baseUrl, emailEnabled } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
 import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
@@ -70,7 +70,7 @@ import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { crewTelegramInvite, getGroupById, getGroupMember } from "@/lib/domain/groups";
 import { matchCrewGroupLink } from "@/lib/domain/groupAccess";
 import { telegramBotId, telegramEnabled } from "@/lib/telegram/api";
-import { hasRange, isLevelVerified } from "@/lib/domain/levels";
+import { hasRange, isLevelVerified, joinAsks, joinBarLevel, partnerOffered } from "@/lib/domain/levels";
 import { maySendPlayAgainRound, nextGameOf, playAgainActor, playAgainOfferWhen, playAgainRoundOf, rangeWaiverAt, PLAY_AGAIN_AHEAD_DAYS } from "@/lib/domain/playAgain";
 import { askLevelAfterJoin } from "@/lib/domain/levelAsk";
 import { cleanAgeMin, cleanCategory } from "@/lib/domain/eventTags";
@@ -92,10 +92,10 @@ import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
-import { eventUrl, inviteUrl, whatsappShareUrl } from "@/lib/share";
-import { countParts, heldSeats, lineupNames, previewText, tellGroupText } from "@/lib/domain/groupLine";
+import { eventUrl, inviteUrl, tagForWhatsapp, whatsappShareUrl } from "@/lib/share";
+import { countParts, heldSeats, lineupNames, previewText, shareMessage, shareMoment } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
-import { markedAmong, normalAddress } from "@/lib/domain/emailMarks";
+import { mailBlocksAmong, normalAddress } from "@/lib/domain/emailMarks";
 import { NO_OFFER, thatsMeOffer, unreachedSignsIn } from "@/lib/domain/thatsMe";
 import { anyHintAmong, hintOpen, hintScopeIds } from "@/lib/domain/deviceHintAsk";
 import { deviceHintMode } from "@/lib/deviceHint";
@@ -104,7 +104,7 @@ import { heldMessageOf, heldRowOffers, type HeldRowOffer } from "@/lib/domain/he
 import { withClientMessages } from "@/i18n/withClientMessages";
 import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
 
-type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string; join?: string }> };
+type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string; join?: string; manage?: string }> };
 
 /**
  * One read of the match for each request: `generateMetadata` and the page both want it, and the two
@@ -160,6 +160,8 @@ async function EventPage({ params, searchParams }: Props) {
   const source = cleanSource(query?.s);
   // "I'm in" in a message outside Telegram (`playAgainJoinUrl`): the join step opens by itself; nothing is joined.
   const openJoin = query?.join === "1";
+  // An organizer link that did not work (`/[code]/manage/[manage]`): the page says so instead of only lacking the tools.
+  const wrongManage = query?.manage === "wrong";
   const { code } = await params;
   if (!isValidShareCode(code)) notFound();
   // Taken before the first read, by whichever of the page and its metadata read the match first
@@ -182,9 +184,13 @@ async function EventPage({ params, searchParams }: Props) {
   const live = !cancelled && started && !over;
   const me = viewer.player;
   // The organiser sees whose email stopped arriving, beside the name, so they can send the link
-  // another way. One read for the whole roster; nobody else sees it (src/lib/domain/emailMarks.ts).
-  const bounced = viewer.isCreator && emailEnabled() ? await markedAmong(db, [...roster, ...waitlist].flatMap((s) => [s.player?.email, s.invitedEmail])) : new Set<string>();
-  const didBounce = (a: string | null | undefined) => Boolean(a) && bounced.has(normalAddress(a));
+  // another way, and which held place's address asked for no mail from organisers (no "Invite emailed"
+  // for it). One read for the whole roster; nobody else sees it (src/lib/domain/emailMarks.ts).
+  const blocks = viewer.isCreator && emailEnabled() ? await mailBlocksAmong(db, [...roster, ...waitlist].flatMap((s) => [s.player?.email, s.invitedEmail])) : { marked: new Set<string>(), optedOut: new Set<string>() };
+  const didBounce = (a: string | null | undefined) => Boolean(a) && blocks.marked.has(normalAddress(a));
+  const optedOut = (a: string | null | undefined) => Boolean(a) && blocks.optedOut.has(normalAddress(a));
+  // The address a held place's invitation went to: none for an address that opted out, which got nothing.
+  const emailedTo = (s: SlotWithPlayer) => (s.status === "invited" && s.invitedEmail && emailEnabled() && !optedOut(s.invitedEmail) ? s.invitedEmail : null);
   const mySlot = me ? [...roster, ...waitlist].find((s) => s.playerId === me.id) : undefined;
   // A place the organiser holds for this very record (a past player picked for it, the owner's decision
   // of 11 October 2026) is not a seat: the viewer is not in until they take it, and Join takes it
@@ -218,7 +224,8 @@ async function EventPage({ params, searchParams }: Props) {
   const ranged = hasRange(levelRange);
   const requests = ranged ? await getJoinRequests(db, ev.id) : [];
   const myRequest = me ? requests.find((r) => r.playerId === me.id) : undefined;
-  const pendingRequests = viewer.isCreator ? requests.filter((r) => r.status === "pending") : [];
+  // Only while the match is neither called off nor over: an approval there is refused, and a decline told the player about a dead match.
+  const pendingRequests = viewer.isCreator && !cancelled && !over ? requests.filter((r) => r.status === "pending") : [];
   // Sequential, like everything else on this page: the pooler stalls on pipelined bursts (rule 8).
   const paid = ev.cost ? await paymentsFor(db, ev.id) : [];
   // Seat ids only: a player id never goes to a browser (src/lib/seatProps.ts). The viewer's own row is named by its seat.
@@ -230,21 +237,24 @@ async function EventPage({ params, searchParams }: Props) {
   const verifierDTOs = verifiers.map((v) => (v.kind === "coach" ? { key: `coach:${v.id}`, name: v.name, target: { coachId: v.id } } : { key: `club:${v.slug}`, name: v.name, target: { clubSlug: v.slug } }));
   const askedKeys = myChecks.map((c) => (c.coachId ? `coach:${c.coachId}` : `club:${c.clubSlug}`));
 
-  let joinState: JoinState = "join";
-  if (cancelled) joinState = "cancelled";
-  else if (over) joinState = "past";
-  else if (isMember) joinState = started ? "member_live" : "leave";
-  else if (isWaitlisted) joinState = "leave_waitlist";
-  else if (myHeld) joinState = "join";
-  else if (myRequest?.status === "pending") joinState = "requested";
-  else if (myRequest?.status === "declined") joinState = "request_declined";
-  else if (spotsLeft > 0) joinState = "join";
-  else if (ev.whenFull === "waitlist") joinState = "join_waitlist";
-  else joinState = "full";
+  const joinState = joinStateOf({
+    cancelled,
+    over,
+    started,
+    member: isMember,
+    waitlisted: isWaitlisted,
+    held: myHeld,
+    request: myRequest?.status === "pending" || myRequest?.status === "declined" ? myRequest.status : null,
+    spotsLeft,
+    whenFull: ev.whenFull,
+  });
   // Somebody the organiser already played a finished, scored match with is not held to the range
   // (DECIDING rules 21 and 37): the button says Join, not "Ask to join", or on a confirmed-levels-only
   // match the bar asks for a confirmed level, as the server does. One read, only for a viewer the range would hold.
-  const rangeWaived = me && ranged && !viewer.isCreator && (joinState === "join" || joinState === "join_waitlist" || joinState === "requested") ? await rangeWaiverAt(db, ev, me, now) : null;
+  // A place held for this very record asks no range at all (`joinBarLevel`'s `held`), so no read for it.
+  const rangeWaived = me && ranged && !viewer.isCreator && !myHeld && (joinState === "join" || joinState === "join_waitlist" || joinState === "requested") ? await rangeWaiverAt(db, ev, me, now) : null;
+  // The bar's reading of the viewer's level, for the open spot's words too: "Ask to join" where the tap only asks.
+  const barLevel = joinBarLevel({ range: ranged ? levelRange : null, level: me?.level ?? null, verifiedOnly: ev.levelVerifiedOnly, verified: me ? isLevelVerified(me) : false, waived: rangeWaived, held: myHeld });
 
   const typeLabel = t(ev.type === "match" ? "event.match" : "event.tournament");
   const title = calendarTitle(ev, typeLabel);
@@ -258,30 +268,7 @@ async function EventPage({ params, searchParams }: Props) {
   const booked = courtBookedBy(detail);
   const bookedText = booked ? (booked.name ? t("event.courtBookedBy", { name: booked.name }) : t("event.courtBooked")) : null;
   const shareVenue = bookedText ? `${venue} · ${bookedText}` : venue;
-  const shareText =
-    spotsLeft === 0 && ev.whenFull === "waitlist"
-      ? t("shareText.eventFull", { day, time, venue: shareVenue, url })
-      : t("shareText.event", { day, time, venue: shareVenue, spots: t("shareText.spotsLeft", { count: spotsLeft }), url });
-  // "Tell the group": once in, one tap carries the line-up back to the group the link came from
-  // (src/lib/domain/groupLine.ts). The match's own link, tagged as a WhatsApp one; never a personal
-  // link, because a message in a group can be forwarded.
   const lineSeats = roster.map((s) => ({ status: s.status, name: s.player?.displayName ?? s.invitedName }));
-  const tellGroup =
-    joinState === "leave"
-      ? whatsappShareUrl(
-          tellGroupText(
-            {
-              when: formatWeekdayTime(ev.startsAt, ev.tz, locale),
-              venue: ev.venueName,
-              names: lineupNames(lineSeats),
-              capacity: ev.capacity,
-              held: heldSeats(lineSeats) ? t("shareText.held", { count: heldSeats(lineSeats) }) : null,
-              spots: t("shareText.spots", { count: spotsLeft }),
-            },
-            taggedUrl(url, "wa"),
-          ),
-        )
-      : null;
 
   const participants = roster.filter(isOccupied);
   const isTournament = ev.type === "tournament";
@@ -478,14 +465,8 @@ async function EventPage({ params, searchParams }: Props) {
   // "They sign in as themselves" only where it is true of every name on the line (D6, `unreachedSignsIn`):
   // a partner "That's me" refuses keeps the plain "Send them the link.".
   const unreachedSignIn = unreachedRecs.length > 0 && (await unreachedSignsIn(db, ev, unreachedRecs, now));
-  const unreached =
-    unreachedNames.length > 0
-      ? {
-          text: t(unreachedSignIn ? "creator.unreachedSignIn" : "creator.unreached", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format([...unreachedParts.shown, ...(unreachedParts.more ? [t("creator.unreachedMore", { count: unreachedParts.more })] : [])]) }),
-          url,
-          shareText,
-        }
-      : null;
+  // Words only since 9 November 2026: the one share in the bar sends the match link, so the line has no button of its own.
+  const unreached = unreachedNames.length > 0 ? t(unreachedSignIn ? "creator.unreachedSignIn" : "creator.unreached", { names: new Intl.ListFormat(locale, { type: "conjunction" }).format([...unreachedParts.shown, ...(unreachedParts.more ? [t("creator.unreachedMore", { count: unreachedParts.more })] : [])]) }) : null;
   // "That's me" (DECIDING rule 34): a browser that knows nobody signs in as a record of this match or
   // its crew by name, inside the owner's limits; a browser that already made its own new record folds
   // it into the old one. One bounded read, and none for a viewer the rule can never apply to (the
@@ -563,6 +544,64 @@ async function EventPage({ params, searchParams }: Props) {
   const askLevel = Boolean(me) && askLevelAfterJoin({ seated: isMember || isWaitlisted, level: me?.level ?? null, ranged, organiser: viewer.isCreator, open: !cancelled && !over });
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
   const stayFeed = me && stay?.kind === "reached" && stay.calendar === "feed" ? feedLinks(base, await feedKeyFor(db, me), locale) : null;
+  // The match's one share (the owner, 9 November 2026: "Bottom bar (Recommended)"): one WhatsApp button
+  // in the bar for the organiser and every seated player, with the message that fits the state
+  // (`shareMessage`): the held players the plain link fills (the organiser's view only), the open spots,
+  // the line-up when full, the result card after the match. Telegram, Copy, the QR and the story image
+  // send the same message from "Other ways to share". The match's own link, never a personal one,
+  // because a message in a group can be forwarded.
+  const shareFacts = { over, result: result ? { line: result.line, url: resultCardUrl } : null, heldNames: heldMsg?.names ?? [], spots: spotsLeft };
+  const moment = cancelled ? null : shareMoment(shareFacts);
+  const oneShareText = moment
+    ? shareMessage(t as unknown as (key: string, values?: Record<string, string | number>) => string, {
+        ...shareFacts,
+        locale,
+        url,
+        day,
+        time,
+        venue: shareVenue,
+        when: formatWeekdayTime(ev.startsAt, ev.tz, locale),
+        venueName: ev.venueName,
+        names: lineupNames(lineSeats),
+        capacity: ev.capacity,
+        held: heldSeats(lineSeats),
+        waitlist: ev.whenFull === "waitlist",
+      })
+    : null;
+  // The link the message carries: the result card's after the match, else the match's own.
+  const oneShareUrl = moment === "result" ? resultCardUrl : url;
+  // The bar carries it for the organiser and every seated player; anybody else finds WhatsApp under "Other ways to share".
+  const sharesInBar = Boolean(oneShareText) && (viewer.isCreator || isMember);
+  const barShare =
+    sharesInBar && oneShareText
+      ? {
+          href: whatsappShareUrl(tagForWhatsapp(oneShareText, oneShareUrl)),
+          label: t(moment === "result" ? "event.shareResult" : moment === "full" ? "event.tellGroup" : "event.shareInvite"),
+          // Strong while places are open or held, and for a player's result; the organiser's after-match primary is "Play again".
+          strong: moment === "held" || moment === "open" || (moment === "result" && !viewer.isCreator),
+        }
+      : null;
+  // "Other ways to share", where the page has something to share: before the match, and after it once a result exists.
+  const otherShares = oneShareText ? <OtherShares url={oneShareUrl} text={oneShareText} whatsapp={!sharesInBar} story={moment === "result" ? null : `/${code}/story`} image={moment === "result" && resultCard ? resultCard.image : undefined} extra={waJoin && moment !== "result" ? (
+    <div className="rounded-2xl border border-line px-4 py-3">
+      <div className="text-sm font-bold">{t("wa.handoff")}</div>
+      <p className="mt-1 text-xs text-muted">{t("wa.handoffHelp")}</p>
+      <div className="mt-2 truncate text-xs text-faint">{waJoin}</div>
+      <CopyButton value={waJoin} label={t("wa.copy")} className="btn-ghost btn-sm mt-2" />
+    </div>
+  ) : null} /> : null;
+  // The names the one share asks to tap their name, and the held players it leaves out, under the line-up, five names and then "N more".
+  const listOf = (all: readonly string[]) => {
+    const { shown, more } = unreachedLine(all);
+    return new Intl.ListFormat(locale, { type: "conjunction" }).format([...shown, ...(more ? [t("creator.unreachedMore", { count: more })] : [])]);
+  };
+  // The organiser's own seat: "Give up my place" in Organizer tools, with the question the bar's Leave asked.
+  const organiserLeave =
+    viewer.isCreator && joinState === "leave"
+      ? { question: fixedPairs && myPartner ? t(partnerGoes ? "pairs.leaveWithName" : "pairs.leaveKeepsPartner", { name: myPartner.player?.displayName ?? myPartner.invitedName ?? "" }) : t("event.leaveConfirm") }
+      : null;
+  // "Make it weekly" under "Play again" makes the crew a group with a weekly slot: then it is the one control, and "Turn this crew into a group" is not offered beside it.
+  const weeklyShown = Boolean(canPlayAgain && playAgain && weeklyOffered && weeklyWhen && ev.type === "match" && detail.scores.length > 0);
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
   const editInitial: EventFormValues = {
     type: ev.type,
@@ -600,11 +639,6 @@ async function EventPage({ params, searchParams }: Props) {
   const nudgeTextTemplate = t("shareText.nudge", { name: "__NAME__", day, time, venue, url: "__URL__" });
   // A pair that waits says so: "I saved you a spot" would not be true yet.
   const waitingInviteTemplate = t("pairs.shareWaiting", { name: "__NAME__", day, time, venue, url: "__URL__" });
-  const pendingInvites = roster.filter((s) => s.status === "invited" && s.inviteCode);
-  const groupInviteText =
-    pendingInvites.length > 0
-      ? t("shareText.inviteGroup", { day, time, venue, lines: pendingInvites.map((s) => `${s.invitedName}: ${inviteUrl(base, code, s.inviteCode!)}`).join("\n") })
-      : null;
 
   const slotRow = (s: SlotWithPlayer, index: number, isWaitlist = false) => {
     const name = s.player?.displayName ?? s.invitedName ?? "";
@@ -648,6 +682,8 @@ async function EventPage({ params, searchParams }: Props) {
                 <div className="text-xs font-semibold text-warn">
                   {viewer.isCreator && didBounce(s.invitedEmail)
                     ? t("creator.inviteBounced")
+                    : viewer.isCreator && optedOut(s.invitedEmail)
+                    ? t("creator.inviteOptedOut")
                     : s.invitedEmail && emailEnabled()
                     ? viewer.isCreator && s.invitedAt
                       ? s.lastRemindedAt
@@ -678,6 +714,7 @@ async function EventPage({ params, searchParams }: Props) {
                 myLevel={me?.level ?? null}
                 myName={me?.displayName ?? null}
                 backIn={backIn}
+                asks={ranged && !myHeld ? { known: joinAsks(barLevel), verifiedOnly: ev.levelVerifiedOnly, waived: rangeWaived === "ok", rangeText: levelRangeText } : null}
               />
             )}
           </div>
@@ -700,7 +737,7 @@ async function EventPage({ params, searchParams }: Props) {
             forwardText={inviteHref ? inviteTextTemplate.replace("__NAME__", name).replace("__URL__", inviteHref) : undefined}
             nudgeText={inviteHref ? nudgeTextTemplate.replace("__NAME__", name).replace("__URL__", inviteHref) : undefined}
             stale={stale}
-            emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
+            emailedTo={emailedTo(s)}
             keepRecord={keepRecordFor(pastPlayers, s, idsHere)}
           />
         )}
@@ -712,6 +749,8 @@ async function EventPage({ params, searchParams }: Props) {
   // alone, "Ana · Partner needed", with "Be their partner" for whoever can take the place beside them.
   const personName = (s: SlotWithPlayer) => s.player?.displayName ?? s.invitedName ?? "";
   const beforeRound1 = (tstate?.rounds.length ?? 0) === 0 && !cancelled && !over;
+  // "Be their partner" only where `partnerAdmission` lets this viewer in: from what the page read already.
+  const partnerAdmits = partnerOffered(ev, me, { organiser: viewer.isCreator, seated: isMember || isWaitlisted, waived: rangeWaived });
   const mySingleOnList = Boolean(fixedPairs && isMember && !myPartner);
   const unitRow = (u: SeatUnit<SlotWithPlayer>, isWaitlist = false) => {
     const seatsOf = u.kind === "pair" ? u.seats : [u.seat];
@@ -728,7 +767,8 @@ async function EventPage({ params, searchParams }: Props) {
     const others = u.kind === "single" ? seatUnits(isWaitlist ? waitlist : roster).flatMap((x) => (x.kind === "single" && x.seat.id !== u.seat.id ? [{ id: x.seat.id, name: personName(x.seat) }] : [])) : [];
     // "Be their partner": a single on the list, before round 1, for somebody who is not in a pair and has a place to sit.
     // Never on a reserved name: its link is for whoever gave it.
-    const canBePartner = u.kind === "single" && u.seat.status !== "invited" && !isWaitlist && beforeRound1 && u.seat.playerId !== me?.id && !myPartner && (mySingleOnList || (!isMember && spotsLeft > 0));
+    // Only where the server lets this viewer in (`partnerAdmission`): a ranged night holds a newcomer to its range.
+    const canBePartner = u.kind === "single" && u.seat.status !== "invited" && !isWaitlist && beforeRound1 && u.seat.playerId !== me?.id && !myPartner && (mySingleOnList || (!isMember && spotsLeft > 0)) && partnerAdmits;
     return (
       <li key={seatsOf[0].id} className={`rounded-2xl border px-4 py-3 ${u.kind === "pair" ? "border-line bg-card" : "border-dashed border-warn/50 bg-warn-soft/40"}`} data-testid={u.kind === "pair" ? "pair-row" : "single-row"}>
         <div className="flex items-center gap-3">
@@ -782,7 +822,7 @@ async function EventPage({ params, searchParams }: Props) {
                     forwardText={href ? inviteTextTemplate.replace("__NAME__", name).replace("__URL__", href) : undefined}
                     nudgeText={href ? nudgeTextTemplate.replace("__NAME__", name).replace("__URL__", href) : undefined}
                     stale={s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000}
-                    emailedTo={s.status === "invited" && s.invitedEmail && emailEnabled() ? s.invitedEmail : null}
+                    emailedTo={emailedTo(s)}
                   />
                 </div>
               );
@@ -891,6 +931,11 @@ async function EventPage({ params, searchParams }: Props) {
           {(booked || canMarkBooked) && !cancelled && (
             <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" ? (platformById(prepared.platform)?.name ?? prepared.platform ?? "") : null } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
           )}
+          {wrongManage && !viewer.isCreator && (
+            <p className="mt-4 rounded-2xl bg-warn-soft px-4 py-3 text-sm font-semibold" role="status" data-testid="manage-wrong">
+              {t("creator.manageWrong")}
+            </p>
+          )}
           {cancelled && (
             <div className="mt-4 rounded-2xl bg-danger-soft p-4">
               <div className="font-extrabold text-danger">{t("event.cancelled")}</div>
@@ -928,7 +973,7 @@ async function EventPage({ params, searchParams }: Props) {
           {hintAsk && <WelcomeBack code={code} doors={backIn} />}
         </section>
 
-        {creatorBanner && (
+        {creatorBanner && isTournament && (
           <a href="#score" className="flex items-center justify-between rounded-2xl border border-accent bg-accent-soft px-4 py-3 font-bold">
             <span>🏆 {isTournament && waitingRound ? t("creator.scoreReminderTournament", { n: waitingRound }) : t("creator.scoreReminderBanner")}</span>
             <span>→</span>
@@ -949,8 +994,11 @@ async function EventPage({ params, searchParams }: Props) {
             weeklyOffered={weeklyOffered}
             weeklyWhen={weeklyWhen}
             card={resultCard}
+            prompt={creatorBanner ? t("creator.scoreReminderBanner") : null}
+            playAgainQuiet={!viewer.isCreator}
           />
         )}
+        {over && otherShares}
         {seriesRow && (
           <p className="px-1 text-sm text-muted" data-testid="series-line">
             <Link href={`/s/${seriesRow.slug}`} prefetch={false} className="link font-semibold">
@@ -1015,10 +1063,21 @@ async function EventPage({ params, searchParams }: Props) {
           <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {/* Pending approvals first, then the one message for the held places (the owner's decision A of 6 November 2026). */}
           {pendingRequests.length > 0 && (
-            <JoinRequests code={code} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now, ev.tz) }))} />
+            <JoinRequests code={code} waitlist={ev.whenFull === "waitlist"} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now, ev.tz) }))} />
           )}
-          {heldMsg && heldMsg.names.length > 0 && (
-            <HeldMessage where="page" url={url} text={t("shareText.heldGroup", { day, time, venue, count: heldMsg.names.length, names: new Intl.ListFormat(locale, { type: "conjunction" }).format(heldMsg.names), url })} names={heldMsg.names} others={heldMsg.others} />
+          {/* The one share's held players, and the ones it leaves out, as words (the owner, 9 November 2026: the
+              separate box and its own WhatsApp went; the bar's share is the held players' message). */}
+          {heldMsg && heldMsg.names.length > 0 && !cancelled && (
+            <div className="mt-3 flex flex-col gap-1 text-sm text-muted" data-testid="held-message">
+              <p>{t("creator.heldInShare", { names: listOf(heldMsg.names) })}</p>
+              {heldMsg.others.length > 0 && <p data-testid="held-message-not">{t("creator.heldMessageNot", { names: listOf(heldMsg.others), count: heldMsg.others.length })}</p>}
+            </div>
+          )}
+          {/* "Kicksmash can't reach Tim and Adrian. Send the match link to them too." (DECIDING rule 7): words, beside the share they point to. */}
+          {unreached && !cancelled && (
+            <p className="mt-3 text-sm text-muted" data-testid="unreached">
+              {unreached}
+            </p>
           )}
           {(!me || (ranged && me.level == null)) && joinState === "join_waitlist" && (
             <JoinInline code={code} label={t("event.joinWaitlist")} hasIdentity={Boolean(me)} levelRange={ranged ? levelRange : null} myLevel={me?.level ?? null} namesHere={namesHere} claimable={offer.names} held={heldNames} backIn={backIn} />
@@ -1056,7 +1115,8 @@ async function EventPage({ params, searchParams }: Props) {
           {joinFormHere && <BackInOpener label={t("identity.backInOpen")} doorsOn={Boolean(backIn?.email || backIn?.telegram)} />}
           {/* Back from Telegram: the button lives in the join form, which is closed on load, so the return is read here. */}
           {joinFormHere && backIn?.telegram && <TelegramReturn authUrl={backIn.telegram.authUrl} />}
-          {me && me.email && (isMember || isWaitlisted) && !cancelled && !over && emailEnabled() && (
+          {/* One email switch for the organiser, in Organizer tools: both wrote the same setting (the owner, 9 November 2026). */}
+          {me && me.email && (isMember || isWaitlisted) && !viewer.isCreator && !cancelled && !over && emailEnabled() && (
             <div className="mt-5 border-t border-line pt-4">
               <EmailField initial={me.email} mode="me" code={code} title={t("event.yourEmail")} emailEnabled={emailEnabled()} notifyOn={me.emailNotifications} />
             </div>
@@ -1066,7 +1126,7 @@ async function EventPage({ params, searchParams }: Props) {
               <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
             </div>
           )}
-          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
+          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && !weeklyShown && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
           {crewChat && !cancelled && (
             <a href={crewChat} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-4 w-full whitespace-normal leading-snug" data-testid="crew-telegram-join">
               {t("group.telegramJoin")}
@@ -1074,29 +1134,7 @@ async function EventPage({ params, searchParams }: Props) {
           )}
         </section>
 
-        {/* Share */}
-        {!cancelled && !over && (
-          <section className="card">
-            <h2 className="text-lg font-extrabold">{t("event.share")}</h2>
-            <div className="mt-1 mb-3 truncate text-sm font-semibold text-muted">
-              {shortHost()}/{code}
-            </div>
-            <ShareButtons url={url} text={shareText} />
-            {/* The hand-off. A bot cannot be in the crew's WhatsApp group, so a person carries the
-                message across: this link opens a thread with us and takes the spot from there. */}
-            {waJoin && (
-              <div className="mt-3 rounded-2xl border border-line px-4 py-3">
-                <div className="text-sm font-bold">{t("wa.handoff")}</div>
-                <p className="mt-1 text-xs text-muted">{t("wa.handoffHelp")}</p>
-                <div className="mt-2 truncate text-xs text-faint">{waJoin}</div>
-                <CopyButton value={waJoin} label={t("wa.copy")} className="btn-ghost btn-sm mt-2" />
-              </div>
-            )}
-            <div className="mt-3">
-              <QrFold url={url} label={t("share.qrHint")} />
-            </div>
-          </section>
-        )}
+        {!over && otherShares}
 
         {viewer.isCreator && (
           <CreatorPanel
@@ -1109,9 +1147,9 @@ async function EventPage({ params, searchParams }: Props) {
             emailEnabled={emailEnabled()}
             manageUrl={organiserManageUrl}
             isCancelled={cancelled}
-            groupInvite={groupInviteText ? { text: groupInviteText, count: pendingInvites.length, url } : null}
+            isOver={over}
             paste={!cancelled && !over ? { namesHere, spots: spotsLeft, past: pastAsk } : null}
-            unreached={unreached}
+            leave={organiserLeave}
           />
         )}
 
@@ -1120,14 +1158,15 @@ async function EventPage({ params, searchParams }: Props) {
             <h2 className="text-lg font-extrabold">{t("event.changeDetails")}</h2>
             <p className="mt-0.5 text-sm text-muted">{t("event.changeDetailsHelp")}</p>
             <div className="mt-3">
-              <EditMatch code={code} initial={editInitial} venues={venueOptions} startLocked={startLocked} />
+              <EditMatch code={code} initial={editInitial} venues={venueOptions} startLocked={startLocked} playerFields />
             </div>
           </section>
         )}
 
         <ActivityFeed items={detail.activity} viewerId={me?.id ?? null} />
 
-        {(cancelled || over) && (
+        {/* For a visitor only: the organiser and the players have "Play again" (the owner, 9 November 2026, one primary). */}
+        {(cancelled || over) && !viewer.isCreator && !isMember && (
           <Link href="/" className="btn-primary w-full">
             {t("event.createYourOwn")}
           </Link>
@@ -1160,8 +1199,11 @@ async function EventPage({ params, searchParams }: Props) {
         partnerName={myPartner ? (myPartner.player?.displayName ?? myPartner.invitedName ?? "") : null}
         partnerGoes={partnerGoes}
         pairsLocked={(tstate?.rounds.length ?? 0) > 0}
-        tellGroupHref={tellGroup}
+        share={barShare}
+        organiser={viewer.isCreator}
+        heldHint={!me && heldRows.size > 0}
         rangeWaived={rangeWaived}
+        heldPlace={myHeld}
         openJoin={openJoin}
         namesHere={namesHere}
         claimable={offer.names}

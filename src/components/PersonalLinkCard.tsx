@@ -29,9 +29,10 @@ export function PersonalLinkCard({ url, email, emailEnabled }: { url: string; em
     start(async () => {
       setError(null);
       const r = await emailPersonalLinkAction();
-      if (!r.ok) return setError(t("common.somethingWrong"));
+      // The day's limit says so; an address that bounced or was marked says the mail did not go.
+      if (!r.ok) return setError(r.error === "too_many" ? t("identity.linkMailLimit") : t("common.somethingWrong"));
       if (!r.data.email) return setAskEmail(true);
-      if (!r.data.sent) return setError(t("common.somethingWrong"));
+      if (!r.data.sent) return setError(t("identity.linkNotSent", { email: r.data.email }));
       setMailTo(r.data.email);
     });
 
@@ -52,8 +53,10 @@ export function PersonalLinkCard({ url, email, emailEnabled }: { url: string; em
   const reset = () => {
     if (!confirm(t("identity.resetConfirm"))) return;
     start(async () => {
+      setError(null);
       const r = await rotatePersonalLinkAction();
       if (r.ok) router.refresh();
+      else setError(r.error === "forbidden" ? t("errors.proof_required") : t("common.somethingWrong"));
     });
   };
 

@@ -5,7 +5,9 @@ import { getDb } from "@/db";
 import { after } from "next/server";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { FeedbackError, createFeedback, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore } from "@/lib/feedback/store";
+import { FeedbackError, createFeedback, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore, webReplyRoute } from "@/lib/feedback/store";
+import { subscriptionsFor } from "@/lib/domain/push";
+import { pushEnabled } from "@/lib/push";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from "./shared";
@@ -37,10 +39,12 @@ export async function sendFeedbackAction(text: string, contact: string, context:
       if (e instanceof FeedbackError) throw new ActionFailure("generic");
       throw e;
     });
-    const replyVia = player?.telegramId ? "telegram" : email ? "email" : null;
+    // The way back the daily answer takes (`deliverToPerson`): a phone with notifications on is read only when nothing else reaches the player (one bounded read).
+    const hasPush = Boolean(player && !player.telegramId && !email && !player.email && pushEnabled() && (await subscriptionsFor(db, [player.id])).length > 0);
+    const { replyVia, canReply } = webReplyRoute(player ? { telegramId: player.telegramId, email: player.email } : null, email, hasPush);
     // This note is already a row, so its own reply (still null) is not counted and the tally is one high; `notesBefore` only decides whether this person has heard the long line before, and one is the same answer either way.
     const said = await saidBefore(db, { playerId: player?.id ?? null, email, telegramUserId: player?.telegramId ?? null });
-    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web", canReply: replyVia !== null, replyVia, said });
+    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web", canReply, replyVia, said });
     if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
     else {
       await markAcknowledged(db, row.id, ack.reply);

@@ -76,6 +76,25 @@ export async function withdrawWaitlist(db: Db, coachId: string, entryId: string,
   return row ?? null;
 }
 
+/**
+ * The student leaves the list, or says "No thanks" to a spot held for them. A spot held for them is
+ * free again at once, so it goes to the next student waiting, exactly as it would have gone when the
+ * thirty minutes ran out (`tickWaitlist`). Before this, "No thanks" ended the chain: the withdrawn row
+ * was no longer `offered`, so the tick never passed the hour on, and the next student never heard.
+ * The caller tells the next student (`notifyOffer`).
+ */
+export async function leaveWaitlist(db: Db, coach: Coach, entryId: string, studentPlayerId: string, now = new Date()): Promise<{ row: LessonWaitlistRow | null; next: Offer | null }> {
+  // Two guarded updates, not a read and then a write: whichever matches says what the row was.
+  const [held] = await db
+    .update(lessonWaitlist)
+    .set({ status: "withdrawn", resolvedAt: now })
+    .where(and(eq(lessonWaitlist.id, entryId), eq(lessonWaitlist.coachId, coach.id), eq(lessonWaitlist.studentPlayerId, studentPlayerId), eq(lessonWaitlist.status, "offered")))
+    .returning();
+  if (!held) return { row: await withdrawWaitlist(db, coach.id, entryId, studentPlayerId, now), next: null };
+  const next = held.slotStartsAt ? await offerFreedSlot(db, coach, held.slotStartsAt, now) : null;
+  return { row: held, next };
+}
+
 export type WaitlistEntry = LessonWaitlistRow & { player: Player };
 
 /** Everyone waiting on a coach, soonest want first: what the coach sees under "waiting". */
