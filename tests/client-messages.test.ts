@@ -79,6 +79,10 @@ const DYNAMIC: DynamicTable = {
     // `errorLine` in src/lib/errorLine.ts, over the refused action's code.
     "`errors.${errorLine(code)}`": ["errors.*"],
   },
+  "src/components/HighlightsLink.tsx": {
+    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
+    "`errors.${errorLine(r.error)}`": ["errors.*"],
+  },
   "src/components/MatchPayments.tsx": {
     // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
     "`errors.${errorLine(r.error)}`": ["errors.*"],
