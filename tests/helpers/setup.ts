@@ -10,6 +10,24 @@ import { afterAll } from "vitest";
 // Next, because each storage is made once, when its module loads, and the worker keeps it for every file.
 if (typeof (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage !== "function") (globalThis as { AsyncLocalStorage?: unknown }).AsyncLocalStorage = AsyncLocalStorage;
 
+// PGlite emulates Postgres's interval timer with setTimeout (`__setitimer_js`). A file that freezes the
+// clock (`freezeClock`) moves `Date` back to its own NOW, while a Postgres timeout armed before keeps its
+// deadline on the real clock, so PGlite asks for a delay of weeks. Node holds at most 2^31 - 1 ms and turns
+// any longer delay into 1 ms, with a TimeoutOverflowWarning: the timer fired, armed again and fired again
+// for as long as a test waited. Three tests of scrape.test.ts that wait for a request's deadline did that
+// about 40,000 times (11 November 2026, the "32-day timer" warning in every CI log). The longest delay
+// Node can hold is what such a timer means; 1 ms is what nobody asked for. Once per worker, because this
+// file runs once per test file and the worker keeps its globals.
+const LONGEST_DELAY_MS = 2 ** 31 - 1;
+const timers = globalThis as { __longTimersCapped?: boolean };
+if (!timers.__longTimersCapped) {
+  timers.__longTimersCapped = true;
+  const nodeSetTimeout = globalThis.setTimeout;
+  const capped = (fn: (...a: unknown[]) => void, ms?: number, ...args: unknown[]) =>
+    nodeSetTimeout(fn, typeof ms === "number" && ms > LONGEST_DELAY_MS ? LONGEST_DELAY_MS : ms, ...args);
+  globalThis.setTimeout = Object.assign(capped, nodeSetTimeout) as unknown as typeof setTimeout;
+}
+
 /**
  * Runs once per test file. A test that reaches the app's own database (`getDb()` with no DATABASE_URL, the
  * path a route handler takes) gets an embedded database of its own in a temporary directory, so two files

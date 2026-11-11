@@ -736,6 +736,20 @@
       "when": 1794022201033,
       "tag": "0104_push_job_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1794385630809,
+      "tag": "0105_highlights_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1794386442373,
+      "tag": "0106_reader_grants",
+      "breakpoints": true
     }
   ]
 }

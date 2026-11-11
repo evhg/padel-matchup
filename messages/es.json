@@ -1419,7 +1419,15 @@
     "removePhoto": "Quitar la foto",
     "waiting": "Esperando el resultado",
     "makeWeekly": "Hacerlo semanal",
-    "removePhotoConfirm": "¿Quitar la foto de la tarjeta del resultado?"
+    "removePhotoConfirm": "¿Quitar la foto de la tarjeta del resultado?",
+    "watchHighlights": "Ver los mejores momentos",
+    "addHighlights": "Añadir el vídeo de los mejores momentos",
+    "highlightsHelp": "Pega el enlace de YouTube del vídeo del partido. Aquí solo lo ven los jugadores de este partido.",
+    "saveHighlights": "Guardar el enlace",
+    "highlightsNotYoutube": "Pega un enlace de YouTube, por ejemplo https://youtu.be/…",
+    "removeHighlights": "Quitar el enlace del vídeo",
+    "removeHighlightsConfirm": "¿Quitar el enlace de los mejores momentos para todos en este partido?",
+    "filmTips": "Para grabar un partido: pon el móvil en el cristal del fondo, en el centro y en horizontal. Graba en 4K a 30 fps, en modo avión y con una batería externa."
   },
   "group": {
     "title": "Grupo",
