@@ -308,7 +308,7 @@ export type Fact = typeof facts.$inferSelect;
  * levels, rally and clip times, body positions as coordinates, the time each step took, and the
  * first names typed for the players. No picture and no sound leave the phone. The page sends the same
  * run again as it gets further, so a run is one row, replaced (`id` is the page's own run id). Read
- * through /api/admin/sql to tune the finders; kept LAB_RUNS_KEEP_DAYS.
+ * through /api/admin/sql to tune the finders; kept 180 days (LAB_RUNS_KEEP_DAYS in src/app/api/lab/run/route.ts).
  */
 export const labRuns = pgTable(
   "lab_runs",

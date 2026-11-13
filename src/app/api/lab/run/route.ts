@@ -9,7 +9,7 @@ import { LIMITS, takeRate } from "@/lib/domain/ratelimit";
 export const dynamic = "force-dynamic";
 
 /** How long a lab run is kept: long enough to tune on a season of matches. */
-export const LAB_RUNS_KEEP_DAYS = 180;
+const LAB_RUNS_KEEP_DAYS = 180;
 /** A report is numbers: a 90-minute match with every hit is about 60 KB. */
 const MAX_BYTES = 1_000_000;
 const STAGES = new Set(["read", "cut", "who"]);
