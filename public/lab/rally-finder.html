@@ -1,0 +1,2310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<!-- Rally Finder, a Kicksmash lab test. Served as a plain file so the iPhone share sheet can save the cut:
+     the Claude viewer lets only its own organisation download. The same page is published as a Claude
+     artifact from the session scratchpad; this copy adds only this head. No video leaves the phone:
+     only the pose library and model below are downloaded, from pinned public copies. -->
+<script>window.RF_MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/"; window.RF_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";</script>
+</head>
+<body>
+<title>Rally Finder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+:root {
+  --bg: #edf1f3; --surface: #ffffff; --surface-2: #f4f7f8; --ink: #13232e; --muted: #556773;
+  --line: #d2dbe0; --accent: #1d58a5; --accent-ink: #ffffff; --accent-soft: #dde8f6;
+  --ok: #1d7550; --ok-soft: #dcf0e5; --warn: #9a4c08; --warn-soft: #fbeedd; --bad: #b02a1d; --bad-soft: #fbe4e1;
+  --score-lo: #b9cfe9; --score-hi: #0c3a78; --wave: #a3b3bd; --track: #e3e9ec; --marked: #b8c2c8;
+  --stage: #0c1218; --label-bg: rgba(8, 16, 24, 0.66); --label-ink: #ffffff; --focus: #e2a400;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d151b; --surface: #152029; --surface-2: #1a2732; --ink: #e3ebf0; --muted: #94a5b0;
+    --line: #283946; --accent: #6fa3ec; --accent-ink: #0a1520; --accent-soft: #1c3250;
+    --ok: #5cc28f; --ok-soft: #173326; --warn: #f0a75e; --warn-soft: #382716; --bad: #f2887e; --bad-soft: #3b1d1a;
+    --score-lo: #2b4667; --score-hi: #a6caff; --wave: #45596a; --track: #1e2c37; --marked: #3a4853;
+    --stage: #05090c; --label-bg: rgba(0, 0, 0, 0.6); --label-ink: #ffffff; --focus: #f2c14e;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d151b; --surface: #152029; --surface-2: #1a2732; --ink: #e3ebf0; --muted: #94a5b0;
+  --line: #283946; --accent: #6fa3ec; --accent-ink: #0a1520; --accent-soft: #1c3250;
+  --ok: #5cc28f; --ok-soft: #173326; --warn: #f0a75e; --warn-soft: #382716; --bad: #f2887e; --bad-soft: #3b1d1a;
+  --score-lo: #2b4667; --score-hi: #a6caff; --wave: #45596a; --track: #1e2c37; --marked: #3a4853;
+  --stage: #05090c; --label-bg: rgba(0, 0, 0, 0.6); --label-ink: #ffffff; --focus: #f2c14e;
+}
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); -webkit-text-size-adjust: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+.wrap { max-width: 720px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 56px; overflow-wrap: anywhere; }
+h1, h2, .num { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.01em; }
+h1 { font-size: 40px; line-height: 1; margin: 6px 0 8px; text-transform: uppercase; }
+h2 { font-size: 22px; line-height: 1.1; margin: 0 0 8px; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+h2 .step { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-size: 18px; flex: none; }
+p { margin: 0 0 10px; }
+.kicker { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+.kicker::before { content: ""; width: 22px; height: 3px; background: var(--accent); border-radius: 2px; }
+.lead { font-size: 16px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.tnum, .stats dd, .prog-line, .rally .t, .rally .facts, .score-num { font-variant-numeric: tabular-nums; }
+.tips { margin: 10px 0 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 8px 8px 0; }
+.tips b { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+.tips ul { margin: 0; padding-left: 18px; }
+.tips li { margin: 2px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 14px; }
+.card[hidden] { display: none; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+a.btn { text-decoration: none; }
+.btn { appearance: none; -webkit-appearance: none; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: 600 15px/1.2 var(--font-body); cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn:focus-visible, input:focus-visible + .btn, input[type=range]:focus-visible, input[type=checkbox]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn.sm { min-height: 38px; padding: 0 12px; font-size: 14px; }
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+.stats { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 0; }
+.stats dt { color: var(--muted); font-size: 13px; padding-top: 1px; }
+.stats dd { margin: 0; font-weight: 500; }
+.bar { height: 10px; border-radius: 6px; background: var(--track); overflow: hidden; margin: 12px 0 6px; }
+.bar > i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.25s; }
+.prog-line { font-weight: 500; }
+.note { padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; margin-top: 10px; }
+.note.warn { background: var(--warn-soft); border-color: transparent; color: var(--ink); }
+.note.warn b { color: var(--warn); }
+.note.ok { background: var(--ok-soft); border-color: transparent; }
+.note.ok b { color: var(--ok); }
+.sample-band { display: none; margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); font-weight: 600; font-size: 14px; }
+.sample-band b { color: var(--warn); }
+.is-sample .sample-band { display: block; }
+.errors { background: var(--bad-soft); border-color: transparent; }
+.errors h2 { color: var(--bad); }
+.errors ul { margin: 0; padding-left: 18px; }
+.big { display: flex; gap: 22px; margin: 4px 0 10px; }
+.big div { display: flex; flex-direction: column; }
+.big .num { font-size: 40px; line-height: 1; }
+.big span:last-child { font-size: 13px; color: var(--muted); }
+.timeline { display: block; width: 100%; height: 84px; margin-top: 6px; touch-action: manipulation; cursor: pointer; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.legend .ramp { width: 70px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--score-lo), var(--score-hi)); }
+.legend .sw { width: 12px; height: 8px; border-radius: 2px; background: var(--marked); }
+.controls { display: grid; gap: 10px; margin: 14px 0 6px; padding: 12px; border-radius: 8px; background: var(--surface-2); }
+.controls label { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; font-size: 14px; font-weight: 500; }
+.controls label output { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 2ch; text-align: right; }
+.controls input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); height: 28px; margin: 0; }
+.stage { position: relative; background: var(--stage); border-radius: 8px; overflow: hidden; margin-top: 12px; aspect-ratio: 16 / 9; }
+.stage video { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--stage); }
+.corner-label { position: absolute; left: 10px; top: 10px; padding: 4px 8px; border-radius: 4px; background: var(--label-bg); color: var(--label-ink); font: 700 14px/1.1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; pointer-events: none; }
+.seg-label { position: absolute; right: 10px; top: 10px; padding: 4px 8px; border-radius: 4px; background: var(--label-bg); color: var(--label-ink); font: 500 12px/1.2 var(--font-body); font-variant-numeric: tabular-nums; pointer-events: none; }
+.sound-only { position: absolute; inset: 0; display: grid; place-items: center; color: #c9d4db; font: 600 15px/1.3 var(--font-body); pointer-events: none; text-align: center; padding: 20px; }
+[hidden] { display: none !important; }
+.rallies { list-style: none; margin: 12px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.who-stage { aspect-ratio: auto; }
+.who-stage canvas { display: block; width: 100%; height: auto; }
+.who-names { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 12px 0; }
+.who-names label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.who-names input { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 16px/1.2 var(--font-body); }
+.who-names .dot { width: 22px; height: 22px; border-radius: 50%; color: #fff; font: 700 13px/22px var(--font-body); text-align: center; flex: none; }
+.who-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.who-list li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.who-list li b { font-weight: 700; }
+.who-list select { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 14px/1.2 var(--font-body); }
+.rally { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.rally .timing { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.rally .timing select { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 14px/1.2 var(--font-body); }
+.rally .rank { font: 700 18px/1 var(--font-display); color: var(--muted); text-align: center; }
+.rally .t { font-weight: 600; font-size: 16px; }
+.rally .facts { font-size: 13px; color: var(--muted); }
+.rally .sbar { height: 4px; border-radius: 2px; background: var(--track); margin-top: 4px; overflow: hidden; max-width: 160px; }
+.rally .sbar i { display: block; height: 100%; background: var(--accent); }
+.rally.marked .t, .rally.marked .facts { text-decoration: line-through; color: var(--muted); }
+.rally.marked .sbar i { background: var(--marked); }
+.toggle[aria-pressed="true"] { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.segs { margin: 10px 0 0; padding-left: 20px; font-size: 14px; font-variant-numeric: tabular-nums; }
+textarea { width: 100%; min-height: 160px; margin-top: 10px; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; margin: 8px 0 12px; }
+.check input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+.status { font-size: 14px; font-weight: 600; margin-top: 8px; min-height: 1.5em; }
+.status.ok { color: var(--ok); }
+.status.bad { color: var(--bad); }
+.prep { margin: 8px 0 12px; padding-left: 20px; display: grid; gap: 6px; }
+footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
+</style>
+
+<main class="wrap" id="app">
+  <header>
+    <div class="kicker">Kicksmash lab test</div>
+    <h1>Rally Finder</h1>
+    <p class="lead">This page listens to one match video and finds the rallies from the sound of the hits. It works on this phone only. Nothing is uploaded.</p>
+    <p class="muted small">We want to learn three things: how fast the phone reads a long video, how well the sound shows the rallies, and whether the phone can make a 1-minute 4K cut of the best rallies.</p>
+    <div class="tips">
+      <b>How to record the match</b>
+      <ul>
+        <li>Record in 4K, with the phone in landscape: 60 fps for slow motion (about 35 GB for 90 minutes), or 30 fps (about 15 GB). Check the setting before you start: Settings, Camera, Record Video.</li>
+        <li>Mount the phone on the outside of the back glass, in the centre, at shoulder height.</li>
+        <li>Turn on airplane mode, so that calls do not stop the recording.</li>
+        <li>Connect a power bank, and keep the phone in the shade.</li>
+      </ul>
+    </div>
+  </header>
+
+  <div class="sample-band" role="status"><b>Sample.</b> These results come from sound that this page made. They do not come from a video.</div>
+
+  <section class="card" id="step1">
+    <h2><span class="step">1</span>Choose the match video</h2>
+    <p>Do these two things first. They take one minute, and save ten.</p>
+    <ol class="prep">
+      <li><b>Put the video in Files.</b> In Photos, open the video, tap Share, then <b>Save to Files</b>. A video picked from Photos is converted first, which can take ten minutes or more. A video picked from Files is not.</li>
+      <li><b>Keep the screen on.</b> Settings, Display &amp; Brightness, Auto-Lock: <b>Never</b>. Put the phone on the charger. If the phone locks, iOS can reload this page, and you start again.</li>
+    </ol>
+    <p>Then tap the button, choose <b>Browse</b> (or "Choose File"), and pick the video in Files. Use Safari, and stay on this page until step 2 says "Done".</p>
+    <div class="row">
+      <input type="file" id="file" class="vh" accept="video/*,.mov,.mp4">
+      <label for="file" class="btn primary" id="pickLabel">Choose the match video</label>
+      <button type="button" class="btn" id="sampleBtn">Try with a sample</button>
+    </div>
+    <dl class="stats" id="fileStats" hidden>
+      <dt>File</dt><dd id="fName"></dd>
+      <dt>Size</dt><dd id="fSize"></dd>
+      <dt>Picker time</dt><dd id="fPick"></dd>
+    </dl>
+  </section>
+
+  <section class="card" id="step2" hidden>
+    <h2><span class="step">2</span>Read the sound</h2>
+    <p class="small muted" id="readHint">Keep this page open and the screen on. The page reads only the sound track, a small part of the file.</p>
+    <dl class="stats" id="boxStats"></dl>
+    <div class="bar" aria-hidden="true"><i id="progBar"></i></div>
+    <div class="prog-line" id="progLine" role="status" aria-live="polite">Waiting.</div>
+    <div class="small muted" id="progSub"></div>
+    <div class="row" style="margin-top:10px">
+      <button type="button" class="btn" id="stopBtn" disabled>Stop reading and show results</button>
+    </div>
+  </section>
+
+  <section class="card errors" id="errCard" hidden>
+    <h2>Problems</h2>
+    <ul id="errList"></ul>
+  </section>
+
+  <section class="card" id="step3" hidden>
+    <h2><span class="step">3</span>Rallies found</h2>
+    <div class="big">
+      <div><span class="num tnum" id="nHits">0</span><span>hits</span></div>
+      <div><span class="num tnum" id="nRallies">0</span><span>rallies</span></div>
+      <div><span class="num tnum" id="nMatch">0:00</span><span>match length</span></div>
+    </div>
+    <div id="sampleCheck" class="note ok" hidden></div>
+    <canvas class="timeline" id="tl" aria-label="Timeline of the match with one mark for each rally. Tap a mark to play that rally."></canvas>
+    <div class="legend"><span>Score</span><span>low</span><span class="ramp"></span><span>high</span><span class="sw"></span><span>not a rally</span></div>
+
+    <div class="controls">
+      <label>Sensitivity <output id="sensOut">5</output>
+        <input type="range" id="sens" min="1" max="10" step="1" value="5" aria-describedby="ctlHint">
+      </label>
+      <label>Fewest hits in a rally <output id="minOut">4</output>
+        <input type="range" id="minHits" min="3" max="8" step="1" value="4" aria-describedby="ctlHint">
+      </label>
+      <div class="small muted" id="ctlHint">Changes apply at once. The page does not read the video again. Higher sensitivity finds quieter hits, and also more noise.</div>
+    </div>
+
+    <div class="stage" id="stage">
+      <video id="vid" playsinline controls preload="metadata"></video>
+      <div class="sound-only" id="soundOnly" hidden>Sample: sound only.<br>Listen for the clicks.</div>
+      <div class="corner-label" id="cornerLabel" hidden>Kicksmash · highlights test</div>
+      <div class="seg-label" id="segLabel" hidden></div>
+    </div>
+
+    <h2 style="margin-top:16px;font-size:18px">Top 15 rallies</h2>
+    <p class="small muted">Play plays the rally from 2 seconds before the first hit to 1 second after the last hit. If a row is not a real rally, tap "Not a rally". If it starts or ends in the wrong place, say so under it. Your answers go into the results.</p>
+    <ol class="rallies" id="list"></ol>
+  </section>
+
+  <section class="card" id="step4" hidden>
+    <h2><span class="step">4</span>The 1-minute cut</h2>
+    <p>The cut holds the last seconds of the best rallies, in match order. Rallies that you marked "Not a rally" stay out.</p>
+    <div class="row">
+      <button type="button" class="btn primary" id="fileCutBtn">Make the 4K cut</button>
+      <button type="button" class="btn" id="cutBtn">Play the 1-minute cut</button>
+      <button type="button" class="btn" id="recBtn" hidden>Record the cut</button>
+      <button type="button" class="btn" id="cutStop" disabled>Stop the cut</button>
+    </div>
+    <p class="muted small" id="fileCutHelp">"Make the 4K cut" copies the original picture and sound of each rally into a new video. Nothing is re-encoded, so the cut keeps the quality of the match video. The location of the video is not copied.</p>
+    <div id="fileCutOut" hidden>
+      <div class="status" id="fileCutStatus" role="status" aria-live="polite"></div>
+      <div class="stage"><video id="fileCutVid" playsinline controls preload="metadata"></video></div>
+      <div class="row">
+        <button type="button" class="btn primary" id="fileCutSave">Save the cut</button>
+      </div>
+      <div class="status" id="fileCutSaved" role="status" aria-live="polite"></div>
+    </div>
+    <ol class="segs" id="segList"></ol>
+    <div id="recNote" class="note" hidden></div>
+    <div class="stage" id="recStage" hidden>
+      <video id="recVid" playsinline controls></video>
+    </div>
+  </section>
+
+  <section class="card" id="stepWho" hidden>
+    <h2><span class="step">5</span>Who hit it</h2>
+    <p>The phone finds the four players in each rally of the cut, and names the player who hit each shot. It works on this phone. Nothing is uploaded.</p>
+    <div class="row">
+      <button type="button" class="btn primary" id="whoBtn">Find the players</button>
+      <button type="button" class="btn" id="whoStop" disabled>Stop</button>
+    </div>
+    <div class="status" id="whoStatus" role="status" aria-live="polite"></div>
+    <div id="whoName" hidden>
+      <p>Each box is one player. Type the first name of each player beside the number of the box.</p>
+      <div class="stage who-stage"><canvas id="whoPic"></canvas></div>
+      <div class="who-names" id="whoInputs"></div>
+      <div class="row"><button type="button" class="btn primary" id="whoSave">Save the names</button></div>
+    </div>
+    <div id="whoOut" hidden>
+      <p class="small muted">For each shot, say if the name is right. Your answers tell us how good the finder is.</p>
+      <ol class="who-list" id="whoList"></ol>
+    </div>
+  </section>
+
+  <section class="card" id="step5" hidden>
+    <h2><span class="step">6</span>Send us the results</h2>
+    <p>Copy the results. Then paste them into a message to us.</p>
+    <label class="check"><input type="checkbox" id="withHits"> <span>Add the time of every hit. This makes the text longer, but it helps us tune the finder.</span></label>
+    <div class="row">
+      <button type="button" class="btn primary" id="copyBtn">Copy results</button>
+      <button type="button" class="btn" id="showBtn">Show the text</button>
+    </div>
+    <div class="status" id="copyStatus" role="status" aria-live="polite"></div>
+    <textarea id="outText" readonly hidden aria-label="Results as text"></textarea>
+  </section>
+
+  <footer id="ver"></footer>
+</main>
+
+<script>
+/*CORE-START*/
+const RF = (() => {
+  'use strict';
+  const RATES = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+  const fourcc = (u8, o) => String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]);
+  const dvOf = (u8) => new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const u64 = (dv, o) => dv.getUint32(o) * 4294967296 + dv.getUint32(o + 4);
+
+  async function readRange(file, start, end) {
+    return new Uint8Array(await file.slice(start, end).arrayBuffer());
+  }
+
+  // Walk the top-level boxes with small reads. Handles 64-bit sizes (size == 1) and "to end of file" (size == 0).
+  async function walkTop(file) {
+    const out = [];
+    const size = file.size;
+    let off = 0;
+    for (let guard = 0; off + 8 <= size && guard < 100000; guard++) {
+      const h = await readRange(file, off, Math.min(size, off + 16));
+      const dv = dvOf(h);
+      let s = dv.getUint32(0), hdr = 8;
+      const type = fourcc(h, 4);
+      if (s === 1) {
+        if (h.length < 16) throw new Error('The file ends inside a box header.');
+        s = u64(dv, 8); hdr = 16;
+      } else if (s === 0) {
+        s = size - off;
+      }
+      if (s < hdr) throw new Error(`The box "${type}" at byte ${off} has a bad size (${s}). The file may be damaged.`);
+      out.push({ type, start: off, size: s, hdr, truncated: off + s > size });
+      off += s;
+    }
+    return out;
+  }
+
+  function children(u8, start, end) {
+    const dv = dvOf(u8);
+    const out = [];
+    let o = start;
+    while (o + 8 <= end) {
+      let s = dv.getUint32(o), h = 8;
+      const t = fourcc(u8, o + 4);
+      if (s === 1) { s = u64(dv, o + 8); h = 16; } else if (s === 0) { s = end - o; }
+      if (s < h || o + s > end) break;
+      out.push({ type: t, start: o, size: s, body: o + h, end: o + s });
+      o += s;
+    }
+    return out;
+  }
+  const kids = (u8, box) => children(u8, box.body, box.end);
+  function find(u8, box, path) {
+    let cur = box;
+    for (const t of path.split('/')) {
+      cur = kids(u8, cur).find((b) => b.type === t);
+      if (!cur) return null;
+    }
+    return cur;
+  }
+  function deepFind(u8, start, end, type) {
+    for (const b of children(u8, start, end)) {
+      if (b.type === type) return b;
+      if (b.type === 'wave') { const r = deepFind(u8, b.body, b.end, type); if (r) return r; }
+    }
+    return null;
+  }
+
+  function parseEsds(u8, box) {
+    let o = box.body + 4;
+    const end = box.end;
+    const readLen = () => { let len = 0; for (let i = 0; i < 4; i++) { const b = u8[o++]; len = (len << 7) | (b & 0x7f); if (!(b & 0x80)) break; } return len; };
+    while (o < end) {
+      const tag = u8[o++];
+      const len = readLen();
+      if (tag === 0x03) { o += 2; const fl = u8[o++]; if (fl & 0x80) o += 2; if (fl & 0x40) o += 1 + u8[o]; if (fl & 0x20) o += 2; continue; }
+      if (tag === 0x04) { o += 13; continue; }
+      if (tag === 0x05) return u8.slice(o, o + len);
+      o += len;
+    }
+    return null;
+  }
+
+  function parseAsc(asc) {
+    let bit = 0;
+    const rd = (n) => { let v = 0; for (let i = 0; i < n; i++) { v = (v << 1) | ((asc[bit >> 3] >> (7 - (bit & 7))) & 1); bit++; } return v; };
+    let ot = rd(5); if (ot === 31) ot = 32 + rd(6);
+    const fi = rd(4);
+    const rate = fi === 15 ? rd(24) : RATES[fi];
+    const ch = rd(4);
+    let coreOt = ot, sbr = false;
+    if (ot === 5 || ot === 29) { sbr = true; const efi = rd(4); if (efi === 15) rd(24); coreOt = rd(5); if (coreOt === 31) coreOt = 32 + rd(6); }
+    return { objectType: ot, coreObjectType: coreOt, freqIndex: fi, rate, channelConfig: ch, sbr };
+  }
+
+  function parseAudioEntry(u8, dv, e) {
+    const p = e.body + 8;
+    const ver = dv.getUint16(p);
+    const a = { entryVersion: ver, channels: dv.getUint16(p + 8), bits: dv.getUint16(p + 10), sampleRate: dv.getUint32(p + 16) / 65536 };
+    let q = p + 20;
+    if (ver === 1) {
+      a.samplesPerPacket = dv.getUint32(q); a.bytesPerPacket = dv.getUint32(q + 4); a.bytesPerFrameV1 = dv.getUint32(q + 8); a.bytesPerSample = dv.getUint32(q + 12);
+      q += 16;
+    } else if (ver === 2) {
+      a.sampleRate = dv.getFloat64(q + 4); a.channels = dv.getUint32(q + 12); a.bits = dv.getUint32(q + 20);
+      a.lpcmFlags = dv.getUint32(q + 24); a.bytesPerFrameV2 = dv.getUint32(q + 28); a.framesPerPacket = dv.getUint32(q + 32);
+      q += 36;
+    }
+    const esds = deepFind(u8, q, e.end, 'esds');
+    if (esds) { a.asc = parseEsds(u8, esds); if (a.asc) a.ascInfo = parseAsc(a.asc); }
+    const enda = deepFind(u8, q, e.end, 'enda');
+    if (enda) a.endaLittle = dv.getUint16(enda.body) === 1;
+    return a;
+  }
+
+  function parseTrak(u8, dv, trak) {
+    const t = {};
+    const tkhd = find(u8, trak, 'tkhd');
+    if (tkhd) {
+      const v = u8[tkhd.body];
+      const base = tkhd.body + (v === 1 ? 52 : 40);
+      const a = dv.getInt32(base) / 65536, b = dv.getInt32(base + 4) / 65536;
+      t.rotation = (Math.round(Math.atan2(b, a) * 180 / Math.PI) + 360) % 360;
+    }
+    const mdhd = find(u8, trak, 'mdia/mdhd');
+    if (!mdhd) throw new Error('A track has no mdhd box.');
+    if (u8[mdhd.body] === 1) { t.timescale = dv.getUint32(mdhd.body + 20); t.durUnits = u64(dv, mdhd.body + 24); }
+    else { t.timescale = dv.getUint32(mdhd.body + 12); t.durUnits = dv.getUint32(mdhd.body + 16); }
+    t.durationSec = t.timescale ? t.durUnits / t.timescale : 0;
+    const hdlr = find(u8, trak, 'mdia/hdlr');
+    t.handler = hdlr ? fourcc(u8, hdlr.body + 8) : '????';
+    const stbl = find(u8, trak, 'mdia/minf/stbl');
+    if (!stbl) return t;
+    const sb = {};
+    for (const b of kids(u8, stbl)) sb[b.type] = b;
+    if (sb.stsd) {
+      const entries = children(u8, sb.stsd.body + 8, sb.stsd.end);
+      const e = entries[0];
+      if (e) {
+        t.codec = e.type;
+        if (t.handler === 'soun') Object.assign(t, parseAudioEntry(u8, dv, e));
+        else if (t.handler === 'vide') { t.width = dv.getUint16(e.body + 24); t.height = dv.getUint16(e.body + 26); }
+      }
+    }
+    if (sb.stts) {
+      const n = dv.getUint32(sb.stts.body + 4);
+      t.stts = { counts: new Uint32Array(n), deltas: new Uint32Array(n) };
+      for (let i = 0; i < n; i++) { t.stts.counts[i] = dv.getUint32(sb.stts.body + 8 + i * 8); t.stts.deltas[i] = dv.getUint32(sb.stts.body + 12 + i * 8); }
+    }
+    if (sb.stsc) {
+      const n = dv.getUint32(sb.stsc.body + 4);
+      t.stsc = { first: new Uint32Array(n), spc: new Uint32Array(n) };
+      for (let i = 0; i < n; i++) { t.stsc.first[i] = dv.getUint32(sb.stsc.body + 8 + i * 12); t.stsc.spc[i] = dv.getUint32(sb.stsc.body + 12 + i * 12); }
+    }
+    if (sb.stsz) {
+      const size = dv.getUint32(sb.stsz.body + 4), count = dv.getUint32(sb.stsz.body + 8);
+      let sizes = null;
+      if (size === 0) { sizes = new Uint32Array(count); for (let i = 0; i < count; i++) sizes[i] = dv.getUint32(sb.stsz.body + 12 + i * 4); }
+      t.stsz = { size, count, sizes };
+    } else if (sb.stz2) {
+      const fs = u8[sb.stz2.body + 7], count = dv.getUint32(sb.stz2.body + 8);
+      const sizes = new Uint32Array(count);
+      const o = sb.stz2.body + 12;
+      for (let i = 0; i < count; i++) {
+        sizes[i] = fs === 16 ? dv.getUint16(o + i * 2) : fs === 8 ? u8[o + i] : ((u8[o + (i >> 1)] >> ((i & 1) ? 0 : 4)) & 15);
+      }
+      t.stsz = { size: 0, count, sizes };
+    }
+    if (sb.stco) {
+      const n = dv.getUint32(sb.stco.body + 4);
+      t.chunkOffsets = new Float64Array(n);
+      for (let i = 0; i < n; i++) t.chunkOffsets[i] = dv.getUint32(sb.stco.body + 8 + i * 4);
+    } else if (sb.co64) {
+      const n = dv.getUint32(sb.co64.body + 4);
+      t.chunkOffsets = new Float64Array(n);
+      for (let i = 0; i < n; i++) t.chunkOffsets[i] = u64(dv, sb.co64.body + 8 + i * 8);
+      t.co64 = true;
+    }
+    if (sb.stss) {
+      const n = dv.getUint32(sb.stss.body + 4);
+      t.stss = new Uint32Array(n);
+      for (let i = 0; i < n; i++) t.stss[i] = dv.getUint32(sb.stss.body + 8 + i * 4);
+    }
+    if (sb.ctts) {
+      const n = dv.getUint32(sb.ctts.body + 4);
+      t.ctts = { counts: new Uint32Array(n), offs: new Int32Array(n) };
+      for (let i = 0; i < n; i++) { t.ctts.counts[i] = dv.getUint32(sb.ctts.body + 8 + i * 8); t.ctts.offs[i] = dv.getInt32(sb.ctts.body + 12 + i * 8); }
+    }
+    const elst = find(u8, trak, 'edts/elst');
+    if (elst && dv.getUint32(elst.body + 4) >= 1) {
+      const v = u8[elst.body];
+      // The first entry that is not an empty edit (media time -1) says where the picture starts.
+      const n = dv.getUint32(elst.body + 4), w = v === 1 ? 20 : 12;
+      for (let i = 0; i < n; i++) {
+        const o = elst.body + 8 + i * w;
+        const mt = v === 1 ? Number(dv.getBigInt64(o + 8)) : dv.getInt32(o + 4);
+        if (mt >= 0) { t.mediaTime = mt; break; }
+      }
+    }
+    const raw = (b) => (b ? u8.slice(b.start, b.end) : null);
+    t.raw = { tkhd: raw(tkhd), hdlr: raw(hdlr), stsd: raw(sb.stsd), mhd: raw(find(u8, trak, 'mdia/minf/vmhd') || find(u8, trak, 'mdia/minf/smhd')) };
+    t.sampleCount = t.stsz ? t.stsz.count : 0;
+    return t;
+  }
+
+  // u8 holds the whole moov box, header included.
+  function parseMoov(u8) {
+    const dv = dvOf(u8);
+    const root = children(u8, 0, u8.length)[0];
+    if (!root || root.type !== 'moov') throw new Error('The moov box is not readable.');
+    const res = { timescale: 0, durationSec: 0, tracks: [] };
+    for (const b of kids(u8, root)) {
+      if (b.type === 'mvhd') {
+        const v = u8[b.body];
+        if (v === 1) { res.timescale = dv.getUint32(b.body + 20); res.durationSec = u64(dv, b.body + 24) / res.timescale; }
+        else { res.timescale = dv.getUint32(b.body + 12); res.durationSec = dv.getUint32(b.body + 16) / res.timescale; }
+      } else if (b.type === 'trak') {
+        try { res.tracks.push(parseTrak(u8, dv, b)); } catch (e) { res.tracks.push({ error: String(e && e.message || e) }); }
+      }
+    }
+    return res;
+  }
+
+  const PCM_CODECS = ['sowt', 'twos', 'lpcm', 'in24', 'in32', 'fl32', 'fl64', 'raw '];
+  function pcmFormat(t) {
+    const c = t.codec;
+    let bits = t.bits || 16, float = false, le = false, unsigned = false;
+    if (c === 'sowt') { le = true; bits = t.bits === 8 ? 8 : 16; }
+    else if (c === 'twos') { le = false; bits = t.bits === 8 ? 8 : 16; }
+    else if (c === 'in24') { bits = 24; le = !!t.endaLittle; }
+    else if (c === 'in32') { bits = 32; le = !!t.endaLittle; }
+    else if (c === 'fl32') { bits = 32; float = true; le = !!t.endaLittle; }
+    else if (c === 'fl64') { bits = 64; float = true; le = !!t.endaLittle; }
+    else if (c === 'raw ') { bits = 8; unsigned = true; }
+    else if (c === 'lpcm') {
+      const f = t.lpcmFlags || 0;
+      float = !!(f & 1); le = !(f & 2);
+      if (t.bytesPerFrameV2 && t.channels) bits = (t.bytesPerFrameV2 / t.channels) * 8;
+    }
+    const channels = t.channels || 1;
+    return { bits, float, le, unsigned, channels, bytesPerFrame: channels * bits / 8 };
+  }
+  function trackKind(t) {
+    if (t.codec === 'mp4a' && t.asc) return 'aac';
+    if (PCM_CODECS.includes(t.codec)) return 'pcm';
+    return null;
+  }
+
+  // AAC: one entry per AAC frame.
+  function sampleTable(t) {
+    const n = t.stsz.count;
+    const sizes = t.stsz.sizes || new Uint32Array(n).fill(t.stsz.size);
+    const offs = new Float64Array(n);
+    const co = t.chunkOffsets, sc = t.stsc;
+    let s = 0;
+    for (let e = 0; e < sc.first.length; e++) {
+      const c0 = sc.first[e] - 1;
+      const c1 = e + 1 < sc.first.length ? sc.first[e + 1] - 1 : co.length;
+      const spc = sc.spc[e];
+      for (let c = c0; c < c1 && s < n; c++) {
+        let o = co[c];
+        for (let k = 0; k < spc && s < n; k++) { offs[s] = o; o += sizes[s]; s++; }
+      }
+    }
+    return { offs, sizes, n: s };
+  }
+
+  // PCM: list of chunks with byte ranges.
+  function pcmChunks(t, fmt) {
+    const co = t.chunkOffsets, sc = t.stsc;
+    const unit = t.stsz ? t.stsz.size : 1;
+    const per = unit > 1 ? unit : fmt.bytesPerFrame;
+    const chunks = [];
+    for (let e = 0; e < sc.first.length; e++) {
+      const c0 = sc.first[e] - 1;
+      const c1 = e + 1 < sc.first.length ? sc.first[e + 1] - 1 : co.length;
+      for (let c = c0; c < c1; c++) chunks.push({ start: co[c], end: co[c] + sc.spc[e] * per });
+    }
+    return chunks;
+  }
+
+  // Merge byte ranges of consecutive samples. Returns ranges and, per sample, its range index.
+  function planRanges(offs, sizes, i0, i1, maxGap) {
+    const ranges = [];
+    const map = new Int32Array(i1 - i0);
+    let rs = offs[i0], re = offs[i0] + sizes[i0];
+    map[0] = 0;
+    for (let i = i0 + 1; i < i1; i++) {
+      const o = offs[i], e = o + sizes[i];
+      if (o >= re && o - re <= maxGap) { re = e; }
+      else if (!(o >= rs && e <= re)) { ranges.push({ start: rs, end: re }); rs = o; re = e; }
+      map[i - i0] = ranges.length;
+    }
+    ranges.push({ start: rs, end: re });
+    return { ranges, map };
+  }
+
+  function pcmToMono(u8, fmt) {
+    const dv = dvOf(u8);
+    const bpc = fmt.bits / 8, bpf = fmt.bytesPerFrame, ch = fmt.channels, le = fmt.le;
+    const n = Math.floor(u8.length / bpf);
+    const out = new Float32Array(n);
+    const inv = 1 / ch;
+    for (let i = 0; i < n; i++) {
+      let s = 0;
+      for (let c = 0; c < ch; c++) {
+        const o = i * bpf + c * bpc;
+        let v;
+        if (fmt.float) v = bpc === 4 ? dv.getFloat32(o, le) : dv.getFloat64(o, le);
+        else if (bpc === 2) v = dv.getInt16(o, le) / 32768;
+        else if (bpc === 3) { v = le ? (u8[o] | (u8[o + 1] << 8) | (u8[o + 2] << 16)) : ((u8[o] << 16) | (u8[o + 1] << 8) | u8[o + 2]); if (v & 0x800000) v -= 0x1000000; v /= 8388608; }
+        else if (bpc === 4) v = dv.getInt32(o, le) / 2147483648;
+        else v = fmt.unsigned ? (u8[o] - 128) / 128 : ((u8[o] << 24) >> 24) / 128;
+        s += v;
+      }
+      out[i] = s * inv;
+    }
+    return out;
+  }
+
+  // ---- AAC framing for decodeAudioData ----
+  function adtsFreqIndex(cfg) {
+    if (cfg.freqIndex !== 15) return cfg.freqIndex;
+    let best = 3, d = 1e9;
+    RATES.forEach((r, i) => { if (Math.abs(r - cfg.rate) < d) { d = Math.abs(r - cfg.rate); best = i; } });
+    return best;
+  }
+  function adtsHeader(cfg, payloadLen, channels) {
+    const len = payloadLen + 7;
+    const prof = ((cfg.coreObjectType || 2) - 1) & 3;
+    const fi = adtsFreqIndex(cfg) & 15;
+    const ch = (cfg.channelConfig || Math.min(channels || 2, 7)) & 7;
+    return [0xFF, 0xF1, (prof << 6) | (fi << 2) | (ch >> 2), ((ch & 3) << 6) | ((len >> 11) & 3), (len >> 3) & 0xFF, ((len & 7) << 5) | 0x1F, 0xFC];
+  }
+  function buildAdts(frames, cfg, channels) {
+    let total = 0;
+    for (const f of frames) total += f.length + 7;
+    const out = new Uint8Array(total);
+    let o = 0;
+    for (const f of frames) { out.set(adtsHeader(cfg, f.length, channels), o); out.set(f, o + 7); o += f.length + 7; }
+    return out;
+  }
+  const be32 = (v) => [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
+  const be16 = (v) => [(v >>> 8) & 255, v & 255];
+  const str4 = (s) => [s.charCodeAt(0), s.charCodeAt(1), s.charCodeAt(2), s.charCodeAt(3)];
+  const fullHdr = (v, f) => [v, (f >> 16) & 255, (f >> 8) & 255, f & 255];
+  function bx(type, ...parts) {
+    const flat = parts.map((p) => (p instanceof Uint8Array ? p : Uint8Array.from(p)));
+    const len = 8 + flat.reduce((a, p) => a + p.length, 0);
+    const out = new Uint8Array(len);
+    out.set(be32(len)); out.set(str4(type), 4);
+    let o = 8;
+    for (const p of flat) { out.set(p, o); o += p.length; }
+    return out;
+  }
+  const MATRIX = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].flatMap(be32);
+  // A minimal M4A file around raw AAC frames: the second fallback when ADTS does not decode.
+  function buildM4a(frames, asc, sampleRate, channels) {
+    const n = frames.length;
+    const sr = Math.round(sampleRate);
+    const spf = 1024;
+    const dsi = [5, asc.length, ...asc];
+    const dcd = [4, 13 + dsi.length, 0x40, 0x15, 0, 0, 0, ...be32(0), ...be32(0), ...dsi];
+    const es = [3, 3 + dcd.length + 3, 0, 1, 0, ...dcd, 6, 1, 2];
+    const esds = bx('esds', fullHdr(0, 0), es);
+    const mp4a = bx('mp4a', [0, 0, 0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 0, 0, 0], be16(channels), be16(16), [0, 0, 0, 0], be32((sr & 0xffff) * 65536), esds);
+    const sizes = new Uint8Array(n * 4);
+    let dataLen = 0;
+    frames.forEach((f, i) => { sizes.set(be32(f.length), i * 4); dataLen += f.length; });
+    const durMs = Math.round(n * spf * 1000 / sr);
+    const make = (off) => {
+      const stbl = bx('stbl', bx('stsd', fullHdr(0, 0), be32(1), mp4a), bx('stts', fullHdr(0, 0), be32(1), be32(n), be32(spf)),
+        bx('stsc', fullHdr(0, 0), be32(1), be32(1), be32(n), be32(1)), bx('stsz', fullHdr(0, 0), be32(0), be32(n), sizes), bx('stco', fullHdr(0, 0), be32(1), be32(off)));
+      const minf = bx('minf', bx('smhd', fullHdr(0, 0), be16(0), be16(0)), bx('dinf', bx('dref', fullHdr(0, 0), be32(1), bx('url ', fullHdr(0, 1)))), stbl);
+      const mdia = bx('mdia', bx('mdhd', fullHdr(0, 0), be32(0), be32(0), be32(sr), be32(n * spf), be16(0x55c4), be16(0)),
+        bx('hdlr', fullHdr(0, 0), be32(0), str4('soun'), be32(0), be32(0), be32(0), [0]), minf);
+      const tkhd = bx('tkhd', fullHdr(0, 7), be32(0), be32(0), be32(1), be32(0), be32(durMs), be32(0), be32(0), be16(0), be16(0), be16(0x0100), be16(0), MATRIX, be32(0), be32(0));
+      const mvhd = bx('mvhd', fullHdr(0, 0), be32(0), be32(0), be32(1000), be32(durMs), be32(0x00010000), be16(0x0100), new Uint8Array(10), MATRIX, new Uint8Array(24), be32(2));
+      return bx('moov', mvhd, bx('trak', tkhd, mdia));
+    };
+    const ftyp = bx('ftyp', str4('M4A '), be32(0), str4('M4A '), str4('mp42'), str4('isom'));
+    const moov0 = make(0);
+    const moov = make(ftyp.length + moov0.length + 8);
+    const out = new Uint8Array(ftyp.length + moov.length + 8 + dataLen);
+    out.set(ftyp, 0); out.set(moov, ftyp.length);
+    let o = ftyp.length + moov.length;
+    out.set(be32(8 + dataLen), o); out.set(str4('mdat'), o + 4); o += 8;
+    for (const f of frames) { out.set(f, o); o += f.length; }
+    return out;
+  }
+
+  // ---- Feature envelope: 100 frames per second ----
+  function bandpass(f, q, sr) {
+    const w = 2 * Math.PI * f / sr, al = Math.sin(w) / (2 * q), a0 = 1 + al;
+    return { b0: al / a0, a1: -2 * Math.cos(w) / a0, a2: (1 - al) / a0 };
+  }
+  function highpass(f, q, sr) {
+    const w = 2 * Math.PI * f / sr, al = Math.sin(w) / (2 * q), c = Math.cos(w), a0 = 1 + al;
+    return { b0: (1 + c) / 2 / a0, b1: -(1 + c) / a0, b2: (1 + c) / 2 / a0, a1: -2 * c / a0, a2: (1 - al) / a0 };
+  }
+  class Envelope {
+    constructor(sr, seconds) {
+      this.sr = sr; this.fps = 100; this.step = sr / 100; this.next = this.step; this.pos = 0;
+      this.cap = Math.ceil((seconds || 600) * 100) + 400;
+      this.onset = new Float32Array(this.cap); this.level = new Float32Array(this.cap); this.full = new Float32Array(this.cap);
+      this.n = 0; this.samples = 0;
+      const centres = [1400, 2800, 5600];
+      this.bp = centres.map((f) => (f < sr * 0.42 ? bandpass(f, 1.1, sr) : { b0: 0, a1: 0, a2: 0 }));
+      this.hp = highpass(300, 0.707, sr);
+      this.s = new Float64Array(16); // filter states
+      this.acc = new Float64Array(4);
+      this.cnt = 0;
+      this.hist = new Float64Array(9); // last 3 amplitudes per band
+    }
+    grow() {
+      const cap = Math.ceil(this.cap * 1.5);
+      for (const k of ['onset', 'level', 'full']) { const a = new Float32Array(cap); a.set(this[k]); this[k] = a; }
+      this.cap = cap;
+    }
+    push(x) {
+      const [p1, p2, p3] = this.bp, hp = this.hp, s = this.s, acc = this.acc, hist = this.hist;
+      const b1 = p1.b0, a11 = p1.a1, a12 = p1.a2, b2 = p2.b0, a21 = p2.a1, a22 = p2.a2, b3 = p3.b0, a31 = p3.a1, a32 = p3.a2;
+      const h0 = hp.b0, h1 = hp.b1, h2 = hp.b2, ha1 = hp.a1, ha2 = hp.a2;
+      let x1 = s[0], x2 = s[1];
+      let y11 = s[2], y12 = s[3], y21 = s[4], y22 = s[5], y31 = s[6], y32 = s[7], yh1 = s[8], yh2 = s[9];
+      let e1 = acc[0], e2 = acc[1], e3 = acc[2], ef = acc[3], cnt = this.cnt, pos = this.pos, next = this.next;
+      for (let i = 0, L = x.length; i < L; i++) {
+        const v = x[i] + 1e-12;
+        const d = v - x2;
+        const y1 = b1 * d - a11 * y11 - a12 * y12; y12 = y11; y11 = y1;
+        const y2 = b2 * d - a21 * y21 - a22 * y22; y22 = y21; y21 = y2;
+        const y3 = b3 * d - a31 * y31 - a32 * y32; y32 = y31; y31 = y3;
+        const yh = h0 * v + h1 * x1 + h2 * x2 - ha1 * yh1 - ha2 * yh2; yh2 = yh1; yh1 = yh;
+        x2 = x1; x1 = v;
+        e1 += y1 * y1; e2 += y2 * y2; e3 += y3 * y3; ef += yh * yh; cnt++;
+        if (++pos >= next) {
+          next += this.step;
+          if (this.n >= this.cap) this.grow();
+          const inv = 1 / cnt;
+          const A1 = Math.sqrt(e1 * inv), A2 = Math.sqrt(e2 * inv), A3 = Math.sqrt(e3 * inv);
+          const o1 = A1 - (hist[0] + hist[1] + hist[2]) / 3, o2 = A2 - (hist[3] + hist[4] + hist[5]) / 3, o3 = A3 - (hist[6] + hist[7] + hist[8]) / 3;
+          hist[2] = hist[1]; hist[1] = hist[0]; hist[0] = A1; hist[5] = hist[4]; hist[4] = hist[3]; hist[3] = A2; hist[8] = hist[7]; hist[7] = hist[6]; hist[6] = A3;
+          const n = this.n++;
+          this.onset[n] = (o1 > 0 ? o1 : 0) + (o2 > 0 ? o2 : 0) + (o3 > 0 ? o3 : 0);
+          this.level[n] = A1 + A2 + A3;
+          this.full[n] = Math.sqrt(ef * inv);
+          e1 = e2 = e3 = ef = 0; cnt = 0;
+        }
+      }
+      s[0] = x1; s[1] = x2; s[2] = y11; s[3] = y12; s[4] = y21; s[5] = y22; s[6] = y31; s[7] = y32; s[8] = yh1; s[9] = yh2;
+      acc[0] = e1; acc[1] = e2; acc[2] = e3; acc[3] = ef; this.cnt = cnt; this.pos = pos; this.next = next;
+      this.samples += x.length;
+    }
+    get seconds() { return this.n / this.fps; }
+  }
+
+  function quantile(sorted, q) { if (!sorted.length) return 0; return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1))))]; }
+
+  // Parameter-free statistics, computed once per envelope so the sliders re-run instantly.
+  function prepare(env) {
+    const n = env.n, O = env.onset;
+    const sorted = Float32Array.from(O.subarray(0, n)).sort();
+    let p99 = quantile(sorted, 0.99);
+    const p50 = quantile(sorted, 0.5), p999 = quantile(sorted, 0.999);
+    if (!(p99 > 0)) p99 = p999 > 0 ? p999 : 1e-6;
+    // The floor follows the loud end of the match (99.9th percentile of the onset frames): hits are rare
+    // frames, so the 99th percentile sits among the neighbouring court and the noise, not among our hits.
+    const ref = p999 > 0 ? p999 : p99;
+    const nb = Math.ceil(n / 100);
+    const med = new Float32Array(nb), mad = new Float32Array(nb);
+    const buf = new Float32Array(500);
+    for (let b = 0; b < nb; b++) {
+      const lo = Math.max(0, (b - 4) * 100), hi = Math.min(n, (b + 6) * 100);
+      let m = 0;
+      for (let i = lo; i < hi && m < 500; i += 2) buf[m++] = O[i];
+      const w = buf.subarray(0, m).sort();
+      const md = w[m >> 1] || 0;
+      for (let i = 0; i < m; i++) w[i] = Math.abs(w[i] - md);
+      w.sort();
+      med[b] = md; mad[b] = w[m >> 1] || 0;
+    }
+    const minC = 0.01 * ref;
+    const cf = [], cs = [];
+    for (let i = 2; i < n - 2; i++) {
+      const v = O[i];
+      if (v > minC && v >= O[i - 1] && v > O[i + 1] && v >= O[i - 2] && v > O[i + 2]) { cf.push(i); cs.push(v); }
+    }
+    const lsorted = Float32Array.from(env.full.subarray(0, n)).sort();
+    return { n, fps: env.fps, p50, p99, p999, ref, med, mad, candF: Int32Array.from(cf), candS: Float32Array.from(cs), fullMedian: quantile(lsorted, 0.5) };
+  }
+
+  const DEFAULTS = { sensitivity: 5, minHits: 4, minGap: 0.5, maxGap: 2.8, endPause: 4.5, refractory: 0.25, minGoodGapShare: 0.6 };
+  function thresholds(p) {
+    const s = p.sensitivity;
+    return { k: 1.5 + (10 - s) * 0.55, floorFrac: 0.42 * Math.pow(0.82, s - 5) };
+  }
+
+  function pickHits(prep, params) {
+    const { k, floorFrac } = thresholds(params);
+    const floor = floorFrac * prep.ref;
+    const ref = Math.round(params.refractory * prep.fps);
+    const hits = [];
+    for (let i = 0; i < prep.candF.length; i++) {
+      const f = prep.candF[i], v = prep.candS[i];
+      const b = Math.floor(f / 100);
+      const thr = Math.max(prep.med[b] + k * 1.4826 * prep.mad[b], floor);
+      if (v <= thr) continue;
+      const last = hits[hits.length - 1];
+      if (last && f - last.f < ref) { if (v > last.s) { last.f = f; last.s = v; } continue; }
+      hits.push({ f, s: v });
+    }
+    for (const h of hits) h.t = h.f / prep.fps;
+    return { hits, floor, k, floorFrac };
+  }
+
+  function meanRange(a, f0, f1) {
+    f0 = Math.max(0, Math.floor(f0)); f1 = Math.min(a.length, Math.floor(f1));
+    if (f1 <= f0) return 0;
+    let s = 0; for (let i = f0; i < f1; i++) s += a[i];
+    return s / (f1 - f0);
+  }
+  function medianRange(a, f0, f1) {
+    f0 = Math.max(0, Math.floor(f0)); f1 = Math.min(a.length, Math.floor(f1));
+    if (f1 <= f0) return 0;
+    const w = Float32Array.from(a.subarray(f0, f1)).sort();
+    return w[w.length >> 1];
+  }
+  const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+  const db = (x) => 20 * Math.log10(Math.max(x, 1e-9));
+
+  function groupRallies(hits, prep, env, params) {
+    const out = [];
+    if (!hits.length) return out;
+    const hs = hits.map((h) => h.s).sort((a, b) => a - b);
+    const hitMedian = hs[hs.length >> 1] || 1e-9;
+    const fps = prep.fps, full = env.full.subarray(0, env.n);
+    let seq = [hits[0]];
+    const flush = () => {
+      if (seq.length >= params.minHits) {
+        const gaps = [];
+        for (let i = 1; i < seq.length; i++) gaps.push(seq[i].t - seq[i - 1].t);
+        const good = gaps.filter((g) => g >= params.minGap && g <= params.maxGap);
+        if (good.length / gaps.length >= params.minGoodGapShare && good.length >= params.minHits - 1) {
+          const start = seq[0].t, end = seq[seq.length - 1].t, dur = end - start;
+          const sortedGood = good.slice().sort((a, b) => a - b);
+          const medGap = sortedGood[sortedGood.length >> 1];
+          let maxS = 0; for (const h of seq) if (h.s > maxS) maxS = h.s;
+          const smashDb = db(maxS / hitMedian);
+          const after = meanRange(full, (end + 0.4) * fps, (end + 3.0) * fps);
+          let base = medianRange(full, (start - 6) * fps, (start - 1) * fps);
+          if (!(base > 0)) base = prep.fullMedian;
+          const cheerDb = db(after / Math.max(base, 1e-9));
+          const parts = {
+            hits: clamp01((seq.length - 3) / 15),
+            length: clamp01(dur / 30),
+            pace: clamp01((2.2 - medGap) / 1.2),
+            smash: clamp01(smashDb / 9),
+            cheer: clamp01((cheerDb - 3) / 9),
+          };
+          const score = Math.round(100 * (0.3 * parts.hits + 0.2 * parts.length + 0.15 * parts.pace + 0.2 * parts.smash + 0.15 * parts.cheer));
+          out.push({ start, end, dur, hits: seq.length, medGap, smashDb, cheerDb, parts, score });
+        }
+      }
+    };
+    for (let i = 1; i < hits.length; i++) {
+      if (hits[i].t - hits[i - 1].t > params.endPause) { flush(); seq = []; }
+      seq.push(hits[i]);
+    }
+    flush();
+    return out;
+  }
+
+  function overlapShare(a, b) {
+    const ov = Math.min(a.end, b.end) - Math.max(a.start, b.start);
+    const len = Math.max(0.5, Math.min(a.end - a.start, b.end - b.start));
+    return ov / len;
+  }
+
+  function planCut(rallies, isMarked, target) {
+    target = target || 60;
+    const pool = rallies.filter((r) => !isMarked(r)).sort((a, b) => b.score - a.score);
+    const segs = [];
+    let total = 0;
+    for (const r of pool) {
+      if (segs.length >= 8 || (segs.length >= 6 && total >= target - 4)) break;
+      const L = Math.min(10, Math.max(6, r.dur + 2.5));
+      const end = r.end + 1.2;
+      const seg = { start: Math.max(0, end - L), end, rally: r };
+      if (segs.some((s) => s.start < seg.end && seg.start < s.end)) continue;
+      segs.push(seg); total += seg.end - seg.start;
+    }
+    if (total > target + 4) {
+      const f = (target + 4) / total;
+      for (const s of segs) s.start = Math.max(s.start, s.end - Math.max(6, (s.end - s.start) * f));
+    }
+    return segs.sort((a, b) => a.start - b.start);
+  }
+
+  // ---- The 4K cut: the original video and sound samples of each segment, copied into a new file. ----
+  // Nothing is decoded or encoded, so the cut keeps the resolution, frame rate and quality of the
+  // original. Each segment starts at the keyframe at or before its start. The file is a Blob made of
+  // slices of the original file, so building it reads nothing: the bytes move only when the cut is
+  // played, saved or shared. The location and other metadata of the original are not copied.
+  function samplesOf(t) {
+    const { offs, sizes, n } = sampleTable(t);
+    const dts = new Float64Array(n), dur = new Uint32Array(n);
+    let i = 0, d = 0;
+    for (let e = 0; e < t.stts.counts.length; e++) for (let k = 0; k < t.stts.counts[e] && i < n; k++) { dts[i] = d; dur[i] = t.stts.deltas[e]; d += dur[i]; i++; }
+    for (; i < n; i++) { dts[i] = d; dur[i] = t.stts.deltas[t.stts.deltas.length - 1] || 1; d += dur[i]; }
+    let cto = null;
+    if (t.ctts) { cto = new Int32Array(n); let j = 0; for (let e = 0; e < t.ctts.counts.length; e++) for (let k = 0; k < t.ctts.counts[e] && j < n; k++) cto[j++] = t.ctts.offs[e]; }
+    let sync = null;
+    if (t.stss) { sync = new Uint8Array(n); for (const x of t.stss) if (x >= 1 && x <= n) sync[x - 1] = 1; }
+    return { offs, sizes, n, dts, dur, cto, sync, ts: t.timescale };
+  }
+  // First index whose time is at or after sec.
+  function firstAt(S, sec) {
+    const target = sec * S.ts;
+    let lo = 0, hi = S.n;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (S.dts[m] < target) lo = m + 1; else hi = m; }
+    return lo;
+  }
+  function runs(values) {
+    const out = [];
+    for (let i = 0; i < values.length; i++) {
+      if (out.length && out[out.length - 1][1] === values[i]) out[out.length - 1][0]++;
+      else out.push([1, values[i]]);
+    }
+    return out;
+  }
+  async function buildCut(file, movie, segs, ftypRaw) {
+    const vt = movie.tracks.find((t) => t.handler === 'vide' && t.stsz && t.stts && t.raw && t.raw.stsd);
+    if (!vt) throw new Error('The file has no video track that the page can copy.');
+    const at = movie.tracks.find((t) => t.handler === 'soun' && trackKind(t) === 'aac' && t.stsz && t.stts && t.raw && t.raw.stsd) || null;
+    const V = samplesOf(vt), A = at ? samplesOf(at) : null;
+    const vIdx = [], aIdx = [], vSeg = [], aSeg = [], vDur = [], vCto = [], aDur = [];
+    const lastSec = (V.dts[V.n - 1] + V.dur[V.n - 1]) / V.ts;
+    let dropped = 0;
+    let vTotal = 0, aTotal = 0;
+    const plan = [];
+    for (const seg of segs) {
+      if (seg.start >= lastSec) continue;
+      let k = Math.min(firstAt(V, seg.start), V.n - 1);
+      if (V.sync) { while (k > 0 && !V.sync[k]) k--; }
+      // Whole groups of frames only: the segment ends just before the next keyframe, so every frame it
+      // holds has the frames it refers to.
+      let vEnd = Math.max(k + 1, Math.min(firstAt(V, seg.end), V.n));
+      if (V.sync) { while (vEnd < V.n && !V.sync[vEnd]) vEnd++; }
+      let lo = Infinity, hi = 0;
+      const sIdx = plan.length;
+      // An open group of frames starts with frames shown before its keyframe that refer to the group
+      // before it. Those cannot decode in the cut, so they go. Every frame that stays is then shown
+      // earlier by the time the dropped frames held, so the picture runs on with no gap at the join.
+      const keyPts = V.dts[k] + (V.cto ? V.cto[k] : 0);
+      const lead = (i) => !!V.cto && i > k && V.dts[i] + V.cto[i] < keyPts;
+      let total = 0;
+      for (let i = k; i < vEnd; i++) if (lead(i)) total += V.dur[i];
+      let before = 0, patchKey = false;
+      const first = vIdx.length;
+      for (let i = k; i < vEnd; i++) {
+        if (lead(i)) { before += V.dur[i]; dropped++; patchKey = true; continue; }
+        vIdx.push(i); vSeg.push(sIdx); vDur.push(V.dur[i]); vCto.push(V.cto ? V.cto[i] + before - total : 0);
+        lo = Math.min(lo, V.offs[i]); hi = Math.max(hi, V.offs[i] + V.sizes[i]);
+      }
+      for (let j = first; j < vDur.length; j++) vTotal += vDur[j] / V.ts;
+      if (A) {
+        // The sound starts with the first keyframe and stops where the picture stops, so the two never drift apart.
+        let a = firstAt(A, V.dts[k] / V.ts);
+        while (a < A.n && aTotal + A.dur[a] / A.ts / 2 <= vTotal) { aIdx.push(a); aSeg.push(sIdx); aDur.push(A.dur[a]); aTotal += A.dur[a] / A.ts; lo = Math.min(lo, A.offs[a]); hi = Math.max(hi, A.offs[a] + A.sizes[a]); a++; }
+      }
+      plan.push({ key: patchKey ? k : -1, lo, hi, startSec: V.dts[k] / V.ts, endSec: vEnd < V.n ? V.dts[vEnd] / V.ts : lastSec, frames: vIdx.length - first });
+    }
+    if (!vIdx.length) throw new Error('The cut has no frames.');
+    const segBase = [];
+    let payload = 0;
+    for (const p of plan) { segBase.push(payload); payload += p.hi - p.lo; }
+    // Always an MP4: the viewer saves an .mp4 that a page made, never a .mov, and YouTube takes both.
+    const ftyp = bx('ftyp', str4('isom'), be32(512), str4('isom'), str4('iso2'), str4('mp41'));
+    const durMs = Math.round(vTotal * 1000);
+    const big = payload + 64e6 > 0xffffffff;
+    const offTable = (S, idx, segOf, base) => {
+      const w = big ? 8 : 4, out = new Uint8Array(8 + idx.length * w), dv = new DataView(out.buffer);
+      dv.setUint32(4, idx.length);
+      idx.forEach((i, j) => {
+        const v = base + segBase[segOf[j]] + (S.offs[i] - plan[segOf[j]].lo);
+        if (big) { dv.setUint32(8 + j * 8, Math.floor(v / 4294967296)); dv.setUint32(12 + j * 8, v >>> 0); } else dv.setUint32(8 + j * 4, v);
+      });
+      return bx(big ? 'co64' : 'stco', out);
+    };
+    const trak = (t, S, idx, segOf, id, base, isVideo, durs, ctos) => {
+      const n = idx.length;
+      const sz = new Uint8Array(12 + n * 4), sdv = new DataView(sz.buffer);
+      sdv.setUint32(8, n); idx.forEach((i, j) => sdv.setUint32(12 + j * 4, S.sizes[i]));
+      const sttsRuns = runs(durs);
+      const stts = bx('stts', fullHdr(0, 0), be32(sttsRuns.length), sttsRuns.flatMap(([c, d]) => [...be32(c), ...be32(d)]));
+      const boxes = [t.raw.stsd, stts];
+      let mediaTime = 0;
+      if (S.cto && ctos) {
+        const cr = runs(ctos);
+        const neg = cr.some(([, o]) => o < 0);
+        boxes.push(bx('ctts', fullHdr(neg ? 1 : 0, 0), be32(cr.length), cr.flatMap(([c, o]) => [...be32(c), ...be32(o >>> 0)])));
+        // The picture starts with the first frame shown, which is not always the first one decoded.
+        let m = Infinity, d = 0;
+        for (let j = 0; j < durs.length && segOf[j] === 0; j++) { m = Math.min(m, d + ctos[j]); d += durs[j]; }
+        mediaTime = Math.max(0, m === Infinity ? 0 : m);
+      }
+      if (S.sync) {
+        const ks = []; idx.forEach((i, j) => { if (S.sync[i]) ks.push(j + 1); });
+        boxes.push(bx('stss', fullHdr(0, 0), be32(ks.length), ks.flatMap(be32)));
+      }
+      boxes.push(bx('stsc', fullHdr(0, 0), be32(1), be32(1), be32(1), be32(1)), bx('stsz', sz), offTable(S, idx, segOf, base));
+      const mediaDur = durs.reduce((a, d) => a + d, 0);
+      const tkhd = t.raw.tkhd.slice(), tv = tkhd[8], tdv = new DataView(tkhd.buffer);
+      tdv.setUint32(tv === 1 ? 28 : 20, id);
+      if (tv === 1) { tdv.setUint32(36, 0); tdv.setUint32(40, durMs); } else tdv.setUint32(28, durMs);
+      const mhd = t.raw.mhd || (isVideo ? bx('vmhd', fullHdr(0, 1), new Uint8Array(8)) : bx('smhd', fullHdr(0, 0), be16(0), be16(0)));
+      const minf = bx('minf', mhd, bx('dinf', bx('dref', fullHdr(0, 0), be32(1), bx('url ', fullHdr(0, 1)))), bx('stbl', ...boxes));
+      const mdia = bx('mdia', bx('mdhd', fullHdr(0, 0), be32(0), be32(0), be32(S.ts), be32(mediaDur), be16(0x55c4), be16(0)), t.raw.hdlr, minf);
+      const edts = isVideo && mediaTime ? [bx('edts', bx('elst', fullHdr(0, 0), be32(1), be32(durMs), be32(mediaTime), be16(1), be16(0)))] : [];
+      return bx('trak', tkhd, ...edts, mdia);
+    };
+    const make = (base) => {
+      const mvhd = bx('mvhd', fullHdr(0, 0), be32(0), be32(0), be32(1000), be32(durMs), be32(0x00010000), be16(0x0100), new Uint8Array(10), MATRIX, new Uint8Array(24), be32(A ? 3 : 2));
+      const traks = [trak(vt, V, vIdx, vSeg, 1, base, true, vDur, V.cto ? vCto : null)];
+      if (A) traks.push(trak(at, A, aIdx, aSeg, 2, base, false, aDur, null));
+      return bx('moov', mvhd, ...traks);
+    };
+    const hdr = big ? 16 : 8;
+    const moov0 = make(0);
+    const moov = make(ftyp.length + moov0.length + hdr);
+    const mdatHdr = new Uint8Array(hdr), mdv = new DataView(mdatHdr.buffer);
+    if (big) { mdv.setUint32(0, 1); mdatHdr.set(str4('mdat'), 4); mdv.setUint32(8, Math.floor((payload + 16) / 4294967296)); mdv.setUint32(12, (payload + 16) >>> 0); }
+    else { mdv.setUint32(0, payload + 8); mdatHdr.set(str4('mdat'), 4); }
+    // A segment that lost leading frames starts on a CRA keyframe of HEVC. Its type changes to BLA, the
+    // type that marks a splice, so the decoder starts a new sequence there. Only that one frame is read.
+    const lenSize = (() => {
+      const r = vt.raw.stsd;
+      for (let i = 0; i + 30 < r.length; i++) if (r[i] === 0x68 && r[i + 1] === 0x76 && r[i + 2] === 0x63 && r[i + 3] === 0x43) return (r[i + 25] & 3) + 1;
+      return 0;
+    })();
+    let patched = 0;
+    const blobParts = [ftyp, moov, mdatHdr];
+    for (const p of plan) {
+      if (p.key < 0 || !lenSize) { blobParts.push(file.slice(p.lo, p.hi)); continue; }
+      const off = V.offs[p.key], size = V.sizes[p.key];
+      const u8 = await readRange(file, off, off + size);
+      let o = 0;
+      while (o + lenSize < u8.length) {
+        let n = 0;
+        for (let b = 0; b < lenSize; b++) n = n * 256 + u8[o + b];
+        const h = o + lenSize;
+        if (((u8[h] >> 1) & 63) === 21) { u8[h] = (u8[h] & 0x81) | (16 << 1); patched++; }
+        o = h + n;
+      }
+      blobParts.push(file.slice(p.lo, off), u8, file.slice(off + size, p.hi));
+    }
+    const blob = new Blob(blobParts, { type: 'video/mp4' });
+    return {
+      blob, ext: '.mp4', bytes: blob.size, moovBytes: moov.length, payloadBytes: payload,
+      videoSec: Math.round(vTotal * 100) / 100, audioSec: Math.round(aTotal * 100) / 100, audio: A ? at.codec : 'none',
+      codec: vt.codec, width: vt.width, height: vt.height, frames: vIdx.length, droppedLeadingFrames: dropped, keyframesMadeBla: patched,
+      segments: plan.map((p) => ({ startSec: Math.round(p.startSec * 100) / 100, endSec: Math.round(p.endSec * 100) / 100, frames: p.frames, bytes: p.hi - p.lo })),
+    };
+  }
+
+  function evaluate(rallies, truth) {
+    const used = new Set();
+    let tp = 0;
+    for (const d of rallies) {
+      const m = truth.findIndex((g, i) => !used.has(i) && overlapShare(d, g) >= 0.5);
+      if (m >= 0) { used.add(m); tp++; }
+    }
+    return { detected: rallies.length, truth: truth.length, matched: tp, precision: rallies.length ? tp / rallies.length : 0, recall: truth.length ? tp / truth.length : 0 };
+  }
+
+  // ---- A synthetic match: main-court rallies, a quieter neighbouring court, serve bounces, talk, cheers, noise ----
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function synthMatch(seconds, sr, seed) {
+    const rnd = mulberry32(seed || 1);
+    const N = Math.floor(seconds * sr);
+    const out = new Float32Array(N);
+    const truth = { rallies: [], short: [], neighbour: [], cheers: [], applause: [] };
+    let brown = 0;
+    for (let i = 0; i < N; i++) { const w = rnd() * 2 - 1; brown = 0.997 * brown + 0.03 * w; out[i] = 0.003 * w + 0.03 * brown; }
+    const add = (i0, len, fn) => { for (let k = 0; k < len; k++) { const i = i0 + k; if (i >= 0 && i < N) out[i] += fn(k / sr); } };
+    function click(t, amp, f, decay) {
+      const ph = rnd() * 6.28;
+      add(Math.round(t * sr), Math.round(0.06 * sr), (u) => amp * (0.55 * (rnd() * 2 - 1) * Math.exp(-u / 0.0007) + 0.7 * Math.sin(2 * Math.PI * f * u + ph) * Math.exp(-u / decay) + 0.35 * Math.sin(2 * Math.PI * 750 * u) * Math.exp(-u / 0.01)));
+    }
+    function noiseBurst(t, dur, amp, lowpass, mod) {
+      let lp = 0;
+      add(Math.round(t * sr), Math.round(dur * sr), (u) => { const w = rnd() * 2 - 1; lp += lowpass * (w - lp); const env = Math.min(1, u / 0.15, (dur - u) / 0.3); const m = mod ? 0.5 + 0.5 * Math.sin(2 * Math.PI * mod * u) : 1; return amp * lp * Math.max(0, env) * m; });
+    }
+    function court(amp, list, extras, offset) {
+      let t = offset + 3 + rnd() * 5;
+      while (t < seconds - 30) {
+        if (extras) { const nb = 2 + Math.floor(rnd() * 2); for (let b = 0; b < nb; b++) click(t + b * 0.55, amp * 0.3, 1500, 0.006); t += nb * 0.55 + 1.2; }
+        const nHits = rnd() < 0.15 ? 2 + Math.floor(rnd() * 2) : 4 + Math.floor(rnd() * rnd() * 18);
+        const hits = [];
+        let h = t;
+        for (let k = 0; k < nHits; k++) {
+          const smash = k === nHits - 1 && rnd() < 0.35;
+          const a = amp * (0.7 + 0.4 * rnd()) * (smash ? 1.7 : 1);
+          click(h, a, 2000 + 2000 * rnd(), 0.008);
+          hits.push(h);
+          if (extras && k < nHits - 1 && rnd() < 0.4) click(h + 0.32 + 0.2 * rnd(), a * 0.45, 1200 + 800 * rnd(), 0.012);
+          const r = rnd();
+          h += r < 0.12 ? 2.3 + rnd() * 0.4 : r < 0.3 ? 0.7 + 0.2 * rnd() : 0.95 + 0.9 * rnd();
+        }
+        const last = hits[hits.length - 1];
+        (nHits >= 4 ? list : truth.short).push({ start: +hits[0].toFixed(3), end: +last.toFixed(3), hits: nHits, court: extras ? 'main' : 'neighbour' });
+        if (extras && rnd() < 0.4) { const d = 1.5 + rnd(); noiseBurst(last + 0.5, d, amp * 0.5, 0.5, 0); truth.cheers.push(+(last + 0.5).toFixed(2)); }
+        if (extras && rnd() < 0.15) { const a0 = last + 3.5; for (let c = 0; c < 50; c++) click(a0 + rnd() * 2.5, amp * 0.18, 2500, 0.004); truth.applause.push(+a0.toFixed(2)); }
+        if (extras && rnd() < 0.6) noiseBurst(last + 4, 2 + rnd() * 3, 0.06, 0.15, 4);
+        t = last + 8 + rnd() * 14;
+      }
+    }
+    court(0.5, truth.rallies, true, 0);
+    court(0.5 * 0.22, truth.neighbour, false, 6);
+    let peak = 0;
+    for (let i = 0; i < N; i++) { const a = Math.abs(out[i]); if (a > peak) peak = a; }
+    if (peak > 0.95) { const g = 0.95 / peak; for (let i = 0; i < N; i++) out[i] *= g; }
+    return { mono: out, sr, truth };
+  }
+
+  function wavBlobBytes(mono, sr) {
+    const n = mono.length;
+    const buf = new ArrayBuffer(44 + n * 2);
+    const dv = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < 4; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, sr, true);
+    dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) { const v = Math.max(-1, Math.min(1, mono[i])); dv.setInt16(44 + i * 2, v < 0 ? v * 32768 : v * 32767, true); }
+    return new Uint8Array(buf);
+  }
+
+  return { walkTop, children, parseMoov, parseAsc, parseEsds, trackKind, pcmFormat, sampleTable, pcmChunks, planRanges, pcmToMono, adtsHeader, buildAdts, buildM4a, readRange,
+    Envelope, prepare, pickHits, groupRallies, planCut, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc };
+})();
+if (typeof module !== 'undefined') module.exports = RF;
+/*CORE-END*/
+</script>
+
+<script>
+(() => {
+  'use strict';
+  if (typeof document === 'undefined') return;
+  const VERSION = 'rally-finder 2026-11-13.1';
+  const $ = (s) => document.querySelector(s);
+  const app = $('#app');
+  $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
+
+  const state = {
+    src: null, file: null, fileUrl: null, pickMs: null, info: null, env: null, prep: null,
+    params: Object.assign({}, RF.DEFAULTS), hits: [], hitInfo: null, rallies: [], marks: [],
+    read: {}, errors: [], working: false, stop: false, decodePath: null, cut: null, rec: {}, sample: null, runId: 0, timing: {},
+  };
+  window.__rf = state;
+
+  // ---------- small helpers ----------
+  const fmtT = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + String(r).padStart(2, '0'); };
+  const fmtLen = (s) => (s < 60 ? Math.round(s) + ' s' : Math.floor(s / 60) + ' min ' + String(Math.round(s % 60)).padStart(2, '0') + ' s');
+  const fmtBytes = (b) => (b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.round(b / 1e3) + ' kB');
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const CODEC_NAMES = { avc1: 'H.264', avc3: 'H.264', hvc1: 'HEVC (H.265)', hev1: 'HEVC (H.265)', dvh1: 'HEVC with Dolby Vision', dvhe: 'HEVC with Dolby Vision', mp4v: 'MPEG-4', apcn: 'ProRes', apch: 'ProRes HQ', apcs: 'ProRes LT', ap4h: 'ProRes 4444', mp4a: 'AAC', sowt: 'PCM 16-bit (little-endian)', twos: 'PCM 16-bit (big-endian)', lpcm: 'Linear PCM', apac: 'Apple spatial audio (APAC)' };
+  const codecName = (c) => (CODEC_NAMES[c] ? CODEC_NAMES[c] + ' (' + c.trim() + ')' : c);
+
+  function plain(e) {
+    const name = e && e.name, msg = String((e && e.message) || e || 'Unknown error');
+    if (name === 'NotReadableError' || /could not be read|NotReadable/i.test(msg)) return 'The phone could not read the file. Keep the page open, then choose the video again.';
+    if (name === 'NotFoundError') return 'The file is gone. Choose the video again.';
+    if (name === 'NotAllowedError') return 'The browser did not allow this action. Tap the button again.';
+    if (name === 'EncodingError' || /decode/i.test(msg)) return 'The browser could not decode the sound. ' + msg;
+    if (name === 'RangeError' || /memory|allocation/i.test(msg)) return 'The phone ran out of memory. Close other apps and try again. (' + msg + ')';
+    return msg;
+  }
+  function report(e, where) {
+    const text = (where ? where + ': ' : '') + plain(e);
+    state.errors.push({ where: where || '', name: (e && e.name) || '', message: String((e && e.message) || e), shown: text });
+    const li = document.createElement('li');
+    li.textContent = text;
+    $('#errList').appendChild(li);
+    $('#errCard').hidden = false;
+  }
+  window.addEventListener('error', (ev) => report(ev.error || ev.message, 'Page error'));
+  window.addEventListener('unhandledrejection', (ev) => report(ev.reason, 'Page error'));
+
+  // ---------- wake lock ----------
+  let wake = null;
+  async function wakeOn() {
+    if (!('wakeLock' in navigator)) { state.read.wakeLock = 'not available'; return; }
+    try { wake = await navigator.wakeLock.request('screen'); state.read.wakeLock = 'granted'; }
+    catch (e) { state.read.wakeLock = 'refused (' + (e.name || 'error') + ')'; }
+  }
+  function wakeOff() { if (wake) { wake.release().catch(() => {}); wake = null; } }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.working) wakeOn();
+    if (document.visibilityState === 'hidden' && state.working) state.read.hiddenWhileWorking = (state.read.hiddenWhileWorking || 0) + 1;
+  });
+
+  // ---------- reset ----------
+  function resetAll(src) {
+    state.runId++;
+    stopCut(true);
+    Object.assign(state, { src, info: null, env: null, prep: null, hits: [], hitInfo: null, rallies: [], marks: [], read: {}, errors: [], decodePath: null, cut: null, rec: {}, sample: null, stop: false, movie: null, ftypRaw: null, fileCut: null, timing: {} });
+    $('#fileCutOut').hidden = true;
+    if (state.fileCutUrl) { URL.revokeObjectURL(state.fileCutUrl); state.fileCutUrl = null; }
+    $('#errList').textContent = ''; $('#errCard').hidden = true;
+    $('#boxStats').textContent = ''; $('#progBar').style.width = '0%'; $('#progLine').textContent = 'Starting.'; $('#progSub').textContent = '';
+    ['#step3', '#step4', '#step5', '#stepWho'].forEach((s) => ($(s).hidden = true));
+    whoReset();
+    $('#step2').hidden = false;
+    $('#recNote').hidden = true; $('#recStage').hidden = true; $('#outText').hidden = true; $('#copyStatus').textContent = '';
+    $('#sampleCheck').hidden = true;
+    app.classList.toggle('is-sample', src === 'sample');
+    $('#soundOnly').hidden = src !== 'sample';
+    if (state.fileUrl) { URL.revokeObjectURL(state.fileUrl); state.fileUrl = null; }
+    const v = $('#vid'); v.removeAttribute('src'); v.load();
+  }
+  function addStat(dl, k, v) { const dt = document.createElement('dt'); dt.textContent = k; const dd = document.createElement('dd'); dd.textContent = v; dl.append(dt, dd); }
+
+  // ---------- picking ----------
+  let pickT0 = null;
+  const fileInput = $('#file');
+  // The screen stays on from the tap: the picker's own wait (converting, copying) is when phones locked (Erik, 13 November 2026).
+  $('#pickLabel').addEventListener('click', () => { pickT0 = performance.now(); fileInput.value = ''; wakeOn(); });
+  fileInput.addEventListener('click', () => { if (pickT0 === null) pickT0 = performance.now(); });
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files && fileInput.files[0];
+    const ms = pickT0 !== null ? performance.now() - pickT0 : null;
+    pickT0 = null;
+    if (!f) return;
+    state.pickMs = ms;
+    state.file = f;
+    $('#fileStats').hidden = false;
+    $('#fName').textContent = f.name || '(no name)';
+    $('#fSize').textContent = fmtBytes(f.size) + ' (' + f.size.toLocaleString('en-US') + ' bytes)';
+    $('#fPick').textContent = ms === null ? 'not measured' : (ms / 1000).toFixed(1) + ' s, from the tap to the file. The phone may copy the file first.';
+    analyseFile(f).catch((e) => { report(e, 'Reading'); finishWork(); });
+  });
+  $('#sampleBtn').addEventListener('click', () => { runSample().catch((e) => { report(e, 'Sample'); finishWork(); }); });
+  $('#stopBtn').addEventListener('click', () => { state.stop = true; $('#stopBtn').disabled = true; $('#progLine').textContent = 'Stopping after this part.'; });
+
+  function startWork() { state.working = true; state.stop = false; $('#stopBtn').disabled = false; wakeOn(); }
+  function finishWork() { state.working = false; $('#stopBtn').disabled = true; wakeOff(); }
+
+  // ---------- the file pipeline ----------
+  async function analyseFile(file) {
+    resetAll('file');
+    const myRun = state.runId;
+    startWork();
+    const t0 = performance.now();
+    state.fileUrl = URL.createObjectURL(file);
+    $('#vid').src = state.fileUrl;
+
+    const boxes = await RF.walkTop(file);
+    const moovBox = boxes.find((b) => b.type === 'moov');
+    const mdat = boxes.find((b) => b.type === 'mdat');
+    const ftyp = boxes.find((b) => b.type === 'ftyp');
+    let brand = null;
+    if (ftyp) { const fb = await RF.readRange(file, ftyp.start + ftyp.hdr, ftyp.start + ftyp.hdr + 4); brand = RF.fourcc(fb, 0); }
+    if (!moovBox) throw new Error('The file has no moov box (the index of the video). The file may still be copying, or it is not an MP4 or MOV file. Top-level boxes: ' + boxes.map((b) => b.type).join(', '));
+    if (moovBox.truncated) throw new Error('The file ends before the end of the moov box. The file is not complete.');
+    if (moovBox.size > 400e6) throw new Error('The moov box is too large to read (' + fmtBytes(moovBox.size) + ').');
+    const moovBytes = await RF.readRange(file, moovBox.start, moovBox.start + moovBox.size);
+    const movie = RF.parseMoov(moovBytes);
+    state.movie = movie;
+    state.ftypRaw = ftyp && ftyp.size < 4096 ? await RF.readRange(file, ftyp.start, ftyp.start + ftyp.size) : null;
+    const tMoov = performance.now() - t0;
+
+    const vtrak = movie.tracks.find((t) => t.handler === 'vide');
+    const soundTracks = movie.tracks.filter((t) => t.handler === 'soun');
+    const atrak = soundTracks.find((t) => RF.trackKind(t));
+    const info = {
+      brand, moovAt: mdat && moovBox.start > mdat.start ? 'end' : 'start', moovBytes: moovBox.size, moovMs: Math.round(tMoov),
+      topBoxes: boxes.map((b) => b.type + (b.hdr === 16 ? '(64-bit)' : '')),
+      durationSec: movie.durationSec, audioTracks: soundTracks.map((t) => ({ codec: t.codec, channels: t.channels, sampleRate: t.sampleRate })),
+    };
+    if (vtrak) {
+      const fps = vtrak.durationSec ? vtrak.sampleCount / vtrak.durationSec : 0;
+      const v = { codec: vtrak.codec, width: vtrak.width, height: vtrak.height, rotation: vtrak.rotation, fps: r2(fps), frames: vtrak.sampleCount, durationSec: r2(vtrak.durationSec) };
+      if (vtrak.stss && vtrak.stss.length > 1 && fps) {
+        let maxGap = 0;
+        for (let i = 1; i < vtrak.stss.length; i++) maxGap = Math.max(maxGap, vtrak.stss[i] - vtrak.stss[i - 1]);
+        v.keyframes = vtrak.stss.length;
+        v.keyframeEverySec = r2(vtrak.sampleCount / vtrak.stss.length / fps);
+        v.keyframeMaxGapSec = r2(maxGap / fps);
+      } else if (!vtrak.stss) { v.keyframes = vtrak.sampleCount; v.keyframeEverySec = fps ? r2(1 / fps) : null; v.keyframeNote = 'every frame is a keyframe'; }
+      else { v.keyframes = vtrak.stss.length; }
+      info.video = v;
+    }
+    state.info = info;
+    const dl = $('#boxStats');
+    addStat(dl, 'Length', fmtLen(movie.durationSec || (atrak && atrak.durationSec) || 0));
+    if (info.video) {
+      const v = info.video;
+      addStat(dl, 'Video', codecName(v.codec) + ', ' + v.width + '×' + v.height + ', ' + v.fps + ' fps' + (v.rotation ? ', turned ' + v.rotation + '°' : ''));
+      addStat(dl, 'Keyframes', v.keyframeNote ? 'Every frame' : v.keyframeEverySec ? 'One every ' + v.keyframeEverySec + ' s (longest gap ' + v.keyframeMaxGapSec + ' s)' : 'Not found');
+    } else addStat(dl, 'Video', 'No video track found');
+    addStat(dl, 'Sound', soundTracks.length ? soundTracks.map((t) => codecName(t.codec) + ', ' + Math.round(t.sampleRate || 0) + ' Hz, ' + (t.channels || '?') + ' ch').join('; ') : 'No sound track found');
+    addStat(dl, 'Index', 'moov ' + fmtBytes(moovBox.size) + ', at the ' + info.moovAt + ' of the file, read in ' + Math.round(tMoov) + ' ms');
+    if (!atrak) throw new Error(soundTracks.length ? 'The page cannot read this sound format (' + soundTracks.map((t) => t.codec).join(', ') + ').' : 'The video has no sound track.');
+
+    const kind = RF.trackKind(atrak);
+    const sr = Math.round(atrak.sampleRate || (atrak.ascInfo && atrak.ascInfo.rate) || 48000);
+    const audioSec = atrak.durationSec || movie.durationSec;
+    info.audio = { codec: atrak.codec, sampleRate: sr, channels: atrak.channels, durationSec: r2(audioSec) };
+    if (atrak.ascInfo) info.audio.aacObjectType = atrak.ascInfo.objectType;
+    state.env = new RF.Envelope(sr, audioSec);
+    state.read = Object.assign(state.read, { startedAt: new Date().toISOString(), bytesRead: 0, reads: 0, decodeMs: 0, featureMs: 0 });
+    const tRead0 = performance.now();
+    const progress = (secDone) => {
+      const el = (performance.now() - tRead0) / 1000;
+      const pct = audioSec ? Math.min(100, (secDone / audioSec) * 100) : 0;
+      $('#progBar').style.width = pct.toFixed(1) + '%';
+      $('#progLine').textContent = 'Read ' + (secDone / 60).toFixed(1) + ' of ' + (audioSec / 60).toFixed(1) + ' min · ' + (el > 0 ? Math.round(secDone / el) : 0) + '× real time';
+      $('#progSub').textContent = fmtBytes(state.read.bytesRead) + ' read in ' + state.read.reads + ' reads · ' + el.toFixed(1) + ' s · decoder: ' + (state.decodePath || 'starting');
+    };
+
+    if (kind === 'pcm') await readPcm(file, atrak, progress, myRun);
+    else await readAac(file, atrak, sr, progress, myRun);
+    if (myRun !== state.runId) return;
+
+    const el = (performance.now() - tRead0) / 1000;
+    state.read.seconds = r2(el);
+    state.read.audioSecondsRead = r2(state.env.seconds);
+    state.read.speedX = el > 0 ? Math.round(state.env.seconds / el) : null;
+    state.read.totalSecondsFromPick = r2((performance.now() - t0) / 1000);
+    if (state.stop) state.read.stoppedEarlyAt = fmtT(state.env.seconds);
+    progress(state.env.seconds);
+    $('#progLine').textContent = (state.stop ? 'Stopped at ' + fmtT(state.env.seconds) + '. ' : 'Done. ') + 'Read ' + (state.env.seconds / 60).toFixed(1) + ' min of sound in ' + el.toFixed(1) + ' s (' + state.read.speedX + '× real time).';
+    finishWork();
+    analyseEnvelope();
+  }
+
+  async function pool(items, k, fn) {
+    const out = new Array(items.length);
+    let i = 0;
+    const worker = async () => { while (i < items.length) { const j = i++; out[j] = await fn(items[j]); } };
+    await Promise.all(Array.from({ length: Math.min(k, items.length) }, worker));
+    return out;
+  }
+
+  async function readAac(file, t, sr, progress, myRun) {
+    const tab = RF.sampleTable(t);
+    const cfg = t.ascInfo;
+    const spf = 1024 * (cfg.sbr ? 2 : 1);
+    const perBatch = Math.max(64, Math.round((30 * sr) / spf));
+    const batches = [];
+    for (let i = 0; i < tab.n; i += perBatch) batches.push([i, Math.min(tab.n, i + perBatch)]);
+    const channels = t.channels || cfg.channelConfig || 2;
+    const env = state.env;
+
+    const readBatch = async (b) => {
+      const PRE = 3;
+      const i0 = Math.max(0, b[0] - PRE), i1 = b[1];
+      const { ranges, map } = RF.planRanges(tab.offs, tab.sizes, i0, i1, 131072);
+      const bufs = await pool(ranges, 6, (r) => RF.readRange(file, r.start, r.end));
+      state.read.reads += ranges.length;
+      for (const r of ranges) state.read.bytesRead += r.end - r.start;
+      const frames = [];
+      for (let i = i0; i < i1; i++) {
+        const ri = map[i - i0], rr = ranges[ri], o = tab.offs[i] - rr.start;
+        frames.push(bufs[ri].subarray(o, o + tab.sizes[i]));
+      }
+      return { frames, pre: b[0] - i0, first: b[0], count: b[1] - b[0] };
+    };
+
+    // Decoder choice: WebCodecs first, then ADTS through decodeAudioData, then an M4A wrapper.
+    let wc = null;
+    const force = window.__rfForceDecoder || ''; // test hook: 'adts' or 'm4a' skips the decoders before it
+    if (force) state.read.forcedDecoder = force;
+    if (force === 'm4a') state.decodePath = 'M4A';
+    if (!force && typeof AudioDecoder !== 'undefined' && typeof EncodedAudioChunk !== 'undefined') {
+      const conf = { codec: 'mp4a.40.' + cfg.objectType, sampleRate: sr, numberOfChannels: channels, description: t.asc };
+      try {
+        const sup = await AudioDecoder.isConfigSupported(conf);
+        if (sup && sup.supported) {
+          let decErr = null;
+          const dec = new AudioDecoder({
+            output: (ad) => { const tf = performance.now(); try { env.push(audioDataToMono(ad)); } catch (e) { decErr = e; } finally { ad.close(); } state.read.featureMs += performance.now() - tf; },
+            error: (e) => { decErr = e; },
+          });
+          dec.configure(conf);
+          wc = { dec, get err() { return decErr; } };
+          state.decodePath = 'AudioDecoder';
+        }
+      } catch (e) { state.read.webCodecsProbe = String(e && e.message || e); }
+    }
+    let ctx = null;
+    if (!wc) {
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OAC) throw new Error('This browser has no audio decoder that the page can use.');
+      ctx = new OAC(1, 1, sr);
+    }
+    const decodeWrapped = (bytes) => new Promise((res, rej) => {
+      try { const p = ctx.decodeAudioData(bytes.buffer, res, rej); if (p && p.catch) p.catch(rej); } catch (e) { rej(e); }
+    });
+
+    let next = readBatch(batches[0]);
+    let expected = 0, got = 0;
+    for (let bi = 0; bi < batches.length; bi++) {
+      const data = await next;
+      if (myRun !== state.runId) return;
+      if (bi + 1 < batches.length && !state.stop) next = readBatch(batches[bi + 1]);
+      const td = performance.now();
+      if (wc) {
+        const fr = data.frames.slice(data.pre);
+        for (let k = 0; k < fr.length; k++) {
+          wc.dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round(((data.first + k) * spf * 1e6) / sr), data: fr[k] }));
+        }
+        await wc.dec.flush();
+        if (wc.err) throw wc.err;
+        state.read.decodeMs += performance.now() - td;
+      } else {
+        let ab = null;
+        if (state.decodePath !== 'M4A') {
+          try { ab = await decodeWrapped(RF.buildAdts(data.frames, cfg, channels)); state.decodePath = 'ADTS'; }
+          catch (e) { if (state.decodePath === 'ADTS') throw e; state.read.adtsError = String(e && e.message || e); }
+        }
+        if (!ab) { ab = await decodeWrapped(RF.buildM4a(data.frames, t.asc, sr, channels)); state.decodePath = 'M4A'; }
+        state.read.decodeMs += performance.now() - td;
+        const tf = performance.now();
+        const N = data.count * spf;
+        const L = ab.length;
+        let from = 0, len = Math.min(L, N);
+        if (data.pre > 0 && L >= N) { from = L - N; len = N; }
+        const chs = [];
+        for (let c = 0; c < ab.numberOfChannels; c++) chs.push(ab.getChannelData(c).subarray(from, from + len));
+        const mono = new Float32Array(len);
+        for (const ch of chs) for (let i = 0; i < len; i++) mono[i] += ch[i];
+        if (chs.length > 1) { const g = 1 / chs.length; for (let i = 0; i < len; i++) mono[i] *= g; }
+        env.push(mono);
+        got += len; expected += N;
+        state.read.featureMs += performance.now() - tf;
+      }
+      progress(env.seconds);
+      await tick();
+      if (state.stop) break;
+    }
+    if (wc) { try { wc.dec.close(); } catch (e) {} }
+    if (expected) state.read.decodeDriftMs = Math.round(((got - expected) / sr) * 1000);
+    state.read.decodeMs = Math.round(state.read.decodeMs); state.read.featureMs = Math.round(state.read.featureMs);
+  }
+
+  function audioDataToMono(ad) {
+    const n = ad.numberOfFrames, ch = ad.numberOfChannels;
+    const out = new Float32Array(n);
+    try {
+      const tmp = new Float32Array(n);
+      for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c, format: 'f32-planar' }); for (let i = 0; i < n; i++) out[i] += tmp[i]; }
+    } catch (e) {
+      const f = ad.format || '';
+      const planar = f.endsWith('-planar');
+      const Arr = f.startsWith('s16') ? Int16Array : f.startsWith('s32') ? Int32Array : f.startsWith('u8') ? Uint8Array : Float32Array;
+      const scale = Arr === Int16Array ? 1 / 32768 : Arr === Int32Array ? 1 / 2147483648 : Arr === Uint8Array ? 1 / 128 : 1;
+      const off = Arr === Uint8Array ? 128 : 0;
+      out.fill(0);
+      if (planar) {
+        const tmp = new Arr(n);
+        for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c }); for (let i = 0; i < n; i++) out[i] += (tmp[i] - off) * scale; }
+      } else {
+        const tmp = new Arr(n * ch);
+        ad.copyTo(tmp, { planeIndex: 0 });
+        for (let i = 0; i < n; i++) { let s = 0; for (let c = 0; c < ch; c++) s += tmp[i * ch + c] - off; out[i] = s * scale; }
+      }
+    }
+    if (ch > 1) { const g = 1 / ch; for (let i = 0; i < n; i++) out[i] *= g; }
+    return out;
+  }
+
+  async function readPcm(file, t, progress, myRun) {
+    const fmt = RF.pcmFormat(t);
+    const chunks = RF.pcmChunks(t, fmt);
+    state.decodePath = 'PCM';
+    const env = state.env;
+    const sr = env.sr;
+    const batches = [];
+    let cur = [], bytes = 0;
+    for (const c of chunks) { cur.push(c); bytes += c.end - c.start; if (bytes >= 4e6) { batches.push(cur); cur = []; bytes = 0; } }
+    if (cur.length) batches.push(cur);
+    const readBatch = async (list) => {
+      const offs = Float64Array.from(list.map((c) => c.start)), sizes = Float64Array.from(list.map((c) => c.end - c.start));
+      const { ranges, map } = RF.planRanges(offs, sizes, 0, list.length, 131072);
+      const bufs = await pool(ranges, 6, (r) => RF.readRange(file, r.start, r.end));
+      state.read.reads += ranges.length;
+      for (const r of ranges) state.read.bytesRead += r.end - r.start;
+      return list.map((c, i) => { const rr = ranges[map[i]]; const o = c.start - rr.start; return bufs[map[i]].subarray(o, o + (c.end - c.start)); });
+    };
+    let next = readBatch(batches[0]);
+    for (let bi = 0; bi < batches.length; bi++) {
+      const parts = await next;
+      if (myRun !== state.runId) return;
+      if (bi + 1 < batches.length && !state.stop) next = readBatch(batches[bi + 1]);
+      const tf = performance.now();
+      for (const p of parts) {
+        const usable = p.length - (p.length % fmt.bytesPerFrame);
+        env.push(RF.pcmToMono(p.subarray(0, usable), fmt));
+      }
+      state.read.featureMs += performance.now() - tf;
+      progress(env.seconds);
+      await tick();
+      if (state.stop) break;
+    }
+    state.read.featureMs = Math.round(state.read.featureMs);
+    state.read.pcm = fmt;
+    if (sr && t.durationSec) state.read.decodeDriftMs = Math.round((env.samples / sr - t.durationSec) * 1000);
+  }
+
+  // ---------- the sample ----------
+  async function runSample() {
+    resetAll('sample');
+    const myRun = state.runId;
+    state.file = null;
+    $('#fileStats').hidden = true;
+    startWork();
+    const secs = 180, sr = 24000;
+    $('#progLine').textContent = 'Making 3 minutes of sample sound.';
+    await tick();
+    const syn = RF.synthMatch(secs, sr, 7);
+    state.sample = { seconds: secs, sampleRate: sr, truth: syn.truth };
+    state.fileUrl = URL.createObjectURL(new Blob([RF.wavBlobBytes(syn.mono, sr)], { type: 'audio/wav' }));
+    $('#vid').src = state.fileUrl;
+    state.info = { durationSec: secs, audio: { codec: 'sample (made in the page)', sampleRate: sr, channels: 1, durationSec: secs } };
+    const dl = $('#boxStats');
+    addStat(dl, 'Length', fmtLen(secs));
+    addStat(dl, 'Sound', 'Made in the page: hits on our court, a quieter neighbouring court, serve bounces, talk, cheers and noise');
+    addStat(dl, 'Video', 'None. The sample is sound only.');
+    state.env = new RF.Envelope(sr, secs);
+    state.decodePath = 'sample';
+    state.read = Object.assign(state.read, { bytesRead: 0, reads: 0 });
+    const t0 = performance.now();
+    const step = sr * 10;
+    for (let i = 0; i < syn.mono.length; i += step) {
+      state.env.push(syn.mono.subarray(i, i + step));
+      const done = Math.min(secs, (i + step) / sr);
+      $('#progBar').style.width = ((done / secs) * 100).toFixed(1) + '%';
+      $('#progLine').textContent = 'Read ' + (done / 60).toFixed(1) + ' of ' + (secs / 60).toFixed(1) + ' min (sample)';
+      await tick();
+      if (myRun !== state.runId) return;
+      if (state.stop) break;
+    }
+    const el = (performance.now() - t0) / 1000;
+    state.read.seconds = r2(el);
+    state.read.audioSecondsRead = r2(state.env.seconds);
+    state.read.speedX = Math.round(state.env.seconds / Math.max(el, 0.001));
+    $('#progLine').textContent = 'Done. This was the sample.';
+    finishWork();
+    analyseEnvelope();
+  }
+
+  // ---------- detection and results ----------
+  function analyseEnvelope() {
+    const t0 = performance.now();
+    state.prep = RF.prepare(state.env);
+    state.read.prepareMs = Math.round(performance.now() - t0);
+    regroup();
+    ['#step3', '#step4', '#step5'].forEach((s) => ($(s).hidden = false));
+    $('#nMatch').textContent = fmtT(state.env.seconds);
+    drawTimeline();
+  }
+  function regroup() {
+    const p = state.params;
+    const r = RF.pickHits(state.prep, p);
+    state.hits = r.hits;
+    state.hitInfo = { floor: r.floor, k: r.k, floorFrac: r.floorFrac };
+    state.rallies = RF.groupRallies(r.hits, state.prep, state.env, p);
+    $('#nHits').textContent = state.hits.length.toLocaleString('en-US');
+    $('#nRallies').textContent = state.rallies.length;
+    if (state.sample) {
+      const ev = RF.evaluate(state.rallies, state.sample.truth.rallies);
+      state.sample.check = ev;
+      const box = $('#sampleCheck');
+      box.hidden = false;
+      box.innerHTML = '';
+      const b = document.createElement('b'); b.textContent = 'Sample check. ';
+      box.append(b, document.createTextNode('The sample has ' + ev.truth + ' real rallies. The finder found ' + ev.matched + ' of them, and ' + (ev.detected - ev.matched) + ' false ones.'));
+    }
+    renderList();
+    renderCutPlan();
+    drawTimeline();
+  }
+  const isMarked = (r) => state.marks.some((m) => RF.overlapShare(m, r) >= 0.5);
+  function topRallies() { return state.rallies.slice().sort((a, b) => b.score - a.score).slice(0, 15); }
+
+  function renderList() {
+    const ol = $('#list');
+    ol.textContent = '';
+    const top = topRallies();
+    if (!top.length) {
+      const li = document.createElement('li'); li.className = 'note'; li.textContent = 'No rallies found. Move the sensitivity up, or lower the fewest hits.';
+      ol.appendChild(li); return;
+    }
+    top.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.className = 'rally' + (isMarked(r) ? ' marked' : '');
+      const rank = document.createElement('span'); rank.className = 'rank'; rank.textContent = i + 1;
+      const meta = document.createElement('div');
+      const t = document.createElement('div'); t.className = 't'; t.textContent = fmtT(r.start);
+      const facts = document.createElement('div'); facts.className = 'facts'; facts.textContent = Math.round(r.dur) + ' s · ' + r.hits + ' hits · score ' + r.score;
+      const sbar = document.createElement('div'); sbar.className = 'sbar'; const si = document.createElement('i'); si.style.width = r.score + '%'; sbar.appendChild(si);
+      meta.append(t, facts, sbar);
+      const play = document.createElement('button'); play.type = 'button'; play.className = 'btn sm'; play.textContent = 'Play';
+      play.setAttribute('aria-label', 'Play the rally at ' + fmtT(r.start));
+      play.addEventListener('click', () => playRally(r));
+      const tog = document.createElement('button'); tog.type = 'button'; tog.className = 'btn sm toggle'; tog.textContent = 'Not a rally';
+      tog.setAttribute('aria-pressed', isMarked(r) ? 'true' : 'false');
+      tog.addEventListener('click', () => {
+        if (isMarked(r)) state.marks = state.marks.filter((m) => RF.overlapShare(m, r) < 0.5);
+        else state.marks.push({ start: r.start, end: r.end });
+        renderList(); renderCutPlan(); drawTimeline();
+      });
+      // Does the rally start and end in the right place? (The owner, 13 November 2026: "I agree this would
+      // be very useful".) Two answers per row, kept by the rally's start, so the finder can be tuned.
+      const key = r.start.toFixed(1);
+      const timing = document.createElement('div'); timing.className = 'timing';
+      [['start', 'Start'], ['end', 'End']].forEach(([part, word]) => {
+        const sel = document.createElement('select');
+        sel.setAttribute('aria-label', word + ' of the rally at ' + fmtT(r.start));
+        [['', word + ': ?'], ['right', word + ': right'], ['early', word + ': too early'], ['late', word + ': too late']].forEach(([v, l]) => {
+          const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o);
+        });
+        sel.value = (state.timing[key] || {})[part] || '';
+        sel.onchange = () => { state.timing[key] = Object.assign({}, state.timing[key], { [part]: sel.value || null }); };
+        timing.appendChild(sel);
+      });
+      li.append(rank, meta, play, tog, timing);
+      ol.appendChild(li);
+    });
+  }
+
+  // ---------- timeline ----------
+  const hexToRgb = (h) => { h = h.trim().replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  function drawTimeline() {
+    const c = $('#tl');
+    if (!state.env || !c.clientWidth) return;
+    const cs = getComputedStyle(document.documentElement);
+    const tok = (n) => cs.getPropertyValue(n).trim();
+    const dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = 84;
+    c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+    const g = c.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const total = Math.max(1, state.env.seconds);
+    const top = 4, bandH = 58;
+    g.fillStyle = tok('--track'); g.fillRect(0, top, w, bandH);
+    // loudness of the hit band, as a faint profile
+    const lv = state.env.level, n = state.env.n;
+    const cols = Math.max(1, Math.floor(w));
+    const per = n / cols;
+    const peaks = new Float32Array(cols);
+    let mx = 0;
+    for (let x = 0; x < cols; x++) { let m = 0; const a = Math.floor(x * per), b = Math.min(n, Math.floor((x + 1) * per)); for (let i = a; i < b; i++) if (lv[i] > m) m = lv[i]; peaks[x] = m; if (m > mx) mx = m; }
+    const sortedPk = Float32Array.from(peaks).sort();
+    const ref = sortedPk[Math.floor(sortedPk.length * 0.98)] || mx || 1;
+    g.fillStyle = tok('--wave');
+    for (let x = 0; x < cols; x++) { const hh = Math.min(1, peaks[x] / ref) * (bandH * 0.5); g.fillRect(x, top + bandH - hh, 1, hh); }
+    const lo = hexToRgb(tok('--score-lo')), hi = hexToRgb(tok('--score-hi'));
+    for (const r of state.rallies) {
+      const x = (r.start / total) * w, ww = Math.max(3, (r.dur / total) * w);
+      if (isMarked(r)) g.fillStyle = tok('--marked');
+      else { const f = Math.min(1, r.score / 80); g.fillStyle = 'rgb(' + lo.map((v, i) => Math.round(v + (hi[i] - v) * f)).join(',') + ')'; }
+      const hh = bandH * (0.45 + 0.55 * Math.min(1, r.score / 80));
+      g.fillRect(x, top + bandH - hh, ww, hh);
+    }
+    if (state.cut && state.cut.active) {
+      const s = state.cut.segs[state.cut.idx];
+      g.strokeStyle = tok('--focus'); g.lineWidth = 2; g.strokeRect((s.start / total) * w, top, Math.max(3, ((s.end - s.start) / total) * w), bandH);
+    }
+    g.fillStyle = tok('--muted');
+    g.font = '11px ' + tok('--font-body');
+    g.textBaseline = 'top';
+    const stepMin = total > 3600 ? 15 : total > 1200 ? 10 : total > 300 ? 2 : 1;
+    for (let m = 0; m * 60 <= total; m += stepMin) {
+      const x = (m * 60 / total) * w;
+      g.fillRect(Math.min(w - 1, x), top + bandH, 1, 4);
+      const label = m + ' min';
+      const tw = g.measureText(label).width;
+      g.fillText(label, Math.min(Math.max(0, x - tw / 2), w - tw), top + bandH + 6);
+    }
+  }
+  window.addEventListener('resize', () => drawTimeline());
+  $('#tl').addEventListener('click', (ev) => {
+    if (!state.env || !state.rallies.length) return;
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const t = ((ev.clientX - rect.left) / rect.width) * state.env.seconds;
+    let best = null, bd = 1e9;
+    for (const r of state.rallies) { const d = t < r.start ? r.start - t : t > r.end ? t - r.end : 0; if (d < bd) { bd = d; best = r; } }
+    if (best && bd < Math.max(10, state.env.seconds / 60)) playRally(best);
+  });
+
+  // ---------- sliders ----------
+  let rq = 0;
+  const onSlide = () => {
+    state.params.sensitivity = +$('#sens').value; state.params.minHits = +$('#minHits').value;
+    $('#sensOut').textContent = state.params.sensitivity; $('#minOut').textContent = state.params.minHits;
+    if (!state.prep) return;
+    cancelAnimationFrame(rq); rq = requestAnimationFrame(regroup);
+  };
+  $('#sens').addEventListener('input', onSlide);
+  $('#minHits').addEventListener('input', onSlide);
+
+  // ---------- playing one rally ----------
+  const vid = $('#vid');
+  let stopAt = null, stopRaf = 0;
+  function whenReady(v) { return v.readyState >= 1 ? Promise.resolve() : new Promise((res) => v.addEventListener('loadedmetadata', res, { once: true })); }
+  function playRally(r) {
+    if (state.cut && state.cut.active) stopCut();
+    const a = Math.max(0, r.start - 2), b = r.end + 1;
+    const p = vid.play();
+    if (p && p.catch) p.catch((e) => report(e, 'Play'));
+    whenReady(vid).then(() => { vid.currentTime = a; });
+    stopAt = b;
+    cancelAnimationFrame(stopRaf);
+    const watch = () => { if (stopAt === null) return; if (!vid.seeking && vid.currentTime >= stopAt) { vid.pause(); stopAt = null; return; } stopRaf = requestAnimationFrame(watch); };
+    stopRaf = requestAnimationFrame(watch);
+    $('#stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ---------- the 1-minute cut ----------
+  function renderCutPlan() {
+    const segs = RF.planCut(state.rallies, isMarked, 60);
+    state.cutPlan = segs;
+    const ol = $('#segList');
+    ol.textContent = '';
+    const total = segs.reduce((a, s) => a + s.end - s.start, 0);
+    segs.forEach((s) => { const li = document.createElement('li'); li.textContent = fmtT(s.start) + ' to ' + fmtT(s.end) + ' · ' + Math.round(s.end - s.start) + ' s · score ' + s.rally.score; ol.appendChild(li); });
+    const enough = segs.length > 0;
+    $('#cutBtn').disabled = !enough || !!(state.cut && state.cut.active); $('#recBtn').disabled = !enough || !!(state.cut && state.cut.active);
+    $('#fileCutBtn').hidden = !state.movie; $('#fileCutHelp').hidden = !state.movie;
+    $('#stepWho').hidden = !state.movie || !enough;
+    $('#fileCutBtn').disabled = !enough;
+    $('#cutBtn').textContent = enough ? 'Play the ' + Math.round(total) + '-second cut' : 'Play the 1-minute cut';
+  }
+  function setSegLabel() {
+    const c = state.cut; if (!c) return;
+    const s = c.segs[c.idx];
+    $('#segLabel').textContent = 'Rally ' + (c.idx + 1) + ' of ' + c.segs.length + ' · ' + fmtT(s.rally.start);
+  }
+  function gotoSeg(i) {
+    const c = state.cut;
+    c.idx = i; c.seeking = true; c.seekStart = performance.now();
+    if (c.rec && c.rec.state === 'recording') { try { c.rec.pause(); c.recPausedAt = performance.now(); } catch (e) {} }
+    vid.currentTime = c.segs[i].start;
+    setSegLabel();
+    drawTimeline();
+  }
+  vid.addEventListener('seeked', () => {
+    const c = state.cut;
+    if (!c || !c.active || !c.seeking) return;
+    c.seeking = false;
+    c.seekMs.push(Math.round(performance.now() - c.seekStart));
+    if (c.rec && c.rec.state === 'paused') requestAnimationFrame(() => {
+      try {
+        if (!c.active) return;
+        c.rec.resume();
+        const now = performance.now();
+        if (!c.recFirst) c.recFirst = now; else if (c.recPausedAt) c.recPausedMs = (c.recPausedMs || 0) + now - c.recPausedAt;
+        c.recPausedAt = 0;
+      } catch (e) {}
+    });
+  });
+  function cutLoop() {
+    const c = state.cut;
+    if (!c || !c.active) return;
+    if (!c.seeking) {
+      const s = c.segs[c.idx];
+      if (vid.currentTime >= s.end || vid.ended) {
+        if (c.idx + 1 < c.segs.length) gotoSeg(c.idx + 1);
+        else { stopCut(); return; }
+      }
+    }
+    c.raf = requestAnimationFrame(cutLoop);
+  }
+  function startCut(recorder) {
+    const segs = state.cutPlan || [];
+    if (!segs.length) return;
+    stopAt = null;
+    state.cut = { active: true, segs, idx: 0, seekMs: [], rec: recorder || null, startedAt: performance.now() };
+    $('#cornerLabel').hidden = false; $('#segLabel').hidden = false;
+    $('#cutStop').disabled = false; $('#cutBtn').disabled = true; $('#recBtn').disabled = true;
+    const p = vid.play();
+    if (p && p.catch) p.catch((e) => report(e, 'Play the cut'));
+    whenReady(vid).then(() => { if (state.cut && state.cut.active) { gotoSeg(0); cutLoop(); } });
+    $('#stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function stopCut(silent) {
+    const c = state.cut;
+    if (!c || !c.active) return;
+    c.active = false;
+    cancelAnimationFrame(c.raf);
+    c.playedSec = r2((performance.now() - c.startedAt) / 1000);
+    vid.pause();
+    $('#cornerLabel').hidden = true; $('#segLabel').hidden = true;
+    $('#cutStop').disabled = true;
+    if (c.rec && c.rec.state !== 'inactive') {
+      const now = performance.now();
+      if (c.recFirst) c.recSec = (now - c.recFirst - (c.recPausedMs || 0) - (c.recPausedAt ? now - c.recPausedAt : 0)) / 1000;
+      try { c.rec.stop(); } catch (e) {}
+    }
+    if (!silent) { renderCutPlan(); drawTimeline(); }
+  }
+  $('#cutBtn').addEventListener('click', () => startCut(null));
+  $('#fileCutBtn').addEventListener('click', async () => {
+    const st = $('#fileCutStatus');
+    $('#fileCutOut').hidden = false;
+    const t0 = performance.now();
+    let cut;
+    $('#fileCutBtn').disabled = true;
+    try { cut = await RF.buildCut(state.file, state.movie, state.cutPlan || [], state.ftypRaw); }
+    catch (e) {
+      state.fileCut = { error: String(e && e.message || e) };
+      st.className = 'status bad'; st.textContent = 'The page could not make the cut: ' + state.fileCut.error;
+      $('#fileCutBtn').disabled = false;
+      return;
+    }
+    $('#fileCutBtn').disabled = false;
+    const { blob, ...meta } = cut;
+    state.fileCut = Object.assign(meta, { buildMs: Math.round(performance.now() - t0) });
+    if (state.fileCutUrl) URL.revokeObjectURL(state.fileCutUrl);
+    state.fileCutUrl = URL.createObjectURL(blob);
+    const name = 'kicksmash-cut' + cut.ext;
+    const v = $('#fileCutVid');
+    const tLoad = performance.now();
+    v.onloadedmetadata = () => {
+      state.fileCut.plays = { durationSec: r2(v.duration), width: v.videoWidth, height: v.videoHeight, metadataMs: Math.round(performance.now() - tLoad) };
+      st.className = 'status ok';
+      st.textContent = 'The cut is ready: ' + Math.round(v.duration) + ' s, ' + (v.videoWidth ? v.videoWidth + '×' + v.videoHeight : cut.width + '×' + cut.height + ' (this browser cannot show the picture)') + ', ' + fmtBytes(cut.bytes) + '. Play it below, then save it.';
+    };
+    v.onerror = () => {
+      state.fileCut.plays = { error: (v.error && v.error.message) || ('media error ' + (v.error && v.error.code)) };
+      st.className = 'status bad'; st.textContent = 'This phone cannot play the cut. Copy the results in step 5 and send them to us.';
+    };
+    st.className = 'status'; st.textContent = 'Opening the cut.';
+    v.src = state.fileCutUrl;
+    const saved = $('#fileCutSaved');
+    saved.textContent = '';
+    $('#fileCutSave').onclick = async () => {
+      // The iPhone's share sheet first ("Save Video" puts it in Photos). It must open in the tap itself,
+      // so nothing is awaited before it. The Claude viewer refuses it, and then its own save is next.
+      const file = typeof File !== 'undefined' ? new File([blob], name, { type: 'video/mp4' }) : null;
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          state.fileCut.saved = 'share';
+          saved.className = 'status ok'; saved.textContent = 'Done. To keep it in Photos, choose "Save Video" in the share sheet.';
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') { saved.className = 'status'; saved.textContent = 'Not saved. Tap "Save the cut" again when you want it.'; return; }
+          state.fileCut.shareError = String(e && e.name || e);
+        }
+      }
+      const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (!dl) {
+        // Outside the Claude viewer (the page opened as a file): a plain link saves it.
+        const a = document.createElement('a'); a.href = state.fileCutUrl; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        state.fileCut.saved = 'link';
+        return;
+      }
+      try {
+        await dl.save({ filename: name, data: blob });
+        state.fileCut.saved = true;
+        saved.className = 'status ok'; saved.textContent = 'Saved. Upload it to YouTube, or send it to us.';
+      } catch (e) {
+        const code = (e && e.code) || 'unavailable';
+        state.fileCut.saveError = code;
+        saved.className = 'status bad';
+        saved.textContent = code === 'declined' ? 'Not saved. Tap "Save the cut" again when you want it.' : code === 'rate_limited' ? 'Another save is open. Wait a moment, then tap again.' : 'This view cannot save the cut (' + code + '). Copy the results in step 5 and send them to us.';
+      }
+    };
+  });
+  $('#cutStop').addEventListener('click', () => stopCut());
+
+  // ---------- recording the cut ----------
+  let audioCtx = null, mediaSrc = null;
+  $('#recBtn').addEventListener('click', () => {
+    const note = $('#recNote');
+    const canCapture = !!(HTMLCanvasElement.prototype.captureStream);
+    const hasMR = typeof MediaRecorder !== 'undefined';
+    state.rec = { mediaRecorder: hasMR, captureStream: canCapture };
+    if (!hasMR || !canCapture) {
+      note.hidden = false; note.className = 'note warn';
+      note.textContent = 'This browser cannot record the cut: ' + (!hasMR ? 'MediaRecorder is missing. ' : '') + (!canCapture ? 'canvas.captureStream is missing.' : '') + ' The page skips this step.';
+      return;
+    }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtx && AC) audioCtx = new AC();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      const canvas = document.createElement('canvas');
+      const vw = vid.videoWidth || 1280, vh = vid.videoHeight || 720;
+      const scale = Math.min(1, 1280 / vw);
+      canvas.width = Math.round((vw * scale) / 2) * 2; canvas.height = Math.round((vh * scale) / 2) * 2;
+      const g = canvas.getContext('2d');
+      const stream = canvas.captureStream(30);
+      if (audioCtx) {
+        if (!mediaSrc) { mediaSrc = audioCtx.createMediaElementSource(vid); mediaSrc.connect(audioCtx.destination); }
+        const dest = audioCtx.createMediaStreamDestination();
+        mediaSrc.connect(dest);
+        dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
+        state.rec.audio = true;
+      }
+      const types = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+      const mime = types.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+      state.rec.mimeType = mime || '(browser default)';
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6e6 } : undefined);
+      const parts = [];
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
+      rec.onstop = () => {
+        const recMs = ((state.cut && state.cut.recSec) || 0) * 1000;
+        const blob = new Blob(parts, { type: rec.mimeType || mime || 'video/mp4' });
+        state.rec.recordedBytes = blob.size;
+        state.rec.recordedSec = r2(recMs / 1000);
+        state.rec.actualMimeType = rec.mimeType;
+        const rv = $('#recVid');
+        rv.src = URL.createObjectURL(blob);
+        $('#recStage').hidden = false;
+        note.hidden = false; note.className = 'note ok';
+        note.innerHTML = '';
+        const b = document.createElement('b'); b.textContent = 'Recorded. ';
+        note.append(b, document.createTextNode(fmtBytes(blob.size) + ', about ' + Math.round(recMs / 1000) + ' s, ' + (rec.mimeType || mime || 'default format') + '. This page cannot save the recording to the phone. Play it below to see how it looks.'));
+        rv.addEventListener('loadedmetadata', () => { if (isFinite(rv.duration)) { state.rec.playerDurationSec = r2(rv.duration); } }, { once: true });
+        renderCutPlan();
+      };
+      rec.onerror = (e) => report(e.error || e, 'Recording');
+      const draw = () => {
+        if (!state.cut || !state.cut.active) return;
+        g.fillStyle = '#0c1218'; g.fillRect(0, 0, canvas.width, canvas.height);
+        if (vid.videoWidth) { try { g.drawImage(vid, 0, 0, canvas.width, canvas.height); } catch (e) {} }
+        else { g.fillStyle = '#c9d4db'; g.font = '600 ' + Math.round(canvas.height / 16) + 'px sans-serif'; g.textAlign = 'center'; g.fillText('Sample: sound only', canvas.width / 2, canvas.height / 2); g.textAlign = 'left'; }
+        const fs = Math.round(canvas.height / 22), pad = Math.round(fs * 0.5);
+        g.font = '700 ' + fs + 'px "Barlow Condensed", "Arial Narrow", sans-serif';
+        const label = 'KICKSMASH · HIGHLIGHTS TEST';
+        const tw = g.measureText(label).width;
+        g.fillStyle = 'rgba(8,16,24,0.66)'; g.fillRect(pad, pad, tw + pad * 2, fs + pad * 1.2);
+        g.fillStyle = '#ffffff'; g.textBaseline = 'top'; g.fillText(label, pad * 2, pad * 1.6);
+        if (vid.requestVideoFrameCallback && vid.videoWidth) vid.requestVideoFrameCallback(draw); else requestAnimationFrame(draw);
+      };
+      rec.start(1000);
+      try { rec.pause(); } catch (e) {}
+      startCut(rec);
+      requestAnimationFrame(draw);
+      setTimeout(() => { if (!vid.videoWidth) requestAnimationFrame(draw); }, 50);
+      note.hidden = false; note.className = 'note'; note.textContent = 'Recording the cut. Wait until it ends.';
+    } catch (e) {
+      report(e, 'Record the cut');
+    }
+  });
+
+  // ---------- results ----------
+  // ---------- who hit it ----------
+  // MediaPipe's pose model, shipped with the page (mp/), finds up to four bodies in a frame. The page
+  // reads each rally of the cut at WHO_FPS frames a second: the whole frame, and the far half again,
+  // enlarged, because the far players are small. Bodies are followed from frame to frame by where their
+  // hips are; each body keeps the colours of its shirt, so a name given once in the first rally finds
+  // its player in the others. For each hit in the sound, the hitter is the body whose wrist moved
+  // fastest around that moment, measured in body heights a second.
+  const WHO_FPS = 10;
+  const WHO_TILES = [[0.08, 0.06, 0.32, 0.46], [0.34, 0.06, 0.32, 0.46], [0.6, 0.06, 0.32, 0.46]];
+  const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
+  const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
+  function whoReset() {
+    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false;
+    const el = (q) => document.querySelector(q);
+    if (el('#whoName')) { el('#whoName').hidden = true; el('#whoOut').hidden = true; el('#whoStatus').textContent = ''; el('#whoList').textContent = ''; el('#whoBtn').disabled = false; el('#whoStop').disabled = true; }
+  }
+  async function whoModel() {
+    if (who.lm) return who.lm;
+    // The Claude viewer serves the library beside the page (mp/); kicksma.sh/lab sets RF_MP_BASE and
+    // RF_MODEL_URL to pinned public copies, so the repository carries no 22 MB of model files.
+    const base = window.RF_MP_BASE || new URL('mp/', location.href).href;
+    const vision = await import(base + 'vision_bundle.mjs');
+    const files = await vision.FilesetResolver.forVisionTasks(base + 'wasm');
+    // In the viewer the model ships as base64 text, because it serves no .task file; MediaPipe takes its bytes.
+    let model;
+    if (window.RF_MODEL_URL) model = new Uint8Array(await (await fetch(window.RF_MODEL_URL)).arrayBuffer());
+    else {
+      const b64 = (await (await fetch(base + 'pose_landmarker_lite.b64.txt')).text()).trim();
+      const bin = atob(b64);
+      model = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) model[i] = bin.charCodeAt(i);
+    }
+    const opts = (delegate) => ({ baseOptions: { modelAssetBuffer: model, delegate }, runningMode: 'IMAGE', numPoses: 4, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3 });
+    try { who.lm = await vision.PoseLandmarker.createFromOptions(files, opts('GPU')); who.delegate = 'GPU'; }
+    catch (e) { who.lm = await vision.PoseLandmarker.createFromOptions(files, opts('CPU')); who.delegate = 'CPU'; }
+    return who.lm;
+  }
+  function seekTo(v, t) {
+    return new Promise((res) => {
+      let done = false;
+      const fin = () => { if (done) return; done = true; v.removeEventListener('seeked', fin); res(); };
+      v.addEventListener('seeked', fin);
+      v.currentTime = t;
+      setTimeout(fin, 4000);
+    });
+  }
+  // One body from one set of landmarks, in pixels of the frame canvas. `map` turns the input's 0..1 into frame pixels.
+  function bodyOf(lms, map) {
+    const pts = lms.map((l) => ({ x: map.x + l.x * map.w, y: map.y + l.y * map.h, v: l.visibility == null ? 1 : l.visibility }));
+    const seen = pts.filter((q) => q.v > 0.3);
+    if (seen.length < 6) return null;
+    const xs = seen.map((q) => q.x), ys = seen.map((q) => q.y);
+    const box = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+    const hip = { x: (pts[23].x + pts[24].x) / 2, y: (pts[23].y + pts[24].y) / 2 };
+    const h = Math.max(8, box.y1 - box.y0);
+    return { box, hip, h, wrists: [pts[15], pts[16]], sh: [pts[11], pts[12]], hp: [pts[23], pts[24]] };
+  }
+  // Twelve hue bins and a light/dark share of the shirt: the box between the shoulders and the hips.
+  function shirtOf(g, b) {
+    const x0 = Math.min(b.sh[0].x, b.sh[1].x, b.hp[0].x, b.hp[1].x), x1 = Math.max(b.sh[0].x, b.sh[1].x, b.hp[0].x, b.hp[1].x);
+    const y0 = Math.min(b.sh[0].y, b.sh[1].y), y1 = Math.max(b.hp[0].y, b.hp[1].y);
+    const w = x1 - x0, h = y1 - y0;
+    if (w < 3 || h < 3) return null;
+    const sx = Math.round(x0 + w * 0.2), sy = Math.round(y0 + h * 0.15), sw = Math.max(1, Math.round(w * 0.6)), sh = Math.max(1, Math.round(h * 0.7));
+    let d;
+    try { d = g.getImageData(sx, sy, sw, sh).data; } catch (e) { return null; }
+    const hist = new Float32Array(14);
+    let n = 0;
+    for (let i = 0; i < d.length; i += 16) {
+      const r = d[i] / 255, gg = d[i + 1] / 255, bb = d[i + 2] / 255;
+      const mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb), c = mx - mn;
+      if (c < 0.12) { hist[mx > 0.55 ? 12 : 13]++; n++; continue; }
+      let hue = mx === r ? ((gg - bb) / c) % 6 : mx === gg ? (bb - r) / c + 2 : (r - gg) / c + 4;
+      hist[Math.floor(((hue * 60 + 360) % 360) / 30)]++; n++;
+    }
+    if (!n) return null;
+    for (let i = 0; i < hist.length; i++) hist[i] /= n;
+    return hist;
+  }
+  const histDist = (a, b) => { if (!a || !b) return 1; let s = 0; for (let i = 0; i < a.length; i++) s += Math.min(a[i], b[i]); return 1 - s; };
+  function detectFrame(lm, frame, g, W, H) {
+    const out = [];
+    const r1 = lm.detect(frame);
+    for (const l of r1.landmarks || []) { const b = bodyOf(l, { x: 0, y: 0, w: W, h: H }); if (b) out.push(b); }
+    // The far end again, in three overlapping tiles: the model shrinks each picture to 224 pixels, so a
+    // far player (a sixth of the frame's height) is about 26 pixels tall in the whole frame and about 65
+    // in a tile. Each tile is x, y, width, height as shares of the frame.
+    const tile = who.tile || (who.tile = document.createElement('canvas'));
+    for (const [fx, fy, fw, fh] of WHO_TILES) {
+      const cx = Math.round(W * fx), cy = Math.round(H * fy), cw = Math.round(W * fw), ch = Math.round(H * fh);
+      tile.width = cw; tile.height = ch;
+      tile.getContext('2d').drawImage(frame, cx, cy, cw, ch, 0, 0, cw, ch);
+      const r2 = lm.detect(tile);
+      for (const l of r2.landmarks || []) {
+        const b = bodyOf(l, { x: cx, y: cy, w: cw, h: ch });
+        if (!b) continue;
+        const same = out.findIndex((o) => Math.hypot(o.hip.x - b.hip.x, o.hip.y - b.hip.y) < 0.35 * Math.max(o.h, b.h));
+        if (same < 0) out.push(b); else if (b.h >= out[same].h * 0.8 && b.h <= out[same].h * 1.25) out[same] = b;
+      }
+    }
+    for (const b of out) b.shirt = shirtOf(g, b);
+    return out;
+  }
+  // Follows bodies through one rally: each body goes to the nearest track by hip position.
+  function track(frames) {
+    const tracks = [];
+    for (const f of frames) {
+      const free = new Set(tracks.map((_, i) => i));
+      const pairs = [];
+      f.bodies.forEach((b, bi) => tracks.forEach((tr, ti) => {
+        const last = tr.pts[tr.pts.length - 1];
+        if (f.t - last.t > 1.2) return;
+        const d = Math.hypot(last.b.hip.x - b.hip.x, last.b.hip.y - b.hip.y) / Math.max(last.b.h, b.h);
+        if (d < 0.9) pairs.push({ d, bi, ti });
+      }));
+      pairs.sort((a, b) => a.d - b.d);
+      const used = new Set();
+      for (const p of pairs) { if (used.has(p.bi) || !free.has(p.ti)) continue; used.add(p.bi); free.delete(p.ti); tracks[p.ti].pts.push({ t: f.t, b: f.bodies[p.bi] }); }
+      f.bodies.forEach((b, bi) => { if (!used.has(bi)) tracks.push({ pts: [{ t: f.t, b }] }); });
+    }
+    const keep = tracks.filter((tr) => tr.pts.length >= Math.max(3, frames.length * 0.3));
+    keep.sort((a, b) => b.pts.length - a.pts.length);
+    const top = keep.slice(0, 4);
+    for (const tr of top) {
+      const hs = tr.pts.map((q) => q.b.shirt).filter(Boolean);
+      tr.shirt = hs.length ? hs.reduce((acc, h) => acc.map((v, i) => v + h[i] / hs.length), new Array(14).fill(0)) : null;
+      tr.h = tr.pts.reduce((a, q) => a + q.b.h, 0) / tr.pts.length;
+    }
+    return top;
+  }
+  // How fast a wrist moves against the player's own hips, in body heights a second, for each step of a
+  // track: a player who runs moves the wrists too, and only the arm's own movement is a swing.
+  function wristSpeeds(tr) {
+    if (tr.speeds) return tr.speeds;
+    const out = [];
+    for (let i = 1; i < tr.pts.length; i++) {
+      const a = tr.pts[i - 1], b = tr.pts[i], dt = b.t - a.t;
+      if (dt <= 0) continue;
+      let v = 0;
+      for (let k = 0; k < 2; k++) {
+        const dx = (b.b.wrists[k].x - b.b.hip.x) - (a.b.wrists[k].x - a.b.hip.x), dy = (b.b.wrists[k].y - b.b.hip.y) - (a.b.wrists[k].y - a.b.hip.y);
+        v = Math.max(v, Math.hypot(dx, dy) / Math.max(a.b.h, b.b.h) / dt);
+      }
+      out.push({ t: (a.t + b.t) / 2, v });
+    }
+    const sorted = out.map((q) => q.v).sort((x, y) => x - y);
+    tr.speeds = out; tr.usual = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+    return out;
+  }
+  // A swing is a burst above the player's own usual wrist speed: the fastest step around the hit,
+  // divided by the median step of that player in the rally. A small far player's points jitter more
+  // against the body's height, and this keeps the jitter from looking like a swing.
+  // A real swing moves the wrist about one body height in a fifth of a second: about 5 a second.
+  // Below SWING_FLOOR, nobody swung that the page could see, and it names nobody.
+  const SWING_FLOOR = 1.5;
+  function swingOf(tr, t) {
+    const sp = wristSpeeds(tr);
+    let peak = 0;
+    for (const q of sp) if (q.t >= t - 0.35 && q.t <= t + 0.15 && q.v > peak) peak = q.v;
+    return { peak, score: peak < SWING_FLOOR ? 0 : peak / Math.max(0.05, tr.usual) };
+  }
+  async function whoRun() {
+    const run = ++who.run;
+    who.busy = true; who.error = null; who.segs = [];
+    $('#whoBtn').disabled = true; $('#whoStop').disabled = false; $('#whoName').hidden = true; $('#whoOut').hidden = true;
+    const st = $('#whoStatus');
+    st.className = 'status'; st.textContent = 'Loading the player finder (about 20 MB, once).';
+    const t0 = performance.now();
+    const stats = { fps: WHO_FPS, modelMs: 0, frames: 0, seekMs: 0, detectMs: 0, bodiesPerFrame: 0, delegate: null };
+    try {
+      const lm = await whoModel();
+      stats.modelMs = Math.round(performance.now() - t0); stats.delegate = who.delegate;
+      const v = document.createElement('video');
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+      document.body.appendChild(v);
+      v.src = state.fileUrl;
+      await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('The video does not open in this browser.')); setTimeout(res, 8000); });
+      const W = Math.min(1920, v.videoWidth || 1920), H = Math.round(W * ((v.videoHeight || 1080) / (v.videoWidth || 1920)));
+      const frame = document.createElement('canvas'); frame.width = W; frame.height = H;
+      const g = frame.getContext('2d', { willReadFrequently: true });
+      const segs = state.cutPlan || [];
+      const total = segs.reduce((a, s) => a + Math.ceil((s.end - s.start) * WHO_FPS), 0);
+      let done = 0, bodies = 0;
+      for (let si = 0; si < segs.length; si++) {
+        const seg = segs[si], frames = [];
+        for (let t = seg.start; t < seg.end; t += 1 / WHO_FPS) {
+          if (run !== who.run) return;
+          const a = performance.now();
+          await seekTo(v, t);
+          const b = performance.now();
+          g.drawImage(v, 0, 0, W, H);
+          const found = detectFrame(lm, frame, g, W, H);
+          stats.seekMs += b - a; stats.detectMs += performance.now() - b;
+          frames.push({ t, bodies: found }); bodies += found.length; done++;
+          if (si === 0 && frames.length === 1) who.firstPic = g.getImageData(0, 0, W, H);
+          if (done % 5 === 0) st.textContent = 'Reading rally ' + (si + 1) + ' of ' + segs.length + ': frame ' + done + ' of ' + total + '.';
+        }
+        who.segs.push({ seg, tracks: track(frames), frames: frames.length, bodies: frames.reduce((a, f) => a + f.bodies.length, 0) });
+      }
+      v.remove();
+      stats.frames = done; stats.bodiesPerFrame = done ? r2(bodies / done) : 0;
+      stats.seekMs = Math.round(stats.seekMs / Math.max(1, done)); stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
+      stats.totalSec = r2((performance.now() - t0) / 1000);
+      who.stats = stats;
+      const first = who.segs[0];
+      if (!first || !first.tracks.length) throw new Error('The finder saw no players in the first rally.');
+      st.className = 'status ok';
+      st.textContent = 'Found ' + first.tracks.length + ' players in the first rally (' + stats.bodiesPerFrame + ' a frame on average). Name them below.';
+      whoShowNames(first, W, H);
+    } catch (e) {
+      who.error = String(e && e.message || e);
+      who.stats = stats;
+      st.className = 'status bad'; st.textContent = 'The player finder stopped: ' + who.error;
+    } finally {
+      if (run === who.run) { who.busy = false; $('#whoBtn').disabled = false; $('#whoStop').disabled = true; }
+    }
+  }
+  function whoShowNames(first, W, H) {
+    const c = $('#whoPic'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    if (who.firstPic) g.putImageData(who.firstPic, 0, 0);
+    const box = $('#whoInputs'); box.textContent = '';
+    first.tracks.forEach((tr, i) => {
+      const b = tr.pts[0].b.box, col = WHO_COLORS[i];
+      g.lineWidth = Math.max(3, W / 400); g.strokeStyle = col; g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+      const r = Math.max(14, W / 70);
+      g.fillStyle = col; g.beginPath(); g.arc(b.x0, b.y0, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fff'; g.font = '700 ' + Math.round(r * 1.2) + 'px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), b.x0, b.y0 + 1);
+      const lab = document.createElement('label');
+      const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = col; dot.textContent = String(i + 1);
+      const inp = document.createElement('input'); inp.id = 'whoName' + i; inp.autocomplete = 'off'; inp.placeholder = 'Player ' + (i + 1); inp.setAttribute('aria-label', 'Name of player ' + (i + 1));
+      lab.append(dot, inp); box.appendChild(lab);
+    });
+    $('#whoName').hidden = false;
+  }
+  function whoAttribute() {
+    const first = who.segs[0];
+    who.names = first.tracks.map((_, i) => (($('#whoName' + i) || {}).value || '').trim() || 'Player ' + (i + 1));
+    const refs = first.tracks.map((tr) => tr.shirt);
+    const shots = [];
+    who.segs.forEach((s, si) => {
+      // Names for this rally's tracks: the order of names whose shirts fit best (at most 4 tracks, so all orders can be tried).
+      const n = s.tracks.length, idx = refs.map((_, i) => i);
+      let best = null;
+      const perms = (arr, k) => k === 0 ? [[]] : arr.flatMap((x, i) => perms(arr.slice(0, i).concat(arr.slice(i + 1)), k - 1).map((p) => [x].concat(p)));
+      for (const p of perms(idx, Math.min(n, idx.length))) {
+        const cost = p.reduce((a, ref, ti) => a + histDist(s.tracks[ti].shirt, refs[ref]), 0);
+        if (!best || cost < best.cost) best = { cost, p };
+      }
+      const nameOf = (ti) => (si === 0 ? who.names[ti] : best && best.p[ti] != null ? who.names[best.p[ti]] : '?');
+      const hits = state.hits.filter((h) => h.t >= s.seg.start && h.t <= s.seg.end);
+      hits.forEach((h, hi) => {
+        const sw = s.tracks.map((tr, ti) => Object.assign({ ti }, swingOf(tr, h.t))).sort((a, b) => b.score - a.score);
+        if (!sw.length) return;
+        const seen = sw[0].score > 0;
+        const margin = !seen ? 0 : sw[1] && sw[1].score > 0 ? sw[0].score / sw[1].score : 9;
+        shots.push({ key: si + ':' + hi, rally: si + 1, t: h.t, name: seen ? nameOf(sw[0].ti) : null, peak: r2(sw[0].peak), score: r2(sw[0].score), margin: r2(margin), last: hi === hits.length - 1, matchCost: si === 0 ? 0 : best ? r2(best.cost / Math.max(1, n)) : null });
+      });
+    });
+    who.shots = shots;
+    const ol = $('#whoList'); ol.textContent = '';
+    for (const sh of shots) {
+      const li = document.createElement('li');
+      const txt = document.createElement('span');
+      txt.innerHTML = 'Rally ' + sh.rally + ' · ' + fmtT(sh.t) + (sh.last ? ' · last shot' : '') + ': <b></b> <span class="muted small"></span>';
+      txt.querySelector('b').textContent = sh.name || 'no clear swing';
+      txt.querySelector('span').textContent = sh.name ? '(' + (sh.margin >= 1.6 ? 'sure' : sh.margin >= 1.2 ? 'likely' : 'a guess') + ')' : '';
+      const sel = document.createElement('select');
+      sel.setAttribute('aria-label', 'Who really hit the shot at ' + fmtT(sh.t));
+      [['', 'Is it right?'], ['right', 'Right'], ...who.names.map((nm) => ['was:' + nm, 'It was ' + nm]), ['unclear', 'Cannot tell']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); });
+      sel.value = who.verdicts[sh.key] || '';
+      sel.onchange = () => { who.verdicts[sh.key] = sel.value; };
+      li.append(txt, sel); ol.appendChild(li);
+    }
+    $('#whoOut').hidden = false;
+    const st = $('#whoStatus');
+    st.className = 'status ok';
+    st.textContent = shots.length + ' shots named in ' + who.segs.length + ' rallies. Check them below, then copy the results.';
+  }
+  function whoResults() {
+    if (!who.stats && !who.error) return null;
+    const shots = (who.shots || []).map((sh) => ({ rally: sh.rally, sec: r2(sh.t), name: sh.name, last: sh.last, peak: sh.peak, score: sh.score, margin: sh.margin, shirtFit: sh.matchCost, verdict: who.verdicts[sh.key] || null }));
+    const judged = shots.filter((s) => s.name && (s.verdict === 'right' || (s.verdict && s.verdict.startsWith('was:'))));
+    return {
+      stats: who.stats, error: who.error, names: who.names.length, swingFloor: SWING_FLOOR,
+      rallies: who.segs.map((s) => ({ start: r2(s.seg.start), frames: s.frames, bodiesPerFrame: r2(s.bodies / Math.max(1, s.frames)), tracks: s.tracks.length, trackFrames: s.tracks.map((tr) => tr.pts.length), heightsPx: s.tracks.map((tr) => Math.round(tr.h)) })),
+      shots, judged: judged.length, right: judged.filter((s) => s.verdict === 'right' || s.verdict === 'was:' + s.name).length,
+    };
+  }
+  $('#whoBtn').addEventListener('click', () => { if (!who.busy && state.fileUrl) whoRun(); });
+  $('#whoStop').addEventListener('click', () => { who.run++; who.busy = false; $('#whoBtn').disabled = false; $('#whoStop').disabled = true; $('#whoStatus').textContent = 'Stopped.'; });
+  $('#whoSave').addEventListener('click', () => whoAttribute());
+  window.__who = who;
+
+  function buildResults() {
+    const p = state.params, th = RF.thresholds(p);
+    const top = topRallies();
+    const f = state.file;
+    const res = {
+      page: VERSION,
+      when: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      source: state.src,
+      file: f ? { extension: (f.name.match(/\.[^.]+$/) || [''])[0].toLowerCase(), sizeBytes: f.size, sizeGB: r2(f.size / 1e9), type: f.type } : null,
+      pickerSeconds: state.src === 'file' && state.pickMs != null ? r2(state.pickMs / 1000) : null,
+      container: state.info,
+      read: Object.assign({}, state.read, { decodePath: state.decodePath }),
+      thresholds: { sensitivity: p.sensitivity, minHits: p.minHits, madK: r2(th.k), floorShareOfP999: r2(th.floorFrac), minGapSec: p.minGap, maxGapSec: p.maxGap, endPauseSec: p.endPause, refractorySec: p.refractory, minGoodGapShare: p.minGoodGapShare },
+      envelope: state.prep ? { frames: state.prep.n, onsetP50: +state.prep.p50.toPrecision(3), onsetP99: +state.prep.p99.toPrecision(3), onsetP999: +state.prep.p999.toPrecision(3), hitFloor: state.hitInfo ? +state.hitInfo.floor.toPrecision(3) : null, candidates: state.prep.candF.length } : null,
+      hits: state.hits.length,
+      rallies: state.rallies.length,
+      sweep: sweep(),
+      top15: top.map((r, i) => ({ rank: i + 1, start: fmtT(r.start), startSec: r2(r.start), lengthSec: r2(r.dur), hits: r.hits, score: r.score, notRally: isMarked(r), smashDb: r2(r.smashDb), cheerDb: r2(r.cheerDb), startFix: (state.timing[r.start.toFixed(1)] || {}).start || null, endFix: (state.timing[r.start.toFixed(1)] || {}).end || null })),
+      marks: state.marks.map((m) => ({ start: fmtT(m.start), startSec: r2(m.start), endSec: r2(m.end) })),
+      allRallies: { columns: ['startSec', 'lengthSec', 'hits', 'score', 'notRally'], rows: state.rallies.map((r) => [r2(r.start), r2(r.dur), r.hits, r.score, isMarked(r) ? 1 : 0]) },
+      cut: { segments: (state.cutPlan || []).map((s) => ({ start: fmtT(s.start), startSec: r2(s.start), endSec: r2(s.end), score: s.rally.score })), totalSec: r2((state.cutPlan || []).reduce((a, s) => a + s.end - s.start, 0)), played: state.cut ? { seekMs: state.cut.seekMs, playedSec: state.cut.playedSec || null } : null },
+      fileCut: state.fileCut,
+      who: whoResults(),
+      recorder: Object.assign({ mediaRecorder: typeof MediaRecorder !== 'undefined', captureStream: !!HTMLCanvasElement.prototype.captureStream, mp4Supported: typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported ? MediaRecorder.isTypeSupported('video/mp4') : false }, state.rec),
+      screen: { width: screen.width, height: screen.height, dpr: window.devicePixelRatio },
+      errors: state.errors.map((e) => e.shown),
+    };
+    if (state.sample) res.sampleCheck = state.sample.check;
+    if ($('#withHits').checked) res.hitTimes = { columns: ['sec', 'strengthVsP999'], rows: state.hits.map((h) => [r2(h.t), r2(h.s / state.prep.ref)]) };
+    let text = JSON.stringify(res, null, 1);
+    text = text.replace(/\[\n\s+([^\[\]{}]*?)\n\s*\]/g, (m, inner) => '[' + inner.replace(/\n\s*/g, ' ') + ']');
+    text = text.replace(/\{\n\s+([^\[\]{}]*?)\n\s*\}/g, (m, inner) => '{' + inner.replace(/\n\s*/g, ' ') + '}');
+    return text;
+  }
+  // Hits and rallies at every sensitivity, so we can see the trade-off without asking Erik to try each one.
+  function sweep() {
+    if (!state.prep) return null;
+    const rows = [];
+    for (let s = 1; s <= 10; s++) {
+      const p = Object.assign({}, state.params, { sensitivity: s });
+      const h = RF.pickHits(state.prep, p);
+      rows.push([s, h.hits.length, RF.groupRallies(h.hits, state.prep, state.env, p).length]);
+    }
+    return { columns: ['sensitivity', 'hits', 'rallies'], rows };
+  }
+  function showText(text) {
+    const ta = $('#outText');
+    ta.hidden = false; ta.value = text;
+    ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  }
+  $('#copyBtn').addEventListener('click', () => {
+    const text = buildResults();
+    const st = $('#copyStatus');
+    const fallback = () => {
+      showText(text);
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      st.className = 'status ' + (ok ? 'ok' : 'bad');
+      st.textContent = ok ? 'Copied (' + Math.round(text.length / 1000) + ' kB of text). Paste it into a message to us.' : 'The phone did not allow the copy. The text is selected below. Tap Copy in the menu, or press and hold the text.';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        st.className = 'status ok';
+        st.textContent = 'Copied (' + Math.round(text.length / 1000) + ' kB of text). Paste it into a message to us.';
+      }, fallback);
+    } else fallback();
+  });
+  $('#showBtn').addEventListener('click', () => showText(buildResults()));
+})();
+</script>
+
+</body>
+</html>
