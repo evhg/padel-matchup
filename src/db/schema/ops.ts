@@ -300,3 +300,25 @@ export type Fact = typeof facts.$inferSelect;
 // ---------------------------------------------------------------------------
 // Level checks: a player asks a coach or a club to confirm their level; one tap confirms it
 // ---------------------------------------------------------------------------
+
+/**
+ * One run of the Rally Finder lab page (public/lab/rally-finder.html), sent by the page itself when it
+ * finishes a stage. The owner, 13 November 2026, chose this over a person copying the results: "find
+ * another way to get the job done without needing another human". Numbers only: hit times and sound
+ * levels, rally and clip times, body positions as coordinates, the time each step took, and the
+ * first names typed for the players. No picture and no sound leave the phone. The page sends the same
+ * run again as it gets further, so a run is one row, replaced (`id` is the page's own run id). Read
+ * through /api/admin/sql to tune the finders; kept LAB_RUNS_KEEP_DAYS.
+ */
+export const labRuns = pgTable(
+  "lab_runs",
+  {
+    id: uuid("id").primaryKey(),
+    page: text("page").notNull(),
+    stage: text("stage").notNull(),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("lab_runs_created_idx").on(t.createdAt)],
+);

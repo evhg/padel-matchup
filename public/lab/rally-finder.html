@@ -223,16 +223,16 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
     </div>
 
     <h2 style="margin-top:16px;font-size:18px">Top 15 rallies</h2>
-    <p class="small muted">Play plays the rally from 2 seconds before the first hit to 1 second after the last hit. If a row is not a real rally, tap "Not a rally". If it starts or ends in the wrong place, say so under it. Your answers go into the results.</p>
+    <p class="small muted">Play plays the whole point, from just before the serve to the reaction after it. If a row is not a real rally, tap "Not a rally". If it starts or ends in the wrong place, say so under it. Your answers go into the results.</p>
     <ol class="rallies" id="list"></ol>
   </section>
 
   <section class="card" id="step4" hidden>
-    <h2><span class="step">4</span>The 1-minute cut</h2>
-    <p>The cut holds the last seconds of the best rallies, in match order. Rallies that you marked "Not a rally" stay out.</p>
+    <h2><span class="step">4</span>The highlights cut</h2>
+    <p>The cut holds up to 5 of the best points (about 2 minutes), each whole, with the reaction after it, in match order. Rallies that you marked "Not a rally" stay out.</p>
     <div class="row">
       <button type="button" class="btn primary" id="fileCutBtn">Make the 4K cut</button>
-      <button type="button" class="btn" id="cutBtn">Play the 1-minute cut</button>
+      <button type="button" class="btn" id="cutBtn">Play the cut</button>
       <button type="button" class="btn" id="recBtn" hidden>Record the cut</button>
       <button type="button" class="btn" id="cutStop" disabled>Stop the cut</button>
     </div>
@@ -260,6 +260,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
       <button type="button" class="btn" id="whoStop" disabled>Stop</button>
     </div>
     <div class="status" id="whoStatus" role="status" aria-live="polite"></div>
+    <div class="stage" id="whoStage" hidden><video id="whoVid" playsinline muted preload="auto"></video></div>
+    <p class="muted small" id="whoHint">The rallies play below while the finder reads them. Keep the screen on.</p>
     <div id="whoName" hidden>
       <p>Each box is one player. Type the first name of each player beside the number of the box.</p>
       <div class="stage who-stage"><canvas id="whoPic"></canvas></div>
@@ -864,22 +866,47 @@ const RF = (() => {
     return ov / len;
   }
 
-  function planCut(rallies, isMarked, target) {
-    target = target || 60;
-    const pool = rallies.filter((r) => !isMarked(r)).sort((a, b) => b.score - a.score);
+  // ---- What a clip of a point holds (Erik's notes on his first cut, 13 November 2026) ----
+  // The whole point, never its last 10 seconds: "rallies should always capture the point". It ends
+  // POINT_AFTER after the last hit, for the reaction ("Jakob screaming and Erik looking smug" came after
+  // the point), and starts POINT_BEFORE before the first hit, because a quiet serve is often not heard.
+  // Players bounce the ball before they serve: a first "hit" that nothing answers within
+  // LONE_HIT_GAP is a bounce or a wait, and the clip starts at the next one ("nothing for 4-5 seconds
+  // before the serve"). The last END_IGNORE seconds of a recording are the phone being stopped.
+  const POINT_BEFORE = 2, POINT_AFTER = 4, LONE_HIT_GAP = 3, END_IGNORE = 10, POINT_MAX = 40;
+  function pointBounds(r, hits) {
+    const inside = (hits || []).filter((h) => h.t >= r.start - 0.01 && h.t <= r.end + 0.01).map((h) => h.t).sort((x, y) => x - y);
+    let i = 0;
+    while (i < inside.length - 2 && inside[i + 1] - inside[i] > LONE_HIT_GAP) i++;
+    const first = inside.length ? inside[i] : r.start;
+    const lastHit = inside.length ? inside[inside.length - 1] : r.end;
+    let start = Math.max(0, first - POINT_BEFORE);
+    const end = lastHit + POINT_AFTER;
+    // A very long point keeps its end, which is where it is decided.
+    if (end - start > POINT_MAX) start = end - POINT_MAX;
+    return { start, end, firstHit: first, lastHit, skipped: i };
+  }
+
+  /**
+   * The cut: whole points, best first, until about `target` seconds; at most `most` points; in match
+   * order. A point the person marked "Not a rally", or one in the last END_IGNORE seconds, stays out.
+   */
+  function planCut(rallies, isMarked, target, opts) {
+    target = target || 90;
+    const o = opts || {};
+    const most = o.most || 5;
+    // Only a whole match ends with the phone being stopped; a short clip ends where it was cut.
+    const ignoreFrom = o.duration && o.duration > 300 ? o.duration - END_IGNORE : Infinity;
+    const pool = rallies.filter((r) => !isMarked(r) && r.end <= ignoreFrom).sort((a, b) => b.score - a.score);
     const segs = [];
     let total = 0;
     for (const r of pool) {
-      if (segs.length >= 8 || (segs.length >= 6 && total >= target - 4)) break;
-      const L = Math.min(10, Math.max(6, r.dur + 2.5));
-      const end = r.end + 1.2;
-      const seg = { start: Math.max(0, end - L), end, rally: r };
+      if (segs.length >= most) break;
+      const b = pointBounds(r, o.hits);
+      const seg = { start: b.start, end: b.end, rally: r };
       if (segs.some((s) => s.start < seg.end && seg.start < s.end)) continue;
+      if (segs.length && total + (seg.end - seg.start) > target + 10) continue;
       segs.push(seg); total += seg.end - seg.start;
-    }
-    if (total > target + 4) {
-      const f = (target + 4) / total;
-      for (const s of segs) s.start = Math.max(s.start, s.end - Math.max(6, (s.end - s.start) * f));
     }
     return segs.sort((a, b) => a.start - b.start);
   }
@@ -1124,7 +1151,7 @@ const RF = (() => {
   }
 
   return { walkTop, children, parseMoov, parseAsc, parseEsds, trackKind, pcmFormat, sampleTable, pcmChunks, planRanges, pcmToMono, adtsHeader, buildAdts, buildM4a, readRange,
-    Envelope, prepare, pickHits, groupRallies, planCut, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc };
+    Envelope, prepare, pickHits, groupRallies, planCut, pointBounds, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc };
 })();
 if (typeof module !== 'undefined') module.exports = RF;
 /*CORE-END*/
@@ -1134,7 +1161,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-13.1';
+  const VERSION = 'rally-finder 2026-11-13.2';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
@@ -1203,6 +1230,8 @@ if (typeof module !== 'undefined') module.exports = RF;
     $('#recNote').hidden = true; $('#recStage').hidden = true; $('#outText').hidden = true; $('#copyStatus').textContent = '';
     $('#sampleCheck').hidden = true;
     app.classList.toggle('is-sample', src === 'sample');
+    state.runId2 = src === 'file' ? newRunId() : null;
+    state.sent = {};
     $('#soundOnly').hidden = src !== 'sample';
     if (state.fileUrl) { URL.revokeObjectURL(state.fileUrl); state.fileUrl = null; }
     const v = $('#vid'); v.removeAttribute('src'); v.load();
@@ -1548,6 +1577,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     ['#step3', '#step4', '#step5'].forEach((s) => ($(s).hidden = false));
     $('#nMatch').textContent = fmtT(state.env.seconds);
     drawTimeline();
+    sendRun('read');
   }
   function regroup() {
     const p = state.params;
@@ -1697,7 +1727,8 @@ if (typeof module !== 'undefined') module.exports = RF;
   function whenReady(v) { return v.readyState >= 1 ? Promise.resolve() : new Promise((res) => v.addEventListener('loadedmetadata', res, { once: true })); }
   function playRally(r) {
     if (state.cut && state.cut.active) stopCut();
-    const a = Math.max(0, r.start - 2), b = r.end + 1;
+    const pb = RF.pointBounds(r, state.hits);
+    const a = pb.start, b = pb.end;
     const p = vid.play();
     if (p && p.catch) p.catch((e) => report(e, 'Play'));
     whenReady(vid).then(() => { vid.currentTime = a; });
@@ -1710,7 +1741,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 
   // ---------- the 1-minute cut ----------
   function renderCutPlan() {
-    const segs = RF.planCut(state.rallies, isMarked, 60);
+    const segs = RF.planCut(state.rallies, isMarked, 120, { hits: state.hits, duration: state.env ? state.env.seconds : 0 });
     state.cutPlan = segs;
     const ol = $('#segList');
     ol.textContent = '';
@@ -1721,7 +1752,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     $('#fileCutBtn').hidden = !state.movie; $('#fileCutHelp').hidden = !state.movie;
     $('#stepWho').hidden = !state.movie || !enough;
     $('#fileCutBtn').disabled = !enough;
-    $('#cutBtn').textContent = enough ? 'Play the ' + Math.round(total) + '-second cut' : 'Play the 1-minute cut';
+    $('#cutBtn').textContent = enough ? 'Play the ' + Math.round(total) + '-second cut' : 'Play the cut';
   }
   function setSegLabel() {
     const c = state.cut; if (!c) return;
@@ -1808,6 +1839,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     $('#fileCutBtn').disabled = false;
     const { blob, ...meta } = cut;
     state.fileCut = Object.assign(meta, { buildMs: Math.round(performance.now() - t0) });
+    sendRun('cut');
     if (state.fileCutUrl) URL.revokeObjectURL(state.fileCutUrl);
     state.fileCutUrl = URL.createObjectURL(blob);
     const name = 'kicksmash-cut' + cut.ext;
@@ -1946,7 +1978,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   // hips are; each body keeps the colours of its shirt, so a name given once in the first rally finds
   // its player in the others. For each hit in the sound, the hitter is the body whose wrist moved
   // fastest around that moment, measured in body heights a second.
-  const WHO_FPS = 10;
+  const WHO_FPS = 8;
   const WHO_TILES = [[0.08, 0.06, 0.32, 0.46], [0.34, 0.06, 0.32, 0.46], [0.6, 0.06, 0.32, 0.46]];
   const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
   const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
@@ -2100,52 +2132,116 @@ if (typeof module !== 'undefined') module.exports = RF;
     for (const q of sp) if (q.t >= t - 0.35 && q.t <= t + 0.15 && q.v > peak) peak = q.v;
     return { peak, score: peak < SWING_FLOOR ? 0 : peak / Math.max(0.05, tr.usual) };
   }
+  // The frames come from the visible player while it plays (Erik's run, 13 November 2026: a hidden
+  // video that only seeks gave Safari's model 606 blank frames, at 5.9 s a frame). Each frame is read
+  // as it shows (requestVideoFrameCallback), and the speed follows the model: slower than real time
+  // when the model needs longer than a frame's turn, so every 1/WHO_FPS gets its look.
+  const meanLuma = (g, W, H) => {
+    const d = g.getImageData(0, 0, W, H).data, step = Math.max(4, Math.floor(d.length / 4 / 2000)) * 4;
+    let s = 0, n = 0;
+    for (let i = 0; i < d.length; i += step) { s += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++; }
+    return n ? s / n : 0;
+  };
+  function drawFrame(g, v, W, H, flip) {
+    if (!flip) { g.drawImage(v, 0, 0, W, H); return; }
+    g.save(); g.translate(W, H); g.rotate(Math.PI); g.drawImage(v, 0, 0, W, H); g.restore();
+  }
+  function playSegment(v, seg, onFrame, isLive) {
+    return new Promise(async (resolve) => {
+      let last = -1, done = false, timer = null;
+      const finish = () => { if (done) return; done = true; clearInterval(timer); v.pause(); resolve(); };
+      await seekTo(v, seg.start);
+      const take = (t) => {
+        if (done) return;
+        if (!isLive() || t >= seg.end) return finish();
+        if (t - last >= 1 / WHO_FPS - 0.02) { last = t; onFrame(t); }
+      };
+      if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        const step = (_now, meta) => { take(meta.mediaTime); if (!done) v.requestVideoFrameCallback(step); };
+        v.requestVideoFrameCallback(step);
+      } else {
+        timer = setInterval(() => take(v.currentTime), 1000 / (WHO_FPS * 2));
+      }
+      v.onended = finish;
+      v.play().catch(() => finish());
+      setTimeout(finish, ((seg.end - seg.start) / Math.max(0.1, v.playbackRate)) * 1000 + 20000);
+    });
+  }
   async function whoRun() {
     const run = ++who.run;
+    const live = () => run === who.run;
     who.busy = true; who.error = null; who.segs = [];
     $('#whoBtn').disabled = true; $('#whoStop').disabled = false; $('#whoName').hidden = true; $('#whoOut').hidden = true;
     const st = $('#whoStatus');
     st.className = 'status'; st.textContent = 'Loading the player finder (about 20 MB, once).';
     const t0 = performance.now();
-    const stats = { fps: WHO_FPS, modelMs: 0, frames: 0, seekMs: 0, detectMs: 0, bodiesPerFrame: 0, delegate: null };
+    const stats = { fps: WHO_FPS, modelMs: 0, frames: 0, detectMs: 0, bodiesPerFrame: 0, delegate: null, flip: false, firstLuma: null, rate: 1, method: 'requestVideoFrameCallback' in HTMLVideoElement.prototype ? 'rvfc' : 'interval' };
+    const v = $('#whoVid');
     try {
       const lm = await whoModel();
       stats.modelMs = Math.round(performance.now() - t0); stats.delegate = who.delegate;
-      const v = document.createElement('video');
-      v.muted = true; v.playsInline = true; v.preload = 'auto';
-      v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
-      document.body.appendChild(v);
-      v.src = state.fileUrl;
-      await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('The video does not open in this browser.')); setTimeout(res, 8000); });
+      $('#whoStage').hidden = false;
+      $('#whoStage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      v.muted = true; v.playsInline = true;
+      if (v.src !== state.fileUrl) v.src = state.fileUrl;
+      await new Promise((res, rej) => { if (v.readyState >= 2) return res(); v.onloadeddata = res; v.onerror = () => rej(new Error('The video does not open in this browser.')); setTimeout(res, 8000); });
       const W = Math.min(1920, v.videoWidth || 1920), H = Math.round(W * ((v.videoHeight || 1080) / (v.videoWidth || 1920)));
       const frame = document.createElement('canvas'); frame.width = W; frame.height = H;
       const g = frame.getContext('2d', { willReadFrequently: true });
       const segs = state.cutPlan || [];
+      if (!segs.length) throw new Error('The cut has no rallies.');
+
+      // The first two seconds decide, before the long run: is there a picture, and which way up is it?
+      // The model reads people upright; a phone mounted upside down records them upside down (Erik's
+      // video carries a 180° turn), and the page cannot know whether the browser applies it.
+      v.playbackRate = 0.25;
+      const probe = { up: 0, flip: 0, n: 0, luma: 0 };
+      await playSegment(v, { start: segs[0].start, end: segs[0].start + 2 }, () => {
+        drawFrame(g, v, W, H, false);
+        probe.luma += meanLuma(g, W, H);
+        probe.up += detectFrame(lm, frame, g, W, H).length;
+        drawFrame(g, v, W, H, true);
+        probe.flip += detectFrame(lm, frame, g, W, H).length;
+        probe.n++;
+      }, live);
+      if (!live()) return;
+      stats.firstLuma = probe.n ? r2(probe.luma / probe.n) : null;
+      stats.probe = { frames: probe.n, upright: probe.up, turned: probe.flip };
+      if (!probe.n) throw new Error('The video did not play here, so the page got no frames. Try again in Safari.');
+      if (stats.firstLuma < 6) throw new Error('This phone gave the page black frames (brightness ' + stats.firstLuma + '). Nothing else was read.');
+      if (!probe.up && !probe.flip) throw new Error('No players in the first 2 seconds of the first rally, either way up. Nothing else was read.');
+      stats.flip = probe.flip > probe.up;
+
       const total = segs.reduce((a, s) => a + Math.ceil((s.end - s.start) * WHO_FPS), 0);
-      let done = 0, bodies = 0;
+      let done = 0, bodies = 0, spent = 0;
+      v.playbackRate = 0.5;
       for (let si = 0; si < segs.length; si++) {
         const seg = segs[si], frames = [];
-        for (let t = seg.start; t < seg.end; t += 1 / WHO_FPS) {
-          if (run !== who.run) return;
+        await playSegment(v, seg, (t) => {
           const a = performance.now();
-          await seekTo(v, t);
-          const b = performance.now();
-          g.drawImage(v, 0, 0, W, H);
+          drawFrame(g, v, W, H, stats.flip);
           const found = detectFrame(lm, frame, g, W, H);
-          stats.seekMs += b - a; stats.detectMs += performance.now() - b;
+          const ms = performance.now() - a;
+          spent += ms; stats.detectMs += ms;
           frames.push({ t, bodies: found }); bodies += found.length; done++;
           if (si === 0 && frames.length === 1) who.firstPic = g.getImageData(0, 0, W, H);
-          if (done % 5 === 0) st.textContent = 'Reading rally ' + (si + 1) + ' of ' + segs.length + ': frame ' + done + ' of ' + total + '.';
-        }
+          // Slower than real time when the model needs more than a frame's turn.
+          const per = spent / done / 1000;
+          v.playbackRate = Math.max(0.15, Math.min(1, 1 / (WHO_FPS * per * 1.15)));
+          if (done % 5 === 0) st.textContent = 'Reading rally ' + (si + 1) + ' of ' + segs.length + ': ' + Math.min(99, Math.round((100 * done) / total)) + '%.';
+        }, live);
+        if (!live()) return;
         who.segs.push({ seg, tracks: track(frames), frames: frames.length, bodies: frames.reduce((a, f) => a + f.bodies.length, 0) });
+        sendRun('who');
       }
-      v.remove();
+      $('#whoStage').hidden = true;
+      stats.rate = r2(v.playbackRate);
       stats.frames = done; stats.bodiesPerFrame = done ? r2(bodies / done) : 0;
-      stats.seekMs = Math.round(stats.seekMs / Math.max(1, done)); stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
+      stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
       stats.totalSec = r2((performance.now() - t0) / 1000);
       who.stats = stats;
       const first = who.segs[0];
-      if (!first || !first.tracks.length) throw new Error('The finder saw no players in the first rally.');
+      if (!first || !first.tracks.length) throw new Error('The finder saw no players it could follow in the first rally.');
       st.className = 'status ok';
       st.textContent = 'Found ' + first.tracks.length + ' players in the first rally (' + stats.bodiesPerFrame + ' a frame on average). Name them below.';
       whoShowNames(first, W, H);
@@ -2153,8 +2249,11 @@ if (typeof module !== 'undefined') module.exports = RF;
       who.error = String(e && e.message || e);
       who.stats = stats;
       st.className = 'status bad'; st.textContent = 'The player finder stopped: ' + who.error;
+      $('#whoStage').hidden = true;
     } finally {
+      try { v.pause(); } catch (e) {}
       if (run === who.run) { who.busy = false; $('#whoBtn').disabled = false; $('#whoStop').disabled = true; }
+      sendRun('who');
     }
   }
   function whoShowNames(first, W, H) {
@@ -2234,7 +2333,31 @@ if (typeof module !== 'undefined') module.exports = RF;
   $('#whoSave').addEventListener('click', () => whoAttribute());
   window.__who = who;
 
+  // ---------- the automatic report ----------
+  // On kicksma.sh the page sends its results to /api/lab/run by itself at the end of each stage (the
+  // owner, 13 November 2026: no person copies anything). Numbers only, never a picture or sound. A run
+  // is one id, so each stage replaces the last. Elsewhere (the Claude viewer) it sends nothing.
+  const canSend = () => /(^|\.)kicksma\.sh$/.test(location.hostname) || location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+  const newRunId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => ((Math.random() * 16) | 0).toString(16)));
+  function sendRun(stage) {
+    if (!canSend() || !state.runId2) return;
+    let data;
+    try { data = resultsObject(true); } catch (e) { return; }
+    const body = JSON.stringify({ id: state.runId2, page: VERSION, stage, data });
+    state.sent = Object.assign({}, state.sent, { [stage]: 'sending' });
+    fetch('/api/lab/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: body.length < 60000 })
+      .then((r) => { state.sent[stage] = r.ok ? 'sent' : 'refused ' + r.status; })
+      .catch((e) => { state.sent[stage] = 'failed ' + (e && e.name); });
+  }
+
   function buildResults() {
+    const res = resultsObject($('#withHits').checked);
+    let text = JSON.stringify(res, null, 1);
+    text = text.replace(/\[\n\s+([^\[\]{}]*?)\n\s*\]/g, (m, inner) => '[' + inner.replace(/\n\s*/g, ' ') + ']');
+    text = text.replace(/\{\n\s+([^\[\]{}]*?)\n\s*\}/g, (m, inner) => '{' + inner.replace(/\n\s*/g, ' ') + '}');
+    return text;
+  }
+  function resultsObject(withHits) {
     const p = state.params, th = RF.thresholds(p);
     const top = topRallies();
     const f = state.file;
@@ -2257,17 +2380,15 @@ if (typeof module !== 'undefined') module.exports = RF;
       allRallies: { columns: ['startSec', 'lengthSec', 'hits', 'score', 'notRally'], rows: state.rallies.map((r) => [r2(r.start), r2(r.dur), r.hits, r.score, isMarked(r) ? 1 : 0]) },
       cut: { segments: (state.cutPlan || []).map((s) => ({ start: fmtT(s.start), startSec: r2(s.start), endSec: r2(s.end), score: s.rally.score })), totalSec: r2((state.cutPlan || []).reduce((a, s) => a + s.end - s.start, 0)), played: state.cut ? { seekMs: state.cut.seekMs, playedSec: state.cut.playedSec || null } : null },
       fileCut: state.fileCut,
+      sent: state.sent || null,
       who: whoResults(),
       recorder: Object.assign({ mediaRecorder: typeof MediaRecorder !== 'undefined', captureStream: !!HTMLCanvasElement.prototype.captureStream, mp4Supported: typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported ? MediaRecorder.isTypeSupported('video/mp4') : false }, state.rec),
       screen: { width: screen.width, height: screen.height, dpr: window.devicePixelRatio },
       errors: state.errors.map((e) => e.shown),
     };
     if (state.sample) res.sampleCheck = state.sample.check;
-    if ($('#withHits').checked) res.hitTimes = { columns: ['sec', 'strengthVsP999'], rows: state.hits.map((h) => [r2(h.t), r2(h.s / state.prep.ref)]) };
-    let text = JSON.stringify(res, null, 1);
-    text = text.replace(/\[\n\s+([^\[\]{}]*?)\n\s*\]/g, (m, inner) => '[' + inner.replace(/\n\s*/g, ' ') + ']');
-    text = text.replace(/\{\n\s+([^\[\]{}]*?)\n\s*\}/g, (m, inner) => '{' + inner.replace(/\n\s*/g, ' ') + '}');
-    return text;
+    if (withHits && state.prep) res.hitTimes = { columns: ['sec', 'strengthVsP999'], rows: state.hits.map((h) => [r2(h.t), r2(h.s / state.prep.ref)]) };
+    return res;
   }
   // Hits and rallies at every sensitivity, so we can see the trade-off without asking Erik to try each one.
   function sweep() {
