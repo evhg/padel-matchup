@@ -35,7 +35,9 @@ try {
   // the server knows (it has none of the directory's), so words naming one stay a plain line.
   const dmIvan = { id: ivan.id, type: "private" };
   const unknownClub = await hook({ update_id: 90, message: { message_id: 90, date: 0, chat: dmIvan, from: ivan, text: "Nowhere Padel tomorrow 18:00-19:30 court 3" } });
-  check("a booking's words that name no club the bot knows get the private help, as before", unknownClub.json?.outcome === "private_other", JSON.stringify(unknownClub.json));
+  // Words the bot cannot act on reach the team as a note (the owner, 13 November 2026: "Anything a player
+  // sends to kicksmash bot, has to be received and analyzed"), no longer the same help again.
+  check("a booking's words that name no club the bot knows become a note to the team", /^feedback(_not)?:/.test(unknownClub.json?.outcome ?? ""), JSON.stringify(unknownClub.json));
   const otherTap = await hook({ update_id: 91, callback_query: { id: "cbpb", from: ivan, data: "pb:c", message: { message_id: 91, date: 0, chat: dmIvan, reply_to_message: { message_id: 89, date: 0, chat: dmIvan, from: { id: 515151, first_name: "Somebody" }, text: "Nowhere Padel tomorrow 18:00" } } } });
   check("“Create match” under somebody else's booking does nothing", otherTap.json?.outcome === "paste_not_yours", JSON.stringify(otherTap.json));
   // The whole e2e run shares one address; a key keeps this suite clear of the per-address write allowance.
@@ -270,7 +272,7 @@ try {
   const ivanPrivate = { id: 424242, type: "private" };
   const ivanSays = (id, text) => hook({ update_id: 300 + id, message: { message_id: 300 + id, date: 0, chat: ivanPrivate, from: ivan, text } });
   const notYet = await ivanSays(1, "завтра 16");
-  check("a player with no coach falls through to the ordinary help", notYet.json?.outcome === "private_other", JSON.stringify(notYet.json));
+  check("a player with no coach falls through to a note to the team, not the coach's book", /^feedback(_not|:added)?:/.test(notYet.json?.outcome ?? ""), JSON.stringify(notYet.json));
   const ivanCtx = await browser.newContext(iphone);
   const ivanPage = await ivanCtx.newPage();
   await ivanPage.goto("about:blank");

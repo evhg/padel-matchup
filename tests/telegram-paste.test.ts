@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { clubs, events, metricsDaily, players, slots, telegramCards, telegramChats, venues } from "@/db/schema";
+import { clubs, events, feedback, metricsDaily, players, slots, telegramCards, telegramChats, venues } from "@/db/schema";
 import { dayKey } from "@/lib/domain/metrics";
 import { LIMITS } from "@/lib/domain/ratelimit";
 import type { OpContext } from "@/lib/api/operations";
@@ -11,6 +11,7 @@ import { zonedTimeToUtc } from "@/lib/dates";
 import { handleTelegramUpdate } from "@/lib/telegram/bot";
 import { strings } from "@/lib/telegram/card";
 import { pasteSummary } from "@/lib/telegram/handlers/paste";
+import { BURST_MINUTES, PHOTO_MARK, privateLine } from "@/lib/telegram/handlers/feedback";
 import type { TgMessage, TgUpdate } from "@/lib/telegram/api";
 import { freezeClock } from "./helpers/clock";
 import { createTestDb } from "./helpers/db";
@@ -213,13 +214,46 @@ describe("a booking pasted in the private chat", () => {
     expect(outside).toEqual([]);
   });
 
-  it("leaves a plain private message as it was: the private help", async () => {
-    for (const text of ["hello, anyone around?", "tomorrow 18:00 works for me"]) {
-      calls = [];
-      expect((await say(dm(cath), cath, text)).outcome).toBe("private_other");
-      expect(sent("sendMessage").map((c) => c.body.text)).toEqual([en.privateHelp]);
-    }
+  it("keeps a plain private message as a note: one thank-you, and a burst of messages and screenshots is one note", async () => {
+    // The owner, 13 November 2026: "Anything a player sends to kicksmash bot, has to be received and
+    // analyzed". Erik sent screenshots and "why you keep repeating", and each got the same help back.
+    calls = [];
+    const first = await say(dm(cath), cath, "why you keep repeating");
+    expect(first.outcome).toMatch(/^feedback(_not)?:/);
+    const id = first.outcome.split(":").at(-1)!;
+    expect(sent("sendMessage")).toHaveLength(1);
+    expect(sent("sendMessage")[0].body.text).not.toBe(en.privateHelp);
+    // A screenshot and more words in the next minutes join the same note, with no second answer. The
+    // clock moves a minute each time, as a real burst does (PGlite's now() follows the frozen clock).
+    const start = Date.now();
+    const at = (min: number) => vi.setSystemTime(new Date(start + min * 60_000));
+    calls = [];
+    at(1);
+    const shot = await say(dm(cath), cath, undefined as unknown as string, { photo: [{ file_id: "small_ABCDEFGHIJ" }, { file_id: "large_ABCDEFGHIJ" }], caption: "this one" });
+    expect(shot.outcome).toBe(`feedback:added:${id}`);
+    at(2);
+    expect((await say(dm(cath), cath, "tomorrow 18:00 works for me")).outcome).toBe(`feedback:added:${id}`);
+    expect(sent("sendMessage")).toHaveLength(0);
+    // After the window, a new message is a new note with its own thank-you.
+    at(2 + BURST_MINUTES + 1);
+    const later = await say(dm(cath), cath, "one more thing about the card");
+    expect(later.outcome).toMatch(/^feedback(_not)?:/);
+    expect(later.outcome).not.toContain(id);
+    vi.setSystemTime(new Date(start));
+    const [note] = await db.select().from(feedback).where(eq(feedback.id, id));
+    expect(note.text).toContain("why you keep repeating");
+    expect(note.text).toContain(`📷 [${PHOTO_MARK}large_ABCDEFGHIJ] this one`);
+    expect(note.text).toContain("tomorrow 18:00 works for me");
+    // Two letters are not a note: the help, as before.
+    calls = [];
+    expect((await say(dm(cath), cath, "ok")).outcome).toBe("private_other");
     expect(outside).toEqual([]);
+  });
+
+  it("writes a picture as Telegram's reference to it, and words beside it", () => {
+    expect(privateLine({ photo: [{ file_id: "a" }, { file_id: "b" }] })).toBe(`📷 [${PHOTO_MARK}b]`);
+    expect(privateLine({ document: { file_id: "d" }, caption: " look " })).toBe(`📷 [${PHOTO_MARK}d] look`);
+    expect(privateLine({ text: " hello " })).toBe("hello");
   });
 
   it("reads a Padel Society link alone once, names what it does not give, and offers Edit first only", async () => {

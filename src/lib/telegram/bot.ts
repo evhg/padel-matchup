@@ -17,7 +17,7 @@ import { continueScoreReply, SCORE_TRAILER } from "./tournament";
 import { handlePlayerCallback, playerMenu, playerMenuWord, PLAYER_CALLBACK } from "./player";
 import { continuePartnerReply, PARTNER_TRAILER, tournamentsInChat } from "./competitions";
 import { continueTap, handleTapCallback, TAP_CALLBACK } from "./taps";
-import { FEEDBACK_TRAILER, feedbackFromChat, feedbackReply } from "./handlers/feedback";
+import { FEEDBACK_TRAILER, feedbackFromChat, feedbackReply, keepPrivateMessage } from "./handlers/feedback";
 import { gamesFromChat, handleInlineQuery, rememberInlineCard } from "./handlers/games";
 import { BOARD_CALLBACK, continueGuidedNew, createFromChat, handleBoardCallback, handleGuidedNew, startGuidedNew } from "./handlers/new";
 import { handleWantCallback, wantCommand } from "./handlers/want";
@@ -200,6 +200,9 @@ async function handleMessage(db: Db, msg: TgMessage, ctx: OpContext): Promise<st
     if (resolved?.kind === "coach") return coachHelp(player, chat.chatId);
     // A button left over from a role that ended (the coach archived, the student let go): the help, and the keyboard and the role's commands go with it.
     if (!resolved && msg.text && menuWord(msg.text)) return roleEnded(chat, s.privateHelp);
+    // Everything else a player sends here reaches us (the owner, 13 November 2026), pictures included.
+    const kept = await keepPrivateMessage(db, msg, chat, from, locale, ctx);
+    if (kept) return kept;
     await sendMessage(chat.chatId, esc(s.privateHelp), { silent: true });
     return "private_other";
   }

@@ -627,8 +627,10 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(JSON.stringify(list.body.reply_markup)).toContain(`c:${pub.code}`);
     expect(await handleTelegramUpdate(db, { update_id: 706, callback_query: { id: "cbc", from: me, message: { message_id: 5, date: 0, chat: dm }, data: `c:${pub.code}` } }, NO_SIDE_EFFECTS)).toBe("card");
     expect(String(sent("sendMessage").at(-1)!.body.text)).toContain("Rawai Padel Club");
-    // Unknown text in private: the help, not silence.
-    expect(await send(707, "hello?")).toBe("private_other");
+    // Unknown words in private are a note to the team, not the help again (the owner, 13 November 2026);
+    // two letters still get the help, not silence.
+    expect(await send(707, "hello?")).toMatch(/^feedback(_not)?:/);
+    expect(await send(708, "ok")).toBe("private_other");
   });
 
   it("a coach's private chat: /start pins the menu once, /help repeats it without a new pin, the general commands stay, and a four-letter button is not a match code", async () => {
@@ -720,7 +722,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     calls = [];
     expect(await send(746, "cancel")).toMatch(/^student:cancel/);
     calls = [];
-    expect(await send(743, "hello?")).toBe("private_other");
+    expect(await send(743, "ok")).toBe("private_other");
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup ?? {})).not.toContain("remove_keyboard");
     // The coach archives the book: the next tap on the old keyboard gets the general help, and the player's keyboard and commands take the student's place.
     await db.update(coaches).set({ archivedAt: new Date() }).where(eq(coaches.id, coach.id));
@@ -736,7 +738,7 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     expect(JSON.stringify(sent("sendMessage").at(-1)!.body.reply_markup)).toContain("Find a match");
     // Ordinary text after that is the ordinary help; nothing left to take away.
     calls = [];
-    expect(await send(734, "hello?")).toBe("private_other");
+    expect(await send(734, "ok")).toBe("private_other");
     expect(sent("deleteMyCommands")).toHaveLength(0);
   });
 

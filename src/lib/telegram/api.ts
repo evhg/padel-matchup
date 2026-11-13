@@ -43,6 +43,8 @@ export type TgMessage = {
   text?: string;
   caption?: string;
   photo?: { file_id: string }[];
+  /** A file sent as a file, a screenshot among them. */
+  document?: { file_id: string; mime_type?: string; file_name?: string };
   message_thread_id?: number;
   reply_to_message?: TgMessage;
   entities?: { type: string; offset: number; length: number; url?: string }[];
@@ -109,6 +111,22 @@ async function count(keys: TgCounter[]): Promise<void> {
 }
 
 /** `timeoutMs`: a picture sent by URL waits while Telegram fetches it from us, so those calls get longer than a text. */
+/**
+ * The bytes of a file a person sent the bot, by Telegram's reference to it (`file_id`), for the operator's
+ * door to a kept screenshot. Null when Telegram does not know it or the bot has no token.
+ */
+export async function telegramFileBytes(fileId: string): Promise<{ bytes: ArrayBuffer; contentType: string } | null> {
+  if (!token()) return null;
+  const meta = await tg<{ file_path?: string }>("getFile", { file_id: fileId });
+  const path = meta.ok ? meta.result?.file_path : undefined;
+  if (!path) return null;
+  const res = await fetch(`https://api.telegram.org/file/bot${token()}/${path}`, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) return null;
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const contentType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : (res.headers.get("content-type") ?? "application/octet-stream");
+  return { bytes: await res.arrayBuffer(), contentType };
+}
+
 export async function tg<T = unknown>(method: string, body: Record<string, unknown>, timeoutMs = 10_000): Promise<TgResult<T>> {
   if (!telegramEnabled()) return { ok: false, error_code: 0, description: "telegram disabled" };
   try {
