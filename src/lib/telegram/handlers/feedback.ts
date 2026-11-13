@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import type { Db } from "@/db";
 import { feedback } from "@/db/schema";
 import type { TelegramChat } from "@/db/schema";
@@ -119,9 +119,9 @@ export async function keepPrivateMessage(db: Db, msg: TgMessage, chat: TelegramC
   const [recent] = await db
     .select({ id: feedback.id })
     .from(feedback)
-    // The database's clock on both sides: a note is stamped by the database (created_at's default), so
-    // the window is measured by it too, whatever clock the caller runs on.
-    .where(and(eq(feedback.telegramUserId, from.id), eq(feedback.telegramChatId, chat.chatId), gte(feedback.createdAt, sql`now() - (${BURST_MINUTES} * interval '1 minute')`)))
+    // The app's clock on both sides: createFeedback stamps a note with `now`, so the window is measured by
+    // it too. (The database's now() passed on PGlite, whose clock is the test's, and failed on Postgres.)
+    .where(and(eq(feedback.telegramUserId, from.id), eq(feedback.telegramChatId, chat.chatId), gte(feedback.createdAt, new Date(now.getTime() - BURST_MINUTES * 60_000))))
     .orderBy(desc(feedback.createdAt))
     .limit(1);
   if (recent) {
