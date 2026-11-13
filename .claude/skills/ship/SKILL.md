@@ -947,6 +947,12 @@ Wall clock first, credits second. What actually moved it, measured:
   11 November 2026. `tests/helpers/setup.ts` caps such a delay, and `tests/long-timers.test.ts` fails
   without the cap. A warning that repeats in a log is a fault until a trace says otherwise:
   `NODE_OPTIONS=--trace-warnings` named the code, and `--reporter=verbose` named the test, in two runs.
+- **A frozen clock hides which clock stamps a row.** PGlite takes `now()` from the test's frozen
+  `Date`, and real Postgres does not. The bot's burst window compared a note's `created_at`, which
+  `createFeedback` stamps with the app's `now`, against the database's `now()`: green on the gate,
+  red in CI's real-Postgres run (pull request 284). Compare a row's time with the clock that wrote it,
+  and make a time-window test move the clock (`vi.setSystemTime`) between its steps; a test that
+  never moves the clock passed with the window broken to 0.
 - **Fixtures never use "now".** `freezeClock` and a fixed date (rule 11). Two hours went on tests that
   correctly refused a student's reschedule, because the fixture's "now" sat inside the twelve-hour
   cutoff; and on lesson times that landed in the 12:00–15:00 gap between the morning and afternoon
