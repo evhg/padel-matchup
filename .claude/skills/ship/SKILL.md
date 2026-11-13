@@ -947,6 +947,10 @@ Wall clock first, credits second. What actually moved it, measured:
   11 November 2026. `tests/helpers/setup.ts` caps such a delay, and `tests/long-timers.test.ts` fails
   without the cap. A warning that repeats in a log is a fault until a trace says otherwise:
   `NODE_OPTIONS=--trace-warnings` named the code, and `--reporter=verbose` named the test, in two runs.
+- **A route file exports only what Next.js names.** `export const LAB_RUNS_KEEP_DAYS` beside `POST` in
+  `src/app/api/lab/run/route.ts` passed typecheck, lint and every unit test, and failed only the
+  production build ("does not match the required types of a Next.js Route"). Keep a constant of a
+  route unexported, or put it in `src/lib/`; run `pnpm build` before the gate when you add a route.
 - **A frozen clock hides which clock stamps a row.** PGlite takes `now()` from the test's frozen
   `Date`, and real Postgres does not. The bot's burst window compared a note's `created_at`, which
   `createFeedback` stamps with the app's `now`, against the database's `now()`: green on the gate,

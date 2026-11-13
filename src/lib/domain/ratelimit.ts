@@ -38,6 +38,8 @@ export async function pruneRateRows(db: Db, now = new Date()): Promise<number> {
 
 /** Generous ceilings: a human never hits them, a script does within minutes. */
 export const LIMITS = {
+  /** Rally Finder lab reports one address may send in a day (each run sends up to three stages). */
+  labRunsPerIpPerDay: 60,
   newIdentitiesPerIpPerDay: 40,
   eventsPerPlayerPerDay: 20,
   reservesPerOrganizerPerDay: 40,
