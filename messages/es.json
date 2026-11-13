@@ -551,7 +551,11 @@
     "place": "{n}.º",
     "unusual": "¿{score} es correcto?",
     "unusualYes": "Sí, guardar",
-    "unusualFix": "Corregir"
+    "unusualFix": "Corregir",
+    "correctHelp": "El organizador confirmó este resultado. Hasta {when}, cualquier jugador del partido puede corregirlo, y todos verán el cambio.",
+    "correctedBy": "Corregido por {name}",
+    "correctedLine": "{name} cambió el resultado de {from} a {to}.",
+    "putBack": "Volver a {score}"
   },
   "me": {
     "title": "Mis partidos",
@@ -683,13 +687,15 @@
       "score_entered": "Introdujiste el resultado",
       "cancelled": "Cancelaste el partido",
       "updated": "Actualizaste los detalles",
-      "requested": "Pediste unirte"
+      "requested": "Pediste unirte",
+      "scoreChanged": "Cambiaste el resultado de {from} a {to}"
     },
     "requested": "{name} pidió unirse",
     "approvedBy": "{actor} aprobó a {name}",
     "approvedByYou": "Aprobaste a {name}",
     "rejectedBy": "{actor} rechazó la solicitud de {name}",
-    "rejectedByYou": "Rechazaste la solicitud de {name}"
+    "rejectedByYou": "Rechazaste la solicitud de {name}",
+    "scoreChanged": "{name} cambió el resultado de {from} a {to}"
   },
   "email": {
     "telegramLine": "Recíbelo en Telegram: un toque, y tus partidos, recordatorios y resultados llegan al chat.",

@@ -81,7 +81,7 @@ import { myLevelChecks, verifiersFor } from "@/lib/domain/verify";
 import { getClubForBooking, venuesForPicking } from "@/lib/domain/clubs";
 import { getEventByCode, getRolodex, rolodexForBrowser, type SlotWithPlayer } from "@/lib/domain/queries";
 import { pushEnabled, vapidPublicKey } from "@/lib/pushConfig";
-import { scorePermission } from "@/lib/domain/scores";
+import { confirmedAtOf, lastCorrectionOf, scorePermission } from "@/lib/domain/scores";
 import { getTournamentState, pairsOfSeats } from "@/lib/domain/tournament";
 import { partnerOf, seatUnits, unitCounts, type SeatUnit } from "@/lib/domain/fixedPairs";
 import { isHeldPlace, partnerGoesWith } from "@/lib/domain/slots";
@@ -276,7 +276,14 @@ async function EventPage({ params, searchParams }: Props) {
   // Tournaments: reserved-but-unaccepted names count towards round 1 (placeholders get a player id when it is generated).
   const namedSlots = isTournament ? roster.filter((s) => isOccupied(s) || s.status === "invited") : participants;
   const participantIds = namedSlots.map((s) => s.playerId).filter((x): x is string => Boolean(x));
-  const perm = scorePermission({ event: ev, now, viewerPlayerId: me?.id ?? null, isCreator: viewer.isCreator, participantIds });
+  // A confirmed score stays open to the players for a day after the organiser's save (the owner, 13 November
+  // 2026: "Players can correct"); the activity the page already read says when that save was.
+  const perm = scorePermission({ event: ev, now, viewerPlayerId: me?.id ?? null, isCreator: viewer.isCreator, participantIds, confirmedAt: confirmedAtOf(detail.activity) });
+  const lastFix = ev.scoreLockedByCreator ? lastCorrectionOf(detail.activity) : null;
+  const correction = lastFix
+    ? { by: participants.find((s) => s.playerId === lastFix.by)?.player?.displayName ?? t("activity.someone"), from: lastFix.from, to: lastFix.to, canPutBack: viewer.isCreator }
+    : null;
+  const correctUntil = perm.allowed && perm.correctUntil ? `${formatEventDay(perm.correctUntil, ev.tz, locale)} ${formatEventTime(perm.correctUntil, ev.tz, locale)}` : null;
   const enteredBy = detail.scores[0]?.enteredByPlayerId ? (participants.find((s) => s.playerId === detail.scores[0].enteredByPlayerId)?.player?.displayName ?? null) : null;
   const showScore = started && !cancelled && ev.type === "match";
   // After the score, the card itself: the court photo and WhatsApp one tap away. The owner, 24
@@ -997,6 +1004,8 @@ async function EventPage({ params, searchParams }: Props) {
             card={resultCard}
             prompt={creatorBanner ? t("creator.scoreReminderBanner") : null}
             playAgainQuiet={!viewer.isCreator}
+            correctUntil={correctUntil}
+            correction={correction}
           />
         )}
         {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their

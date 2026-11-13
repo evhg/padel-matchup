@@ -551,7 +551,11 @@
     "place": "{n}.",
     "unusual": "Is {score} right?",
     "unusualYes": "Yes, save",
-    "unusualFix": "Fix it"
+    "unusualFix": "Fix it",
+    "correctHelp": "The organizer confirmed this score. Until {when}, any player of the match can correct it, and everybody sees the change.",
+    "correctedBy": "Corrected by {name}",
+    "correctedLine": "{name} changed the score from {from} to {to}.",
+    "putBack": "Put back {score}"
   },
   "me": {
     "title": "My matches",
@@ -683,13 +687,15 @@
       "score_entered": "You entered the score",
       "cancelled": "You cancelled the match",
       "updated": "You updated the details",
-      "requested": "You asked to join"
+      "requested": "You asked to join",
+      "scoreChanged": "You changed the score from {from} to {to}"
     },
     "requested": "{name} asked to join",
     "approvedBy": "{name} was approved by {actor}",
     "approvedByYou": "You approved {name}",
     "rejectedBy": "{name}'s request was declined by {actor}",
-    "rejectedByYou": "You declined {name}'s request"
+    "rejectedByYou": "You declined {name}'s request",
+    "scoreChanged": "{name} changed the score from {from} to {to}"
   },
   "email": {
     "telegramLine": "Get this on Telegram: one tap, and your matches, reminders and results come to the chat.",

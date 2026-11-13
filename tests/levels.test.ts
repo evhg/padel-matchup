@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players } from "@/db/schema";
 import { createEvent } from "@/lib/domain/events";
 import { balancedTeams, formatLevel, joinBarLevel, joinStep, levelFit, matchDeltas, normalizeLevel, normalizeRange, presetFor, rangeFor, tournamentDeltas } from "@/lib/domain/levels";
-import { applyEventLevels, setPlayerLevel } from "@/lib/domain/rating";
+import { applyEventLevels, setPlayerLevel, settleEventLevels } from "@/lib/domain/rating";
 import { createJoinRequest, decideJoinRequest, getJoinRequests, withdrawJoinRequest } from "@/lib/domain/requests";
 import { saveMatchScore } from "@/lib/domain/scores";
 import { joinEvent } from "@/lib/domain/slots";
@@ -156,6 +156,33 @@ describe("result-based level adjustment", () => {
     const [ev2] = await db.select().from(events).where(eq(events.id, ev.id));
     expect(ev2.levelsAppliedAt).not.toBeNull();
     expect((await db.select().from(players).where(eq(players.id, org.id)))[0].level).toBe(cap.level);
+  });
+  it("match: a corrected confirmed score moves the levels again, as if the corrected score had come first", async () => {
+    const mk = (n: string, level: number) => makePlayer(db, n, { level, levelSource: "self" });
+    const run = async (sets: { setNumber: number; sideA: number; sideB: number }[], fix?: { setNumber: number; sideA: number; sideB: number }[]) => {
+      const [org, p2, p3, p4] = [await mk("Org", 3.5), await mk("Two", 3.5), await mk("Three", 3), await mk("Four", 3)];
+      const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt: new Date(Date.now() - 3 * HOUR), tz: "UTC", whenFull: "waitlist" });
+      for (const p of [org, p2, p3, p4]) await joinEvent(db, { eventId: ev.id, playerId: p.id, now: new Date(Date.now() - 4 * HOUR) });
+      await saveMatchScore(db, { eventId: ev.id, playerId: org.id, isCreator: true, sets, teamA: [org.id, p2.id] });
+      await settleEventLevels(db, ev.id);
+      if (fix) {
+        await saveMatchScore(db, { eventId: ev.id, playerId: p3.id, isCreator: false, sets: fix });
+        await settleEventLevels(db, ev.id);
+      }
+      const rows = await db.select().from(players).where(inArray(players.id, [org.id, p2.id, p3.id, p4.id]));
+      const byName = new Map(rows.map((r) => [r.displayName, r]));
+      return { ev, levels: ["Org", "Two", "Three", "Four"].map((n) => byName.get(n)!.level), logs: ["Org", "Two", "Three", "Four"].map((n) => (byName.get(n)!.levelLog ?? []).filter((e) => e.code === ev.code).length) };
+    };
+    // Erik's case on RcEy: the first score is wrong, a player corrects it.
+    const corrected = await run([{ setNumber: 1, sideA: 6, sideB: 2 }], [{ setNumber: 1, sideA: 2, sideB: 6 }]);
+    // The same match with the right score from the start.
+    const straight = await run([{ setNumber: 1, sideA: 2, sideB: 6 }]);
+    expect(corrected.levels).toEqual(straight.levels);
+    expect(corrected.levels[0]!).toBeLessThan(3.5);
+    expect(corrected.levels[2]!).toBeGreaterThan(3);
+    expect(corrected.logs).toEqual([1, 1, 1, 1]);
+    const [ev] = await db.select().from(events).where(eq(events.id, corrected.ev.id));
+    expect(ev.levelsAppliedAt).not.toBeNull();
   });
   it("tournament: finalizing standings adjusts rated players by rank", async () => {
     const org = await makePlayer(db, "TOrg", { level: 3, levelSource: "self" });

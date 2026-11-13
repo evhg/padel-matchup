@@ -14,6 +14,13 @@ export async function ActivityFeed({ items, viewerId }: { items: ActivityWithAct
     const you = Boolean(viewerId && a.actorPlayerId === viewerId);
     const target = (a.meta?.name as string | undefined) ?? "";
     switch (a.verb) {
+      // A save that replaced a score says what it replaced: everybody in the match sees a correction (13 November 2026).
+      case "score_entered": {
+        const from = typeof a.meta?.from === "string" ? a.meta.from : null;
+        const to = typeof a.meta?.summary === "string" ? a.meta.summary : null;
+        if (from && to && from !== to) return you ? t("activity.you.scoreChanged", { from, to }) : t("activity.scoreChanged", { name: actor, from, to });
+        return you ? t("activity.you.score_entered") : t("activity.score_entered", { name: actor });
+      }
       case "invited":
         return you ? t("activity.addedByYou", { name: target }) : t("activity.addedBy", { name: target, actor });
       case "removed":

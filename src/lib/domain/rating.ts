@@ -20,6 +20,36 @@ export async function setPlayerLevel(db: Db, playerId: string, raw: unknown, now
 export type LevelChange = { playerId: string; from: number; to: number };
 
 /**
+ * Levels from a match's score as it stands now. The first confirmed score moves them (`applyEventLevels`);
+ * a later save of a confirmed score (a player's correction, or the organiser's own second save) first
+ * takes back what this match moved, from each player's level log, then moves them again. Until
+ * 13 November 2026 a later save changed nothing: on RcEy the levels came from Erik's Telegram entry at
+ * 06:14 and ignored the web entry at 06:16. Only the match's own players are read (bounded, rule 12).
+ */
+export async function settleEventLevels(db: Db, eventId: string, now = new Date()): Promise<{ applied: boolean; changes: LevelChange[] }> {
+  await db.transaction(async (tx) => {
+    const ev = await lockEvent(tx, eventId);
+    if (ev.type !== "match" || !ev.levelsAppliedAt) return;
+    const seated = await tx
+      .select({ id: players.id, level: players.level, log: players.levelLog })
+      .from(slots)
+      .innerJoin(players, eq(players.id, slots.playerId))
+      .where(eq(slots.eventId, ev.id));
+    for (const p of seated) {
+      const mine = (p.log ?? []).filter((e) => e.code === ev.code && e.type === "match");
+      if (!mine.length || p.level == null) continue;
+      const moved = mine.reduce((sum, e) => sum + (e.to - e.from), 0);
+      await tx
+        .update(players)
+        .set({ level: clampLevel(p.level - moved), levelLog: (p.log ?? []).filter((e) => !(e.code === ev.code && e.type === "match")) })
+        .where(eq(players.id, p.id));
+    }
+    await tx.update(events).set({ levelsAppliedAt: null }).where(eq(events.id, ev.id));
+  });
+  return applyEventLevels(db, eventId, now);
+}
+
+/**
  * Nudges levels from a finalized result, once per event. Matches need the
  * organizer's confirmed score and 2v2 teams; tournaments need finalized
  * standings. Safe to call repeatedly: the second call is a no-op.

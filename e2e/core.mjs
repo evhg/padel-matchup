@@ -908,9 +908,23 @@ try {
   await a.getByRole("button", { name: "Edit score" }).waitFor({ timeout: 20000 });
   const fiveSets = await a.request.get(`${BASE}/api/v1/matches/${code}`).then((r) => r.json());
   check("\"Yes, save\" saves the five sets as they are", fiveSets.result?.sets?.length === 5 && fiveSets.result.sets[4].a === 3 && fiveSets.result.sets[4].b === 1, JSON.stringify(fiveSets.result));
-  // Jordi (player) is now locked out
+  // Jordi (player) corrects the organiser's score for a day after it (the owner, 13 November 2026:
+  // "Players can correct", after Tim's note on RcEy). The organiser sees the change and can put it back.
   await b.reload();
-  check("player locked out after organizer confirms", (await b.getByText("Only they can change it").count()) > 0);
+  check("a player sees the organiser's score is open to correction until a time, with Edit score", (await b.getByTestId("score-correct-help").count()) === 1 && (await b.getByRole("button", { name: "Edit score" }).count()) === 1);
+  await b.getByRole("button", { name: "Edit score" }).click();
+  await b.locator("#score input[type=number]").nth(1).fill("4");
+  await b.getByRole("button", { name: "Save score" }).click();
+  if (await b.getByTestId("score-check").waitFor({ timeout: 5000 }).then(() => true, () => false)) await b.getByTestId("score-check").getByRole("button", { name: "Yes, save" }).click();
+  await b.getByTestId("score-correction").waitFor({ timeout: 20000 });
+  check("the player's correction is saved and says so", (await b.getByText(/Corrected by Jordi/).count()) === 1);
+  await a.reload();
+  await a.getByTestId("score-put-back").waitFor({ timeout: 20000 });
+  const fixLine = (await a.getByTestId("score-correction").textContent()) ?? "";
+  check("the organiser sees who changed the score, from what to what, and can put it back", /Jordi changed the score from 6-3 .* to 6-4 /.test(fixLine), fixLine);
+  await a.getByTestId("score-put-back").click();
+  await a.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
+  check("Put back restores the organiser's score", (await a.getByTestId("score-correction").count()) === 0);
   await a.goto(BASE + "/me");
   await openSettings(a); // everything set on My matches is behind one "Settings" line (the owner, 9 November 2026)
   check("/me shows the entered score", (await a.getByText("6-3").count()) > 0);

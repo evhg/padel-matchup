@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
-import { checkSets, MAX_SETS, setsComplete, tally, typedSets, type DraftSet } from "@/lib/domain/scores";
+import { checkSets, MAX_SETS, setsComplete, setsOfSummary, tally, typedSets, type DraftSet } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
 import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 import { SameTimeButton } from "./SameTimeButton";
@@ -29,6 +29,8 @@ export function ScorePanel({
   card,
   prompt = null,
   playAgainQuiet = false,
+  correctUntil = null,
+  correction = null,
 }: {
   code: string;
   scores: S[];
@@ -55,6 +57,13 @@ export function ScorePanel({
   prompt?: string | null;
   /** A seated player: "Play again" is a quiet button, because the bar's result share is their one primary. */
   playAgainQuiet?: boolean;
+  /**
+   * A player of the match while the organiser's confirmed score is still open to correction: until when,
+   * in words ("Sat 14:16"). The owner, 13 November 2026: "Players can correct".
+   */
+  correctUntil?: string | null;
+  /** The newest save was a player's correction of the confirmed score: who, from and to; `canPutBack` for the organiser. */
+  correction?: { by: string; from: string; to: string; canPutBack: boolean } | null;
 }) {
   const t = useTranslations();
   // Only the fact that the offer was shown is latched: the tap makes the crew, the page then renders
@@ -99,6 +108,17 @@ export function ScorePanel({
         return;
       }
       setEditing(false);
+    });
+  };
+
+  // The organiser's "Put back": the score the correction replaced, saved again as the organiser's.
+  const putBack = () => {
+    const old = correction ? setsOfSummary(correction.from) : null;
+    if (!old) return;
+    start(async () => {
+      setError(null);
+      const r = await saveScoreAction(code, old);
+      if (!r.ok) setError(t(`errors.${r.error === "name_required" || r.error === "no_identity" ? "generic" : r.error}` as "errors.generic"));
     });
   };
 
@@ -150,7 +170,8 @@ export function ScorePanel({
     <section id="score" className="card">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold">{scores.length ? t("score.result") : t("score.title")}</h2>
-        {locked && scores.length > 0 && <span className="chip-open">✓ {t("score.confirmedByOrganizer")}</span>}
+        {locked && scores.length > 0 && !correction && <span className="chip-open">✓ {t("score.confirmedByOrganizer")}</span>}
+        {locked && scores.length > 0 && correction && <span className="chip-open">✎ {t("score.correctedBy", { name: correction.by })}</span>}
       </div>
 
       {scores.length > 0 && !editing && (
@@ -174,6 +195,17 @@ export function ScorePanel({
             </div>
           </div>
           {enteredBy && !locked && <p className="mt-3 text-xs text-faint">{t("score.enteredBy", { name: enteredBy })}</p>}
+          {correction && (
+            <div className="mt-3 flex flex-col gap-2" data-testid="score-correction">
+              <p className="text-sm text-muted">{t("score.correctedLine", { name: correction.by, from: correction.from, to: correction.to })}</p>
+              {correction.canPutBack && (
+                <button type="button" className="btn-ghost btn-sm self-start" disabled={pending} onClick={putBack} data-testid="score-put-back">
+                  {t("score.putBack", { score: correction.from })}
+                </button>
+              )}
+              {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+            </div>
+          )}
           {card && (
             <div className="mt-4 flex flex-col gap-3" data-testid="result-card">
               <a href={card.href} className="block overflow-hidden rounded-2xl border border-line">
@@ -198,6 +230,7 @@ export function ScorePanel({
           {scores.length ? t("score.edit") : t("score.enter")}
         </button>
       )}
+      {!editing && canEdit && correctUntil && <p className="mt-2 text-xs text-faint" data-testid="score-correct-help">{t("score.correctHelp", { when: correctUntil })}</p>}
       {!editing && !canEdit && reason && reason !== "cancelled" && (
         <p className="mt-3 text-sm text-muted">{reason === "not_started" ? t("score.notStarted") : reason === "locked" ? t("score.lockedHelp") : t("score.notParticipant")}</p>
       )}
