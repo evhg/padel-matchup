@@ -551,7 +551,11 @@
     "place": "{n}.",
     "unusual": "Счёт {score} верный?",
     "unusualYes": "Да, сохранить",
-    "unusualFix": "Исправить"
+    "unusualFix": "Исправить",
+    "correctHelp": "Организатор подтвердил этот счёт. До {when} любой игрок матча может его исправить, и все увидят изменение.",
+    "correctedBy": "Исправил(а) {name}",
+    "correctedLine": "{name} изменил(а) счёт с {from} на {to}.",
+    "putBack": "Вернуть {score}"
   },
   "me": {
     "title": "Мои матчи",
@@ -683,13 +687,15 @@
       "score_entered": "Вы ввели счёт",
       "cancelled": "Вы отменили матч",
       "updated": "Вы изменили детали",
-      "requested": "Вы попросились в игру"
+      "requested": "Вы попросились в игру",
+      "scoreChanged": "Вы изменили счёт с {from} на {to}"
     },
     "requested": "{name} попросился(ась) в игру",
     "approvedBy": "{name} одобрен(а): {actor}",
     "approvedByYou": "Вы одобрили: {name}",
     "rejectedBy": "Запрос {name} отклонил(а) {actor}",
-    "rejectedByYou": "Вы отклонили запрос: {name}"
+    "rejectedByYou": "Вы отклонили запрос: {name}",
+    "scoreChanged": "{name} изменил(а) счёт с {from} на {to}"
   },
   "email": {
     "telegramLine": "Получать это в Telegram: одно нажатие, и матчи, напоминания и результаты приходят в чат.",

@@ -11,7 +11,7 @@ import { suggestGroupName } from "@/lib/domain/groupNames";
 import { weeklyGroupFromEvent } from "@/lib/domain/groups";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventByCode, getPlayerEvents, type EventDetail } from "@/lib/domain/queries";
-import { applyEventLevels } from "@/lib/domain/rating";
+import { settleEventLevels } from "@/lib/domain/rating";
 import { matchResult, WINNER_ONLY_SETS } from "@/lib/domain/result";
 import { MAX_SETS, saveMatchScore, unusualSets, type SetScore } from "@/lib/domain/scores";
 import { answerCallbackQuery, botDeepLink, editMessageText, esc, sendMessage, type InlineKeyboard, type TgMessage, type TgUpdate, type TgUser } from "../api";
@@ -75,7 +75,7 @@ async function scoreFromChat(db: Db, msg: TgMessage, chat: TelegramChat, from: T
     await say(scoreErrorText(s, e));
     return `score_error:${isDomainError(e) ? e.code : "unknown"}`;
   }
-  if (isCreator) await applyEventLevels(db, detail.event.id).catch(() => undefined);
+  await settleEventLevels(db, detail.event.id).catch(() => undefined);
   ctx.emit("match.result", detail.event.code, { confirmed: isCreator });
   // An unusual set is saved all the same (decision H): the chat has no "Yes, save", so the bot says so
   // once and a second message with the right score replaces it.
@@ -195,7 +195,7 @@ async function handleWinner(db: Db, cb: NonNullable<TgUpdate["callback_query"]>,
     await answerCallbackQuery(cb.id, scoreErrorText(s, e), { alert: true });
     return `result:error:${isDomainError(e) ? e.code : "unknown"}`;
   }
-  if (isCreator) await applyEventLevels(db, ev.id).catch(() => undefined);
+  await settleEventLevels(db, ev.id).catch(() => undefined);
   const names = winners.map(seatName).join(" & ");
   if (cb.message) {
     const text = `${esc(isCreator ? s.confirmedNote(names) : s.recorded(names, player.displayName))}\n${esc(praiseLine(locale, ev.code, names))}\n${esc(s.scoreHint(ev.code))}`;
@@ -228,7 +228,7 @@ async function handleConfirm(db: Db, cb: NonNullable<TgUpdate["callback_query"]>
     await answerCallbackQuery(cb.id, scoreErrorText(s, e), { alert: true });
     return `result:error:${isDomainError(e) ? e.code : "unknown"}`;
   }
-  await applyEventLevels(db, ev.id).catch(() => undefined);
+  await settleEventLevels(db, ev.id).catch(() => undefined);
   const r = matchResult(
     detail.scores,
     detail.roster.map((x) => ({ team: x.team, status: x.status, name: seatName(x) })),

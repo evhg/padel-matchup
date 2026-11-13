@@ -586,8 +586,9 @@ describe("telegram bot (db, stubbed Bot API)", () => {
     pub = matchToPublic((await getEventByCode(db, code))!, "https://kicksma.sh");
     expect(pub.result?.sets).toEqual([{ a: 6, b: 3 }, { a: 4, b: 6 }, { a: 6, b: 4 }, { a: 6, b: 2 }]);
     expect(await msg(93, org, "/score what")).toBe("score_how");
-    // A locked result stays locked for players.
-    expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_error:locked");
+    // A player corrects a confirmed result for a day after the organiser's save (the owner, 13 November
+    // 2026: "Players can correct"); after that it is the organiser's alone (tests/scores.test.ts).
+    expect(await msg(94, players[0], `/score ${code} 0-6`)).toBe("score_saved");
     expect(await tap(95, org, card.messageId, `r:${code}`)).toBe("result:locked");
   });
 

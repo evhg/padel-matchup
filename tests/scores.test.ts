@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Db } from "@/db";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent } from "@/lib/domain/slots";
-import { checkSets, isUsualSet, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, setsComplete, tally, typedSets, unusualSets, validateSets } from "@/lib/domain/scores";
+import { and, desc, eq } from "drizzle-orm";
+import { activity } from "@/db/schema";
+import { checkSets, confirmedAtOf, CORRECTION_HOURS, isUsualSet, lastCorrectionOf, MAX_SETS, outcomeForTeam, saveMatchScore, scorePermission, setsComplete, setsOfSummary, tally, typedSets, unusualSets, validateSets } from "@/lib/domain/scores";
 import { createTestDb, makePlayer, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -28,7 +30,30 @@ describe("score-lock rules (pure)", () => {
     expect(scorePermission({ event: base, now: after, viewerPlayerId: "x", isCreator: false, participantIds: ["p1"] })).toEqual({ allowed: false, reason: "not_participant" });
     expect(scorePermission({ event: base, now: after, viewerPlayerId: null, isCreator: false, participantIds: ["p1"] })).toEqual({ allowed: false, reason: "not_participant" });
   });
-  it("once the creator entered, players are locked out but the creator can still edit", () => {
+  it("players correct a confirmed score for CORRECTION_HOURS after the organiser's save, then it is the organiser's alone", () => {
+    const locked = { ...base, scoreLockedByCreator: true };
+    const confirmedAt = new Date("2026-01-01T19:40:00Z");
+    const within = new Date(confirmedAt.getTime() + (CORRECTION_HOURS - 1) * HOUR);
+    const past = new Date(confirmedAt.getTime() + CORRECTION_HOURS * HOUR);
+    expect(scorePermission({ event: locked, now: within, viewerPlayerId: "p1", isCreator: false, participantIds: ["p1"], confirmedAt })).toEqual({ allowed: true, locked: true, correctUntil: past });
+    expect(scorePermission({ event: locked, now: past, viewerPlayerId: "p1", isCreator: false, participantIds: ["p1"], confirmedAt })).toEqual({ allowed: false, reason: "locked" });
+    expect(scorePermission({ event: locked, now: within, viewerPlayerId: "x", isCreator: false, participantIds: ["p1"], confirmedAt })).toEqual({ allowed: false, reason: "not_participant" });
+  });
+  it("the organiser's last save is the start of the window, and a player's correction is offered back", () => {
+    const at = (h: number) => new Date(Date.UTC(2026, 0, 1, h));
+    const lines: { verb: string; meta: Record<string, string | number | null> | null; createdAt: Date; actorPlayerId: string | null }[] = [
+      { verb: "score_entered", meta: { summary: "6-2", byCreator: 0 }, createdAt: at(19), actorPlayerId: "p1" },
+      { verb: "score_entered", meta: { summary: "6-3 7-5", byCreator: 1, from: "6-2" }, createdAt: at(20), actorPlayerId: "c" },
+      { verb: "joined", meta: null, createdAt: at(21), actorPlayerId: "p2" },
+      { verb: "score_entered", meta: { summary: "3-6 5-7", byCreator: 0, from: "6-3 7-5", correction: 1 }, createdAt: at(22), actorPlayerId: "p2" },
+    ];
+    expect(confirmedAtOf(lines)).toEqual(at(20));
+    expect(lastCorrectionOf(lines)).toEqual({ by: "p2", from: "6-3 7-5", to: "3-6 5-7" });
+    expect(lastCorrectionOf(lines.slice(0, 3))).toBeNull();
+    expect(setsOfSummary("6-3 7-5")).toEqual([{ setNumber: 1, sideA: 6, sideB: 3 }, { setNumber: 2, sideA: 7, sideB: 5 }]);
+    expect(setsOfSummary("great")).toBeNull();
+  });
+  it("without a known save time, a confirmed score stays locked as before", () => {
     const locked = { ...base, scoreLockedByCreator: true };
     expect(scorePermission({ event: locked, now: after, viewerPlayerId: "p1", isCreator: false, participantIds: ["p1"] })).toEqual({ allowed: false, reason: "locked" });
     expect(scorePermission({ event: locked, now: after, viewerPlayerId: "c", isCreator: true, participantIds: ["p1"] })).toEqual({ allowed: true, locked: true });
@@ -160,7 +185,13 @@ describe("score entry (db)", () => {
     const r3 = await saveMatchScore(db, { eventId: ev.id, playerId: creator.id, isCreator: true, sets: [{ setNumber: 1, sideA: 6, sideB: 3 }, { setNumber: 2, sideA: 6, sideB: 4 }], now: later });
     expect(r3.event.scoreLockedByCreator).toBe(true);
 
-    await expect(saveMatchScore(db, { eventId: ev.id, playerId: a.id, isCreator: false, sets: [{ setNumber: 1, sideA: 1, sideB: 6 }], now: later })).rejects.toMatchObject({ code: "locked" });
+    // A player corrects the confirmed score within CORRECTION_HOURS (the owner, 13 November 2026), and the
+    // line says what it replaced; after the window the score is the organiser's alone.
+    const fixed = await saveMatchScore(db, { eventId: ev.id, playerId: a.id, isCreator: false, sets: [{ setNumber: 1, sideA: 6, sideB: 3 }, { setNumber: 2, sideA: 4, sideB: 6 }], now: new Date(later.getTime() + HOUR) });
+    expect(fixed.event.scoreLockedByCreator).toBe(true);
+    const [line] = await db.select().from(activity).where(and(eq(activity.eventId, ev.id), eq(activity.actorPlayerId, a.id))).orderBy(desc(activity.createdAt)).limit(1);
+    expect(line.meta).toMatchObject({ summary: "6-3 4-6", from: "6-3 6-4", byCreator: 0, correction: 1 });
+    await expect(saveMatchScore(db, { eventId: ev.id, playerId: a.id, isCreator: false, sets: [{ setNumber: 1, sideA: 1, sideB: 6 }], now: new Date(later.getTime() + (CORRECTION_HOURS + 1) * HOUR) })).rejects.toMatchObject({ code: "locked" });
     const r4 = await saveMatchScore(db, { eventId: ev.id, playerId: creator.id, isCreator: true, sets: [{ setNumber: 1, sideA: 7, sideB: 6 }], now: later });
     expect(r4.scores).toHaveLength(1);
 

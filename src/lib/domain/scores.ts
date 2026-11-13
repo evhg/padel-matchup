@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, scores, slots, type Event, type Score } from "@/db/schema";
 import { DomainError } from "./errors";
@@ -7,13 +7,21 @@ import { lockEvent } from "./slots";
 export type SetScore = { setNumber: number; sideA: number; sideB: number };
 
 export type ScorePermission =
-  | { allowed: true; locked: boolean }
+  | { allowed: true; locked: boolean; correctUntil?: Date }
   | { allowed: false; reason: "not_started" | "cancelled" | "not_participant" | "locked" };
 
 /**
- * Decision 13: after start, any participant may enter/edit and players may
- * correct each other freely; once the CREATOR enters or edits, it locks for
- * everyone else.
+ * How long the players may correct a score the organiser confirmed. The owner, 13 November 2026, after
+ * Tim's note on RcEy ("Erik put the wrong score and I can't edit"): "Players can correct". Everybody
+ * in the match sees the change in the activity, and the organiser can put the old score back.
+ */
+export const CORRECTION_HOURS = 24;
+
+/**
+ * Decision 13: after start, any participant may enter/edit and players may correct each other freely;
+ * once the CREATOR enters or edits, the score is confirmed. Since 13 November 2026 a confirmed score
+ * stays open to the players for CORRECTION_HOURS after the organiser's last save (`confirmedAt`), then
+ * it locks for everyone but the organiser.
  */
 export function scorePermission(input: {
   event: Pick<Event, "startsAt" | "status" | "scoreLockedByCreator">;
@@ -21,14 +29,53 @@ export function scorePermission(input: {
   viewerPlayerId: string | null;
   isCreator: boolean;
   participantIds: string[];
+  /** When the organiser last saved the score (`confirmedAtOf`); null when unknown, which locks as before. */
+  confirmedAt?: Date | null;
 }): ScorePermission {
   const { event, now, viewerPlayerId, isCreator, participantIds } = input;
   if (event.status === "cancelled") return { allowed: false, reason: "cancelled" };
   if (now.getTime() < event.startsAt.getTime()) return { allowed: false, reason: "not_started" };
   if (isCreator) return { allowed: true, locked: event.scoreLockedByCreator };
   if (!viewerPlayerId || !participantIds.includes(viewerPlayerId)) return { allowed: false, reason: "not_participant" };
-  if (event.scoreLockedByCreator) return { allowed: false, reason: "locked" };
+  if (event.scoreLockedByCreator) {
+    const until = input.confirmedAt ? new Date(input.confirmedAt.getTime() + CORRECTION_HOURS * 3_600_000) : null;
+    if (until && now.getTime() < until.getTime()) return { allowed: true, locked: true, correctUntil: until };
+    return { allowed: false, reason: "locked" };
+  }
   return { allowed: true, locked: false };
+}
+
+/** An activity line of a score save, as the match's activity keeps it. */
+type ScoreLine = { verb: string; meta: Record<string, string | number | null> | null; createdAt: Date };
+
+/** When the organiser last saved the score: the newest `score_entered` line with `byCreator`. Pure. */
+export function confirmedAtOf(lines: readonly ScoreLine[]): Date | null {
+  let at: Date | null = null;
+  for (const l of lines) if (l.verb === "score_entered" && Number(l.meta?.byCreator) === 1 && (!at || l.createdAt > at)) at = l.createdAt;
+  return at;
+}
+
+/**
+ * The newest save of the score, when it was a player's correction of a confirmed score: who, and the
+ * score it replaced ("6-3 7-5"), so the organiser can put it back. Null when the newest save is not one.
+ */
+export function lastCorrectionOf(lines: readonly (ScoreLine & { actorPlayerId: string | null })[]): { by: string | null; from: string; to: string } | null {
+  const saves = lines.filter((l) => l.verb === "score_entered").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const last = saves[0];
+  if (!last || Number(last.meta?.correction) !== 1 || typeof last.meta?.from !== "string") return null;
+  return { by: last.actorPlayerId, from: last.meta.from, to: String(last.meta?.summary ?? "") };
+}
+
+/** A score as the activity writes it ("6-3 7-5"), back into sets; null when it does not read as one. */
+export function setsOfSummary(summary: string): SetScore[] | null {
+  const parts = summary.trim().split(/\s+/);
+  const out: SetScore[] = [];
+  for (const [i, p] of parts.entries()) {
+    const m = /^(\d{1,2})-(\d{1,2})$/.exec(p);
+    if (!m) return null;
+    out.push({ setNumber: i + 1, sideA: Number(m[1]), sideB: Number(m[2]) });
+  }
+  return out.length >= 1 && out.length <= MAX_SETS ? out : null;
 }
 
 /**
@@ -175,11 +222,16 @@ export async function saveMatchScore(
       .from(slots)
       .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["joined", "confirmed"])));
     const participantIds = roster.map((r) => r.playerId).filter((x): x is string => Boolean(x));
-    const perm = scorePermission({ event: ev, now, viewerPlayerId: input.playerId, isCreator: input.isCreator, participantIds });
+    const saves = ev.scoreLockedByCreator && !input.isCreator
+      ? await tx.select({ verb: activity.verb, meta: activity.meta, createdAt: activity.createdAt }).from(activity).where(and(eq(activity.eventId, ev.id), eq(activity.verb, "score_entered"))).orderBy(desc(activity.createdAt)).limit(20)
+      : [];
+    const perm = scorePermission({ event: ev, now, viewerPlayerId: input.playerId, isCreator: input.isCreator, participantIds, confirmedAt: confirmedAtOf(saves) });
     if (!perm.allowed) {
       throw new DomainError(perm.reason === "locked" ? "locked" : perm.reason === "not_started" ? "not_started" : perm.reason === "cancelled" ? "cancelled" : "not_participant");
     }
 
+    const before = await tx.select({ sideA: scores.sideA, sideB: scores.sideB }).from(scores).where(eq(scores.eventId, ev.id)).orderBy(asc(scores.setNumber));
+    const fromSummary = before.map((s) => `${s.sideA}-${s.sideB}`).join(" ");
     await tx.delete(scores).where(eq(scores.eventId, ev.id));
     const inserted = await tx
       .insert(scores)
@@ -204,7 +256,16 @@ export async function saveMatchScore(
       eventId: ev.id,
       actorPlayerId: input.playerId,
       verb: "score_entered",
-      meta: { summary: sets.map((s) => `${s.sideA}-${s.sideB}`).join(" "), byCreator: input.isCreator ? 1 : 0 },
+      // The save's own time: the correction window counts from the organiser's save.
+      createdAt: now,
+      meta: {
+        summary: sets.map((s) => `${s.sideA}-${s.sideB}`).join(" "),
+        byCreator: input.isCreator ? 1 : 0,
+        // The score this save replaced, so the line says "changed the score from … to …".
+        ...(fromSummary ? { from: fromSummary } : {}),
+        // A player's correction of a confirmed score: the organiser is offered "Put back".
+        ...(ev.scoreLockedByCreator && !input.isCreator ? { correction: 1 } : {}),
+      },
     });
     return { event: updated, scores: inserted };
   });
