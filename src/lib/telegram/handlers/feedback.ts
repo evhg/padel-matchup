@@ -1,4 +1,6 @@
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import type { Db } from "@/db";
+import { feedback } from "@/db/schema";
 import type { TelegramChat } from "@/db/schema";
 import type { OpContext } from "@/lib/api/operations";
 import { composeAck } from "@/lib/feedback/ack";
@@ -88,4 +90,43 @@ async function feedbackReply(db: Db, msg: TgMessage, chat: TelegramChat, from: T
   if (!updated) return null;
   if (updated.messagesSent < FEEDBACK_LIMITS.messagesPerItem) await sendMessage(chat.chatId, esc(strings(locale).feedbackAdded), { replyTo: msg.message_id, silent: true });
   return `feedback:added:${note.id}`;
+}
+
+/** How a kept picture is written into a note: Telegram's reference, which /api/admin/feedback/photo opens. */
+export const PHOTO_MARK = "tg-file:";
+/** Messages this close to the person's last note join it, with no second thank-you: five screenshots are one note. */
+export const BURST_MINUTES = 15;
+
+/** A private message as a line of a note: its words, and a kept picture as `📷 [tg-file:<id>]`. Pure. */
+export function privateLine(msg: Pick<TgMessage, "text" | "caption" | "photo" | "document">): string {
+  const words = (msg.text ?? msg.caption ?? "").trim();
+  const file = msg.photo?.length ? msg.photo[msg.photo.length - 1].file_id : msg.document?.file_id;
+  if (!file) return words;
+  return `📷 [${PHOTO_MARK}${file}]${words ? ` ${words}` : ""}`;
+}
+
+/**
+ * Anything a player sends the bot in a private chat that no command, code, score or reply explains. The
+ * owner, 13 November 2026: "Anything a player sends to kicksmash bot, has to be received and analyzed".
+ * Until then such a message got the same help back and was kept nowhere: Erik sent screenshots, then
+ * "why you keep repeating", and all of it was lost. Now it is a note (`feedbackFromChat`: thanked once,
+ * proposed to the owner, read by the hourly check), and a message within BURST_MINUTES of the person's
+ * last note, of any kind, joins that note without a second answer.
+ */
+export async function keepPrivateMessage(db: Db, msg: TgMessage, chat: TelegramChat, from: TgUser, locale: BotLocale, ctx: OpContext, now = new Date()): Promise<string | null> {
+  const line = privateLine(msg);
+  if (line.length < 3) return null;
+  const [recent] = await db
+    .select({ id: feedback.id })
+    .from(feedback)
+    // The database's clock on both sides: a note is stamped by the database (created_at's default), so
+    // the window is measured by it too, whatever clock the caller runs on.
+    .where(and(eq(feedback.telegramUserId, from.id), eq(feedback.telegramChatId, chat.chatId), gte(feedback.createdAt, sql`now() - (${BURST_MINUTES} * interval '1 minute')`)))
+    .orderBy(desc(feedback.createdAt))
+    .limit(1);
+  if (recent) {
+    const joined = await appendFeedbackReply(db, recent.id, line, now);
+    if (joined) return `feedback:added:${recent.id}`;
+  }
+  return feedbackFromChat(db, msg, chat, from, line, locale, ctx);
 }
