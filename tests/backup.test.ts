@@ -28,6 +28,18 @@ describe("nightly backup", () => {
     expect((dump.events as { venue_name: string }[]).some((r) => r.venue_name === "Rawai Padel Club")).toBe(true);
   });
 
+  // The Rally Finder's still frames live 30 days (/privacy); a night file lives 60, so they stay out.
+  it("leaves the Rally Finder's pictures out and keeps its numbers", async () => {
+    const { labRuns } = await import("@/db/schema");
+    await db.insert(labRuns).values([
+      { id: "00000000-0000-4000-8000-0000000000a1", page: "rally-finder 1", stage: "who", data: { hits: 3 } },
+      { id: "00000000-0000-4000-8000-0000000000a2", page: "rally-finder 1", stage: "pic", data: { jpeg: "/9j/AAAA" } },
+    ]);
+    const rows = (await dumpDatabase(db)).lab_runs as Array<{ id: string; stage: string }>;
+    expect(rows.map((r) => r.stage)).toContain("who");
+    expect(rows.map((r) => r.stage)).not.toContain("pic");
+  });
+
   it("without the repository and token it does nothing; with them it puts one gzipped file a day and prunes old ones", async () => {
     const now = new Date("2026-09-06T05:00:00Z");
     expect(await runBackup(db, now)).toEqual({ status: "skipped" });

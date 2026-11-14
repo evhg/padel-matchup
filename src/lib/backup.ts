@@ -39,12 +39,19 @@ export const cappedTables = (dump: Record<string, unknown[]>, cap = BACKUP_ROW_C
     .map(([name]) => name);
 const rowsOf = (r: unknown): unknown[] => (Array.isArray(r) ? r : ((r as { rows?: unknown[] }).rows ?? []));
 
-/** Every table, every row (capped per table), as plain JSON. */
+/**
+ * Rows a backup leaves out. The Rally Finder's still frames (`lab_runs` stage `pic`) live 30 days and
+ * no longer (src/lib/domain/lab.ts, /privacy); a night file kept 60 days would keep them twice as long.
+ */
+export const BACKUP_SKIP: Readonly<Record<string, string>> = { lab_runs: "stage <> 'pic'" };
+
+/** Every table, every row (capped per table, without BACKUP_SKIP), as plain JSON. */
 export async function dumpDatabase(db: Db, cap = BACKUP_ROW_CAP): Promise<Record<string, unknown[]>> {
   const out: Record<string, unknown[]> = {};
   for (const name of BACKUP_TABLES) {
     if (!/^[a-z_]+$/.test(name)) continue;
-    out[name] = rowsOf(await db.execute(sql.raw(`select * from "${name}" limit ${cap}`)));
+    const where = BACKUP_SKIP[name] ? ` where ${BACKUP_SKIP[name]}` : "";
+    out[name] = rowsOf(await db.execute(sql.raw(`select * from "${name}"${where} limit ${cap}`)));
   }
   return out;
 }

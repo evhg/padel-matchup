@@ -7,7 +7,8 @@
 <!-- Rally Finder, a Kicksmash lab test. Served as a plain file so the iPhone share sheet can save the cut:
      the Claude viewer lets only its own organisation download. The same page is published as a Claude
      artifact from the session scratchpad; this copy adds only this head. No video leaves the phone:
-     only the pose library and model below are downloaded, from pinned public copies. -->
+     the pose library and model below are downloaded from pinned public copies, and after the player
+     finder the page sends 4 still frames to /api/lab/run (src/lib/domain/lab.ts). -->
 <script>window.RF_MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/"; window.RF_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";</script>
 </head>
 <body>
@@ -157,7 +158,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
   <header>
     <div class="kicker">Kicksmash lab test</div>
     <h1>Rally Finder</h1>
-    <p class="lead">This page listens to one match video and finds the rallies from the sound of the hits. It works on this phone only. Nothing is uploaded.</p>
+    <p class="lead">This page listens to one match video and finds the rallies from the sound of the hits. It works on this phone. The video stays on this phone; to help us fix the player finder, the page sends Kicksmash 4 still pictures from the match each time the finder runs, and they are deleted after 30 days.</p>
     <p class="muted small">We want to learn three things: how fast the phone reads a long video, how well the sound shows the rallies, and whether the phone can make a 1-minute 4K cut of the best rallies.</p>
     <div class="tips">
       <b>How to record the match</b>
@@ -286,7 +287,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
 
   <section class="card" id="stepWho" hidden>
     <h2><span class="step">5</span>Who hit it</h2>
-    <p>The phone finds the four players in each rally of the cut, and names the player who hit each shot. It works on this phone. Nothing is uploaded.</p>
+    <p>The phone finds the four players in each rally of the cut, and names the player who hit each shot. It works on this phone. Each time, the page sends Kicksmash 4 still pictures, one from each rally at the moment the finder saw the fewest players, so we can see where it loses them. They are deleted after 30 days. The video stays on this phone.</p>
     <div class="row">
       <button type="button" class="btn primary" id="whoBtn">Find the players</button>
       <button type="button" class="btn" id="whoStop" disabled>Stop</button>
@@ -308,7 +309,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
 
   <section class="card" id="step5" hidden>
     <h2><span class="step">6</span>The results</h2>
-    <p>On kicksma.sh the page sends its numbers to Kicksmash by itself after each step: no picture and no sound. Copy them only if you want to read them.</p>
+    <p>On kicksma.sh the page sends its numbers to Kicksmash by itself after each step, and the 4 still pictures after the player finder. Never the video, never its sound. Copy the numbers only if you want to read them.</p>
     <label class="check"><input type="checkbox" id="withHits"> <span>Add the time of every hit. This makes the text longer, but it helps us tune the finder.</span></label>
     <div class="row">
       <button type="button" class="btn primary" id="copyBtn">Copy results</button>
@@ -1363,7 +1364,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.6';
+  const VERSION = 'rally-finder 2026-11-14.7';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
@@ -2266,7 +2267,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
   const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
   function whoReset() {
-    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0;
+    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0; who.picturesSent = 0;
     const el = (q) => document.querySelector(q);
     if (el('#whoName')) { el('#whoName').hidden = true; el('#whoOut').hidden = true; el('#whoStatus').textContent = ''; el('#whoList').textContent = ''; el('#whoBtn').disabled = false; el('#whoStop').disabled = true; }
   }
@@ -2585,7 +2586,10 @@ if (typeof module !== 'undefined') module.exports = RF;
           if (done % 5 === 0) st.textContent = 'Reading rally ' + (si + 1) + ' of ' + segs.length + ': ' + Math.min(99, Math.round((100 * done) / total)) + '%.';
         }, live);
         if (!live()) return;
-        who.segs.push({ seg, tracks: track(frames), frames: frames.length, bodies: frames.reduce((a, f) => a + f.bodies.length, 0) });
+        // The moment this rally showed the fewest people, after its first second: the picture we need.
+        const later = frames.slice(WHO_FPS);
+        const low = (later.length ? later : frames).reduce((m, f) => (f.bodies.length < m.bodies.length ? f : m), (later.length ? later : frames)[0]);
+        who.segs.push({ seg, tracks: track(frames), frames: frames.length, bodies: frames.reduce((a, f) => a + f.bodies.length, 0), low: low && { t: low.t, bodies: low.bodies.map((b) => ({ box: b.box, hip: b.hip, h: Math.round(b.h), vis: r2(b.vis) })) } });
         sendRun('who');
       }
       $('#whoStage').hidden = true;
@@ -2605,6 +2609,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       if (!first || !first.tracks.length) throw new Error('The finder saw no players it could follow in any rally.');
       st.className = 'status ok';
       st.textContent = 'Found ' + first.tracks.length + ' people in rally ' + (who.nameSeg + 1) + ' (' + stats.bodiesPerFrame + ' a frame on average). Name the players below.';
+      await sendPictures(v, W, H, stats.flip);
       await whoShowNames(first, W, H, v, stats.flip);
     } catch (e) {
       who.error = String(e && e.message || e);
@@ -2617,6 +2622,37 @@ if (typeof module !== 'undefined') module.exports = RF;
       sendRun('who');
     }
   }
+  // The pictures. The owner, 14 November 2026, "Send automatically": three fixes of the finder were made
+  // without one real frame while every synthetic test passed. After each finder run the page sends one
+  // still frame from each of the first four rallies, at the moment it saw the fewest people, with what
+  // it saw there. Kicksmash deletes them after 30 days and never backs them up (src/lib/domain/lab.ts);
+  // the video itself never leaves the phone.
+  async function sendPictures(v, W, H, flip) {
+    if (!canSend()) return;
+    const work = document.createElement('canvas'); work.width = W; work.height = H;
+    const g = work.getContext('2d');
+    const stage = $('#whoStage'); stage.hidden = false; // a hidden video gives blank frames on the iPhone
+    const toB64 = (q) => new Promise((res) => work.toBlob((bl) => {
+      if (!bl) return res('');
+      const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] || ''); fr.onerror = () => res(''); fr.readAsDataURL(bl);
+    }, 'image/jpeg', q));
+    let sent = 0;
+    for (const [i, sg] of who.segs.slice(0, 4).entries()) {
+      if (!sg.low) continue;
+      try {
+        await seekTo(v, sg.low.t); drawFrame(g, v, W, H, flip);
+        let jpeg = await toB64(0.8);
+        if (jpeg.length > 900000) jpeg = await toB64(0.6);
+        if (!jpeg.startsWith('/9j/') || jpeg.length > 900000) continue;
+        const body = JSON.stringify({ id: newRunId(), page: VERSION, stage: 'pic', data: { run: state.runId2 || null, rally: i + 1, t: r2(sg.low.t), W, H, flip: !!flip, seen: sg.low.bodies.length, bodies: sg.low.bodies, jpeg } });
+        fetch('/api/lab/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body }).catch(() => {});
+        sent++;
+      } catch (e) { /* a picture that fails is skipped; the finder's own result stands */ }
+    }
+    stage.hidden = true;
+    who.picturesSent = sent;
+  }
+
   // The names. Erik's run (14 November 2026) named the players from the first frame of the first
   // rally: Tim stood half behind Erik, and a player of the next court stood beyond the glass, so Erik
   // typed "half of Tim" and "someone on another court". Now each person the finder followed gets a
@@ -2746,6 +2782,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       stats: who.stats, error: who.error, names: who.names.length, swingFloor: SWING_FLOOR,
       rallies: who.segs.map((s) => ({ start: r2(s.seg.start), frames: s.frames, bodiesPerFrame: r2(s.bodies / Math.max(1, s.frames)), tracks: s.tracks.length, trackFrames: s.tracks.map((tr) => tr.pts.length), heightsPx: s.tracks.map((tr) => Math.round(tr.h)) })),
       nameRally: (who.nameSeg || 0) + 1,
+      picturesSent: who.picturesSent || 0,
       shots, judged: judged.length, right: judged.filter((s) => s.verdict === 'right' || s.verdict === 'was:' + s.name).length,
     };
   }
@@ -2756,7 +2793,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 
   // ---------- the automatic report ----------
   // On kicksma.sh the page sends its results to /api/lab/run by itself at the end of each stage (the
-  // owner, 13 November 2026: no person copies anything). Numbers only, never a picture or sound. A run
+  // owner, 13 November 2026: no person copies anything). Numbers, and after the player finder a few still frames (sendPictures); never the video or its sound. A run
   // is one id, so each stage replaces the last. Elsewhere (the Claude viewer) it sends nothing.
   const canSend = () => /(^|\.)kicksma\.sh$/.test(location.hostname) || location.hostname === '127.0.0.1' || location.hostname === 'localhost';
   const newRunId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => ((Math.random() * 16) | 0).toString(16)));

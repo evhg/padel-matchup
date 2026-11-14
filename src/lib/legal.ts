@@ -4,6 +4,7 @@ import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { INBOX_DAYS } from "@/lib/domain/noticeKinds";
 import { PARTNER_WINDOW_MS } from "@/lib/domain/refill";
 import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
+import { LAB_PICTURE_KEEP_DAYS, LAB_PICTURES_MAX, LAB_PICTURES_PER_RUN, LAB_RUNS_KEEP_DAYS } from "@/lib/domain/lab";
 
 /**
  * What /privacy and /terms say where the code decides it.
@@ -19,7 +20,7 @@ import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
 export const LEGAL_OPERATOR = "Kicksmash, Phuket, Thailand";
 
 /** The day /privacy or /terms last changed. Move it in the same commit as the words. */
-export const LEGAL_UPDATED = "2026-11-09";
+export const LEGAL_UPDATED = "2026-11-14";
 
 /** That day in the reader's language: "9 October 2026", "9 октября 2026 г.", "9 de octubre de 2026". */
 export function legalDate(locale: string, iso: string = LEGAL_UPDATED): string {
@@ -40,5 +41,10 @@ export function legalValues(locale: string) {
     partnerDays: PARTNER_WINDOW_MS / (24 * 60 * 60 * 1000),
     // How often a full sign-in gets its new year at most: the km_player line (the owner, 28 October 2026).
     renewDays: RENEW_EVERY_DAYS,
+    // The Rally Finder lab page: its numbers, its still frames, and how long each stays (src/lib/domain/lab.ts).
+    labRunDays: LAB_RUNS_KEEP_DAYS,
+    labPictureDays: LAB_PICTURE_KEEP_DAYS,
+    labPictures: LAB_PICTURES_PER_RUN,
+    labPicturesMax: LAB_PICTURES_MAX,
   };
 }
