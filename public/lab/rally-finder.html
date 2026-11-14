@@ -117,6 +117,9 @@ a.btn { text-decoration: none; }
 .who-list li b { font-weight: 700; }
 .who-list select { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 14px/1.2 var(--font-body); }
 .rally { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.reel-pick { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0 12px; }
+.reel-pick label { font-weight: 600; }
+.reel-pick select { min-height: 40px; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 15px/1.2 var(--font-body); }
 .rally .timing { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
 .rally .timing select { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 14px/1.2 var(--font-body); }
 .rally .rank { font: 700 18px/1 var(--font-display); color: var(--muted); text-align: center; }
@@ -229,7 +232,24 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
 
   <section class="card" id="step4" hidden>
     <h2><span class="step">4</span>The highlights cut</h2>
-    <p>The cut holds up to 5 of the best points (about 2 minutes), each whole, with the reaction after it, in match order. Rallies that you marked "Not a rally" stay out.</p>
+    <p>Choose what you want to watch. Each clip runs to the reaction after the point. Rallies that you marked "Not a rally" stay out.</p>
+    <div class="reel-pick">
+      <label for="reelKind">Reel</label>
+      <select id="reelKind">
+        <option value="best">Best points (whole points, about 2 minutes)</option>
+        <option value="funny">Funny moments (laughter after the point)</option>
+        <option value="reactions">Big reactions (shouts and cheers)</option>
+        <option value="longest">Longest rallies</option>
+        <option value="net">Net battles (fast volleys)</option>
+        <option value="smashes">Smashes (needs the players)</option>
+        <option value="saves">Impossible saves (needs the players)</option>
+        <option value="celebrations">Celebrations and chest bumps (needs the players)</option>
+        <option value="mistakes">Mistakes of one player (needs the players)</option>
+        <option value="player">One player's match (needs the players)</option>
+      </select>
+      <span id="reelPlayerRow" hidden><label for="reelPlayer">Whose</label> <select id="reelPlayer"></select></span>
+    </div>
+    <p class="note" id="reelNote" hidden></p>
     <div class="row">
       <button type="button" class="btn primary" id="fileCutBtn">Make the 4K cut</button>
       <button type="button" class="btn" id="cutBtn">Play the cut</button>
@@ -275,8 +295,8 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
   </section>
 
   <section class="card" id="step5" hidden>
-    <h2><span class="step">6</span>Send us the results</h2>
-    <p>Copy the results. Then paste them into a message to us.</p>
+    <h2><span class="step">6</span>The results</h2>
+    <p>On kicksma.sh the page sends its numbers to Kicksmash by itself after each step: no picture and no sound. Copy them only if you want to read them.</p>
     <label class="check"><input type="checkbox" id="withHits"> <span>Add the time of every hit. This makes the text longer, but it helps us tune the finder.</span></label>
     <div class="row">
       <button type="button" class="btn primary" id="copyBtn">Copy results</button>
@@ -1078,6 +1098,177 @@ const RF = (() => {
     };
   }
 
+  // ---- Reels: the kind of highlights a player chooses (the owner, 13 and 14 November 2026) ----
+  // After each point the sound says how the people reacted: how loud they are against the match's
+  // usual level (shouts, cheers, "oh nooo"), and how much of it is laughter, which makes the level go
+  // up and down 3 to 7 times a second (Erik: funny moments come with "laughter and shouts").
+  const LAUGH_MIN = 0.22, NET_GAP = 0.8, SMASH_MIN = 2;
+  function reactionOf(env, prep, lastHit) {
+    const fps = prep.fps, full = env.full;
+    const a = Math.round((lastHit + 0.3) * fps), b = Math.min(env.n, Math.round((lastHit + 5) * fps));
+    if (b - a < 60) return { db: 0, laugh: 0 };
+    const x = new Float32Array(b - a);
+    let mu = 0;
+    for (let i = 0; i < x.length; i++) { x[i] = full[a + i]; mu += x[i]; }
+    mu /= x.length;
+    const dbv = db(mu / Math.max(prep.fullMedian, 1e-9));
+    // Only the flicker counts: the half-second average comes off first, so a shout that starts and
+    // stops (one slow step) does not read as laughter.
+    const w = 25, y = new Float32Array(x.length);
+    let run = 0;
+    for (let i = 0; i < x.length; i++) {
+      run += x[i];
+      if (i >= 2 * w + 1) run -= x[i - 2 * w - 1];
+      const lo = Math.max(0, i - 2 * w), cnt = i - lo + 1;
+      y[Math.max(0, i - w)] = x[Math.max(0, i - w)] - run / cnt;
+    }
+    for (let i = Math.max(0, x.length - w); i < x.length; i++) y[i] = 0;
+    for (let i = 0; i < x.length; i++) x[i] = y[i];
+    let v0 = 0;
+    for (let i = 0; i < x.length; i++) v0 += x[i] * x[i];
+    let best = 0;
+    if (v0 > 0) for (let lag = 14; lag <= 33; lag++) {
+      let c = 0;
+      for (let i = lag; i < x.length; i++) c += x[i] * x[i - lag];
+      c /= v0;
+      if (c > best) best = c;
+    }
+    return { db: Math.round(dbv * 10) / 10, laugh: Math.round(best * 100) / 100 };
+  }
+  // The longest run of hits less than NET_GAP apart: volleys at the net.
+  function netBurst(times) {
+    let best = { n: 0, start: 0, end: 0 }, i = 0;
+    for (let j = 1; j <= times.length; j++) {
+      if (j === times.length || times[j] - times[j - 1] > NET_GAP) {
+        if (j - i > best.n) best = { n: j - i, start: times[i], end: times[j - 1] };
+        i = j;
+      }
+    }
+    return best;
+  }
+  const REELS = {
+    best: { label: 'Best points', picture: false },
+    funny: { label: 'Funny moments', picture: false },
+    reactions: { label: 'Big reactions', picture: false },
+    longest: { label: 'Longest rallies', picture: false },
+    net: { label: 'Net battles', picture: false },
+    smashes: { label: 'Smashes', picture: true },
+    saves: { label: 'Impossible saves', picture: true },
+    celebrations: { label: 'Celebrations and chest bumps', picture: true },
+    mistakes: { label: 'Mistakes of one player', picture: true, player: true },
+    player: { label: "One player's match", picture: true, player: true },
+  };
+  // What each point offers the reels, measured once.
+  function pointFacts(rallies, hits, env, prep) {
+    return rallies.map((r) => {
+      const times = hits.filter((h) => h.t >= r.start - 0.01 && h.t <= r.end + 0.01).map((h) => h.t);
+      const strong = hits.filter((h) => h.t >= r.start - 0.01 && h.t <= r.end + 0.01).reduce((m, h) => (h.s > m.s ? h : m), { s: 0, t: r.start });
+      const pb = pointBounds(r, hits);
+      return { r, pb, reaction: reactionOf(env, prep, pb.lastHit), burst: netBurst(times), strongest: { t: strong.t, s: strong.s / prep.ref } };
+    });
+  }
+  function pickClips(cands, most, target) {
+    const segs = [];
+    let total = 0;
+    for (const c of cands) {
+      if (segs.length >= most) break;
+      if (segs.some((s) => s.start < c.end && c.start < s.end)) continue;
+      if (segs.length && total + (c.end - c.start) > target + 10) continue;
+      segs.push(c); total += c.end - c.start;
+    }
+    return segs.sort((a, b) => a.start - b.start);
+  }
+  /**
+   * The clips of a reel, from the sound alone. A reel that needs the players (REELS[kind].picture)
+   * gets its candidates here; `pictureReel` keeps the ones the picture confirms.
+   */
+  function planReel(kind, o) {
+    if (kind === 'best' || !REELS[kind]) return planCut(o.rallies, o.isMarked, 120, { hits: o.hits, duration: o.duration });
+    const ignoreFrom = o.duration && o.duration > 300 ? o.duration - END_IGNORE : Infinity;
+    const facts = pointFacts(o.rallies.filter((r) => !o.isMarked(r) && r.end <= ignoreFrom), o.hits, o.env, o.prep);
+    const after = (f, before, tail) => ({ start: Math.max(0, f.pb.lastHit - before), end: f.pb.lastHit + tail, rally: f.r });
+    const tag = (c, why) => Object.assign(c, { why });
+    if (kind === 'funny') return pickClips(facts.filter((f) => f.reaction.laugh >= LAUGH_MIN && f.reaction.db >= 2).sort((a, b) => b.reaction.laugh - a.reaction.laugh).map((f) => tag(after(f, 4, 6), 'laughter ' + f.reaction.laugh)), 6, 60);
+    if (kind === 'reactions') return pickClips(facts.filter((f) => f.reaction.db >= 4).sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 4, 6), 'reaction +' + f.reaction.db + ' dB')), 6, 60);
+    if (kind === 'longest') return pickClips(facts.slice().sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: Math.max(0, f.pb.firstHit - POINT_BEFORE), end: f.pb.lastHit + POINT_AFTER, rally: f.r }, f.r.hits + ' shots')), 3, 150);
+    if (kind === 'net') return pickClips(facts.filter((f) => f.burst.n >= 4).sort((a, b) => b.burst.n - a.burst.n || b.r.score - a.r.score).map((f) => tag({ start: Math.max(0, f.burst.start - 3), end: Math.max(f.burst.end + 4, Math.min(f.pb.end, f.burst.end + 8)), rally: f.r }, f.burst.n + ' fast shots')), 5, 60);
+    // Candidates for the picture: more than the reel keeps, few enough for a few minutes of looking.
+    if (kind === 'smashes') {
+      const loud = o.hits.filter((h) => h.s / o.prep.ref >= SMASH_MIN && h.t <= ignoreFrom).sort((a, b) => b.s - a.s).slice(0, 12);
+      return pickClips(loud.map((h) => ({ start: Math.max(0, h.t - 3), end: h.t + 4, rally: null, hitT: h.t, why: 'loud hit ' + Math.round((h.s / o.prep.ref) * 10) / 10 })), 12, 100);
+    }
+    if (kind === 'saves') return pickClips(facts.filter((f) => f.r.hits >= 10).sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, f.r.hits + ' shots')), 8, 200);
+    if (kind === 'celebrations') return pickClips(facts.slice().sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 3, 7), 'reaction +' + f.reaction.db + ' dB')), 10, 100);
+    if (kind === 'mistakes') return pickClips(facts.slice().sort((a, b) => b.reaction.laugh + b.reaction.db / 20 - (a.reaction.laugh + a.reaction.db / 20)).map((f) => tag(after(f, 5, 5), 'laughter ' + f.reaction.laugh)), 12, 120);
+    if (kind === 'player') return pickClips(facts.slice().sort((a, b) => b.r.score - a.r.score).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, 'score ' + f.r.score)), 8, 200);
+    return [];
+  }
+
+  // ---- What the picture adds: per clip, from the players the finder followed ----
+  const nearest = (tr, t) => tr.pts.reduce((m, q) => (Math.abs(q.t - t) < Math.abs(m.t - t) ? q : m), tr.pts[0]);
+  // A smash: the hitter's wrist above the head, over the shoulders by a fifth of the body's height.
+  function armUp(tr, t) {
+    const q = nearest(tr, t);
+    if (!q || Math.abs(q.t - t) > 0.3) return false;
+    const b = q.b, top = Math.min(b.sh[0].y, b.sh[1].y);
+    return Math.min(b.wrists[0].y, b.wrists[1].y) < top - 0.2 * b.h;
+  }
+  // The fastest a player's hips moved, in body heights a second: a sprint or a lunge for a save.
+  function topSpeed(tr) {
+    let v = 0;
+    for (let i = 1; i < tr.pts.length; i++) {
+      const a = tr.pts[i - 1], b = tr.pts[i], dt = b.t - a.t;
+      if (dt > 0) v = Math.max(v, Math.hypot(b.b.hip.x - a.b.hip.x, b.b.hip.y - a.b.hip.y) / Math.max(a.b.h, b.b.h) / dt);
+    }
+    return v;
+  }
+  // A celebration after the point: two players' hips within half a body height, three frames or more.
+  function celebrated(tracks, from) {
+    let close = 0;
+    const times = [...new Set(tracks.flatMap((tr) => tr.pts.filter((q) => q.t >= from).map((q) => q.t)))];
+    for (const t of times) {
+      const at = tracks.map((tr) => tr.pts.find((q) => Math.abs(q.t - t) < 0.06)).filter(Boolean);
+      let near = false;
+      for (let i = 0; i < at.length && !near; i++) for (let j = i + 1; j < at.length && !near; j++) {
+        const h = (at[i].b.h + at[j].b.h) / 2;
+        near = Math.abs(at[i].b.h - at[j].b.h) < 0.35 * h && Math.hypot(at[i].b.hip.x - at[j].b.hip.x, at[i].b.hip.y - at[j].b.hip.y) < 0.5 * h;
+      }
+      if (near) close++;
+    }
+    return close >= 3;
+  }
+  /**
+   * The clips the picture confirms. `seen` holds, for each candidate clip in order, the tracks the
+   * finder followed and the name of each, and the shots it named ({ t, name, last, score }).
+   */
+  function pictureReel(kind, cands, seen, player) {
+    const keep = [];
+    cands.forEach((c, i) => {
+      const s = seen[i];
+      if (!s || !s.tracks.length) return;
+      const named = (ti) => s.names[ti] || '?';
+      if (kind === 'smashes') {
+        const shot = s.shots.filter((x) => x.name && Math.abs(x.t - c.hitT) < 0.4).sort((a, b) => b.score - a.score)[0];
+        const ti = shot ? s.names.indexOf(shot.name) : -1;
+        if (shot && ti >= 0 && armUp(s.tracks[ti], c.hitT)) keep.push(Object.assign({}, c, { why: 'Smash by ' + shot.name, rank: 1 }));
+      } else if (kind === 'saves') {
+        let bestV = 0, bestT = -1;
+        s.tracks.forEach((tr, ti) => { const v = topSpeed(tr); if (v > bestV) { bestV = v; bestT = ti; } });
+        if (bestV >= 1.5) keep.push(Object.assign({}, c, { why: 'Save by ' + named(bestT) + ' (' + Math.round(bestV * 10) / 10 + ' body heights a second)', rank: bestV }));
+      } else if (kind === 'celebrations') {
+        if (celebrated(s.tracks, (c.rally ? pointBounds(c.rally, s.hits || []).lastHit : c.start) + 0.5)) keep.push(Object.assign({}, c, { why: 'Celebration', rank: 1 }));
+      } else if (kind === 'mistakes') {
+        const last = s.shots.filter((x) => x.last && x.name).pop();
+        if (last && last.name === player) keep.push(Object.assign({}, c, { why: player + "'s last shot, then laughter", rank: 1 }));
+      } else if (kind === 'player') {
+        const mine = s.shots.filter((x) => x.name === player);
+        if (mine.length) keep.push(Object.assign({}, c, { why: mine.length + ' shots by ' + player, rank: mine.length }));
+      }
+    });
+    keep.sort((a, b) => b.rank - a.rank);
+    return pickClips(keep, kind === 'saves' || kind === 'player' ? 4 : 6, kind === 'saves' || kind === 'player' ? 120 : 60);
+  }
+
   function evaluate(rallies, truth) {
     const used = new Set();
     let tp = 0;
@@ -1151,7 +1342,7 @@ const RF = (() => {
   }
 
   return { walkTop, children, parseMoov, parseAsc, parseEsds, trackKind, pcmFormat, sampleTable, pcmChunks, planRanges, pcmToMono, adtsHeader, buildAdts, buildM4a, readRange,
-    Envelope, prepare, pickHits, groupRallies, planCut, pointBounds, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc };
+    Envelope, prepare, pickHits, groupRallies, planCut, pointBounds, planReel, pictureReel, reactionOf, netBurst, REELS, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc };
 })();
 if (typeof module !== 'undefined') module.exports = RF;
 /*CORE-END*/
@@ -1161,7 +1352,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-13.2';
+  const VERSION = 'rally-finder 2026-11-14.1';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
@@ -1740,24 +1931,48 @@ if (typeof module !== 'undefined') module.exports = RF;
   }
 
   // ---------- the 1-minute cut ----------
+  const planKeyOf = (segs) => JSON.stringify(segs.map((x) => [Math.round(x.start * 10), Math.round(x.end * 10)]));
   function renderCutPlan() {
-    const segs = RF.planCut(state.rallies, isMarked, 120, { hits: state.hits, duration: state.env ? state.env.seconds : 0 });
-    state.cutPlan = segs;
+    const kind = ($('#reelKind') && $('#reelKind').value) || 'best';
+    const def = RF.REELS[kind] || RF.REELS.best;
+    const o = { rallies: state.rallies, hits: state.hits, env: state.env, prep: state.prep, isMarked, duration: state.env ? state.env.seconds : 0 };
+    let segs = state.prep ? RF.planReel(kind, o) : [];
+    const note = $('#reelNote');
+    note.hidden = true;
+    $('#reelPlayerRow').hidden = !def.player;
+    state.finderPlan = null;
+    let waiting = false;
+    if (def.picture) {
+      const cands = segs;
+      if (who.seen && who.planKey === planKeyOf(cands)) {
+        segs = RF.pictureReel(kind, cands, who.seen, $('#reelPlayer').value);
+        note.hidden = false;
+        note.textContent = 'The picture kept ' + segs.length + ' of ' + cands.length + ' moments.' + (segs.length ? '' : ' Try another reel, or another player.');
+      } else {
+        state.finderPlan = cands.length ? cands : null;
+        waiting = cands.length > 0;
+        note.hidden = false;
+        note.textContent = cands.length ? 'This reel needs the players. Tap "Find the players" in step 5: the page looks at ' + cands.length + ' moments, keeps the ones that fit, and then this cut is ready.' : 'No moments for this reel in this match.';
+      }
+    }
+    if (!def.picture && !segs.length && state.prep) { note.hidden = false; note.textContent = 'No moments for this reel in this match. Try another reel.'; }
+    state.reelKind = kind;
+    state.cutPlan = waiting ? [] : segs;
     const ol = $('#segList');
     ol.textContent = '';
-    const total = segs.reduce((a, s) => a + s.end - s.start, 0);
-    segs.forEach((s) => { const li = document.createElement('li'); li.textContent = fmtT(s.start) + ' to ' + fmtT(s.end) + ' · ' + Math.round(s.end - s.start) + ' s · score ' + s.rally.score; ol.appendChild(li); });
-    const enough = segs.length > 0;
+    const total = state.cutPlan.reduce((a, x) => a + x.end - x.start, 0);
+    state.cutPlan.forEach((x) => { const li = document.createElement('li'); li.textContent = fmtT(x.start) + ' to ' + fmtT(x.end) + ' · ' + Math.round(x.end - x.start) + ' s · ' + (x.why || 'score ' + x.rally.score); ol.appendChild(li); });
+    const enough = state.cutPlan.length > 0;
     $('#cutBtn').disabled = !enough || !!(state.cut && state.cut.active); $('#recBtn').disabled = !enough || !!(state.cut && state.cut.active);
     $('#fileCutBtn').hidden = !state.movie; $('#fileCutHelp').hidden = !state.movie;
-    $('#stepWho').hidden = !state.movie || !enough;
+    $('#stepWho').hidden = !state.movie || !(enough || waiting);
     $('#fileCutBtn').disabled = !enough;
     $('#cutBtn').textContent = enough ? 'Play the ' + Math.round(total) + '-second cut' : 'Play the cut';
   }
   function setSegLabel() {
     const c = state.cut; if (!c) return;
     const s = c.segs[c.idx];
-    $('#segLabel').textContent = 'Rally ' + (c.idx + 1) + ' of ' + c.segs.length + ' · ' + fmtT(s.rally.start);
+    $('#segLabel').textContent = 'Clip ' + (c.idx + 1) + ' of ' + c.segs.length + ' · ' + fmtT(s.start) + (s.why ? ' · ' + s.why : '');
   }
   function gotoSeg(i) {
     const c = state.cut;
@@ -1823,6 +2038,8 @@ if (typeof module !== 'undefined') module.exports = RF;
     if (!silent) { renderCutPlan(); drawTimeline(); }
   }
   $('#cutBtn').addEventListener('click', () => startCut(null));
+  $('#reelKind').addEventListener('change', () => { if (!(state.cut && state.cut.active)) renderCutPlan(); });
+  $('#reelPlayer').addEventListener('change', () => renderCutPlan());
   $('#fileCutBtn').addEventListener('click', async () => {
     const st = $('#fileCutStatus');
     $('#fileCutOut').hidden = false;
@@ -1983,7 +2200,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
   const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
   function whoReset() {
-    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false;
+    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null;
     const el = (q) => document.querySelector(q);
     if (el('#whoName')) { el('#whoName').hidden = true; el('#whoOut').hidden = true; el('#whoStatus').textContent = ''; el('#whoList').textContent = ''; el('#whoBtn').disabled = false; el('#whoStop').disabled = true; }
   }
@@ -2188,8 +2405,9 @@ if (typeof module !== 'undefined') module.exports = RF;
       const W = Math.min(1920, v.videoWidth || 1920), H = Math.round(W * ((v.videoHeight || 1080) / (v.videoWidth || 1920)));
       const frame = document.createElement('canvas'); frame.width = W; frame.height = H;
       const g = frame.getContext('2d', { willReadFrequently: true });
-      const segs = state.cutPlan || [];
+      const segs = state.finderPlan || state.cutPlan || [];
       if (!segs.length) throw new Error('The cut has no rallies.');
+      who.planKey = planKeyOf(segs); who.seen = null;
 
       // The first two seconds decide, before the long run: is there a picture, and which way up is it?
       // The model reads people upright; a phone mounted upside down records them upside down (Erik's
@@ -2289,6 +2507,7 @@ if (typeof module !== 'undefined') module.exports = RF;
         if (!best || cost < best.cost) best = { cost, p };
       }
       const nameOf = (ti) => (si === 0 ? who.names[ti] : best && best.p[ti] != null ? who.names[best.p[ti]] : '?');
+      s.names = s.tracks.map((_, ti) => nameOf(ti));
       const hits = state.hits.filter((h) => h.t >= s.seg.start && h.t <= s.seg.end);
       hits.forEach((h, hi) => {
         const sw = s.tracks.map((tr, ti) => Object.assign({ ti }, swingOf(tr, h.t))).sort((a, b) => b.score - a.score);
@@ -2299,6 +2518,13 @@ if (typeof module !== 'undefined') module.exports = RF;
       });
     });
     who.shots = shots;
+    who.seen = who.segs.map((s, si) => ({ tracks: s.tracks, names: s.names || [], shots: shots.filter((x) => x.rally === si + 1), hits: state.hits.filter((h) => h.t >= s.seg.start && h.t <= s.seg.end) }));
+    // "Whose?" offers the names just typed; the reel is planned again with what the picture saw.
+    const sel = $('#reelPlayer'), was = sel.value;
+    sel.textContent = '';
+    who.names.forEach((nm) => { const op = document.createElement('option'); op.value = nm; op.textContent = nm; sel.appendChild(op); });
+    if (who.names.includes(was)) sel.value = was;
+    renderCutPlan();
     const ol = $('#whoList'); ol.textContent = '';
     for (const sh of shots) {
       const li = document.createElement('li');
@@ -2378,7 +2604,8 @@ if (typeof module !== 'undefined') module.exports = RF;
       top15: top.map((r, i) => ({ rank: i + 1, start: fmtT(r.start), startSec: r2(r.start), lengthSec: r2(r.dur), hits: r.hits, score: r.score, notRally: isMarked(r), smashDb: r2(r.smashDb), cheerDb: r2(r.cheerDb), startFix: (state.timing[r.start.toFixed(1)] || {}).start || null, endFix: (state.timing[r.start.toFixed(1)] || {}).end || null })),
       marks: state.marks.map((m) => ({ start: fmtT(m.start), startSec: r2(m.start), endSec: r2(m.end) })),
       allRallies: { columns: ['startSec', 'lengthSec', 'hits', 'score', 'notRally'], rows: state.rallies.map((r) => [r2(r.start), r2(r.dur), r.hits, r.score, isMarked(r) ? 1 : 0]) },
-      cut: { segments: (state.cutPlan || []).map((s) => ({ start: fmtT(s.start), startSec: r2(s.start), endSec: r2(s.end), score: s.rally.score })), totalSec: r2((state.cutPlan || []).reduce((a, s) => a + s.end - s.start, 0)), played: state.cut ? { seekMs: state.cut.seekMs, playedSec: state.cut.playedSec || null } : null },
+      reel: state.reelKind || 'best',
+      cut: { segments: (state.cutPlan || []).map((s) => ({ start: fmtT(s.start), startSec: r2(s.start), endSec: r2(s.end), score: s.rally ? s.rally.score : null, why: s.why || null })), totalSec: r2((state.cutPlan || []).reduce((a, s) => a + s.end - s.start, 0)), played: state.cut ? { seekMs: state.cut.seekMs, playedSec: state.cut.playedSec || null } : null },
       fileCut: state.fileCut,
       sent: state.sent || null,
       who: whoResults(),
