@@ -112,6 +112,11 @@ a.btn { text-decoration: none; }
 .who-names label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .who-names input { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 16px/1.2 var(--font-body); }
 .who-names .dot { width: 22px; height: 22px; border-radius: 50%; color: #fff; font: 700 13px/22px var(--font-body); text-align: center; flex: none; }
+.who-card { display: grid; gap: 6px; align-content: start; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.who-card canvas { display: block; width: 100%; height: 170px; object-fit: contain; border-radius: 6px; background: var(--stage); }
+.who-card label { min-width: 0; }
+.who-card.out canvas, .who-card.out label { opacity: 0.4; }
+.who-card .ans { justify-self: start; }
 .who-list { list-style: none; margin: 8px 0 0; padding: 0; }
 .who-list li { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
 .who-list li b { font-weight: 700; }
@@ -290,7 +295,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
     <div class="stage" id="whoStage" hidden><video id="whoVid" playsinline muted preload="auto"></video></div>
     <p class="muted small" id="whoHint">The rallies play below while the finder reads them. Keep the screen on.</p>
     <div id="whoName" hidden>
-      <p>Each box is one player. Type the first name of each player beside the number of the box.</p>
+      <p>Each picture is one person the finder followed. Type the first name of each player. Tap "Not a player" for anyone else, such as a person on the next court.</p>
       <div class="stage who-stage"><canvas id="whoPic"></canvas></div>
       <div class="who-names" id="whoInputs"></div>
       <div class="row"><button type="button" class="btn primary" id="whoSave">Save the names</button></div>
@@ -925,18 +930,13 @@ const RF = (() => {
     // Only a whole match ends with the phone being stopped; a short clip ends where it was cut.
     const ignoreFrom = o.duration && o.duration > 300 ? o.duration - END_IGNORE : Infinity;
     const pool = rallies.filter((r) => !isMarked(r) && r.end <= ignoreFrom).sort((a, b) => b.score - a.score);
-    const segs = [];
-    let total = 0;
-    for (const r of pool) {
-      if (segs.length >= most) break;
-      const b = pointBounds(r, o.hits);
-      const seg = { start: b.start, end: b.end, rally: r };
-      if (segs.some((s) => s.start < seg.end && seg.start < s.end)) continue;
-      if (segs.length && total + (seg.end - seg.start) > target + 10) continue;
-      segs.push(seg); total += seg.end - seg.start;
-    }
-    return segs.sort((a, b) => a.start - b.start);
+    return pickClips(pool.map((r) => { const b = pointBounds(r, o.hits); return { start: b.start, end: b.end, rally: r }; }), most, target, spreadOf(o.duration, most));
   }
+  // A reel never singles out one pair. The owner, 14 November 2026: Erik's five best points all fell
+  // between minutes 16 and 28, so Erik and Jakob stood near the camera in every clip while the pairs
+  // change ends about every two games. Clips of a whole match therefore stand at least a tenth of the
+  // match apart (about 9 minutes in 90), which gives both pairs their turns at the camera end.
+  const spreadOf = (duration, most) => (duration && duration > 600 ? duration / (2 * most) : 0);
 
   // ---- The 4K cut: the original video and sound samples of each segment, copied into a new file. ----
   // Nothing is decoded or encoded, so the cut keeps the resolution, frame rate and quality of the
@@ -1174,14 +1174,18 @@ const RF = (() => {
       return { r, pb, reaction: reactionOf(env, prep, pb.lastHit), burst: netBurst(times), strongest: { t: strong.t, s: strong.s / prep.ref } };
     });
   }
-  function pickClips(cands, most, target) {
+  // The best candidates first, at least `spread` seconds apart; when that leaves the reel short, the
+  // best of the rest fill it.
+  function pickClips(cands, most, target, spread) {
     const segs = [];
     let total = 0;
-    for (const c of cands) {
-      if (segs.length >= most) break;
-      if (segs.some((s) => s.start < c.end && c.start < s.end)) continue;
-      if (segs.length && total + (c.end - c.start) > target + 10) continue;
-      segs.push(c); total += c.end - c.start;
+    for (const gap of spread ? [spread, 0] : [0]) {
+      for (const c of cands) {
+        if (segs.length >= most) break;
+        if (segs.includes(c) || segs.some((s) => s.start - gap < c.end && c.start < s.end + gap)) continue;
+        if (segs.length && total + (c.end - c.start) > target + 10) continue;
+        segs.push(c); total += c.end - c.start;
+      }
     }
     return segs.sort((a, b) => a.start - b.start);
   }
@@ -1195,17 +1199,17 @@ const RF = (() => {
     const facts = pointFacts(o.rallies.filter((r) => !o.isMarked(r) && r.end <= ignoreFrom), o.hits, o.env, o.prep);
     const after = (f, before, tail) => ({ start: Math.max(0, f.pb.lastHit - before), end: f.pb.lastHit + tail, rally: f.r });
     const tag = (c, why) => Object.assign(c, { why });
-    if (kind === 'funny') return pickClips(facts.filter((f) => f.reaction.laugh >= LAUGH_MIN && f.reaction.db >= 2).sort((a, b) => b.reaction.laugh - a.reaction.laugh).map((f) => tag(after(f, 4, 6), 'laughter ' + f.reaction.laugh)), 6, 60);
-    if (kind === 'reactions') return pickClips(facts.filter((f) => f.reaction.db >= 4).sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 4, 6), 'reaction +' + f.reaction.db + ' dB')), 6, 60);
-    if (kind === 'longest') return pickClips(facts.slice().sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: Math.max(0, f.pb.firstHit - POINT_BEFORE), end: f.pb.lastHit + POINT_AFTER, rally: f.r }, f.r.hits + ' shots')), 3, 150);
-    if (kind === 'net') return pickClips(facts.filter((f) => f.burst.n >= 4).sort((a, b) => b.burst.n - a.burst.n || b.r.score - a.r.score).map((f) => tag({ start: Math.max(0, f.burst.start - 3), end: Math.max(f.burst.end + 4, Math.min(f.pb.end, f.burst.end + 8)), rally: f.r }, f.burst.n + ' fast shots')), 5, 60);
+    if (kind === 'funny') return pickClips(facts.filter((f) => f.reaction.laugh >= LAUGH_MIN && f.reaction.db >= 2).sort((a, b) => b.reaction.laugh - a.reaction.laugh).map((f) => tag(after(f, 4, 6), 'laughter ' + f.reaction.laugh)), 6, 60, spreadOf(o.duration, 6));
+    if (kind === 'reactions') return pickClips(facts.filter((f) => f.reaction.db >= 4).sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 4, 6), 'reaction +' + f.reaction.db + ' dB')), 6, 60, spreadOf(o.duration, 6));
+    if (kind === 'longest') return pickClips(facts.slice().sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: Math.max(0, f.pb.firstHit - POINT_BEFORE), end: f.pb.lastHit + POINT_AFTER, rally: f.r }, f.r.hits + ' shots')), 3, 150, spreadOf(o.duration, 3));
+    if (kind === 'net') return pickClips(facts.filter((f) => f.burst.n >= 4).sort((a, b) => b.burst.n - a.burst.n || b.r.score - a.r.score).map((f) => tag({ start: Math.max(0, f.burst.start - 3), end: Math.max(f.burst.end + 4, Math.min(f.pb.end, f.burst.end + 8)), rally: f.r }, f.burst.n + ' fast shots')), 5, 60, spreadOf(o.duration, 5));
     // Candidates for the picture: more than the reel keeps, few enough for a few minutes of looking.
     if (kind === 'smashes') {
       const loud = o.hits.filter((h) => h.s / o.prep.ref >= SMASH_MIN && h.t <= ignoreFrom).sort((a, b) => b.s - a.s).slice(0, 12);
       return pickClips(loud.map((h) => ({ start: Math.max(0, h.t - 3), end: h.t + 4, rally: null, hitT: h.t, why: 'loud hit ' + Math.round((h.s / o.prep.ref) * 10) / 10 })), 12, 100);
     }
-    if (kind === 'saves') return pickClips(facts.filter((f) => f.r.hits >= 10).sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, f.r.hits + ' shots')), 8, 200);
-    if (kind === 'celebrations') return pickClips(facts.slice().sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 3, 7), 'reaction +' + f.reaction.db + ' dB')), 10, 100);
+    if (kind === 'saves') return pickClips(facts.filter((f) => f.r.hits >= 10).sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, f.r.hits + ' shots')), 8, 200, spreadOf(o.duration, 8));
+    if (kind === 'celebrations') return pickClips(facts.slice().sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 3, 7), 'reaction +' + f.reaction.db + ' dB')), 10, 100, spreadOf(o.duration, 10));
     if (kind === 'mistakes') return pickClips(facts.slice().sort((a, b) => b.reaction.laugh + b.reaction.db / 20 - (a.reaction.laugh + a.reaction.db / 20)).map((f) => tag(after(f, 5, 5), 'laughter ' + f.reaction.laugh)), 12, 120);
     if (kind === 'player') return pickClips(facts.slice().sort((a, b) => b.r.score - a.r.score).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, 'score ' + f.r.score)), 8, 200);
     return [];
@@ -1359,7 +1363,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.3';
+  const VERSION = 'rally-finder 2026-11-14.5';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
@@ -2425,7 +2429,9 @@ if (typeof module !== 'undefined') module.exports = RF;
     }
     const keep = tracks.filter((tr) => tr.pts.length >= Math.max(3, frames.length * 0.3));
     keep.sort((a, b) => b.pts.length - a.pts.length);
-    const top = keep.slice(0, 4);
+    // Up to six: a person on the next court or a half body can be dropped at the names, and the real
+    // players must still be there.
+    const top = keep.slice(0, 6);
     for (const tr of top) {
       const hs = tr.pts.map((q) => q.b.shirt).filter(Boolean);
       tr.shirt = hs.length ? hs.reduce((acc, h) => acc.map((v, i) => v + h[i] / hs.length), new Array(14).fill(0)) : null;
@@ -2588,8 +2594,8 @@ if (typeof module !== 'undefined') module.exports = RF;
       const first = who.segs[0];
       if (!first || !first.tracks.length) throw new Error('The finder saw no players it could follow in the first rally.');
       st.className = 'status ok';
-      st.textContent = 'Found ' + first.tracks.length + ' players in the first rally (' + stats.bodiesPerFrame + ' a frame on average). Name them below.';
-      whoShowNames(first, W, H);
+      st.textContent = 'Found ' + first.tracks.length + ' people in the first rally (' + stats.bodiesPerFrame + ' a frame on average). Name the players below.';
+      await whoShowNames(first, W, H, v, stats.flip);
     } catch (e) {
       who.error = String(e && e.message || e);
       who.stats = stats;
@@ -2601,51 +2607,94 @@ if (typeof module !== 'undefined') module.exports = RF;
       sendRun('who');
     }
   }
-  function whoShowNames(first, W, H) {
+  // The names. Erik's run (14 November 2026) named the players from the first frame of the first
+  // rally: Tim stood half behind Erik, and a player of the next court stood beyond the glass, so Erik
+  // typed "half of Tim" and "someone on another court". Now each person the finder followed gets a
+  // close-up from the moment the person was largest and clearest, and "Not a player" drops a person.
+  async function whoShowNames(first, W, H, v, flip) {
+    const work = document.createElement('canvas'); work.width = W; work.height = H;
+    const g = work.getContext('2d', { willReadFrequently: true });
+    const stage = $('#whoStage'); stage.hidden = false; // a hidden video gives blank frames on the iPhone
+    const at = (tr, t) => tr.pts.reduce((m, q) => (Math.abs(q.t - t) < Math.abs(m.t - t) ? q : m), tr.pts[0]);
+    const pics = [];
+    for (const tr of first.tracks) {
+      const q = tr.pts.reduce((m, x) => (x.b.vis * x.b.h > m.b.vis * m.b.h ? x : m), tr.pts[0]);
+      await seekTo(v, q.t); drawFrame(g, v, W, H, flip);
+      const bx = q.b.box, px = 0.3 * (bx.x1 - bx.x0) + 0.15 * q.b.h, py = 0.12 * q.b.h;
+      const x0 = Math.max(0, bx.x0 - px), y0 = Math.max(0, bx.y0 - py), x1 = Math.min(W, bx.x1 + px), y1 = Math.min(H, bx.y1 + py);
+      const c = document.createElement('canvas'), k = 320 / Math.max(1, y1 - y0);
+      c.width = Math.max(1, Math.round((x1 - x0) * k)); c.height = 320;
+      c.getContext('2d').drawImage(work, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+      pics.push(c);
+    }
+    // The overview: the moment the most people are seen at once, not simply the first frame.
+    const times = [...new Set(first.tracks.flatMap((tr) => tr.pts.map((q) => q.t)))];
+    const seenAt = (t) => first.tracks.filter((tr) => Math.abs(at(tr, t).t - t) < 0.07).length;
+    const tBest = times.reduce((m, t) => (seenAt(t) > seenAt(m) ? t : m), times[0]);
+    await seekTo(v, tBest); drawFrame(g, v, W, H, flip);
+    stage.hidden = true;
     const c = $('#whoPic'); c.width = W; c.height = H;
-    const g = c.getContext('2d');
-    if (who.firstPic) g.putImageData(who.firstPic, 0, 0);
+    const pg = c.getContext('2d'); pg.drawImage(work, 0, 0);
     const box = $('#whoInputs'); box.textContent = '';
     first.tracks.forEach((tr, i) => {
-      const b = tr.pts[0].b.box, col = WHO_COLORS[i];
-      g.lineWidth = Math.max(3, W / 400); g.strokeStyle = col; g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-      const r = Math.max(14, W / 70);
-      g.fillStyle = col; g.beginPath(); g.arc(b.x0, b.y0, r, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#fff'; g.font = '700 ' + Math.round(r * 1.2) + 'px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), b.x0, b.y0 + 1);
+      const col = WHO_COLORS[i % WHO_COLORS.length], q = at(tr, tBest);
+      if (Math.abs(q.t - tBest) < 0.3) {
+        const b = q.b.box;
+        pg.lineWidth = Math.max(3, W / 400); pg.strokeStyle = col; pg.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+        const r = Math.max(14, W / 70);
+        pg.fillStyle = col; pg.beginPath(); pg.arc(b.x0, b.y0, r, 0, Math.PI * 2); pg.fill();
+        pg.fillStyle = '#fff'; pg.font = '700 ' + Math.round(r * 1.2) + 'px system-ui'; pg.textAlign = 'center'; pg.textBaseline = 'middle'; pg.fillText(String(i + 1), b.x0, b.y0 + 1);
+      }
+      const card = document.createElement('div'); card.className = 'who-card';
+      pics[i].setAttribute('role', 'img'); pics[i].setAttribute('aria-label', 'Close-up of person ' + (i + 1));
       const lab = document.createElement('label');
       const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = col; dot.textContent = String(i + 1);
-      const inp = document.createElement('input'); inp.id = 'whoName' + i; inp.autocomplete = 'off'; inp.placeholder = 'Player ' + (i + 1); inp.setAttribute('aria-label', 'Name of player ' + (i + 1));
-      lab.append(dot, inp); box.appendChild(lab);
+      const inp = document.createElement('input'); inp.id = 'whoName' + i; inp.autocomplete = 'off'; inp.placeholder = 'First name'; inp.setAttribute('aria-label', 'Name of person ' + (i + 1));
+      lab.append(dot, inp);
+      const out = document.createElement('button'); out.type = 'button'; out.className = 'ans'; out.id = 'whoNot' + i; out.textContent = 'Not a player'; out.setAttribute('aria-pressed', 'false');
+      out.addEventListener('click', () => { const on = out.getAttribute('aria-pressed') !== 'true'; out.setAttribute('aria-pressed', on ? 'true' : 'false'); card.classList.toggle('out', on); inp.disabled = on; });
+      card.append(pics[i], lab, out); box.appendChild(card);
     });
     $('#whoName').hidden = false;
   }
   function whoAttribute() {
     const first = who.segs[0];
-    who.names = first.tracks.map((_, i) => (($('#whoName' + i) || {}).value || '').trim() || 'Player ' + (i + 1));
-    const refs = first.tracks.map((tr) => tr.shirt);
+    // People marked "Not a player" have no name and hit no shot.
+    const players = first.tracks.map((_, i) => i).filter((i) => ($('#whoNot' + i) || { getAttribute: () => 'false' }).getAttribute('aria-pressed') !== 'true');
+    who.names = players.map((i) => (($('#whoName' + i) || {}).value || '').trim() || 'Player ' + (i + 1));
+    const refs = players.map((i) => first.tracks[i].shirt);
     const shots = [];
+    const perms = (arr, k) => k === 0 ? [[]] : arr.flatMap((x, i) => perms(arr.slice(0, i).concat(arr.slice(i + 1)), k - 1).map((p) => [x].concat(p)));
     who.segs.forEach((s, si) => {
-      // Names for this rally's tracks: the order of names whose shirts fit best (at most 4 tracks, so all orders can be tried).
-      const n = s.tracks.length, idx = refs.map((_, i) => i);
+      // In the other rallies, the pairing of names and people whose shirts fit best (at most six
+      // people and four names, so every pairing can be tried); a person left over is not a player.
+      const n = s.tracks.length;
       let best = null;
-      const perms = (arr, k) => k === 0 ? [[]] : arr.flatMap((x, i) => perms(arr.slice(0, i).concat(arr.slice(i + 1)), k - 1).map((p) => [x].concat(p)));
-      for (const p of perms(idx, Math.min(n, idx.length))) {
-        const cost = p.reduce((a, ref, ti) => a + histDist(s.tracks[ti].shirt, refs[ref]), 0);
-        if (!best || cost < best.cost) best = { cost, p };
+      if (si === 0) best = { cost: 0, pairs: players.map((ti, ri) => ({ ri, ti })) };
+      else if (n >= refs.length) {
+        for (const p of perms(s.tracks.map((_, i) => i), refs.length)) {
+          const cost = p.reduce((a, ti, ri) => a + histDist(s.tracks[ti].shirt, refs[ri]), 0);
+          if (!best || cost < best.cost) best = { cost, pairs: p.map((ti, ri) => ({ ri, ti })) };
+        }
+      } else {
+        for (const p of perms(refs.map((_, i) => i), n)) {
+          const cost = p.reduce((a, ri, ti) => a + histDist(s.tracks[ti].shirt, refs[ri]), 0);
+          if (!best || cost < best.cost) best = { cost, pairs: p.map((ri, ti) => ({ ri, ti })) };
+        }
       }
-      const nameOf = (ti) => (si === 0 ? who.names[ti] : best && best.p[ti] != null ? who.names[best.p[ti]] : '?');
+      const nameOf = (ti) => { const pr = best && best.pairs.find((x) => x.ti === ti); return pr ? who.names[pr.ri] : null; };
       s.names = s.tracks.map((_, ti) => nameOf(ti));
       const hits = state.hits.filter((h) => h.t >= s.seg.start && h.t <= s.seg.end);
       hits.forEach((h, hi) => {
-        const sw = s.tracks.map((tr, ti) => Object.assign({ ti }, swingOf(tr, h.t))).sort((a, b) => b.score - a.score);
+        const sw = s.tracks.map((tr, ti) => Object.assign({ ti }, swingOf(tr, h.t))).filter((x) => nameOf(x.ti)).sort((a, b) => b.score - a.score);
         if (!sw.length) return;
         const seen = sw[0].score > 0;
         const margin = !seen ? 0 : sw[1] && sw[1].score > 0 ? sw[0].score / sw[1].score : 9;
-        shots.push({ key: si + ':' + hi, rally: si + 1, t: h.t, name: seen ? nameOf(sw[0].ti) : null, peak: r2(sw[0].peak), score: r2(sw[0].score), margin: r2(margin), last: hi === hits.length - 1, matchCost: si === 0 ? 0 : best ? r2(best.cost / Math.max(1, n)) : null });
+        shots.push({ key: si + ':' + hi, rally: si + 1, t: h.t, name: seen ? nameOf(sw[0].ti) : null, peak: r2(sw[0].peak), score: r2(sw[0].score), margin: r2(margin), last: hi === hits.length - 1, matchCost: si === 0 ? 0 : best ? r2(best.cost / Math.max(1, best.pairs.length)) : null });
       });
     });
     who.shots = shots;
-    who.seen = who.segs.map((s, si) => ({ tracks: s.tracks, names: s.names || [], shots: shots.filter((x) => x.rally === si + 1), hits: state.hits.filter((h) => h.t >= s.seg.start && h.t <= s.seg.end) }));
+    who.seen = who.segs.map((s, si) => ({ tracks: s.tracks.filter((_, ti) => (s.names || [])[ti]), names: (s.names || []).filter(Boolean), shots: shots.filter((x) => x.rally === si + 1), hits: state.hits.filter((h) => h.t >= s.seg.start && h.t <= s.seg.end) }));
     // "Whose?" offers the names just typed; the reel is planned again with what the picture saw.
     const sel = $('#reelPlayer'), was = sel.value;
     sel.textContent = '';
