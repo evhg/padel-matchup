@@ -925,18 +925,13 @@ const RF = (() => {
     // Only a whole match ends with the phone being stopped; a short clip ends where it was cut.
     const ignoreFrom = o.duration && o.duration > 300 ? o.duration - END_IGNORE : Infinity;
     const pool = rallies.filter((r) => !isMarked(r) && r.end <= ignoreFrom).sort((a, b) => b.score - a.score);
-    const segs = [];
-    let total = 0;
-    for (const r of pool) {
-      if (segs.length >= most) break;
-      const b = pointBounds(r, o.hits);
-      const seg = { start: b.start, end: b.end, rally: r };
-      if (segs.some((s) => s.start < seg.end && seg.start < s.end)) continue;
-      if (segs.length && total + (seg.end - seg.start) > target + 10) continue;
-      segs.push(seg); total += seg.end - seg.start;
-    }
-    return segs.sort((a, b) => a.start - b.start);
+    return pickClips(pool.map((r) => { const b = pointBounds(r, o.hits); return { start: b.start, end: b.end, rally: r }; }), most, target, spreadOf(o.duration, most));
   }
+  // A reel never singles out one pair. The owner, 14 November 2026: Erik's five best points all fell
+  // between minutes 16 and 28, so Erik and Jakob stood near the camera in every clip while the pairs
+  // change ends about every two games. Clips of a whole match therefore stand at least a tenth of the
+  // match apart (about 9 minutes in 90), which gives both pairs their turns at the camera end.
+  const spreadOf = (duration, most) => (duration && duration > 600 ? duration / (2 * most) : 0);
 
   // ---- The 4K cut: the original video and sound samples of each segment, copied into a new file. ----
   // Nothing is decoded or encoded, so the cut keeps the resolution, frame rate and quality of the
@@ -1174,14 +1169,18 @@ const RF = (() => {
       return { r, pb, reaction: reactionOf(env, prep, pb.lastHit), burst: netBurst(times), strongest: { t: strong.t, s: strong.s / prep.ref } };
     });
   }
-  function pickClips(cands, most, target) {
+  // The best candidates first, at least `spread` seconds apart; when that leaves the reel short, the
+  // best of the rest fill it.
+  function pickClips(cands, most, target, spread) {
     const segs = [];
     let total = 0;
-    for (const c of cands) {
-      if (segs.length >= most) break;
-      if (segs.some((s) => s.start < c.end && c.start < s.end)) continue;
-      if (segs.length && total + (c.end - c.start) > target + 10) continue;
-      segs.push(c); total += c.end - c.start;
+    for (const gap of spread ? [spread, 0] : [0]) {
+      for (const c of cands) {
+        if (segs.length >= most) break;
+        if (segs.includes(c) || segs.some((s) => s.start - gap < c.end && c.start < s.end + gap)) continue;
+        if (segs.length && total + (c.end - c.start) > target + 10) continue;
+        segs.push(c); total += c.end - c.start;
+      }
     }
     return segs.sort((a, b) => a.start - b.start);
   }
@@ -1195,17 +1194,17 @@ const RF = (() => {
     const facts = pointFacts(o.rallies.filter((r) => !o.isMarked(r) && r.end <= ignoreFrom), o.hits, o.env, o.prep);
     const after = (f, before, tail) => ({ start: Math.max(0, f.pb.lastHit - before), end: f.pb.lastHit + tail, rally: f.r });
     const tag = (c, why) => Object.assign(c, { why });
-    if (kind === 'funny') return pickClips(facts.filter((f) => f.reaction.laugh >= LAUGH_MIN && f.reaction.db >= 2).sort((a, b) => b.reaction.laugh - a.reaction.laugh).map((f) => tag(after(f, 4, 6), 'laughter ' + f.reaction.laugh)), 6, 60);
-    if (kind === 'reactions') return pickClips(facts.filter((f) => f.reaction.db >= 4).sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 4, 6), 'reaction +' + f.reaction.db + ' dB')), 6, 60);
-    if (kind === 'longest') return pickClips(facts.slice().sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: Math.max(0, f.pb.firstHit - POINT_BEFORE), end: f.pb.lastHit + POINT_AFTER, rally: f.r }, f.r.hits + ' shots')), 3, 150);
-    if (kind === 'net') return pickClips(facts.filter((f) => f.burst.n >= 4).sort((a, b) => b.burst.n - a.burst.n || b.r.score - a.r.score).map((f) => tag({ start: Math.max(0, f.burst.start - 3), end: Math.max(f.burst.end + 4, Math.min(f.pb.end, f.burst.end + 8)), rally: f.r }, f.burst.n + ' fast shots')), 5, 60);
+    if (kind === 'funny') return pickClips(facts.filter((f) => f.reaction.laugh >= LAUGH_MIN && f.reaction.db >= 2).sort((a, b) => b.reaction.laugh - a.reaction.laugh).map((f) => tag(after(f, 4, 6), 'laughter ' + f.reaction.laugh)), 6, 60, spreadOf(o.duration, 6));
+    if (kind === 'reactions') return pickClips(facts.filter((f) => f.reaction.db >= 4).sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 4, 6), 'reaction +' + f.reaction.db + ' dB')), 6, 60, spreadOf(o.duration, 6));
+    if (kind === 'longest') return pickClips(facts.slice().sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: Math.max(0, f.pb.firstHit - POINT_BEFORE), end: f.pb.lastHit + POINT_AFTER, rally: f.r }, f.r.hits + ' shots')), 3, 150, spreadOf(o.duration, 3));
+    if (kind === 'net') return pickClips(facts.filter((f) => f.burst.n >= 4).sort((a, b) => b.burst.n - a.burst.n || b.r.score - a.r.score).map((f) => tag({ start: Math.max(0, f.burst.start - 3), end: Math.max(f.burst.end + 4, Math.min(f.pb.end, f.burst.end + 8)), rally: f.r }, f.burst.n + ' fast shots')), 5, 60, spreadOf(o.duration, 5));
     // Candidates for the picture: more than the reel keeps, few enough for a few minutes of looking.
     if (kind === 'smashes') {
       const loud = o.hits.filter((h) => h.s / o.prep.ref >= SMASH_MIN && h.t <= ignoreFrom).sort((a, b) => b.s - a.s).slice(0, 12);
       return pickClips(loud.map((h) => ({ start: Math.max(0, h.t - 3), end: h.t + 4, rally: null, hitT: h.t, why: 'loud hit ' + Math.round((h.s / o.prep.ref) * 10) / 10 })), 12, 100);
     }
-    if (kind === 'saves') return pickClips(facts.filter((f) => f.r.hits >= 10).sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, f.r.hits + ' shots')), 8, 200);
-    if (kind === 'celebrations') return pickClips(facts.slice().sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 3, 7), 'reaction +' + f.reaction.db + ' dB')), 10, 100);
+    if (kind === 'saves') return pickClips(facts.filter((f) => f.r.hits >= 10).sort((a, b) => b.r.hits - a.r.hits).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, f.r.hits + ' shots')), 8, 200, spreadOf(o.duration, 8));
+    if (kind === 'celebrations') return pickClips(facts.slice().sort((a, b) => b.reaction.db - a.reaction.db).map((f) => tag(after(f, 3, 7), 'reaction +' + f.reaction.db + ' dB')), 10, 100, spreadOf(o.duration, 10));
     if (kind === 'mistakes') return pickClips(facts.slice().sort((a, b) => b.reaction.laugh + b.reaction.db / 20 - (a.reaction.laugh + a.reaction.db / 20)).map((f) => tag(after(f, 5, 5), 'laughter ' + f.reaction.laugh)), 12, 120);
     if (kind === 'player') return pickClips(facts.slice().sort((a, b) => b.r.score - a.r.score).map((f) => tag({ start: f.pb.start, end: f.pb.end, rally: f.r }, 'score ' + f.r.score)), 8, 200);
     return [];
@@ -1359,7 +1358,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.3';
+  const VERSION = 'rally-finder 2026-11-14.4';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
