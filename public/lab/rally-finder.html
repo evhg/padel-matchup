@@ -7,9 +7,9 @@
 <!-- Rally Finder, a Kicksmash lab test. Served as a plain file so the iPhone share sheet can save the cut:
      the Claude viewer lets only its own organisation download. The same page is published as a Claude
      artifact from the session scratchpad; this copy adds only this head. No video leaves the phone:
-     the pose library and model below are downloaded from pinned public copies, and after the player
+     the pose library, the pose model and the person detector below are downloaded from pinned public copies, and after the player
      finder the page sends 4 still frames to /api/lab/run (src/lib/domain/lab.ts). -->
-<script>window.RF_MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/"; window.RF_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";</script>
+<script>window.RF_MP_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/"; window.RF_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"; window.RF_DET_URL = "https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite";</script>
 </head>
 <body>
 <title>Rally Finder</title>
@@ -1222,7 +1222,9 @@ const RF = (() => {
   function armUp(tr, t) {
     const q = nearest(tr, t);
     if (!q || Math.abs(q.t - t) > 0.3) return false;
-    const b = q.b, top = Math.min(b.sh[0].y, b.sh[1].y);
+    const b = q.b;
+    if (!b.sh || !b.wrists) return false;
+    const top = Math.min(b.sh[0].y, b.sh[1].y);
     return Math.min(b.wrists[0].y, b.wrists[1].y) < top - 0.2 * b.h;
   }
   // The fastest a player's hips moved, in body heights a second: a sprint or a lunge for a save.
@@ -1364,7 +1366,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.8';
+  const VERSION = 'rally-finder 2026-11-14.9';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. On kicksma.sh it sends Kicksmash the numbers of each run, and 4 still pictures after the player finder; never the video, never its sound.';
@@ -2290,6 +2292,11 @@ if (typeof module !== 'undefined') module.exports = RF;
     const opts = (delegate) => ({ baseOptions: { modelAssetBuffer: model, delegate }, runningMode: 'IMAGE', numPoses: 4, minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3 });
     try { who.lm = await vision.PoseLandmarker.createFromOptions(files, opts('GPU')); who.delegate = 'GPU'; }
     catch (e) { who.lm = await vision.PoseLandmarker.createFromOptions(files, opts('CPU')); who.delegate = 'CPU'; }
+    // The person detector (about 7 MB): kicksma.sh/lab sets RF_DET_URL to Google's pinned public copy.
+    const detModel = new Uint8Array(await (await fetch(window.RF_DET_URL || base + 'efficientdet_lite0.tflite')).arrayBuffer());
+    const dopts = (delegate) => ({ baseOptions: { modelAssetBuffer: detModel, delegate }, runningMode: 'IMAGE', scoreThreshold: FAR_MIN, maxResults: 12, categoryAllowlist: ['person'] });
+    try { who.det = await vision.ObjectDetector.createFromOptions(files, dopts(who.delegate)); }
+    catch (e) { who.det = await vision.ObjectDetector.createFromOptions(files, dopts('CPU')); }
     return who.lm;
   }
   function seekTo(v, t) {
@@ -2322,8 +2329,10 @@ if (typeof module !== 'undefined') module.exports = RF;
   }
   // Twelve hue bins and a light/dark share of the shirt: the box between the shoulders and the hips.
   function shirtOf(g, b) {
-    const x0 = Math.min(b.sh[0].x, b.sh[1].x, b.hp[0].x, b.hp[1].x), x1 = Math.max(b.sh[0].x, b.sh[1].x, b.hp[0].x, b.hp[1].x);
-    const y0 = Math.min(b.sh[0].y, b.sh[1].y), y1 = Math.max(b.hp[0].y, b.hp[1].y);
+    // Without landmarks, the shirt is the box from a fifth to a half of its height, its middle three fifths.
+    const bw = b.box.x1 - b.box.x0, bh = b.box.y1 - b.box.y0;
+    const x0 = b.sh ? Math.min(b.sh[0].x, b.sh[1].x, b.hp[0].x, b.hp[1].x) : b.box.x0 + 0.2 * bw, x1 = b.sh ? Math.max(b.sh[0].x, b.sh[1].x, b.hp[0].x, b.hp[1].x) : b.box.x1 - 0.2 * bw;
+    const y0 = b.sh ? Math.min(b.sh[0].y, b.sh[1].y) : b.box.y0 + 0.2 * bh, y1 = b.sh ? Math.max(b.hp[0].y, b.hp[1].y) : b.box.y0 + 0.5 * bh;
     const w = x1 - x0, h = y1 - y0;
     if (w < 3 || h < 3) return null;
     const sx = Math.round(x0 + w * 0.2), sy = Math.round(y0 + h * 0.15), sw = Math.max(1, Math.round(w * 0.6)), sh = Math.max(1, Math.round(h * 0.7));
@@ -2343,70 +2352,81 @@ if (typeof module !== 'undefined') module.exports = RF;
     return hist;
   }
   const histDist = (a, b) => { if (!a || !b) return 1; let s = 0; for (let i = 0; i < a.length; i++) s += Math.min(a[i], b[i]); return 1 - s; };
-  // Players on a wide court are small. Erik's far players stand about 90 pixels tall in 1920, and the
-  // model shrinks what it is given to 224 pixels, so a third of the picture made them 30 pixels: too
-  // small to see. Measured on a still like Erik's court: a square about four body heights wide finds
-  // them every time. So the search is the whole picture plus square parts 0.37 of the picture height
-  // wide (400 pixels at 1080p), overlapping. All of them on the first frame of a rally; between, a few
-  // in turn, and a close-up of each player already found, where the player fills the model's view.
-  function searchTiles(W, H) {
-    const S = Math.round(0.3 * Math.min(W, H)), step = Math.round(0.6 * S);
-    const at = (n) => { const o = []; for (let v = 0; ; v += step) { o.push(Math.min(v, n - S)); if (v + S >= n) break; } return o; };
-    return at(H).flatMap((y) => at(W).map((x) => [x, y, S, S]));
-  }
-  function lookIn(lm, frame, W, H, x, y, w, h, out, cut, hide) {
-    x = Math.max(0, Math.min(W - w, Math.round(x))); y = Math.max(0, Math.min(H - h, Math.round(y)));
-    w = Math.round(Math.min(w, W)); h = Math.round(Math.min(h, H));
-    const tile = who.tile || (who.tile = document.createElement('canvas'));
-    tile.width = w; tile.height = h;
-    const tg = tile.getContext('2d');
-    tg.drawImage(frame, x, y, w, h, 0, 0, w, h);
-    // Grey over the other players already known: a near player's head beside a small far player made
-    // the model miss the far player for up to two seconds (seen on both test videos).
-    if (hide && hide.length) {
-      tg.fillStyle = '#808080';
-      for (const o of hide) { const p = 0.03 * (o.y1 - o.y0); tg.fillRect(o.x0 - p - x, o.y0 - p - y, o.x1 - o.x0 + 2 * p, o.y1 - o.y0 + 2 * p); }
-    }
-    const r = lm.detect(tile);
-    // A body that a part's edge cuts is half a person (a near player with the arms out is wider than
-    // the step between parts): it does not count, and it gets a close-up of its own, which sees it whole.
+  // ---- Finding the people ----
+  // Erik's real frames (14 November 2026, sent by the page itself) showed why three versions missed
+  // players. The pose model finds a person by the face and upper body: it found nobody in a frame where
+  // the near player was blurred by his own speed, and never a far player behind the net, whatever the
+  // crop. A person detector (EfficientDet-Lite0, MediaPipe) found the blurred player at 0.90 on the whole
+  // picture, the near player cut by the edge, and both far players in a crop of the far half of the
+  // court (0.47 and 0.35). So the detector finds the people, and the pose model reads each box for the
+  // arms and the shoulders. A box the pose model cannot read (a player behind the net) still counts as a
+  // person, without arms.
+  // Where to look, measured on Erik's four frames (layouts compared side by side): the whole picture and
+  // its two overlapping halves for the near players (a half found the player cut by the edge at 0.58
+  // and 0.84, the whole picture at 0.28); and three crops of 480 by 300 pixels across the middle band
+  // for the far players, which found both of them in three frames of four.
+  const NEAR_PARTS = [[0, 0, 1, 1], [0, 0, 0.6, 1], [0.4, 0, 0.6, 1]];
+  const FAR_BAND = [[0.25, 0.28, 0.25, 0.28], [0.417, 0.28, 0.25, 0.28], [0.583, 0.28, 0.25, 0.28]];
+  // The pose model reads a box this tall or taller; on a far player behind the net it finds nothing anyway.
+  const POSE_MIN_PX = 70;
+  const NEAR_MIN = 0.4, FAR_MIN = 0.3;
+  const overlap = (a, b) => {
+    const iw = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), ih = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+    if (iw <= 0 || ih <= 0) return 0;
+    return (iw * ih) / Math.min((a.x1 - a.x0) * (a.y1 - a.y0), (b.x1 - b.x0) * (b.y1 - b.y0));
+  };
+  const tileOf = (frame, x, y, w, h) => {
+    const t = who.tile || (who.tile = document.createElement('canvas'));
+    t.width = w; t.height = h; t.getContext('2d').drawImage(frame, x, y, w, h, 0, 0, w, h);
+    return t;
+  };
+  function boxesIn(det, frame, W, H, x, y, w, h, min, out, cutOk) {
+    x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y)); w = Math.round(Math.min(w, W - x)); h = Math.round(Math.min(h, H - y));
+    const r = det.detect(tileOf(frame, x, y, w, h));
     const m = 0.02 * Math.max(w, h);
-    for (const l of r.landmarks || []) {
-      const b = bodyOf(l, { x, y, w, h });
-      if (!b) continue;
-      if ((x > 0 && b.box.x0 < x + m) || (y > 0 && b.box.y0 < y + m) || (x + w < W && b.box.x1 > x + w - m) || (y + h < H && b.box.y1 > y + h - m)) { if (cut) cut.push(b); continue; }
-      const same = out.findIndex((o) => Math.hypot(o.hip.x - b.hip.x, o.hip.y - b.hip.y) < 0.35 * Math.max(o.h, b.h));
-      if (same < 0) out.push(b); else if (b.vis > out[same].vis) out[same] = b;
+    for (const d of r.detections || []) {
+      const score = d.categories && d.categories[0] ? d.categories[0].score : 0;
+      if (score < min) continue;
+      const bb = d.boundingBox, box = { x0: x + bb.originX, y0: y + bb.originY, x1: x + bb.originX + bb.width, y1: y + bb.originY + bb.height };
+      if (box.y1 - box.y0 < 24) continue;
+      // A box that a crop's inner edge cuts is half a person; the whole picture sees it whole.
+      // A near player can be wider than half the picture, so the halves keep a cut box: the whole
+      // picture's box of the same player overlaps it and the better score stays.
+      if (!cutOk && ((x > 0 && box.x0 < x + m) || (y > 0 && box.y0 < y + m) || (x + w < W && box.x1 > x + w - m) || (y + h < H && box.y1 > y + h - m))) continue;
+      const same = out.findIndex((o) => overlap(o.box, box) > 0.5);
+      if (same < 0) out.push({ box, score }); else if (score > out[same].score) out[same] = { box, score };
     }
   }
-  // tiles: 'all' for the whole search, or how many search parts to look in this frame, in turn.
-  function detectFrame(lm, frame, g, W, H, prev, tiles, whole) {
-    prev = prev || [];
-    const out = [], grid = who.grid && who.grid.W === W && who.grid.H === H ? who.grid : (who.grid = { W, H, at: 0, list: searchTiles(W, H) });
-    if (whole || tiles === 'all') lookIn(lm, frame, W, H, 0, 0, W, H, out);
-    const n = tiles === 'all' ? grid.list.length : tiles;
-    const cut = [];
-    for (let i = 0; i < n; i++) { const [x, y, w, h] = grid.list[grid.at++ % grid.list.length]; lookIn(lm, frame, W, H, x, y, w, h, out, cut); }
-    const near = (a, b) => Math.hypot(a.hip.x - b.hip.x, a.hip.y - b.hip.y) < 0.6 * Math.max(a.h, b.h);
-    const more = [];
-    for (const b of cut) if (!out.some((o) => near(o, b)) && !prev.some((o) => near(o.b, b)) && !more.some((o) => near(o, b))) more.push(b);
-    for (const b of more.slice(0, 4)) {
-      const side = Math.min(Math.min(W, H), Math.max(224, 4 * b.h, 1.4 * (b.box.x1 - b.box.x0)));
-      lookIn(lm, frame, W, H, (b.box.x0 + b.box.x1) / 2 - side / 2, (b.box.y0 + b.box.y1) / 2 - side / 2, side, side, out);
+  // The pose inside one box: the body whose hips fall inside it, or null.
+  function poseIn(lm, frame, W, H, box) {
+    const bw = box.x1 - box.x0, bh = box.y1 - box.y0, side = Math.min(Math.min(W, H), Math.max(160, 1.3 * Math.max(bw, bh)));
+    const x = Math.max(0, Math.min(W - side, (box.x0 + box.x1) / 2 - side / 2)), y = Math.max(0, Math.min(H - side, (box.y0 + box.y1) / 2 - side / 2));
+    const r = lm.detect(tileOf(frame, Math.round(x), Math.round(y), Math.round(side), Math.round(side)));
+    let best = null;
+    for (const l of r.landmarks || []) {
+      const b = bodyOf(l, { x: Math.round(x), y: Math.round(y), w: Math.round(side), h: Math.round(side) });
+      if (!b || b.hip.x < box.x0 || b.hip.x > box.x1 || b.hip.y < box.y0 || b.hip.y > box.y1) continue;
+      if (!best || b.h > best.h) best = b;
     }
-    for (const { b, dt } of prev) {
-      // Three body heights: measured on stills, a player is found best at a third to half of the
-      // close-up. A player runs at most about two body heights a second, so the square grows with the
-      // time since the player was last seen.
-      const side = Math.max(224, Math.min(Math.min(W, H), (3 + 4 * Math.min(1, dt)) * b.h));
-      // Only players whose boxes stay clear of this one are greyed, so no part of this player is hidden.
-      const pad = 0.05 * b.h, clear = (o) => o.x1 < b.box.x0 - pad || o.x0 > b.box.x1 + pad || o.y1 < b.box.y0 - pad || o.y0 > b.box.y1 + pad;
-      const hide = prev.filter((q) => q.b !== b).map((q) => q.b.box).concat(out.map((o) => o.box)).filter(clear);
-      lookIn(lm, frame, W, H, b.hip.x - side / 2, b.hip.y - 0.1 * b.h - side / 2, side, side, out, null, hide);
+    return best;
+  }
+  // far: also look in the far half (every second frame in a rally, to keep the time of a run).
+  function detectFrame(lm, det, frame, g, W, H, far) {
+    const found = [];
+    for (const [fx, fy, fw, fh] of NEAR_PARTS) boxesIn(det, frame, W, H, W * fx, H * fy, W * fw, H * fh, NEAR_MIN, found, true);
+    if (far !== false) for (const [fx, fy, fw, fh] of FAR_BAND) boxesIn(det, frame, W, H, W * fx, H * fy, W * fw, H * fh, FAR_MIN, found, false);
+    found.sort((a, b) => b.score - a.score);
+    const out = [];
+    for (const d of found.slice(0, 8)) {
+      const bh = d.box.y1 - d.box.y0, p = bh >= POSE_MIN_PX ? poseIn(lm, frame, W, H, d.box) : null;
+      // The box gives the place and the size, so a player keeps one size whether the pose is read or not.
+      const b = { box: d.box, h: bh, score: r2(d.score), vis: p ? p.vis : d.score, hip: p ? p.hip : { x: (d.box.x0 + d.box.x1) / 2, y: d.box.y0 + 0.55 * bh }, wrists: p ? p.wrists : null, sh: p ? p.sh : null, hp: p ? p.hp : null };
+      b.shirt = shirtOf(g, b);
+      out.push(b);
     }
-    for (const b of out) b.shirt = shirtOf(g, b);
     return out;
   }
+  if (window.RF_TEST) window.__whoTest = { whoModel, detect: (frame, g, W, H) => detectFrame(who.lm, who.det, frame, g, W, H) };
 
   // Follows bodies through one rally: each body goes to the nearest track by hip position.
   function track(frames) {
@@ -2420,6 +2440,9 @@ if (typeof module !== 'undefined') module.exports = RF;
         // grows with the gap, as a player moves about a body height a second.
         const gap = f.t - last.t;
         if (gap > 2) return;
+        // One person keeps about one size: a far player is never joined to a near one (Erik's run
+        // showed Jakob's close-up under a far player's number).
+        if (Math.max(last.b.h, b.h) > 1.6 * Math.min(last.b.h, b.h)) return;
         const d = Math.hypot(last.b.hip.x - b.hip.x, last.b.hip.y - b.hip.y) / Math.max(last.b.h, b.h);
         if (d < 0.9 + 0.6 * Math.max(0, gap - 0.2)) pairs.push({ d, bi, ti });
       }));
@@ -2447,7 +2470,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     const out = [];
     for (let i = 1; i < tr.pts.length; i++) {
       const a = tr.pts[i - 1], b = tr.pts[i], dt = b.t - a.t;
-      if (dt <= 0) continue;
+      if (dt <= 0 || !a.b.wrists || !b.b.wrists) continue;
       let v = 0;
       for (let k = 0; k < 2; k++) {
         const dx = (b.b.wrists[k].x - b.b.hip.x) - (a.b.wrists[k].x - a.b.hip.x), dy = (b.b.wrists[k].y - b.b.hip.y) - (a.b.wrists[k].y - a.b.hip.y);
@@ -2552,9 +2575,9 @@ if (typeof module !== 'undefined') module.exports = RF;
       await playSegment(v, { start: segs[0].start, end: segs[0].start + 2 }, () => {
         drawFrame(g, v, W, H, false);
         probe.luma += meanLuma(g, W, H);
-        probe.up += detectFrame(lm, frame, g, W, H, null, 'all').length;
+        probe.up += detectFrame(lm, who.det, frame, g, W, H).length;
         drawFrame(g, v, W, H, true);
-        probe.flip += detectFrame(lm, frame, g, W, H, null, 'all').length;
+        probe.flip += detectFrame(lm, who.det, frame, g, W, H).length;
         probe.n++;
       }, live);
       if (!live()) return;
@@ -2564,30 +2587,21 @@ if (typeof module !== 'undefined') module.exports = RF;
       if (stats.firstLuma < 6) throw new Error('This phone gave the page black frames (brightness ' + stats.firstLuma + '). Nothing else was read.');
       if (!probe.up && !probe.flip) throw new Error('No players in the first 2 seconds of the first rally, either way up. Nothing else was read.');
       // Turn the picture only when the turned one clearly finds more people: a stray body must not turn it.
-      stats.flip = probe.flip >= 2 && probe.flip > 1.5 * probe.up;
+      // The person detector sees fewer people in a poor picture, so a weak count never turns it.
+      stats.flip = probe.flip >= 3 && probe.flip > 2 * probe.up;
 
       const total = segs.reduce((a, s) => a + Math.ceil((s.end - s.start) * WHO_FPS), 0);
       let done = 0, bodies = 0, spent = 0;
       v.playbackRate = 0.5;
       for (let si = 0; si < segs.length; si++) {
         const seg = segs[si], frames = [];
-        let prev = [], k = 0;
+        let k = 0;
         await playSegment(v, seg, (t) => {
           const a = performance.now();
           drawFrame(g, v, W, H, stats.flip);
-          // The whole search on the first frame, with the video paused (about two seconds on an iPhone,
-          // and the players must still be where it found them); then four search parts a frame while
-          // fewer than four players are followed, one when all four are, and the whole picture once a second.
-          // While fewer than four people are followed, the whole search again every three seconds:
-          // Erik's run found four a frame in the full search and kept 2.3 while following them.
-          const full = k === 0 || (prev.length < 4 && k % (3 * WHO_FPS) === 0);
-          if (full) v.pause();
-          const found = detectFrame(lm, frame, g, W, H, prev.map((p) => ({ b: p.b, dt: t - p.t })), full ? 'all' : prev.length < 4 ? 4 : 1, k % WHO_FPS === 0);
-          if (full && live()) v.play().catch(() => {});
+          // Every frame: the detector on the whole picture and the far half, then the pose in each box.
+          const found = detectFrame(lm, who.det, frame, g, W, H, k % 2 === 0);
           k++;
-          // A player missed in a frame keeps a close-up for up to a second.
-          const kept = prev.filter((p) => t - p.t <= 1 && !found.some((b) => Math.hypot(b.hip.x - p.b.hip.x, b.hip.y - p.b.hip.y) < 0.5 * Math.max(b.h, p.b.h)));
-          prev = found.map((b) => ({ b, t })).concat(kept);
           const ms = performance.now() - a;
           spent += ms; stats.detectMs += ms;
           frames.push({ t, bodies: found }); bodies += found.length; done++;
