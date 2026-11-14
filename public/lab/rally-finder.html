@@ -1364,10 +1364,10 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.7';
+  const VERSION = 'rally-finder 2026-11-14.8';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
-  $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
+  $('#ver').textContent = VERSION + '. This page runs in your browser. On kicksma.sh it sends Kicksmash the numbers of each run, and 4 still pictures after the player finder; never the video, never its sound.';
 
   const state = {
     src: null, file: null, fileUrl: null, pickMs: null, info: null, env: null, prep: null,
@@ -2267,7 +2267,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
   const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
   function whoReset() {
-    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0; who.picturesSent = 0;
+    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0; who.picturesSent = 0; who.stalls = null;
     const el = (q) => document.querySelector(q);
     if (el('#whoName')) { el('#whoName').hidden = true; el('#whoOut').hidden = true; el('#whoStatus').textContent = ''; el('#whoList').textContent = ''; el('#whoBtn').disabled = false; el('#whoStop').disabled = true; }
   }
@@ -2487,14 +2487,27 @@ if (typeof module !== 'undefined') module.exports = RF;
   }
   function playSegment(v, seg, onFrame, isLive) {
     return new Promise(async (resolve) => {
-      let last = -1, done = false, timer = null;
-      const finish = () => { if (done) return; done = true; clearInterval(timer); v.pause(); resolve(); };
+      let last = -1, done = false, timer = null, watch = null, lastFrameAt = performance.now();
+      const finish = () => { if (done) return; done = true; clearInterval(timer); clearInterval(watch); v.pause(); resolve(); };
       await seekTo(v, seg.start);
       const take = (t) => {
         if (done) return;
         if (!isLive() || t >= seg.end) return finish();
         if (t - last >= 1 / WHO_FPS - 0.02) { last = t; onFrame(t); }
+        lastFrameAt = performance.now();
       };
+      // A watchdog. Erik's run of 14 November 2026 stood at 99% for minutes: the video stopped giving
+      // frames near the end of a rally, and only the rally's long safety timer would end it. A video
+      // that gives no frame for 3 seconds is played again; after 15 seconds the rally ends with what
+      // was read.
+      watch = setInterval(() => {
+        if (done) return;
+        if (!isLive()) return finish();
+        const idle = performance.now() - lastFrameAt;
+        const st = who.stalls || (who.stalls = { replays: 0, ended: 0 });
+        if (idle > 15000 || v.ended) { if (!v.ended) st.ended++; return finish(); }
+        if (idle > 3000 && v.paused) { st.replays++; const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+      }, 1000);
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
         const step = (_now, meta) => { take(meta.mediaTime); if (!done) v.requestVideoFrameCallback(step); };
         v.requestVideoFrameCallback(step);
@@ -2594,6 +2607,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       }
       $('#whoStage').hidden = true;
       stats.rate = r2(v.playbackRate);
+      stats.stalls = who.stalls || null;
       stats.frames = done; stats.bodiesPerFrame = done ? r2(bodies / done) : 0;
       stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
       stats.totalSec = r2((performance.now() - t0) / 1000);
