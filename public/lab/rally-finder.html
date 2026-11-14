@@ -1366,7 +1366,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.11';
+  const VERSION = 'rally-finder 2026-11-14.12';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. On kicksma.sh it sends Kicksmash the numbers of each run, and 4 still pictures after the player finder; never the video, never its sound.';
@@ -2269,7 +2269,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
   const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
   function whoReset() {
-    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0; who.picturesSent = 0; who.stalls = null; who.cost = null; who.seekFails = 0;
+    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0; who.picturesSent = 0; who.stalls = null; who.cost = null; who.seekFails = 0; who.clockGap = null;
     const el = (q) => document.querySelector(q);
     if (el('#whoName')) { el('#whoName').hidden = true; el('#whoOut').hidden = true; el('#whoStatus').textContent = ''; el('#whoList').textContent = ''; el('#whoBtn').disabled = false; el('#whoStop').disabled = true; }
   }
@@ -2574,7 +2574,16 @@ if (typeof module !== 'undefined') module.exports = RF;
         if (idle > 3000 && v.paused) { st.replays++; const p = v.play(); if (p && p.catch) p.catch(() => {}); }
       }, 1000);
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-        const step = (_now, meta) => { take(meta.mediaTime); if (!done) v.requestVideoFrameCallback(step); };
+        // The frame's time is the video's own position. Erik's run of page 14.11: the seek landed, yet
+        // every frame's `mediaTime` stood before the rally's start, so the page counted none. On his
+        // iPhone, with his .mov, `mediaTime` is not the position, and the earlier pages waited for it to
+        // reach each rally's end until the safety timer: the "99%" that lasted for minutes. The gap is
+        // kept for the report.
+        const step = (_now, meta) => {
+          if (who.clockGap == null && meta && typeof meta.mediaTime === 'number') who.clockGap = r2(v.currentTime - meta.mediaTime);
+          take(v.currentTime);
+          if (!done) v.requestVideoFrameCallback(step);
+        };
         v.requestVideoFrameCallback(step);
       } else {
         timer = setInterval(() => take(v.currentTime), 1000 / (WHO_FPS * 2));
@@ -2624,6 +2633,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       }, live);
       if (!live()) return;
       stats.firstLuma = probe.n ? r2(probe.luma / probe.n) : null;
+      stats.clockGap = who.clockGap == null ? null : who.clockGap;
       stats.probe = { frames: probe.n, upright: probe.up, turned: probe.flip };
       if (!probe.n) throw new Error(who.seekFails ? 'This phone could not move the video to the first rally. Close other apps and tabs, then try again in Safari.' : 'The video did not play here, so the page got no frames. Try again in Safari.');
       if (stats.firstLuma < 6) throw new Error('This phone gave the page black frames (brightness ' + stats.firstLuma + '). Nothing else was read.');
@@ -2666,12 +2676,14 @@ if (typeof module !== 'undefined') module.exports = RF;
         stats.framesSoFar = done; stats.cost = who.cost ? { detMs: Math.round(who.cost.det[0] / Math.max(1, who.cost.det[1])), det: who.cost.det[1], poseMs: Math.round(who.cost.pose[0] / Math.max(1, who.cost.pose[1])), pose: who.cost.pose[1] } : null;
         stats.secSoFar = r2((performance.now() - t0) / 1000);
         stats.seekFails = who.seekFails || 0;
+        stats.clockGap = who.clockGap == null ? null : who.clockGap;
         sendRun('who');
       }
       $('#whoStage').hidden = true;
       stats.rate = r2(v.playbackRate);
       stats.stalls = who.stalls || null;
       stats.seekFails = who.seekFails || 0;
+      stats.clockGap = who.clockGap == null ? null : who.clockGap;
       stats.cost = who.cost ? { detMs: Math.round(who.cost.det[0] / Math.max(1, who.cost.det[1])), det: who.cost.det[1], poseMs: Math.round(who.cost.pose[0] / Math.max(1, who.cost.pose[1])), pose: who.cost.pose[1] } : null;
       stats.frames = done; stats.bodiesPerFrame = done ? r2(bodies / done) : 0;
       stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
