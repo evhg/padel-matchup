@@ -113,15 +113,22 @@ a.btn { text-decoration: none; }
 .who-names input { flex: 1; min-width: 0; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 16px/1.2 var(--font-body); }
 .who-names .dot { width: 22px; height: 22px; border-radius: 50%; color: #fff; font: 700 13px/22px var(--font-body); text-align: center; flex: none; }
 .who-list { list-style: none; margin: 8px 0 0; padding: 0; }
-.who-list li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.who-list li { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
 .who-list li b { font-weight: 700; }
 .who-list select { min-height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 14px/1.2 var(--font-body); }
 .rally { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .reel-pick { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0 12px; }
 .reel-pick label { font-weight: 600; }
 .reel-pick select { min-height: 40px; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 15px/1.2 var(--font-body); }
-.rally .timing { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
-.rally .timing select { min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 14px/1.2 var(--font-body); }
+.row-player { grid-column: 1 / -1; }
+.row-player .stage { margin-top: 4px; }
+.row-player .cap { position: absolute; left: 8px; top: 8px; right: 8px; pointer-events: none; color: #fff; font: 600 13px/1.3 var(--font-body); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); }
+.answers { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rally .answers { grid-column: 2 / -1; }
+.answers .lbl { font-size: 13px; color: var(--muted); min-width: 34px; }
+.ans { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); color: var(--ink); font: 500 14px/1 var(--font-body); cursor: pointer; }
+.ans[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.ans:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rally .rank { font: 700 18px/1 var(--font-display); color: var(--muted); text-align: center; }
 .rally .t { font-weight: 600; font-size: 16px; }
 .rally .facts { font-size: 13px; color: var(--muted); }
@@ -226,7 +233,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
     </div>
 
     <h2 style="margin-top:16px;font-size:18px">Top 15 rallies</h2>
-    <p class="small muted">Play plays the whole point, from just before the serve to the reaction after it. If a row is not a real rally, tap "Not a rally". If it starts or ends in the wrong place, say so under it. Your answers go into the results.</p>
+    <p class="small muted">Play opens the whole point in the row, from just before the serve to the reaction after it. If a row is not a real rally, tap "Not a rally". If it starts or ends in the wrong place, tap the answer under it. Your answers go into the results.</p>
     <ol class="rallies" id="list"></ol>
   </section>
 
@@ -289,7 +296,7 @@ footer { margin-top: 18px; font-size: 12px; color: var(--muted); }
       <div class="row"><button type="button" class="btn primary" id="whoSave">Save the names</button></div>
     </div>
     <div id="whoOut" hidden>
-      <p class="small muted">For each shot, say if the name is right. Your answers tell us how good the finder is.</p>
+      <p class="small muted">Tap Play beside a shot to watch it at half speed, then tap the answer under it. Each answer opens the next shot. Your answers tell us how good the finder is.</p>
       <ol class="who-list" id="whoList"></ol>
     </div>
   </section>
@@ -1352,7 +1359,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.2';
+  const VERSION = 'rally-finder 2026-11-14.3';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
@@ -1795,6 +1802,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   function topRallies() { return state.rallies.slice().sort((a, b) => b.score - a.score).slice(0, 15); }
 
   function renderList() {
+    closeRowPlayer();
     const ol = $('#list');
     ol.textContent = '';
     const top = topRallies();
@@ -1813,7 +1821,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       meta.append(t, facts, sbar);
       const play = document.createElement('button'); play.type = 'button'; play.className = 'btn sm'; play.textContent = 'Play';
       play.setAttribute('aria-label', 'Play the rally at ' + fmtT(r.start));
-      play.addEventListener('click', () => playRally(r));
+      play.setAttribute('aria-expanded', 'false');
       const tog = document.createElement('button'); tog.type = 'button'; tog.className = 'btn sm toggle'; tog.textContent = 'Not a rally';
       tog.setAttribute('aria-pressed', isMarked(r) ? 'true' : 'false');
       tog.addEventListener('click', () => {
@@ -1824,18 +1832,15 @@ if (typeof module !== 'undefined') module.exports = RF;
       // Does the rally start and end in the right place? (The owner, 13 November 2026: "I agree this would
       // be very useful".) Two answers per row, kept by the rally's start, so the finder can be tuned.
       const key = r.start.toFixed(1);
-      const timing = document.createElement('div'); timing.className = 'timing';
-      [['start', 'Start'], ['end', 'End']].forEach(([part, word]) => {
-        const sel = document.createElement('select');
-        sel.setAttribute('aria-label', word + ' of the rally at ' + fmtT(r.start));
-        [['', word + ': ?'], ['right', word + ': right'], ['early', word + ': too early'], ['late', word + ': too late']].forEach(([v, l]) => {
-          const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o);
-        });
-        sel.value = (state.timing[key] || {})[part] || '';
-        sel.onchange = () => { state.timing[key] = Object.assign({}, state.timing[key], { [part]: sel.value || null }); };
-        timing.appendChild(sel);
+      const answers = [['start', 'Start'], ['end', 'End']].map(([part, word]) => answerRow(word, word + ' of the rally at ' + fmtT(r.start),
+        [['right', 'Right'], ['early', 'Too early'], ['late', 'Too late']],
+        () => (state.timing[key] || {})[part] || '',
+        (v) => { state.timing[key] = Object.assign({}, state.timing[key], { [part]: v || null }); }));
+      play.addEventListener('click', () => {
+        const pb = RF.pointBounds(r, state.hits);
+        openRowPlayer(play, tog, pb.start, pb.end, { caption: 'Rally at ' + fmtT(r.start) + ': does it start and end in the right place?' });
       });
-      li.append(rank, meta, play, tog, timing);
+      li.append(rank, meta, play, tog, ...answers);
       ol.appendChild(li);
     });
   }
@@ -1917,6 +1922,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   let stopAt = null, stopRaf = 0;
   function whenReady(v) { return v.readyState >= 1 ? Promise.resolve() : new Promise((res) => v.addEventListener('loadedmetadata', res, { once: true })); }
   function playRally(r) {
+    closeRowPlayer();
     if (state.cut && state.cut.active) stopCut();
     const pb = RF.pointBounds(r, state.hits);
     const a = pb.start, b = pb.end;
@@ -1928,6 +1934,62 @@ if (typeof module !== 'undefined') module.exports = RF;
     const watch = () => { if (stopAt === null) return; if (!vid.seeking && vid.currentTime >= stopAt) { vid.pause(); stopAt = null; return; } stopRaf = requestAnimationFrame(watch); };
     stopRaf = requestAnimationFrame(watch);
     $('#stage').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ---------- a clip inside the row being judged ----------
+  // The owner, 14 November 2026: "If you want feedback on a clip, you should have that clip ready to
+  // play with feedback right next to it." One small player opens inside the row that is tapped and
+  // plays that rally, or the moments around that shot in slow motion, again and again. The answers
+  // are buttons right under it.
+  const rowPlay = { v: null, wrap: null, btn: null, raf: 0 };
+  function closeRowPlayer() {
+    cancelAnimationFrame(rowPlay.raf);
+    if (rowPlay.v) rowPlay.v.pause();
+    if (rowPlay.wrap) rowPlay.wrap.remove();
+    if (rowPlay.btn) { rowPlay.btn.textContent = rowPlay.btn.dataset.word; rowPlay.btn.setAttribute('aria-expanded', 'false'); }
+    rowPlay.wrap = null; rowPlay.btn = null;
+  }
+  function openRowPlayer(btn, after, a, b, opts) {
+    if (rowPlay.btn === btn) { closeRowPlayer(); return; }
+    closeRowPlayer();
+    if (state.cut && state.cut.active) stopCut();
+    vid.pause(); stopAt = null;
+    if (!state.fileUrl) return;
+    const v = rowPlay.v || (rowPlay.v = document.createElement('video'));
+    v.setAttribute('playsinline', ''); v.playsInline = true; v.controls = true; v.preload = 'auto';
+    if (v.src !== state.fileUrl) v.src = state.fileUrl;
+    const wrap = document.createElement('div'); wrap.className = 'row-player';
+    const stage = document.createElement('div'); stage.className = 'stage';
+    const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = opts.caption;
+    stage.append(v, cap); wrap.appendChild(stage);
+    after.after(wrap);
+    rowPlay.wrap = wrap; rowPlay.btn = btn;
+    btn.dataset.word = btn.dataset.word || btn.textContent; btn.textContent = 'Close'; btn.setAttribute('aria-expanded', 'true');
+    const rate = opts.rate || 1;
+    v.defaultPlaybackRate = rate; v.playbackRate = rate;
+    // play() inside the tap, so the iPhone lets the sound play; the seek follows once the video is known.
+    const p = v.play(); if (p && p.catch) p.catch((e) => report(e, 'Play the clip'));
+    whenReady(v).then(() => { if (rowPlay.wrap === wrap) { v.currentTime = a; v.playbackRate = rate; } });
+    const loop = () => {
+      if (rowPlay.wrap !== wrap) return;
+      if (!v.seeking && v.readyState >= 1 && (v.currentTime >= b || v.currentTime < a - 1)) v.currentTime = a;
+      rowPlay.raf = requestAnimationFrame(loop);
+    };
+    rowPlay.raf = requestAnimationFrame(loop);
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  // A row of answer buttons: one can be chosen, and a second tap takes it back.
+  function answerRow(word, label, opts, get, set, onPick) {
+    const row = document.createElement('div'); row.className = 'answers'; row.setAttribute('role', 'group'); row.setAttribute('aria-label', label);
+    if (word) { const l = document.createElement('span'); l.className = 'lbl'; l.textContent = word; row.appendChild(l); }
+    const paint = () => row.querySelectorAll('.ans').forEach((x) => x.setAttribute('aria-pressed', x.dataset.v === get() ? 'true' : 'false'));
+    for (const [v, text] of opts) {
+      const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ans'; bt.dataset.v = v; bt.textContent = text;
+      bt.addEventListener('click', () => { const off = get() === v; set(off ? '' : v); paint(); if (!off && onPick) onPick(); });
+      row.appendChild(bt);
+    }
+    paint();
+    return row;
   }
 
   // ---------- the 1-minute cut ----------
@@ -2010,6 +2072,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     c.raf = requestAnimationFrame(cutLoop);
   }
   function startCut(recorder) {
+    closeRowPlayer();
     const segs = state.cutPlan || [];
     if (!segs.length) return;
     stopAt = null;
@@ -2589,20 +2652,28 @@ if (typeof module !== 'undefined') module.exports = RF;
     who.names.forEach((nm) => { const op = document.createElement('option'); op.value = nm; op.textContent = nm; sel.appendChild(op); });
     if (who.names.includes(was)) sel.value = was;
     renderCutPlan();
+    closeRowPlayer();
     const ol = $('#whoList'); ol.textContent = '';
-    for (const sh of shots) {
+    const plays = [];
+    shots.forEach((sh, i) => {
       const li = document.createElement('li');
       const txt = document.createElement('span');
+      const said = sh.name && sh.name !== '?' ? sh.name : sh.name ? 'a player it could not name' : 'no clear swing';
       txt.innerHTML = 'Rally ' + sh.rally + ' · ' + fmtT(sh.t) + (sh.last ? ' · last shot' : '') + ': <b></b> <span class="muted small"></span>';
-      txt.querySelector('b').textContent = sh.name || 'no clear swing';
+      txt.querySelector('b').textContent = said;
       txt.querySelector('span').textContent = sh.name ? '(' + (sh.margin >= 1.6 ? 'sure' : sh.margin >= 1.2 ? 'likely' : 'a guess') + ')' : '';
-      const sel = document.createElement('select');
-      sel.setAttribute('aria-label', 'Who really hit the shot at ' + fmtT(sh.t));
-      [['', 'Is it right?'], ['right', 'Right'], ...who.names.map((nm) => ['was:' + nm, 'It was ' + nm]), ['unclear', 'Cannot tell']].forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; sel.appendChild(o); });
-      sel.value = who.verdicts[sh.key] || '';
-      sel.onchange = () => { who.verdicts[sh.key] = sel.value; };
-      li.append(txt, sel); ol.appendChild(li);
-    }
+      const play = document.createElement('button'); play.type = 'button'; play.className = 'btn sm'; play.textContent = 'Play';
+      play.setAttribute('aria-label', 'Play the shot at ' + fmtT(sh.t)); play.setAttribute('aria-expanded', 'false');
+      // Two seconds before the hit to a second and a half after it, at half speed.
+      const open = () => openRowPlayer(play, play, sh.t - 2, sh.t + 1.5, { rate: 0.5, caption: fmtT(sh.t) + ' · half speed · the finder says: ' + said });
+      play.addEventListener('click', open);
+      plays.push(open);
+      const opts = (sh.name && sh.name !== '?' ? [['right', 'Right']] : []).concat(who.names.filter((nm) => nm !== sh.name).map((nm) => ['was:' + nm, nm]), [['unclear', 'Cannot tell']]);
+      // An answer opens the next shot, so the shots can be judged one after the other without scrolling.
+      const ans = answerRow(sh.name && sh.name !== '?' ? '' : 'Who?', 'Who really hit the shot at ' + fmtT(sh.t), opts,
+        () => who.verdicts[sh.key] || '', (v) => { who.verdicts[sh.key] = v; }, () => { if (plays[i + 1]) plays[i + 1](); else closeRowPlayer(); });
+      li.append(txt, play, ans); ol.appendChild(li);
+    });
     $('#whoOut').hidden = false;
     const st = $('#whoStatus');
     st.className = 'status ok';
