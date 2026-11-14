@@ -22,6 +22,7 @@ import { deviceHints } from "@/db/schema";
 import { HINT_SCOPE_STATUSES } from "@/lib/domain/deviceHintAsk";
 import { HINT_ASKED_KEY, readDeviceSignals } from "@/lib/deviceSignals";
 import { KIND_DEFAULTS, SENDERS } from "@/lib/domain/noticeKinds";
+import { LAB_PICTURE_KEEP_DAYS, LAB_PICTURES_MAX, LAB_PICTURES_PER_RUN, LAB_RUNS_KEEP_DAYS } from "@/lib/domain/lab";
 
 /**
  * /privacy promises things about the code: which cookies it sets, how long it keeps what. A promise
@@ -83,6 +84,17 @@ describe("the privacy page tells the truth about the code", () => {
       const keep = render(l, "privacy.keepBody");
       for (const n of [DISPOSABLE_AFTER_DAYS, RATE_ROWS_KEEP_DAYS, BACKUP_KEEP_DAYS]) expect(keep, `${l}: ${n}`).toMatch(new RegExp(`(^|\\D)${n}\\s`));
       expect(render(l, "privacy.ipBody")).toMatch(new RegExp(`(^|\\D)${RATE_ROWS_KEEP_DAYS}\\s`));
+    }
+  });
+
+  // The owner, 14 November 2026: the Rally Finder sends still pictures of a match by itself.
+  it("says what the Rally Finder sends and how long each part stays, in every language", () => {
+    for (const l of LOCALES) {
+      const store = render(l, "privacy.storeBody").split("\n").find((x) => x.includes("Rally Finder"));
+      expect(store, l).toMatch(new RegExp(`(^|\\D)${LAB_PICTURES_PER_RUN}\\s`));
+      expect(store, l).toContain("kicksma.sh/lab");
+      const keep = render(l, "privacy.keepBody").split("\n").find((x) => x.includes("Rally Finder"));
+      for (const n of [LAB_RUNS_KEEP_DAYS, LAB_PICTURE_KEEP_DAYS, LAB_PICTURES_MAX]) expect(keep, `${l}: ${n}`).toMatch(new RegExp(`(^|\\D)${n}(\\s|$)`));
     }
   });
 
