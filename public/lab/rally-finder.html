@@ -1363,7 +1363,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.5';
+  const VERSION = 'rally-finder 2026-11-14.6';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. It sends nothing over the network.';
@@ -2266,7 +2266,7 @@ if (typeof module !== 'undefined') module.exports = RF;
   const WHO_COLORS = ['#1f8a4c', '#d9480f', '#7048e8', '#c2255c', '#0b7285', '#5c940d'];
   const who = { lm: null, run: 0, segs: [], names: [], verdicts: {}, stats: null, error: null, busy: false };
   function whoReset() {
-    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null;
+    who.run++; who.segs = []; who.names = []; who.verdicts = {}; who.stats = null; who.error = null; who.busy = false; who.seen = null; who.planKey = null; who.nameSeg = 0;
     const el = (q) => document.querySelector(q);
     if (el('#whoName')) { el('#whoName').hidden = true; el('#whoOut').hidden = true; el('#whoStatus').textContent = ''; el('#whoList').textContent = ''; el('#whoBtn').disabled = false; el('#whoStop').disabled = true; }
   }
@@ -2564,9 +2564,12 @@ if (typeof module !== 'undefined') module.exports = RF;
           // The whole search on the first frame, with the video paused (about two seconds on an iPhone,
           // and the players must still be where it found them); then four search parts a frame while
           // fewer than four players are followed, one when all four are, and the whole picture once a second.
-          if (k === 0) v.pause();
-          const found = detectFrame(lm, frame, g, W, H, prev.map((p) => ({ b: p.b, dt: t - p.t })), k === 0 ? 'all' : prev.length < 4 ? 4 : 1, k % WHO_FPS === 0);
-          if (k === 0 && live()) v.play().catch(() => {});
+          // While fewer than four people are followed, the whole search again every three seconds:
+          // Erik's run found four a frame in the full search and kept 2.3 while following them.
+          const full = k === 0 || (prev.length < 4 && k % (3 * WHO_FPS) === 0);
+          if (full) v.pause();
+          const found = detectFrame(lm, frame, g, W, H, prev.map((p) => ({ b: p.b, dt: t - p.t })), full ? 'all' : prev.length < 4 ? 4 : 1, k % WHO_FPS === 0);
+          if (full && live()) v.play().catch(() => {});
           k++;
           // A player missed in a frame keeps a close-up for up to a second.
           const kept = prev.filter((p) => t - p.t <= 1 && !found.some((b) => Math.hypot(b.hip.x - p.b.hip.x, b.hip.y - p.b.hip.y) < 0.5 * Math.max(b.h, p.b.h)));
@@ -2591,10 +2594,17 @@ if (typeof module !== 'undefined') module.exports = RF;
       stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
       stats.totalSec = r2((performance.now() - t0) / 1000);
       who.stats = stats;
-      const first = who.segs[0];
-      if (!first || !first.tracks.length) throw new Error('The finder saw no players it could follow in the first rally.');
+      // The names come from the rally where the finder followed the most people, not simply the first:
+      // Erik's run of 14 November 2026 followed one person in the first rally (a player right in front
+      // of the camera) and three in each of the others, so he could name one player.
+      who.nameSeg = who.segs.reduce((m, sg, i) => {
+        const a = who.segs[m], score = (x) => x.tracks.length * 1e6 + x.tracks.reduce((t, tr) => t + tr.pts.length, 0);
+        return score(sg) > score(a) ? i : m;
+      }, 0);
+      const first = who.segs[who.nameSeg];
+      if (!first || !first.tracks.length) throw new Error('The finder saw no players it could follow in any rally.');
       st.className = 'status ok';
-      st.textContent = 'Found ' + first.tracks.length + ' people in the first rally (' + stats.bodiesPerFrame + ' a frame on average). Name the players below.';
+      st.textContent = 'Found ' + first.tracks.length + ' people in rally ' + (who.nameSeg + 1) + ' (' + stats.bodiesPerFrame + ' a frame on average). Name the players below.';
       await whoShowNames(first, W, H, v, stats.flip);
     } catch (e) {
       who.error = String(e && e.message || e);
@@ -2658,7 +2668,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     $('#whoName').hidden = false;
   }
   function whoAttribute() {
-    const first = who.segs[0];
+    const ns = who.nameSeg || 0, first = who.segs[ns];
     // People marked "Not a player" have no name and hit no shot.
     const players = first.tracks.map((_, i) => i).filter((i) => ($('#whoNot' + i) || { getAttribute: () => 'false' }).getAttribute('aria-pressed') !== 'true');
     who.names = players.map((i) => (($('#whoName' + i) || {}).value || '').trim() || 'Player ' + (i + 1));
@@ -2670,7 +2680,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       // people and four names, so every pairing can be tried); a person left over is not a player.
       const n = s.tracks.length;
       let best = null;
-      if (si === 0) best = { cost: 0, pairs: players.map((ti, ri) => ({ ri, ti })) };
+      if (si === ns) best = { cost: 0, pairs: players.map((ti, ri) => ({ ri, ti })) };
       else if (n >= refs.length) {
         for (const p of perms(s.tracks.map((_, i) => i), refs.length)) {
           const cost = p.reduce((a, ti, ri) => a + histDist(s.tracks[ti].shirt, refs[ri]), 0);
@@ -2690,7 +2700,7 @@ if (typeof module !== 'undefined') module.exports = RF;
         if (!sw.length) return;
         const seen = sw[0].score > 0;
         const margin = !seen ? 0 : sw[1] && sw[1].score > 0 ? sw[0].score / sw[1].score : 9;
-        shots.push({ key: si + ':' + hi, rally: si + 1, t: h.t, name: seen ? nameOf(sw[0].ti) : null, peak: r2(sw[0].peak), score: r2(sw[0].score), margin: r2(margin), last: hi === hits.length - 1, matchCost: si === 0 ? 0 : best ? r2(best.cost / Math.max(1, best.pairs.length)) : null });
+        shots.push({ key: si + ':' + hi, rally: si + 1, t: h.t, name: seen ? nameOf(sw[0].ti) : null, peak: r2(sw[0].peak), score: r2(sw[0].score), margin: r2(margin), last: hi === hits.length - 1, matchCost: si === ns ? 0 : best ? r2(best.cost / Math.max(1, best.pairs.length)) : null });
       });
     });
     who.shots = shots;
@@ -2735,6 +2745,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     return {
       stats: who.stats, error: who.error, names: who.names.length, swingFloor: SWING_FLOOR,
       rallies: who.segs.map((s) => ({ start: r2(s.seg.start), frames: s.frames, bodiesPerFrame: r2(s.bodies / Math.max(1, s.frames)), tracks: s.tracks.length, trackFrames: s.tracks.map((tr) => tr.pts.length), heightsPx: s.tracks.map((tr) => Math.round(tr.h)) })),
+      nameRally: (who.nameSeg || 0) + 1,
       shots, judged: judged.length, right: judged.filter((s) => s.verdict === 'right' || s.verdict === 'was:' + s.name).length,
     };
   }
