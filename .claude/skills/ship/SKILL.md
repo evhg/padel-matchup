@@ -678,6 +678,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
   everywhere" the same day. So the gate went, and the risk is written down with the way to see it
   (DECIDING rule 40, the report's `?label=iPhone`). A known risk the owner accepts is a sentence in
   the rule and a reading in OPERATING, never a quiet guard in the code.
+- **Measure a vision model on a still before tuning it in a video, and test a playing video at the
+  phone's pace.** Erik's Rally Finder run (14 November 2026) found one player of four. Three rounds
+  of change against a test video kept moving the count between two and three. Then one still, cut
+  into squares of five sizes, gave the answer in a minute: the pose model shrinks its input to 224
+  pixels, and a player is found when it fills a quarter or more of the square it gets. The video
+  rounds also misled for a second reason. This test machine runs the model about eight times slower
+  than an iPhone, so the page skipped frames, and players moved out of their close-ups. The page
+  takes `window.RF_MIN_RATE` for tests only, so a test plays the video at the pace an iPhone keeps.
 
 ### Wall clock
 
