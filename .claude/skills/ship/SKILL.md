@@ -686,6 +686,13 @@ learning can be a test, a gate step or a script, make it one and put the story i
   rounds also misled for a second reason. This test machine runs the model about eight times slower
   than an iPhone, so the page skipped frames, and players moved out of their close-ups. The page
   takes `window.RF_MIN_RATE` for tests only, so a test plays the video at the pace an iPhone keeps.
+- **Send the real thing's evidence home, and its cost with it.** Three fixes of the Rally Finder's
+  player finder were built on synthetic videos that passed while Erik's real match failed. The fourth
+  change made the page send four still frames by itself (the owner's decision), and one look at them
+  named the cause: the pose model cannot see a blurred player or one behind the net, and a person
+  detector can. The next run then took 17 minutes on his iPhone, against seconds per frame here: a
+  phone's cost of a model is not the test machine's. Each report now carries the time each model took
+  on the phone, from the first rally, so the next change is measured, not guessed.
 
 ### Wall clock
 
