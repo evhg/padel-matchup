@@ -1366,7 +1366,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.10';
+  const VERSION = 'rally-finder 2026-11-14.11';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. On kicksma.sh it sends Kicksmash the numbers of each run, and 4 still pictures after the player finder; never the video, never its sound.';
@@ -2309,7 +2309,7 @@ if (typeof module !== 'undefined') module.exports = RF;
         if (ok && 'requestVideoFrameCallback' in v) { let shown = false; v.requestVideoFrameCallback(() => { shown = true; res(true); }); setTimeout(() => { if (!shown) res(Math.abs(v.currentTime - t) < 0.5); }, 1000); }
         else res(ok || Math.abs(v.currentTime - t) < 0.5);
       };
-      const onSeeked = () => fin(true);
+      const onSeeked = () => fin(Math.abs(v.currentTime - t) < 1);
       v.addEventListener('seeked', onSeeked);
       v.currentTime = t;
       setTimeout(() => fin(false), 10000);
@@ -2544,11 +2544,20 @@ if (typeof module !== 'undefined') module.exports = RF;
   function playSegment(v, seg, onFrame, isLive) {
     return new Promise(async (resolve) => {
       let last = -1, done = false, timer = null, watch = null, lastFrameAt = performance.now();
-      const finish = () => { if (done) return; done = true; clearInterval(timer); clearInterval(watch); v.pause(); resolve(); };
-      await seekTo(v, seg.start);
+      const finish = (ok) => { if (done) return; done = true; clearInterval(timer); clearInterval(watch); v.pause(); resolve(ok !== false); };
+      // The video must stand at the rally's start before a frame counts. Erik's run of page 14.9: the
+      // seeks failed on his iPhone, the video played on from the last rally's end, and the finder read
+      // the wrong minutes of the match until each rally's safety timer (869 frames for 33 seconds,
+      // "99%" for minutes). Three tries, then the rally is skipped and said so.
+      let ok = false;
+      for (let i = 0; i < 3 && !ok && isLive(); i++) ok = await seekTo(v, seg.start);
+      if (!ok) { who.seekFails = (who.seekFails || 0) + 1; done = true; resolve(false); return; }
       const take = (t) => {
         if (done) return;
         if (!isLive() || t >= seg.end) return finish();
+        // A frame from before the rally is the video somewhere else: it does not count, and it does not
+        // keep the watchdog quiet.
+        if (t < seg.start - 0.5) return;
         if (t - last >= 1 / WHO_FPS - 0.02) { last = t; onFrame(t); }
         lastFrameAt = performance.now();
       };
@@ -2616,7 +2625,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       if (!live()) return;
       stats.firstLuma = probe.n ? r2(probe.luma / probe.n) : null;
       stats.probe = { frames: probe.n, upright: probe.up, turned: probe.flip };
-      if (!probe.n) throw new Error('The video did not play here, so the page got no frames. Try again in Safari.');
+      if (!probe.n) throw new Error(who.seekFails ? 'This phone could not move the video to the first rally. Close other apps and tabs, then try again in Safari.' : 'The video did not play here, so the page got no frames. Try again in Safari.');
       if (stats.firstLuma < 6) throw new Error('This phone gave the page black frames (brightness ' + stats.firstLuma + '). Nothing else was read.');
       if (!probe.up && !probe.flip) throw new Error('No players in the first 2 seconds of the first rally, either way up. Nothing else was read.');
       // Turn the picture only when the turned one clearly finds more people: a stray body must not turn it.
@@ -2631,7 +2640,7 @@ if (typeof module !== 'undefined') module.exports = RF;
       for (let si = 0; si < segs.length; si++) {
         const seg = segs[si], frames = [];
         let k = 0, lastFound = [];
-        await playSegment(v, seg, (t) => {
+        const reached = await playSegment(v, seg, (t) => {
           const a = performance.now();
           drawFrame(g, v, W, H, stats.flip);
           // The detector on every fourth frame (Erik's run of page 14.9 on every frame took about a second a
@@ -2653,14 +2662,16 @@ if (typeof module !== 'undefined') module.exports = RF;
         // The moment this rally showed the fewest people, after its first second: the picture we need.
         const later = frames.slice(WHO_FPS);
         const low = (later.length ? later : frames).reduce((m, f) => (f.bodies.length < m.bodies.length ? f : m), (later.length ? later : frames)[0]);
-        who.segs.push({ seg, tracks: track(frames), frames: frames.length, bodies: frames.reduce((a, f) => a + f.bodies.length, 0), low: low && { t: low.t, bodies: low.bodies.map((b) => ({ box: b.box, hip: b.hip, h: Math.round(b.h), vis: r2(b.vis) })) } });
+        who.segs.push({ seg, reached, tracks: track(frames), frames: frames.length, bodies: frames.reduce((a, f) => a + f.bodies.length, 0), low: low && { t: low.t, bodies: low.bodies.map((b) => ({ box: b.box, hip: b.hip, h: Math.round(b.h), vis: r2(b.vis) })) } });
         stats.framesSoFar = done; stats.cost = who.cost ? { detMs: Math.round(who.cost.det[0] / Math.max(1, who.cost.det[1])), det: who.cost.det[1], poseMs: Math.round(who.cost.pose[0] / Math.max(1, who.cost.pose[1])), pose: who.cost.pose[1] } : null;
         stats.secSoFar = r2((performance.now() - t0) / 1000);
+        stats.seekFails = who.seekFails || 0;
         sendRun('who');
       }
       $('#whoStage').hidden = true;
       stats.rate = r2(v.playbackRate);
       stats.stalls = who.stalls || null;
+      stats.seekFails = who.seekFails || 0;
       stats.cost = who.cost ? { detMs: Math.round(who.cost.det[0] / Math.max(1, who.cost.det[1])), det: who.cost.det[1], poseMs: Math.round(who.cost.pose[0] / Math.max(1, who.cost.pose[1])), pose: who.cost.pose[1] } : null;
       stats.frames = done; stats.bodiesPerFrame = done ? r2(bodies / done) : 0;
       stats.detectMs = Math.round(stats.detectMs / Math.max(1, done));
@@ -2850,7 +2861,7 @@ if (typeof module !== 'undefined') module.exports = RF;
     const judged = shots.filter((s) => s.name && (s.verdict === 'right' || (s.verdict && s.verdict.startsWith('was:'))));
     return {
       stats: who.stats, error: who.error, names: who.names.length, swingFloor: SWING_FLOOR,
-      rallies: who.segs.map((s) => ({ start: r2(s.seg.start), frames: s.frames, bodiesPerFrame: r2(s.bodies / Math.max(1, s.frames)), tracks: s.tracks.length, trackFrames: s.tracks.map((tr) => tr.pts.length), heightsPx: s.tracks.map((tr) => Math.round(tr.h)) })),
+      rallies: who.segs.map((s) => ({ start: r2(s.seg.start), reached: s.reached !== false, frames: s.frames, bodiesPerFrame: r2(s.bodies / Math.max(1, s.frames)), tracks: s.tracks.length, trackFrames: s.tracks.map((tr) => tr.pts.length), heightsPx: s.tracks.map((tr) => Math.round(tr.h)) })),
       nameRally: (who.nameSeg || 0) + 1,
       picturesSent: who.picturesSent || 0,
       seekFails: who.seekFails || 0,
