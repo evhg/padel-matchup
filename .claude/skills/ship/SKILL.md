@@ -693,6 +693,10 @@ learning can be a test, a gate step or a script, make it one and put the story i
   detector can. The next run then took 17 minutes on his iPhone, against seconds per frame here: a
   phone's cost of a model is not the test machine's. Each report now carries the time each model took
   on the phone, from the first rally, so the next change is measured, not guessed.
+- **A good number on held-out seeds is not a good result: put the output on a sheet and look.** The
+  player model scored 99% on its own held-out seeds while its far-end names were close to random, a
+  "55-shot rally" was serve practice, and a replay's "shot" was a high five. Each was found on a sheet
+  of frames in one look. `scripts/highlights/README.md` has the full list for the highlight reel.
 
 ### Wall clock
 
