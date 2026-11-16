@@ -102,7 +102,12 @@ elif seg['kind'] == 'clip':
             a = min(ease((s - 0.3) / 0.4), ease((tag_until + 0.5 - s) / 0.5))
             placed = []
             # the bigger (nearer) players first; a tag that would cover another moves up
+            bigger = []
             for k, b in sorted(track_at(tr, n + off).items(), key=lambda kb: -(kb[1][3] - kb[1][1])):
+                # a player who stands behind a nearer one gets no tag there: the tag would sit on the wrong back
+                hid = any(b[3] - b[1] < 0.6 * (q[3] - q[1]) and q[0] - 0.5 * (q[2] - q[0]) < b[4] < q[2] + 0.5 * (q[2] - q[0]) and q[1] - 0.15 * (q[3] - q[1]) < b[5] < q[3] for q in bigger)
+                bigger.append(b)
+                if hid: smooth.pop(k, None); continue
                 if k not in tags or a <= 0: continue
                 tx, ty = pt(b[4], b[5])
                 if k in smooth: tx, ty = 0.6 * smooth[k][0] + 0.4 * tx, 0.6 * smooth[k][1] + 0.4 * ty
@@ -137,6 +142,10 @@ elif seg['kind'] == 'fast':
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()
 
+elif seg['kind'] == 'file':
+    # a part made elsewhere (the versus opening): taken as it is
+    import shutil; shutil.copyfile(seg['path_tall'] if TALL else seg['path'], out)
+
 elif seg['kind'] == 'replay':
     t0, t1 = seg['t0'], seg['t1']; speed = seg.get('speed', 0.5); zoom = seg.get('zoom', 2.0)
     tr = json.load(open(seg['track'])) if seg.get('track') else None
@@ -144,7 +153,7 @@ elif seg['kind'] == 'replay':
     rb = gfx.badge('Replay'); lt = gfx.lower_third(seg['title'], seg.get('sub')) if seg.get('title') else None
     tag = gfx.name_tag(seg['focus_name'], seg.get('focus_team', 0)) if seg.get('focus_name') else None
     # the window follows the focus player (or the given point), smoothed
-    cw, ch = W / zoom, H / zoom
+    cw, ch = int(W / zoom) // 2 * 2, int(H / zoom) // 2 * 2
     cx, cy = seg.get('cx', W / 2), seg.get('cy', H / 2)
     frames = list(read_frames(video, t0, t1 - t0))
     centres = []
@@ -154,29 +163,54 @@ elif seg['kind'] == 'replay':
         centres.append((cx, cy))
     c = np.array(centres); k = 9
     c = np.stack([np.convolve(np.pad(c[:, j], k, mode='edge'), np.ones(2 * k + 1) / (2 * k + 1), mode='valid') for j in (0, 1)], 1)
+    def origin(cc): return int(np.clip(cc[0] - cw / 2, 0, W - cw)), int(np.clip(cc[1] - ch / 2, 0, H - ch))
+    # 1. the zoomed pictures of the real frames. The upscale model makes cloth, lines and rackets crisper; it is mixed
+    #    in at half strength and kept off the heads, where it paints over what little of a face the camera recorded.
+    SRMIX = float(os.environ.get('SRMIX', '0.5'))
+    steps = int(round(1 / speed))
+    import hashlib
+    cdir = os.environ.get('CACHE') or os.path.join(os.path.dirname(os.path.abspath(out)), 'cache'); os.makedirs(cdir, exist_ok=True)
+    cfile = os.path.join(cdir, 'replay-' + hashlib.md5(json.dumps([t0, t1, zoom, seg.get('focus'), seg.get('cx'), seg.get('cy'), speed, SRMIX]).encode()).hexdigest()[:12] + '.mkv')
+    views = []
+    if os.path.exists(cfile):
+        raw = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-i', cfile, '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], capture_output=True).stdout
+        slow = np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3); frames = []
+    elif SRMIX > 0: import sr
+    for n, (t, img) in enumerate(frames):
+        x0, y0 = origin(c[n]); crop = np.ascontiguousarray(img[y0:y0 + ch, x0:x0 + cw])
+        v = cv2.resize(crop, (W, H), interpolation=cv2.INTER_CUBIC)
+        if SRMIX > 0:
+            u = cv2.resize(sr.up4(crop), (W, H), interpolation=cv2.INTER_AREA)
+            w = np.full((H, W), SRMIX, np.float32)
+            for bx in (track_at(tr, n + off).values() if tr else []):
+                hx, hy = (bx[4] - x0) * W / cw, (bx[5] + 0.11 * (bx[3] - bx[1]) - y0) * H / ch; r = max(14.0, 0.11 * (bx[3] - bx[1]) * W / cw)
+                cv2.circle(w, (int(hx), int(hy)), int(r * 1.5), 0.0, -1)
+            w = cv2.GaussianBlur(w, (0, 0), 12)[:, :, None]
+            v = (v * (1 - w) + u * w).astype(np.uint8)
+        views.append(v)
+    # 2. new frames between the real ones (ffmpeg's motion interpolation): at half speed every second picture is new
+    if views: mi = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-',
+                         '-vf', f'minterpolate=fps={FPS_N * steps}/{FPS_D}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'],
+                        input=b''.join(v.tobytes() for v in views), capture_output=True)
+    if views:
+        slow = np.frombuffer(mi.stdout, np.uint8).reshape(-1, H, W, 3)
+        subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '8', '-pix_fmt', 'yuv444p', cfile], input=slow.tobytes())
     atempo = f'atempo={speed}' if speed >= 0.5 else f'atempo=0.5,atempo={speed / 0.5}'
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video, '-af', f'{atempo},volume=0.45'])
-    def view(img, cc):
-        x0 = int(np.clip(cc[0] - cw / 2, 0, W - cw)); y0 = int(np.clip(cc[1] - ch / 2, 0, H - ch))
-        return cv2.resize(img[y0:y0 + int(ch), x0:x0 + int(cw)], (W, H), interpolation=cv2.INTER_CUBIC), x0, y0
-    steps = int(round(1 / speed)); total = len(frames) * steps; m = 0
-    for n in range(len(frames)):
-        for j in range(steps):
-            w = j / steps
-            a = frames[n][1]; b = frames[min(n + 1, len(frames) - 1)][1]
-            img = a if w == 0 else cv2.addWeighted(a, 1 - w, b, w, 0)
-            cc = (1 - w) * c[n] + w * c[min(n + 1, len(c) - 1)]
-            fr, x0, y0 = view(img, cc)
-            fr = stage(fr, frame=True)       # a thin lime frame marks the replay
-            gfx.blit(fr, bugimg, *BUG); gfx.blit(fr, rb, *right(rb))
-            if tag is not None and tr:
-                bx = track_at(tr, n + off).get(seg.get('focus'))
-                if bx is not None:
-                    tx, ty = pt((bx[4] - x0) * zoom, (bx[5] - y0) * zoom)
-                    gfx.blit(fr, tag, int(tx - tag.shape[1] / 2), int(max(60 if not TALL else VY + 4, ty - tag.shape[0] - 10)))
-            if lt is not None:
-                s = m / FPS; a2 = min(ease((s - 0.2) / 0.4), ease((total / FPS - s) / 0.5))
-                gfx.blit(fr, lt, LT[0], LT[1], a2)
-            enc.stdin.write(fr.tobytes()); m += 1
+    total = len(slow)
+    for m in range(total):
+        nf = m / steps; n = min(int(nf), len(c) - 1); wgt = nf - n
+        cc = (1 - wgt) * c[n] + wgt * c[min(n + 1, len(c) - 1)]; x0, y0 = origin(cc)
+        fr = stage(slow[m].copy(), frame=True)       # a thin lime frame marks the replay
+        gfx.blit(fr, bugimg, *BUG); gfx.blit(fr, rb, *right(rb))
+        if tag is not None and tr:
+            bx = track_at(tr, nf + off).get(seg.get('focus'))
+            if bx is not None:
+                tx, ty = pt((bx[4] - x0) * W / cw, (bx[5] - y0) * H / ch)
+                gfx.blit(fr, tag, int(tx - tag.shape[1] / 2), int(max(60 if not TALL else VY + 4, ty - tag.shape[0] - 10)))
+        if lt is not None:
+            s = m / FPS; a2 = min(ease((s - 0.2) / 0.4), ease((total / FPS - s) / 0.5))
+            gfx.blit(fr, lt, LT[0], LT[1], a2)
+        enc.stdin.write(fr.tobytes())
     enc.stdin.close(); enc.wait()
 print('wrote', out)

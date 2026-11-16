@@ -2,7 +2,10 @@
 
 usage: build.py <video> <plan.json> <ident.json> <feat2.npz> <match.json> <workdir> <out.mp4> [only=cards|all]
 match.json: {"venue", "date", "score", "names": {id: name}, "team": {id: 0|1}, "pair_a": "A & B", "pair_b": "C & D"}
-Tracks are expected at <workdir>/c<i>.json (track.py), one per clip of the plan.
+Optional in match.json: "team_a", "team_b" (the names of the two teams).
+Environment: TRACKS (the folder of track_all.sh, default <workdir>), VERSUS (the prefix of the opening of versus.py:
+<prefix>-wide.mp4 and <prefix>-tall.mp4), TALL=1 (the vertical reel), CACHE (the folder of the slow replays, so the
+second layout does not make them again), SRMIX (how much of the upscaled picture a replay takes, default 0.5).
 """
 import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -18,41 +21,20 @@ os.makedirs(work, exist_ok=True)
 TALL = os.environ.get('TALL') == '1'; TRACKS = os.environ.get('TRACKS', work)
 segs = []
 def add(seg, name):
-    seg['venue'] = MT['venue']; seg['foot'] = [MT['pair_a'], MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
+    seg['venue'] = MT['venue']; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
 def mmss(t): return f'{int(t // 60)}:{int(t % 60):02d}'
 
 # a calm wide frame for the cards: a moment in play
 kf_times = [float(x) for x in open(f'{S}/match/kf_times.txt')]
 def frame_at(t): return cv2.imread(f'{KF}/{int(np.argmin(np.abs(np.array(kf_times) - t))) + 1:06d}.jpg')
 bg = frame_at(P['clips'][0]['t0'] + 3)
-cv2.imwrite(f'{work}/intro.jpg', (gfx.intro_card_tall if TALL else gfx.intro_card)(bg, MT['venue'], MT['date'], MT['pair_a'], MT['pair_b'], MT['score']))
-add({'kind': 'card', 'image': f'{work}/intro.jpg', 'dur': 3.6}, 'intro')
-
-# one card per player: the clearest large sighting, facing the camera
-z = np.load(featf); zbox, zkp, zfr, znames = z['box'], z['kp'], z['frame'], z['names']
-key = {(str(znames[zfr[i]]), tuple(np.round(zbox[i][:4], 1))): i for i in range(len(zbox))}
-cards = {}
-for s in M['sightings']:
-    if s['id'] < 0 or s['zone'] != 'near' or s['conf'] < 0.9 or s.get('margin', 9) < 2.3 or s['t'] < P['t_start']: continue
-    b = s['box']; h = b[3] - b[1]
-    if not (380 <= h <= 900) or b[0] < 30 or b[2] > 1890 or b[3] > 1072 or b[1] < 10: continue
-    i = key.get((s['f'], tuple(np.round(np.array(b[:4], np.float32), 1))))
-    if i is None: continue
-    kp = zkp[i]
-    face = float(kp[:5, 2].mean()); width = abs(kp[5, 0] - kp[6, 0]) / h      # facing the camera: a clear face, wide shoulders
-    cards.setdefault(s['id'], []).append((face * (0.5 + min(0.25, width) * 4) * s['conf'], s))
-for k in range(4):
-    best = None
-    for sc, s in sorted(cards.get(k, []), key=lambda x: -x[0])[:12]:
-        im = cv2.imread(f"{KF}/{s['f']}"); b = [int(v) for v in s['box'][:4]]
-        sharp = cv2.Laplacian(cv2.cvtColor(im[b[1]:b[3], b[0]:b[2]], cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
-        if best is None or sc * sharp > best[0]: best = (sc * sharp, s, im)
-    if best is None: continue
-    partner = [n for i, n in enumerate(names) if team[i] == team[k] and i != k][0]
-    cv2.imwrite(f'{work}/player{k}.jpg', (gfx.player_card_tall if TALL else gfx.player_card)(best[2], best[1]['box'], names[k], team[k], f'with {partner}'))
-order = sorted(range(4), key=lambda k: (team[k], names[k]))
-for k in order:
-    if os.path.exists(f'{work}/player{k}.jpg'): add({'kind': 'card', 'image': f'{work}/player{k}.jpg', 'dur': 1.7}, f'player{k}')
+# the opening: the two teams face each other (versus.py made both layouts before this script runs)
+vs = os.environ.get('VERSUS')
+if vs and os.path.exists(vs + '-wide.mp4') and os.path.exists(vs + '-tall.mp4'):
+    add({'kind': 'file', 'path': vs + '-wide.mp4', 'path_tall': vs + '-tall.mp4'}, 'versus')
+else:
+    cv2.imwrite(f'{work}/intro.jpg', (gfx.intro_card_tall if TALL else gfx.intro_card)(bg, MT['venue'], MT['date'], MT['pair_a'], MT['pair_b'], MT['score']))
+    add({'kind': 'card', 'image': f'{work}/intro.jpg', 'dur': 3.6}, 'intro')
 
 # One replay for each player: the player's hardest swing at a shot that was heard, late in a rally. Nobody is singled
 # out (the owner, 14 November 2026), and a replay is shown only where the swing is clearly that player's.
