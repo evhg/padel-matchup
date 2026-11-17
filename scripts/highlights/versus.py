@@ -28,6 +28,8 @@ def portrait(k, height):
     c = [o for o in FACES[str(k)] if o['sharp'] >= 220] or FACES[str(k)]
     o = max(c, key=lambda o: o['face'][2] ** 1.5 * min(o['sharp'], 450) * o['eyes'] ** 2)
     im = cv2.imread(f"{frames}/{o['f']}"); x, y, w, h = o['face']; cx = x + w / 2; r = max(w, h)
+    if os.environ.get('HDR'):      # the frames of an HDR video are stored as read
+        import hdr; im = hdr.sdr(im, os.environ['HDR'])
     x0, x1 = int(max(0, cx - 2.1 * r)), int(min(im.shape[1], cx + 2.1 * r)); y0, y1 = int(max(0, y - 1.1 * r)), int(min(im.shape[0], y + 3.9 * r))
     cr = im[y0:y1, x0:x1]
     from rembg import remove, new_session
@@ -186,17 +188,32 @@ for b in np.arange(0.30, T_GO - 0.1, 60 / 140):                      # a quiet p
 # the announcer
 lines = [(0.72, f"{' and '.join(names[k] for k in A) if not MT.get('team_a') else 'Team ' + MT['team_a']}!"), (T_VS - 0.02, 'Versus!'),
          (3.12, f"{' and '.join(names[k] for k in B) if not MT.get('team_b') else 'Team ' + MT['team_b']}!"), (T_GO - 0.02, 'Game on!')]
+# The voice. First choice: Kokoro (Apache 2.0, commercial use permitted), voice VOICE_NAME. Second: the piper test voice
+# (its data is for non-commercial use). Neither there, or VOICE=0: the opening has no speech.
+def speak_kokoro(text, td):
+    from kokoro_onnx import Kokoro
+    import soundfile as sf
+    global _kok
+    try: _kok
+    except NameError: _kok = Kokoro(f'{S}/models/kokoro/kokoro-v1.0.onnx', f'{S}/models/kokoro/voices-v1.0.bin')
+    a, sr = _kok.create(text, voice=os.environ.get('VOICE_NAME', 'am_michael'), speed=0.92, lang='en-us'); sf.write(f'{td}/a.wav', a, sr); return int(sr * 0.97)
+def speak_piper(text, td):
+    subprocess.run([piper, '-m', voice, '-f', f'{td}/a.wav'], input=text.encode(), check=True, capture_output=True); return int(22050 * 0.92)
 voice = f'{S}/models/voice/en_US-ryan-high.onnx'; piper = os.path.join(os.path.dirname(sys.executable), 'piper')
-if os.environ.get('VOICE', '1') == '1' and os.path.exists(voice) and os.path.exists(piper):
+speak = None
+if os.environ.get('VOICE', '1') == '1':
+    if os.path.exists(f'{S}/models/kokoro/kokoro-v1.0.onnx') and os.environ.get('VOICE_ENGINE', 'kokoro') == 'kokoro': speak = speak_kokoro
+    elif os.path.exists(voice) and os.path.exists(piper): speak = speak_piper
+if speak:
     for t0, text in lines:
         with tempfile.TemporaryDirectory() as td:
-            subprocess.run([piper, '-m', voice, '-f', f'{td}/a.wav'], input=text.encode(), check=True, capture_output=True)
+            rate = speak(text, td)
             # a little slower and deeper, with a short hall behind it
-            raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', f'{td}/a.wav', '-af', 'asetrate=22050*0.92,aresample=48000,aecho=0.8:0.6:70|140:0.22|0.12,acompressor=threshold=-18dB:ratio=4:makeup=4',
+            raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', f'{td}/a.wav', '-af', f'asetrate={rate},aresample=48000,aecho=0.8:0.6:70|140:0.22|0.12,acompressor=threshold=-18dB:ratio=4:makeup=4',
                                   '-ac', '1', '-f', 'f32le', '-'], capture_output=True, check=True).stdout
             v = np.frombuffer(raw, np.float32).astype(np.float64); v = v / (np.abs(v).max() + 1e-9)
             add(v, t0, 0.95); print(f'voice {t0:.2f} s  {len(v) / SR:.2f} s  "{text}"')
-mix = np.tanh(mix * 0.9); mix = mix / np.abs(mix).max() * 0.5                 # about -6 dB at the loudest moment: the court's own sound is quiet
+mix = np.tanh(mix * 0.9); mix = mix / np.abs(mix).max() * 0.4                 # about -6 dB at the loudest moment: the court's own sound is quiet
 mix[-int(0.05 * SR):] *= np.linspace(1, 0, int(0.05 * SR))
 wav = out + '.f32'; np.stack([mix, mix], 1).astype(np.float32).tofile(wav)
 

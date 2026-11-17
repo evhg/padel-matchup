@@ -38,14 +38,18 @@ if [ "$1" = A ]; then
   step plan python "$H/plan.py" match/audio.json match/ident.json match/plan.json 6
   echo PHASE_A_DONE
 elif [ "$1" = B ]; then
+  # an HDR recording (most phones) is turned into normal video for everything that is drawn
+  HDRK=$(ffprobe -v error -select_streams v:0 -show_entries stream=color_transfer -of csv=p=0 $V)
+  case "$HDRK" in arib-std-b67|smpte2084) ;; *) HDRK= ;; esac
   step follow_clips bash "$H/track_all.sh" $V match/ident match/plan.json match/reel
-  step opening_wide python "$H/versus.py" match/match.json match/faces.json match/kf match/versus-wide.mp4
-  step opening_tall env TALL=1 python "$H/versus.py" match/match.json match/faces.json match/kf match/versus-tall.mp4
-  step reel_wide env VERSUS=match/versus TRACKS=match/reel python "$H/build.py" $V match/plan.json match/ident.json match/feat2.npz match/match.json match/reel match/reel.mp4
-  step reel_tall env TALL=1 VERSUS=match/versus TRACKS=match/reel CACHE=match/reel/cache python "$H/build.py" $V match/plan.json match/ident.json match/feat2.npz match/match.json match/reel-tall match/reel-tall.mp4
-  mkdir -p out
-  step final_wide ffmpeg -v error -nostdin -y -i match/reel.mp4 -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -c:a aac -b:a 160k -movflags +faststart out/highlights-wide.mp4
-  step final_tall ffmpeg -v error -nostdin -y -i match/reel-tall.mp4 -c:v libx264 -preset slow -crf 21 -pix_fmt yuv420p -c:a aac -b:a 160k -movflags +faststart out/highlights-vertical.mp4
+  step shots bash "$H/rally_shots.sh" $V match/ident match/plan.json match/audio.json match/rally
+  step opening_wide env HDR=$HDRK python "$H/versus.py" match/match.json match/faces.json match/kf match/versus-wide.mp4
+  step opening_tall env HDR=$HDRK TALL=1 python "$H/versus.py" match/match.json match/faces.json match/kf match/versus-tall.mp4
+  step reel_wide env VERSUS=match/versus TRACKS=match/reel SHOTS=match/rally python "$H/build.py" $V match/plan.json match/ident.json match/feat2.npz match/match.json match/reel match/reel.mp4
+  step reel_tall env TALL=1 VERSUS=match/versus TRACKS=match/reel SHOTS=match/rally CACHE=match/reel/cache python "$H/build.py" $V match/plan.json match/ident.json match/feat2.npz match/match.json match/reel-tall match/reel-tall.mp4
+  mkdir -p out; C="-colorspace bt709 -color_primaries bt709 -color_trc bt709"
+  step final_wide ffmpeg -v error -nostdin -y -i match/reel.mp4 -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p $C -c:a aac -b:a 160k -movflags +faststart out/highlights-wide.mp4
+  step final_tall ffmpeg -v error -nostdin -y -i match/reel-tall.mp4 -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p $C -c:a aac -b:a 160k -movflags +faststart out/highlights-vertical.mp4
   echo PHASE_B_DONE
 else
   echo "usage: HL_HOME=/path/to/work bash run_all.sh A|B"; exit 2

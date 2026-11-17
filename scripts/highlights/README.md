@@ -27,6 +27,15 @@ a frame or a `match.json`.
    match. `TALL=1` makes the vertical reel.
 8. A slow replay gets more detail and more frames: **`sr.py`** (an upscale model) at half strength, never
    on a head, and the `minterpolate` filter of ffmpeg for the frames in between.
+9. **`hdr.py`** turns an HDR recording (most phones) into normal video before anything is drawn.
+10. **`rally_shots.sh`** checks the shots of each selected rally: **`ball.py`** finds small yellow things that
+    move, **`balllink.py`** joins them into flights, **`shotseq.py`** labels each sound (a shot of the near
+    pair, of the far pair, or something else) from the ball, the arms and the turn of the two pairs.
+    `build.py` with `SHOTS=<folder>` ends each clip after the last shot and counts only shots.
+
+`hear.py` and `hear_calls.py` are the ears: speech recognition (faster-whisper) on a file or on the seconds
+before each point. `serve_probe.py` is a first test of who serves. `balldbg.py` and `ballstrip.py` draw what
+the ball finder saw.
 
 `peek.py`, `dbg.py` and `dbgfar.py` put frames on one sheet. Use them: see the last lesson.
 
@@ -37,11 +46,13 @@ a frame or a `match.json`.
 (through the `rtmlib` package) and DINOv2-small as ONNX. All three have the Apache 2.0 licence. The second
 reel added `realesr-general-x4v3.pth` (Real-ESRGAN, BSD), `yunet.onnx` (the OpenCV face detector, MIT) and
 `u2net_human_seg` (through the `rembg` package). The Python packages are numpy, opencv-python-headless,
-onnxruntime, scikit-learn, pillow, scipy, rtmlib, torch (processor build), rembg and piper-tts.
+onnxruntime, scikit-learn, pillow, scipy, rtmlib, torch (processor build), rembg, piper-tts, kokoro-onnx,
+soundfile and faster-whisper.
 
-The voice is `models/voice/en_US-ryan-high.onnx` for piper. Its data has a non-commercial licence
-(CC BY-NC-SA 4.0) and piper-tts 1.8 is GPL. That is correct for a test reel. The app needs another voice
-before it makes reels for the public. Without the voice file, `versus.py` makes the opening without speech.
+The voice is Kokoro (`models/kokoro/kokoro-v1.0.onnx` and `voices-v1.0.bin`, Apache 2.0: commercial use
+is permitted), 54 voices, `VOICE_NAME` selects one. Without those files `versus.py` uses the piper test
+voice (`models/voice/en_US-ryan-high.onnx`; its data has a non-commercial licence, so not for the public).
+Without both, the opening has no speech.
 
 ```bash
 export HL_HOME=/path/to/work; H=/path/to/repo/scripts/highlights
@@ -83,8 +94,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
   them found from the picture.
-- The end of a rally comes from sound. The shot counter can be one or two shots wrong, and it also hears
-  the court next door. Two cheap tests did not help (see the lessons). The next step is to follow the ball.
+- The shot counter is an estimate. With `SHOTS` it counts the sounds that the labeller calls shots; no
+  rally has a count that a person made to compare with. A video at 60 frames a second is the next test.
+- The score is not found. `serve_probe.py` gives a serving team for most points, not yet the games.
 - The picture is not 4K and the slow motion is not true 60 frames a second. An upscale of a whole frame is
   28 seconds here, and a frame in between is a guess: a racket at full speed stays a blur.
 - No music, and no "funny moments" part: the laugh measure found nothing strong in this match.
@@ -114,5 +126,19 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   a second name for that player.
 - **Read the times of the frames from the packets.** `-skip_frame nokey` with `-show_entries frame` printed
   73,612 lines for 5,258 pictures. `run_all.sh` counts the two and stops when they differ.
+- **Ask what the video is before reading a pixel.** The phone recorded HDR (10 bits, HLG, wide colours).
+  Read as normal video it is grey and flat, and two reels went out like that. The owner asked "is some
+  colour adjustment needed?" before anybody ran `ffprobe`. `hdr.py` converts; `build.py` asks each time.
+- **A rally of a minute does not fit in memory as frames.** The first ball finder held every frame and the
+  kernel killed it at 11 GB. It holds nine frames now, with the same result.
+- **The ball is clear when it is slow and invisible after a hard hit**, at 30 frames a second. So a shot is
+  not "two flights meet": it is a flight that ends or starts at a player, an arm that moves, and the turn of
+  the pairs, in one pass over the whole row of sounds. A racket that swings is also yellow enough to count as
+  "the ball at the racket". That helps, but it is not proof of a hit.
+- **A phone on the back glass does not hear a score call.** In the ten seconds before each of 98 points the
+  recogniser returned nothing or its own filler ("Thank you for watching"). Speech needs a microphone near
+  the players.
+- **Let a recogniser judge a voice when no person can listen.** It wrote "Jarek" and "Tikalai" for the team
+  names, and "Barzoo" for "versus" with the deepest voice behind the effects. That voice was dropped.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

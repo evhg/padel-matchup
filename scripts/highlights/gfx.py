@@ -132,7 +132,7 @@ def player_card(frame_bgr, box, name, team, sub=None):
 def counter(n, final=False, pop=0.0):
     """Top-right: the rally's shot count. `pop` (0..1) makes the number larger for a moment when it rises."""
     size = int(84 * (1 + 0.22 * pop)); f = font(size, 'ExtraBold'); f2 = font(30, 'SemiBold')
-    s = str(n); lab = 'SHOTS' if final else 'RALLY'
+    s = str(n); lab = 'SHOTS'
     wn = int(text_w(s, f)); wl = int(tracked_w(lab, f2, 4)); w = max(150, wn + 44, wl + 44); h = 150
     im = Image.new('RGBA', (w, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     d.rectangle((0, 0, w - 1, h - 1), fill=(LIME if final else INK) + (255 if final else 225,))

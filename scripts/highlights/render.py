@@ -10,6 +10,7 @@ import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gfx
 from people import read_frames
+import hdr
 
 video, segf, out = sys.argv[1], sys.argv[2], sys.argv[3]
 seg = json.load(open(segf))
@@ -63,15 +64,17 @@ def track_at(tr, f):
         out[int(k)] = (1 - w) * v(i - 1) + w * v(i)
     return out
 
+HDR = hdr.kind(video) if seg['kind'] in ('clip', 'fast', 'replay') else None; SDRVF = hdr.vf(HDR) if HDR else None
 bugimg = gfx.bug(seg.get('venue', ''))
 _cnt = {}
-def draw_counter(fr, hits, t, last_extra=1.6):
+def draw_counter(fr, hits, t, last_extra=1.6, calm=False):
     """The rally counter at the top right: it rises with each shot heard; after the last one it shows the total."""
     if not hits: return
     k = sum(1 for h in hits if h <= t)
     if k == 0 or t > hits[-1] + 4.0: return
     final = k == len(hits) and t > hits[-1] + 0.5
     pop = max(0.0, 1 - (t - hits[k - 1]) / 0.22) if not final else max(0.0, 1 - (t - hits[-1] - 0.5) / 0.3)
+    if calm: final, pop = False, 0.0       # at six times the speed the number only counts: no jump at each shot
     key = (k, final, round(pop, 1))
     if key not in _cnt: _cnt[key] = gfx.counter(k, final, key[2])
     c = _cnt[key]; gfx.blit(fr, c, *right(c))
@@ -95,7 +98,7 @@ elif seg['kind'] == 'clip':
     smooth = {}
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video])
     n = 0
-    for t, img in read_frames(video, t0, t1 - t0):
+    for t, img in read_frames(video, t0, t1 - t0, vf=SDRVF):
         fr = stage(img.copy()); s = n / FPS
         gfx.blit(fr, bugimg, *BUG)
         if tr and s < tag_until + 0.5:
@@ -133,12 +136,12 @@ elif seg['kind'] == 'fast':
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video, '-af', ','.join(chain) + ',volume=0.6'])
     ff = gfx.badge(f'x{sp}', gfx.INK, gfx.LIME, 44); lt = gfx.lower_third(seg['title'], seg.get('sub')) if seg.get('title') else None
     n = 0
-    for t, img in read_frames(video, t0, t1 - t0, fps=FPS / sp):
+    for t, img in read_frames(video, t0, t1 - t0, fps=FPS / sp, vf=SDRVF):
         fr = stage(img.copy()); s = n / FPS
         gfx.blit(fr, bugimg, *BUG); gfx.blit(fr, ff, *BADGE_L)
         if lt is not None and s < 4.5:
             a = min(ease((s - 0.2) / 0.4), ease((4.5 - s) / 0.5)); gfx.blit(fr, lt, LT[0], LT[1], a)
-        draw_counter(fr, seg.get('hits'), t)
+        draw_counter(fr, seg.get('hits'), t, calm=True)
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()
 
@@ -197,6 +200,7 @@ elif seg['kind'] == 'replay':
         subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '8', '-pix_fmt', 'yuv444p', cfile], input=slow.tobytes())
     atempo = f'atempo={speed}' if speed >= 0.5 else f'atempo=0.5,atempo={speed / 0.5}'
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video, '-af', f'{atempo},volume=0.45'])
+    if HDR: slow = hdr.sdr(np.ascontiguousarray(np.array(slow)), HDR)      # the cache holds the frames as read; the colours are made right here
     total = len(slow)
     for m in range(total):
         nf = m / steps; n = min(int(nf), len(c) - 1); wgt = nf - n
