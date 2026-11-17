@@ -201,7 +201,12 @@ def speak_piper(text, td):
     subprocess.run([piper, '-m', voice, '-f', f'{td}/a.wav'], input=text.encode(), check=True, capture_output=True); return int(22050 * 0.92)
 voice = f'{S}/models/voice/en_US-ryan-high.onnx'; piper = os.path.join(os.path.dirname(sys.executable), 'piper')
 speak = None
-if os.environ.get('VOICE', '1') == '1':
+VOICE_DIR = os.environ.get('VOICE_DIR')        # lines made before by another voice service: <dir>/<VOICE_PREFIX>-a.mp3, -vs, -b, -go
+def speak_files(text, td):
+    tag = {0: 'a', 1: 'vs', 2: 'b', 3: 'go'}[[t for _, t in lines].index(text)]
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', f"{VOICE_DIR}/{os.environ.get('VOICE_PREFIX', 'voice')}-{tag}.mp3", '-ar', '48000', f'{td}/a.wav'], check=True); return 48000
+if os.environ.get('VOICE', '1') == '1' and VOICE_DIR: speak = speak_files
+elif os.environ.get('VOICE', '1') == '1':
     if os.path.exists(f'{S}/models/kokoro/kokoro-v1.0.onnx') and os.environ.get('VOICE_ENGINE', 'kokoro') == 'kokoro': speak = speak_kokoro
     elif os.path.exists(voice) and os.path.exists(piper): speak = speak_piper
 if speak:
