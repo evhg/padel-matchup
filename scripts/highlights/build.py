@@ -6,7 +6,8 @@ Optional in match.json: "team_a", "team_b" (the names of the two teams).
 Environment: TRACKS (the folder of track_all.sh, default <workdir>), VERSUS (the prefix of the opening of versus.py:
 <prefix>-wide.mp4 and <prefix>-tall.mp4), TALL=1 (the vertical reel), CACHE (the folder of the slow replays, so the
 second layout does not make them again), SRMIX (how much of the upscaled picture a replay takes, default 0.5),
-SHOTS (the folder of rally_shots.sh: a clip ends after the last shot, the counter leaves out what is not a shot).
+SHOTS (the folder of rally_shots.sh: a clip ends after the last shot, the counter leaves out what is not a shot),
+FAST=1 (the long rally at six times the speed; it is off, because it was not fun to watch).
 """
 import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -49,6 +50,7 @@ def track_of(c):
     return (trf, json.load(open(trf))) if os.path.exists(trf) else (None, None)
 # The checked shots of each rally (rally_shots.sh): which sounds are shots, who hit them, where the rally ends.
 SHOTS = os.environ.get('SHOTS'); AFTER = 3.4      # a clip ends this long after the last shot of the rally
+FAST = os.environ.get('FAST') == '1'              # the long rally at six times the speed. Off: the owner, 17 November 2026: "not fun to watch, remove it"
 def shots_of(c):
     if not SHOTS: return None, None
     import glob
@@ -78,7 +80,7 @@ for c in P['clips']:
     r0, r1 = [float(x) for x in os.path.basename(trk)[1:-5].split('-')]
     pre = 16.0 if c.get('best') else 12.0
     c['t1'] = round(min(c['t1'], r1 - 0.2, end + (4.5 if c.get('cut_by_ball') else 6.5)), 2)
-    if c.get('marathon'): c['t0'] = round(end - 9.0, 2); c['fast_from'] = round(max(r0 + 0.1, real[0]['t'] - 1.5), 2)
+    if c.get('marathon') and FAST: c['t0'] = round(end - 9.0, 2); c['fast_from'] = round(max(r0 + 0.1, real[0]['t'] - 1.5), 2)
     else: c['t0'] = round(max(r0 + 0.1, end - pre, real[0]['t'] - 2.5), 2)
     print(f"point at {mmss(end)}: {len(hits)} sounds, {len(real)} counted, end {'moved to ' + mmss(end) if c.get('cut_by_ball') else 'as before'}, clip {c['t0']}-{c['t1']}")
 cand = {k: [] for k in range(4)}
@@ -113,7 +115,7 @@ for ci, c in enumerate(P['clips']):
     shown = [nm if tr and tr['sure'].get(str(i), 0) >= SURE else None for i, nm in enumerate(names)]
     sub = f"{c['hits']} shots · {mmss(c['lastHit'])}"
     hits = c['hitTimes']
-    if c.get('marathon'):
+    if c.get('marathon') and FAST:
         add({'kind': 'fast', 't0': c['fast_from'], 't1': c['t0'], 'speed': 6, 'title': c['title'], 'sub': sub, 'hits': hits}, f'fast{ci}')
         add({'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': None, 'sub': None, 'tags_until': 4.0, 'hits': hits}, f'point{ci}')
     else:
