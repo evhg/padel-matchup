@@ -8,7 +8,7 @@ import { scoreText } from "./draw";
 import { DomainError } from "./errors";
 
 /**
- * What a big event asks for on top: a stream link on a match (rule 26: we link, we never host),
+ * What a big event asks for on top: a stream link on a match (the organiser pastes it),
  * the desk's check-in mark, the lucky loser who takes a withdrawn pair's place in the draw, the
  * results as a file, and a ranking across the editions that share a series tag.
  */

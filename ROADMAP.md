@@ -200,7 +200,7 @@ Everything in this list is live. The README describes each in detail.
   player on the podium (champions, finalists, both semi-final losers) gets the moment once, with
   its own page, and hears it.
 
-- **The serious tournament, step 5: the big-event extras.** A stream link on a match (rule 26: the
+- **The serious tournament, step 5: the big-event extras.** A stream link on a match (the
   organiser pastes YouTube, Twitch or Facebook Live; the page and the club's screen show "Watch
   live"); the desk's check-in mark on a pair; the lucky loser — a pair out of a made draw is
   replaced by the first pair waiting in every match still to play, with nobody waiting the other
