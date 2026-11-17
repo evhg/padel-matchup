@@ -1,10 +1,13 @@
 """Choose the moments of the recap reel: the best points, spread over the match and shared equally between the two ends.
 
 usage: plan.py <audio.json> <ident.json> <plan.json> [points=6]
+WINNERS=<winners.json> (winners.py): the points are shared equally between the pairs that WON them, and only points
+with a known winner are chosen. Without it the points are shared between the two ends, which is not the same thing:
+the first reel had three points at each end, and one pair had won all six.
 A reel never singles out one pair (the owner, 14 November 2026): half the points have each pair at the camera end.
 A point always shows its end (the owner: "rallies should always capture the point").
 """
-import sys, json, numpy as np
+import sys, os, json, numpy as np
 audio, ident, out = sys.argv[1], sys.argv[2], sys.argv[3]
 NPTS = int(sys.argv[4]) if len(sys.argv) > 4 else 6
 A = json.load(open(audio)); M = json.load(open(ident))
@@ -35,20 +38,29 @@ def worth(p):
 for p in pts:
     p['near'] = near_pair[bin_of(p['lastHit'])]; p['sure'] = bool(sure[bin_of(p['lastHit'])]); p['worth'] = worth(p)
 
+# who won: a person said it for some points (label_page.py, winners.py)
+WIN = os.environ.get('WINNERS')
+if WIN:
+    for w in json.load(open(WIN))['points']:
+        q = min(pts, key=lambda p: abs(p['firstHit'] - w['firstHit']))
+        if abs(q['firstHit'] - w['firstHit']) < 1.5: q['won'] = w['won']
+def side(p): return p['won'] if WIN else p['near']
+def usable(p): return p['sure'] and (not WIN or 'won' in p)
+
 # the longest rally of the match is always in: it is the story everybody tells afterwards
 marathon = max([p for p in pts if sure[bin_of(p['lastHit'])] and sure[bin_of(p['firstHit'])]], key=lambda p: p['hits'])
-if marathon['hits'] < 30: marathon = None
+if marathon['hits'] < 30 or not usable(marathon): marathon = None
 chosen = [marathon] if marathon else []
 per = {0: 0, 1: 0}
-if marathon: per[marathon['near']] += 1
+if marathon: per[side(marathon)] += 1
 quota = (NPTS + 1) // 2
-ranked = sorted([p for p in pts if p['sure'] and p is not marathon], key=lambda p: -p['worth'])
+ranked = sorted([p for p in pts if usable(p) and p is not marathon], key=lambda p: -p['worth'])
 while len(chosen) < NPTS:
     # best first; a point close in time to a chosen one loses worth, so the reel covers the match
     def adj(p): return p['worth'] - 8 * sum(1 for q in chosen if abs(p['lastHit'] - q['lastHit']) < 150) - 100 * any(abs(p['lastHit'] - q['lastHit']) < 60 for q in chosen) + 6 * min([abs(p['lastHit'] - q['lastHit']) for q in chosen] + [1200]) / 1200
-    cands = [p for p in ranked if p not in chosen and per[p['near']] < quota]
+    cands = [p for p in ranked if p not in chosen and per[side(p)] < quota]
     if not cands: break
-    p = max(cands, key=adj); chosen.append(p); per[p['near']] += 1
+    p = max(cands, key=adj); chosen.append(p); per[side(p)] += 1
 chosen.sort(key=lambda p: p['lastHit'])
 best = max([p for p in chosen if p is not marathon], key=lambda p: p['worth'])
 
@@ -75,6 +87,7 @@ for p in chosen:
     t0 = max(end - pre, p['firstHit'] - 2.5); t1 = min(p['clipEnd'], p['lastHit'] + 3.2, end + 6.5)
     c = {'kind': 'point', 't0': round(t0, 2), 't1': round(t1, 2), 'lastHit': end, 'hits': len(hits), 'score': p['score'], 'worth': p['worth'], 'near': p['near'], 'ends_sure': p['sure'],
          'title': title(p), 'hitTimes': hits, 'strongest': p['strongest'], 'reactionDb': p['reactionDb'], 'laugh': p['laugh'], 'best': p is best}
+    if 'won' in p: c['won'] = p['won']
     if p is marathon:
         # the whole rally: the long middle runs fast, the last seconds at the true speed
         c['fast_from'] = round(p['firstHit'] - 1.5, 2); c['t0'] = round(end - 9.0, 2); c['marathon'] = True
@@ -85,5 +98,6 @@ json.dump({'t_start': t_start, 'clips': clips, 'stats': stats}, open(out, 'w'), 
 def mm(t): return f'{int(t // 60)}:{int(t % 60):02d}'
 for c in clips:
     print(f"{c['kind']:6s} {mm(c['t0']):>6s}  {c['t1'] - c['t0']:5.1f} s  near pair {c['near']}{'' if c['ends_sure'] else '?'}  hits {c['hits']:3d}  {c['title']}  worth {c['worth']}" + (f"  fast from {mm(c['fast_from'])}" if c.get('marathon') else ''))
+if WIN: print('points won by each pair:', [sum(1 for c in clips if c.get('won') == k) for k in (0, 1)])
 print('near-pair balance of the points:', [sum(1 for c in clips if c['near'] == k) for k in (0, 1)], 'total seconds', round(sum(c['t1'] - c['t0'] for c in clips)))
 print('stats', stats)

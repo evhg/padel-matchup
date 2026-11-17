@@ -17,7 +17,8 @@ a frame or a `match.json`.
 3. **`ident.py`** makes exactly four players, two pairs, and the ends over time. **`farmodel.py`** learns
    the far end by itself (see the lessons).
 4. **`plan.py`** selects the points: the best by sound, the longest rally, the same number for each pair
-   at the camera end.
+   at the camera end. With `WINNERS=<winners.json>` it gives each pair the same number of points that the
+   pair WON, and `build.py` names the winner after the last shot of each clip.
 5. **`track.py`** follows the players through each selected clip and gives a name to each from all the
    sightings together. **`shots.py`** finds whose hand moved at a shot.
 6. **`faces.py`** finds the largest sharp front faces of each player. **`versus.py`** makes the opening
@@ -40,6 +41,7 @@ engine: the most probable score history for weak guesses of who won each point, 
 the rules repair.
 `cand_points.py` lists the best points and makes a sheet of frames of each end, for a person to say who won.
 `label_page.py` makes one page from those clips: a tap for the pair that won each point, and one line to copy.
+`winners.py` turns that line into `winners.json` for `plan.py`.
 `hear_voice.py` finds where people speak; `hear_calls2.py` and `scribe.py` (a paid service) listen for scores.
 `hear.py` and `hear_calls.py` are the ears: speech recognition (faster-whisper) on a file or on the seconds
 before each point. `balldbg.py` and `ballstrip.py` draw what
@@ -155,6 +157,8 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   point in it was won by the same pair. A player of the other pair said so at once. The pipeline does not
   know who won a point, and six still frames of a rally's end do not show it to a careful reader. Until
   that is solved, `cand_points.py` lists the best points with a sheet of each end, and a person says who won.
+  The person's answer for 18 points: 9 for one pair, 6 for the other, 3 "cannot tell". All six points of the
+  reel were among the 9. `plan.py` with `WINNERS` now shares the points between the winners.
 - **The rules of padel do not repair a weak detector. Measure before you promise.** I told the owner that
   the rules could teach the machine who won each point. `score_decode.py simulate2` then showed it: with
   the game limits, the rules and the typed final score, a detector that is right for 80% of the points gives
@@ -184,6 +188,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **A phone on the back glass does not hear a score call.** In the ten seconds before each of 98 points the
   recogniser returned nothing or its own filler ("Thank you for watching"). Speech needs a microphone near
   the players.
+- **A stronger recogniser does not hear what the microphone did not record.** `scribe.py` sent the twelve
+  seconds before each of 98 points to a paid recogniser. It returned text for five of them, and none was a
+  score. Two free recognisers and one paid one agree: the sound is the limit, not the recogniser.
 - **Let a recogniser judge a voice when no person can listen.** It wrote "Jarek" and "Tikalai" for the team
   names, and "Barzoo" for "versus" with the deepest voice behind the effects. That voice was dropped.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good

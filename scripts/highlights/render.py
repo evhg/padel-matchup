@@ -3,6 +3,7 @@
 Segments (JSON, one per call):
   {"kind": "card", "image": "x.jpg", "dur": 3.5}
   {"kind": "clip", "t0", "t1", "track": "clip.json", "names": [...], "team": [...], "title", "sub", "tags_until": 4.0}
+      optional "won": {"team": 0|1, "name": "Team X", "at": seconds of the video}: a person said who won the point, and the clip says it after the last shot
   {"kind": "replay", "t0", "t1", "track": "clip.json", "focus": id or null, "zoom": 2.2, "speed": 0.5, "title"}
 usage: render.py <video> <segment.json> <out.mp4>
 """
@@ -95,6 +96,11 @@ elif seg['kind'] == 'clip':
     tags = {i: gfx.name_tag(nm, seg['team'][i]) for i, nm in enumerate(seg.get('names', [])) if nm}
     lt = gfx.lower_third(seg['title'], seg.get('sub')) if seg.get('title') else None
     tag_until = seg.get('tags_until', 4.0)
+    wb = None
+    if seg.get('won'):
+        # after the ball is dead, never before: the picture tells the end, the line only names it
+        wn = seg['won']; wb = gfx.lower_third(wn['name'], 'wins the point', gfx.LIME if wn['team'] == 0 else (120, 160, 255))
+        w_at = max(4.7, min(wn['at'] - t0 + 1.4, t1 - t0 - 1.8))
     smooth = {}
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video])
     n = 0
@@ -123,6 +129,9 @@ elif seg['kind'] == 'clip':
         if lt is not None and s < 4.5:
             a = min(ease((s - 0.2) / 0.4), ease((4.5 - s) / 0.5))
             gfx.blit(fr, lt, int(LT[0] - 60 * (1 - ease((s - 0.2) / 0.4))), LT[1], a)
+        if wb is not None and s >= w_at:
+            a = min(ease((s - w_at) / 0.35), ease((t1 - t0 - s) / 0.3))
+            gfx.blit(fr, wb, int(LT[0] - 60 * (1 - ease((s - w_at) / 0.35))), LT[1], a)
         draw_counter(fr, seg.get('hits'), t0 + s)
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()
