@@ -122,6 +122,9 @@ elif seg['kind'] == 'clip':
                 if k in smooth: tx, ty = 0.6 * smooth[k][0] + 0.4 * tx, 0.6 * smooth[k][1] + 0.4 * ty
                 smooth[k] = (tx, ty)
                 tg = tags[k]; x, y = int(tx - tg.shape[1] / 2), int(ty - tg.shape[0] - 6)
+                # a tag stays whole inside the picture; a player outside the picture (the vertical crop) gets none
+                if not 0 <= tx <= OW: continue
+                x = min(max(x, 8), OW - tg.shape[1] - 8)
                 for _ in range(3):
                     if any(x < px + pw + 6 and px < x + tg.shape[1] + 6 and y < py + ph + 4 and py < y + tg.shape[0] + 4 for (px, py, pw, ph) in placed): y -= tg.shape[0] + 4
                 placed.append((x, y, tg.shape[1], tg.shape[0]))
