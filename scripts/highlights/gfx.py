@@ -47,16 +47,16 @@ def name_tag(name, team):
     tracked(d, (pad, 1), s, f, fg + (255,), 1.5)
     return rgba_to_bgra(im)
 
-def lower_third(title, sub=None):
-    """Bottom-left: a lime bar, the title on ink, a smaller line under it."""
+def lower_third(title, sub=None, col=LIME):
+    """Bottom-left: a bar in the colour, the title on ink, a smaller line under it."""
     f1, f2 = font(64, 'ExtraBold'), font(34, 'SemiBold')
     t = title.upper(); w1 = int(tracked_w(t, f1, 2)); w2 = int(tracked_w(sub.upper(), f2, 2)) if sub else 0
     w = max(w1, w2) + 64; h = 86 + (48 if sub else 0)
     im = Image.new('RGBA', (w + 14, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
-    d.rectangle((0, 0, 13, h - 1), fill=LIME + (255,))
+    d.rectangle((0, 0, 13, h - 1), fill=tuple(col) + (255,))
     d.rectangle((14, 0, w + 13, h - 1), fill=INK + (235,))
     tracked(d, (40, 4), t, f1, WHITE + (255,), 2)
-    if sub: tracked(d, (40, 82), sub.upper(), f2, LIME + (255,), 2)
+    if sub: tracked(d, (40, 82), sub.upper(), f2, tuple(col) + (255,), 2)
     return rgba_to_bgra(im)
 
 def badge(text, bg=LIME, fg=INK, size=40):

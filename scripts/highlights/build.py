@@ -22,6 +22,7 @@ KF = f'{S}/match/kf'
 os.makedirs(work, exist_ok=True)
 TALL = os.environ.get('TALL') == '1'; TRACKS = os.environ.get('TRACKS', work)
 segs = []
+TEAMS = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']]
 def add(seg, name):
     seg['venue'] = MT['venue']; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
 def mmss(t): return f'{int(t // 60)}:{int(t % 60):02d}'
@@ -119,7 +120,10 @@ for ci, c in enumerate(P['clips']):
         add({'kind': 'fast', 't0': c['fast_from'], 't1': c['t0'], 'speed': 6, 'title': c['title'], 'sub': sub, 'hits': hits}, f'fast{ci}')
         add({'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': None, 'sub': None, 'tags_until': 4.0, 'hits': hits}, f'point{ci}')
     else:
-        add({'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': c['title'], 'sub': sub, 'tags_until': 4.5, 'hits': hits}, f'point{ci}')
+        seg = {'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': c['title'], 'sub': sub, 'tags_until': 4.5, 'hits': hits}
+        # a person said who won this point (plan.py with WINNERS): the clip names the pair after the last shot
+        if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS[c['won']], 'at': c['lastHit']}
+        add(seg, f'point{ci}')
     if ci in replay_at:
         k, h, hi = replay_at[ci]; p = tr['players'][str(k)]
         hgt = float(np.median([b[3] - b[1] for b in p['box']])); nth = sum(1 for x in hits if x <= h)
