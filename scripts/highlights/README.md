@@ -35,9 +35,12 @@ a frame or a `match.json`.
     `SHOTS=<folder>` ends a rally where the ball stops flying near the end of its sounds, leaves the sounds
     that are not of this ball out of the counter, and takes replays only from sure shots.
 
+`serve.py` finds the serving pair, the server and the side of each point. `score_decode.py` is the rules
+engine: the most probable score history for weak guesses of who won each point, and a simulation of how much
+the rules repair.
 `cand_points.py` lists the best points and makes a sheet of frames of each end, for a person to say who won.
 `hear.py` and `hear_calls.py` are the ears: speech recognition (faster-whisper) on a file or on the seconds
-before each point. `serve_probe.py` is a first test of who serves. `balldbg.py` and `ballstrip.py` draw what
+before each point. `balldbg.py` and `ballstrip.py` draw what
 the ball finder saw.
 
 `peek.py`, `dbg.py` and `dbgfar.py` put frames on one sheet. Use them: see the last lesson.
@@ -100,7 +103,8 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - The shot counter is an estimate. With `SHOTS` it leaves out the sounds that are proven not to be shots
   of this ball; a bounce can still count. No rally has a count that a person made to compare with. A video
   at 60 frames a second is the next test.
-- The score is not found. `serve_probe.py` gives a serving team for most points, not yet the games.
+- The score is not found. Nothing here says who won a point. `serve.py` gives the serving pair for the
+  points served from the camera end; `score_decode.py` is ready for a detector that does not exist yet.
 - The picture is not 4K and the slow motion is not true 60 frames a second. An upscale of a whole frame is
   28 seconds here, and a frame in between is a guess: a racket at full speed stays a blur.
 - No music, and no "funny moments" part: the laugh measure found nothing strong in this match.
@@ -148,6 +152,15 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   point in it was won by the same pair. A player of the other pair said so at once. The pipeline does not
   know who won a point, and six still frames of a rally's end do not show it to a careful reader. Until
   that is solved, `cand_points.py` lists the best points with a sheet of each end, and a person says who won.
+- **The rules of padel do not repair a weak detector. Measure before you promise.** I told the owner that
+  the rules could teach the machine who won each point. `score_decode.py simulate2` then showed it: with
+  the game limits, the rules and the typed final score, a detector that is right for 80% of the points gives
+  a correct score on screen 62% of the time, 90% gives 81%, 95% gives 90%, and 98% gives 96%. So the score
+  needs a detector that sees the end of almost every point, and matches with known winners to measure it.
+- **A serve is where a point starts, and the camera end shows it.** `serve.py` reads the formation before
+  the first sound of a point from one picture a second: 140 points, 124 of them served from the camera end.
+  The far end needs poses at the full frame rate. Loudness does not tell the two ends apart: the phone evens
+  out the level.
 - **Fast forward is not a highlight.** The long rally at six times the speed was "not fun to watch". It is
   off (`FAST=1` turns it on); the rally shows its last seconds at the true speed.
 - **A phone on the back glass does not hear a score call.** In the ten seconds before each of 98 points the
