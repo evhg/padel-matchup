@@ -30,14 +30,17 @@ def play_match(best_of=3):
             if tb or (max(g) >= 6 and abs(g[0] - g[1]) >= 2): break
         sets.append(games); won[0 if g[0] > g[1] else 1] += 1
     return sets
-def decode_game(obs, tb=False):
+def decode_game(obs, tb=False, calls=None, call_right=0.9):
     """obs: for each point log P(observation | pair 0 won), log P(observation | pair 1 won).
+    calls: {point number: (a, b)} = a score that was heard before that point ("thirty fifteen" is (2, 1)). A call is a
+    hint: the true score is the heard one with probability call_right.
     -> {winner: (log-likelihood, point winners)} over the point orders that end the game at exactly this length."""
     n = len(obs); best = {(0, 0): (0.0, [])}
     for i, (l0, l1) in enumerate(obs):
         nxt = {}
         for (a, b), (v, path) in best.items():
             if game_over(a, b, tb) is not None: continue                       # the game was over before: not a valid order
+            if calls and i in calls: v += math.log(call_right) if calls[i] == (a, b) else math.log((1 - call_right) / 6)
             for w, l in ((0, l0), (1, l1)):
                 s = (a + 1, b) if w == 0 else (a, b + 1); c = (v + l, path + [w])
                 if s not in nxt or c[0] > nxt[s][0]: nxt[s] = c
@@ -48,10 +51,10 @@ def decode_game(obs, tb=False):
         if w is not None and (w not in out or v > out[w][0]): out[w] = (v, path)
     return out
 def set_over(a, b): return (max(a, b) >= 6 and abs(a - b) >= 2) or max(a, b) == 7
-def decode_set(games_obs, final=None):
+def decode_set(games_obs, final=None, calls=None, call_right=0.9):
     """games_obs: [(obs of the game, is tie-break)]. final: (games of pair 0, games of pair 1) or None.
     -> for each game (winner, point winners): the best choice with a valid order of games (and the typed score)."""
-    opts = [decode_game(o, tb) for o, tb in games_obs]; best = {(0, 0): (0.0, [])}
+    opts = [decode_game(o, tb, (calls or {}).get(k), call_right) for k, (o, tb) in enumerate(games_obs)]; best = {(0, 0): (0.0, [])}
     for i, o in enumerate(opts):
         nxt = {}
         for (a, b), (v, path) in best.items():
@@ -123,3 +126,36 @@ if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'simulate2':
         for uf in (False, True):
             p, g, s = trial2(share, qs, uf, n)
             print(f'  {share * 100:5.0f}% | {qs * 100:5.1f}% | {"yes" if uf else "no "} | {p * 100:5.1f}% | {g * 100:5.1f}% | {s * 100:5.1f}%')
+
+def trial3(q, call_share, call_right, use_final, n):
+    """The detector is right with q for every point. Before a share of the points a score call is heard (right with
+    call_right; a wrong call gives a neighbour score). -> points right, games right, score on screen right."""
+    lq, lr = math.log(q), math.log(1 - q); pt = pc = gt = gc = st = sc = 0
+    for _ in range(n):
+        for games in play_match():
+            obs = []; calls = {}
+            for k, (seq, w, tb) in enumerate(games):
+                g = []; a = b = 0; ck = {}
+                for i, x in enumerate(seq):
+                    if i > 0 and not tb and random.random() < call_share:
+                        ck[i] = (a, b) if random.random() < call_right else random.choice([(a + 1, b), (a, b + 1), (max(0, a - 1), b), (a, max(0, b - 1))])
+                    seen = x if random.random() < q else 1 - x; g.append((lq, lr) if seen == 0 else (lr, lq))
+                    a, b = (a + 1, b) if x == 0 else (a, b + 1)
+                obs.append((g, tb)); calls[k] = ck
+            final = (sum(1 for _, w, _ in games if w == 0), sum(1 for _, w, _ in games if w == 1)) if use_final else None
+            dec = decode_set(obs, final, calls, call_right); ta = tb_ = da = db = 0
+            for (seq, w, tb), (dw, dpts) in zip(games, dec):
+                gt += 1; gc += dw == w; a = b = c = d = 0
+                for x, y in zip(seq, dpts):
+                    pt += 1; pc += x == y
+                    a, b = (a + 1, b) if x == 0 else (a, b + 1); c, d = (c + 1, d) if y == 0 else (c, d + 1)
+                    st += 1; sc += (ta, tb_, a, b) == (da, db, c, d)
+                ta, tb_ = (ta + 1, tb_) if w == 0 else (ta, tb_ + 1); da, db = (da + 1, db) if dw == 0 else (da, db + 1)
+    return pc / pt, gc / gt, sc / st
+if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'simulate3':
+    n = int(sys.argv[2]) if len(sys.argv) > 2 else 300; random.seed(13); GOLDEN = True
+    print('detector right | score call heard before | a heard call is right | typed final | points right | games right | score on screen right')
+    for q in (0.7, 0.8, 0.9):
+        for share, cr in ((0.0, 0.9), (0.2, 0.8), (0.4, 0.8), (0.4, 0.95), (0.7, 0.9)):
+            p, g, s_ = trial3(q, share, cr, True, n)
+            print(f'  {q * 100:3.0f}% | {share * 100:3.0f}% of points | {cr * 100:3.0f}% | yes | {p * 100:5.1f}% | {g * 100:5.1f}% | {s_ * 100:5.1f}%')
