@@ -13,7 +13,7 @@ while read r0 r1; do
   n="$5/r$r0-$r1"
   [ -f "$n.json" ] || python -u "$H/track.py" "$1" "$2" "$r0" "$r1" "$n.json" 2>&1 | tail -1
   [ -f "$n-cand.npz" ] || python "$H/ball.py" "$1" "$r0" "$r1" "$n-cand.npz"
-  python "$H/balllink.py" "$n-cand.npz" "$n-ball.npz" | head -1
+  python "$H/balllink.py" "$n-cand.npz" "$n-ball.npz" | sed -n 1p
   python "$H/shotseq.py" "$n.json" "$n-ball.npz" "$4" "$n-shots.json" | tail -1
 done < "$5/ranges.txt"
 echo RALLY_SHOTS_DONE

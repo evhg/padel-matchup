@@ -153,6 +153,11 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   the one rally that was looked at in detail had looked right. The labeller now says only what is sure, and
   the end of a rally comes from one strong clue: the ball stops flying.
 - **A replay needs the whole player in the picture.** One showed an arm at the edge and a name tag.
+- **A name tag stays whole inside the picture.** A player at the edge had a tag cut to its last three letters.
+  The tag now moves in from the edge, and a player outside the vertical crop gets none.
+- **`head -1` on a script that prints more is an error in the log.** The first line was read and the rest
+  raised "Broken pipe". The result was correct, but a watcher that looked for "Traceback" stopped early.
+  `rally_shots.sh` reads the first line with `sed -n 1p`.
 - **Equal ends is not equal winners.** The reel gave each pair three points at the camera end, and every
   point in it was won by the same pair. A player of the other pair said so at once. The pipeline does not
   know who won a point, and six still frames of a rally's end do not show it to a careful reader. Until
