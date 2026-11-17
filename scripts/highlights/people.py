@@ -98,9 +98,10 @@ class Finder:
             out.append({'box': b[:5].tolist(), 'zone': zn, 'kp': kp, 'col': col, 'ok': ok, 'id': i, 'conf': c})
         return out
 
-def read_frames(path, t0, dur, fps=None, size=(1920, 1080)):
-    """Frames of [t0, t0+dur) as BGR arrays, with their times. Rotation is applied by ffmpeg."""
-    vf = ['-vf', f'fps={fps}'] if fps else []
+def read_frames(path, t0, dur, fps=None, size=(1920, 1080), vf=None):
+    """Frames of [t0, t0+dur) as BGR arrays, with their times. Rotation is applied by ffmpeg. vf: one more ffmpeg filter."""
+    chain = ([f'fps={fps}'] if fps else []) + ([vf] if vf else [])
+    vf = ['-vf', ','.join(chain)] if chain else []
     cmd = ['ffmpeg', '-v', 'error', '-nostdin', '-ss', f'{t0:.3f}', '-i', path, '-t', f'{dur:.3f}', '-map', '0:v:0', *vf, '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-']
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     n = size[0] * size[1] * 3; i = 0; step = 1.0 / (fps or 30000 / 1001)

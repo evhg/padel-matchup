@@ -5,7 +5,8 @@ match.json: {"venue", "date", "score", "names": {id: name}, "team": {id: 0|1}, "
 Optional in match.json: "team_a", "team_b" (the names of the two teams).
 Environment: TRACKS (the folder of track_all.sh, default <workdir>), VERSUS (the prefix of the opening of versus.py:
 <prefix>-wide.mp4 and <prefix>-tall.mp4), TALL=1 (the vertical reel), CACHE (the folder of the slow replays, so the
-second layout does not make them again), SRMIX (how much of the upscaled picture a replay takes, default 0.5).
+second layout does not make them again), SRMIX (how much of the upscaled picture a replay takes, default 0.5),
+SHOTS (the folder of rally_shots.sh: clips end after the last shot, the counter counts only shots).
 """
 import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +27,11 @@ def mmss(t): return f'{int(t // 60)}:{int(t % 60):02d}'
 
 # a calm wide frame for the cards: a moment in play
 kf_times = [float(x) for x in open(f'{S}/match/kf_times.txt')]
-def frame_at(t): return cv2.imread(f'{KF}/{int(np.argmin(np.abs(np.array(kf_times) - t))) + 1:06d}.jpg')
+import hdr
+HDRK = hdr.kind(video)
+def frame_at(t):
+    im = cv2.imread(f'{KF}/{int(np.argmin(np.abs(np.array(kf_times) - t))) + 1:06d}.jpg')
+    return hdr.sdr(im, HDRK) if HDRK else im
 bg = frame_at(P['clips'][0]['t0'] + 3)
 # the opening: the two teams face each other (versus.py made both layouts before this script runs)
 vs = os.environ.get('VERSUS')
@@ -40,15 +45,45 @@ else:
 # out (the owner, 14 November 2026), and a replay is shown only where the swing is clearly that player's.
 SURE = 15.0      # a name is shown only where the clip as a whole is sure of it
 def track_of(c):
-    trf = f"{TRACKS}/t{c['t0']:.2f}-{c['t1']:.2f}.json"
+    trf = c.get('track_file') or f"{TRACKS}/t{c['track_key'][0]:.2f}-{c['track_key'][1]:.2f}.json"
     return (trf, json.load(open(trf))) if os.path.exists(trf) else (None, None)
+# The checked shots of each rally (rally_shots.sh): which sounds are shots, who hit them, where the rally ends.
+SHOTS = os.environ.get('SHOTS'); AFTER = 3.4      # a clip ends this long after the last shot of the rally
+def shots_of(c):
+    if not SHOTS: return None, None
+    import glob
+    for f in glob.glob(f'{SHOTS}/r*-shots.json'):
+        r0, r1 = [float(x) for x in os.path.basename(f)[1:-11].split('-')]
+        if r0 <= c['lastHit'] <= r1: return json.load(open(f)), f[:-11] + '.json'
+    return None, None
+for c in P['clips']:
+    c['track_key'] = (c['t0'], c['t1']); c['track_file'] = None; sh, trk = shots_of(c); c['shots'] = None
+    if sh:
+        real = [x for x in sh if x['label'] in ('near', 'far')]
+        if len(real) >= 3:
+            c['shots'] = real; c['hitTimes'] = [x['t'] for x in real]; c['hits'] = len(real); c['lastHit'] = end = real[-1]['t']
+            c['track_file'] = trk                     # the players were followed through the whole rally
+            r0, r1 = [float(x) for x in os.path.basename(trk)[1:-5].split('-')]
+            pre = 16.0 if c.get('best') else 12.0
+            c['t1'] = round(min(r1 - 0.2, end + AFTER), 2)
+            if c.get('marathon'): c['t0'] = round(end - 9.0, 2); c['fast_from'] = round(max(r0 + 0.1, real[0]['t'] - 1.5), 2)
+            else: c['t0'] = round(max(r0 + 0.1, end - pre, real[0]['t'] - 2.5), 2)
 cand = {k: [] for k in range(4)}
 for ci, c in enumerate(P['clips']):
     trf, tr = track_of(c)
     if not tr: continue
     hs = [h for h in c['hitTimes'] if h >= max(c['t0'] + 1.8, c['lastHit'] - 9.0)]
+    by_t = {x['t']: x for x in (c['shots'] or [])}
     for h in hs:
         hi = hitter(tr, h)
+        if c['shots']:
+            # the labeller says who hit; the ball at the racket counts more than a fast arm
+            x = by_t[h]; who = x['who']; e = x['per'].get(str(who)) if who is not None else None
+            if e is None or tr['sure'].get(str(who), 0) < SURE or together(tr, h, who, M['pairs']): continue
+            seen = e['dball'] is not None and e['dball'] <= 0.8
+            if not seen and not (e['arm'] is not None and e['arm'] >= 2.4): continue
+            cand[who].append(((2.0 if seen else 0.0) + (e['arm'] or 0.0) + (1.0 if e['up'] else 0.0) + (0.8 if h == c['lastHit'] else 0.0), ci, h, {'id': who, 'peak': e['arm'], 'ball': e['dball'], 'overhead': e['up']}))
+            continue
         if hi and hi['peak'] >= 2.2 and hi['margin'] >= 2.0 and tr['sure'].get(str(hi['id']), 0) >= SURE and not together(tr, h, hi['id'], M['pairs']):
             cand[hi['id']].append((hi['peak'] + (1.0 if hi['overhead'] else 0.0), ci, h, hi))
 replay_at = {}; report = []
@@ -72,10 +107,14 @@ for ci, c in enumerate(P['clips']):
         hgt = float(np.median([b[3] - b[1] for b in p['box']])); nth = sum(1 for x in hits if x <= h)
         report.append({'clip': ci, 'player': names[k], 'hit': h, 'hitter': hi})
         add({'kind': 'replay', 't0': round(h - 1.7, 2), 't1': round(min(c['t1'], h + 1.0), 2), 'track': trf, 'speed': 0.5, 'focus': k, 'focus_name': names[k], 'focus_team': team[k],
-             'zoom': float(np.clip(520 / max(hgt, 60), 1.5, 3.2)), 'title': names[k], 'sub': ('Smash · ' if hi['overhead'] else '') + f"shot {nth} of {c['hits']}"}, f'replay{ci}')
+             'zoom': float(np.clip(520 / max(hgt, 60), 1.5, 3.2)), 'title': names[k], 'sub': ' · '.join(x for x in ('Smash' if hi['overhead'] else None, 'Last shot of the rally' if c['shots'] and h == c['lastHit'] else None) if x) or None}, f'replay{ci}')
 
 st = P['stats']
-cv2.imwrite(f'{work}/stats.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(bg, 'The match in numbers', [(st['rallies'], 'rallies'), (st['longest'], 'longest rally'), (f"{st['shots']:,}", 'shots'), (st['minutes'], 'minutes')]))
+if SHOTS and any(c['shots'] for c in P['clips']):
+    # only the six rallies of the reel have checked shots: the total of the match is not shown as a fact
+    nums = [(st['rallies'], 'rallies'), (max(c['hits'] for c in P['clips']), 'shots in the longest rally'), (st['minutes'], 'minutes')]
+else: nums = [(st['rallies'], 'rallies'), (st['longest'], 'longest rally'), (f"{st['shots']:,}", 'shots'), (st['minutes'], 'minutes')]
+cv2.imwrite(f'{work}/stats.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(bg, 'The match in numbers', nums))
 add({'kind': 'card', 'image': f'{work}/stats.jpg', 'dur': 4.5}, 'stats')
 cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, 'Your match. Your highlights.', f"{MT['venue']} · {MT['date']}"))
 add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6}, 'outro')
