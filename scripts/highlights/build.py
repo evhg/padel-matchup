@@ -6,7 +6,7 @@ Optional in match.json: "team_a", "team_b" (the names of the two teams).
 Environment: TRACKS (the folder of track_all.sh, default <workdir>), VERSUS (the prefix of the opening of versus.py:
 <prefix>-wide.mp4 and <prefix>-tall.mp4), TALL=1 (the vertical reel), CACHE (the folder of the slow replays, so the
 second layout does not make them again), SRMIX (how much of the upscaled picture a replay takes, default 0.5),
-SHOTS (the folder of rally_shots.sh: clips end after the last shot, the counter counts only shots).
+SHOTS (the folder of rally_shots.sh: a clip ends after the last shot, the counter leaves out what is not a shot).
 """
 import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -58,16 +58,29 @@ def shots_of(c):
     return None, None
 for c in P['clips']:
     c['track_key'] = (c['t0'], c['t1']); c['track_file'] = None; sh, trk = shots_of(c); c['shots'] = None
-    if sh:
-        real = [x for x in sh if x['label'] in ('near', 'far')]
-        if len(real) >= 3:
-            c['shots'] = real; c['hitTimes'] = [x['t'] for x in real]; c['hits'] = len(real); c['lastHit'] = end = real[-1]['t']
-            c['track_file'] = trk                     # the players were followed through the whole rally
-            r0, r1 = [float(x) for x in os.path.basename(trk)[1:-5].split('-')]
-            pre = 16.0 if c.get('best') else 12.0
-            c['t1'] = round(min(r1 - 0.2, end + AFTER), 2)
-            if c.get('marathon'): c['t0'] = round(end - 9.0, 2); c['fast_from'] = round(max(r0 + 0.1, real[0]['t'] - 1.5), 2)
-            else: c['t0'] = round(max(r0 + 0.1, end - pre, real[0]['t'] - 2.5), 2)
+    if not sh: continue
+    info = {x['t']: x for x in sh['sounds']}; end = c['lastHit']; hits = list(c['hitTimes'])
+    # When the point is over the ball stops flying. A quiet period of the ball that starts in the last 12 seconds of
+    # the sounds ends the rally at the last sound before it (in the first match: a smash won the point, and the
+    # four sounds after it were the ball on the glass, a racket tap, the ball sent back and the next server).
+    for a, b in sh['quiet']:
+        if end - 12.0 <= a < end:
+            before = [h for h in hits if h <= a + 0.8]
+            if len(before) >= 3 and len(hits) - len(before) <= 4: end = before[-1]; c['cut_by_ball'] = True; break
+    real = []; last = -9.0
+    for h in hits:
+        x = info.get(h)
+        if h > end or (x and x['label'] == 'other') or h - last < 0.3: continue        # not of this ball, or an echo
+        real.append(x or {'t': h, 'label': 'shot', 'who': None, 'sure': False, 'per': {}}); last = h
+    if len(real) < 3: continue
+    c['shots'] = real; c['hitTimes'] = [x['t'] for x in real]; c['hits'] = len(real); c['lastHit'] = end
+    c['track_file'] = trk                     # the players were followed through the whole rally
+    r0, r1 = [float(x) for x in os.path.basename(trk)[1:-5].split('-')]
+    pre = 16.0 if c.get('best') else 12.0
+    c['t1'] = round(min(c['t1'], r1 - 0.2, end + (4.5 if c.get('cut_by_ball') else 6.5)), 2)
+    if c.get('marathon'): c['t0'] = round(end - 9.0, 2); c['fast_from'] = round(max(r0 + 0.1, real[0]['t'] - 1.5), 2)
+    else: c['t0'] = round(max(r0 + 0.1, end - pre, real[0]['t'] - 2.5), 2)
+    print(f"point at {mmss(end)}: {len(hits)} sounds, {len(real)} counted, end {'moved to ' + mmss(end) if c.get('cut_by_ball') else 'as before'}, clip {c['t0']}-{c['t1']}")
 cand = {k: [] for k in range(4)}
 for ci, c in enumerate(P['clips']):
     trf, tr = track_of(c)
@@ -80,6 +93,9 @@ for ci, c in enumerate(P['clips']):
             # the labeller says who hit; the ball at the racket counts more than a fast arm
             x = by_t[h]; who = x['who']; e = x['per'].get(str(who)) if who is not None else None
             if e is None or tr['sure'].get(str(who), 0) < SURE or together(tr, h, who, M['pairs']): continue
+            # the whole player is in the picture at the shot (one replay showed an arm at the edge and no player)
+            pl = tr['players'][str(who)]; fi = int(np.argmin([abs(x - (h - tr['t0']) * FPS) for x in pl['f']])); bx = pl['box'][fi]
+            if abs(pl['f'][fi] - (h - tr['t0']) * FPS) > 6 or bx[0] < 40 or bx[2] > 1880 or bx[3] > 1076: continue
             seen = e['dball'] is not None and e['dball'] <= 0.8
             if not seen and not (e['arm'] is not None and e['arm'] >= 2.4): continue
             cand[who].append(((2.0 if seen else 0.0) + (e['arm'] or 0.0) + (1.0 if e['up'] else 0.0) + (0.8 if h == c['lastHit'] else 0.0), ci, h, {'id': who, 'peak': e['arm'], 'ball': e['dball'], 'overhead': e['up']}))
@@ -112,7 +128,7 @@ for ci, c in enumerate(P['clips']):
 st = P['stats']
 if SHOTS and any(c['shots'] for c in P['clips']):
     # only the six rallies of the reel have checked shots: the total of the match is not shown as a fact
-    nums = [(st['rallies'], 'rallies'), (max(c['hits'] for c in P['clips']), 'shots in the longest rally'), (st['minutes'], 'minutes')]
+    nums = [(st['rallies'], 'rallies'), (max(c['hits'] for c in P['clips']), 'longest rally'), (st['minutes'], 'minutes')]
 else: nums = [(st['rallies'], 'rallies'), (st['longest'], 'longest rally'), (f"{st['shots']:,}", 'shots'), (st['minutes'], 'minutes')]
 cv2.imwrite(f'{work}/stats.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(bg, 'The match in numbers', nums))
 add({'kind': 'card', 'image': f'{work}/stats.jpg', 'dur': 4.5}, 'stats')
