@@ -29,9 +29,11 @@ a frame or a `match.json`.
    on a head, and the `minterpolate` filter of ffmpeg for the frames in between.
 9. **`hdr.py`** turns an HDR recording (most phones) into normal video before anything is drawn.
 10. **`rally_shots.sh`** checks the shots of each selected rally: **`ball.py`** finds small yellow things that
-    move, **`balllink.py`** joins them into flights, **`shotseq.py`** labels each sound (a shot of the near
-    pair, of the far pair, or something else) from the ball, the arms and the turn of the two pairs.
-    `build.py` with `SHOTS=<folder>` ends each clip after the last shot and counts only shots.
+    move, **`balllink.py`** joins them into flights, **`shotseq.py`** says of each sound what is sure: a
+    shot of a pair (the ball at a racket with a moving arm), not of this ball (the ball flies on through
+    that moment), or unknown. It also lists the periods with no ball in flight. `build.py` with
+    `SHOTS=<folder>` ends a rally where the ball stops flying near the end of its sounds, leaves the sounds
+    that are not of this ball out of the counter, and takes replays only from sure shots.
 
 `hear.py` and `hear_calls.py` are the ears: speech recognition (faster-whisper) on a file or on the seconds
 before each point. `serve_probe.py` is a first test of who serves. `balldbg.py` and `ballstrip.py` draw what
@@ -94,8 +96,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
   them found from the picture.
-- The shot counter is an estimate. With `SHOTS` it counts the sounds that the labeller calls shots; no
-  rally has a count that a person made to compare with. A video at 60 frames a second is the next test.
+- The shot counter is an estimate. With `SHOTS` it leaves out the sounds that are proven not to be shots
+  of this ball; a bounce can still count. No rally has a count that a person made to compare with. A video
+  at 60 frames a second is the next test.
 - The score is not found. `serve_probe.py` gives a serving team for most points, not yet the games.
 - The picture is not 4K and the slow motion is not true 60 frames a second. An upscale of a whole frame is
   28 seconds here, and a frame in between is a guess: a racket at full speed stays a blur.
@@ -132,9 +135,14 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **A rally of a minute does not fit in memory as frames.** The first ball finder held every frame and the
   kernel killed it at 11 GB. It holds nine frames now, with the same result.
 - **The ball is clear when it is slow and invisible after a hard hit**, at 30 frames a second. So a shot is
-  not "two flights meet": it is a flight that ends or starts at a player, an arm that moves, and the turn of
-  the pairs, in one pass over the whole row of sounds. A racket that swings is also yellow enough to count as
-  "the ball at the racket". That helps, but it is not proof of a hit.
+  not "two flights meet": it is a flight that ends or starts at a player with an arm that moves. A racket
+  that swings is also yellow enough to count as "the ball at the racket": that helps, but it is not proof.
+- **Weak clues do not decide a whole rally.** Two labellers let one pass over all the sounds decide every
+  label (the turn of the pairs, the time between shots). They cut rallies of 31 and 33 sounds to five and
+  three shots, and joined the sounds after one point to its rally. The summary of all six rallies showed it;
+  the one rally that was looked at in detail had looked right. The labeller now says only what is sure, and
+  the end of a rally comes from one strong clue: the ball stops flying.
+- **A replay needs the whole player in the picture.** One showed an arm at the edge and a name tag.
 - **A phone on the back glass does not hear a score call.** In the ten seconds before each of 98 points the
   recogniser returned nothing or its own filler ("Thank you for watching"). Speech needs a microphone near
   the players.

@@ -98,27 +98,50 @@ def viterbi(rows, sc):
     while st is not None:
         j, team = st; labs[j] = ('near' if team else 'far', sc[j][0][1] if team else sc[j][1][1]); st = best[st][1]
     return labs
+def sure_shot(e):
+    """One player at one sound: the ball is at the racket and the arm moves, or the arm moves very fast."""
+    arm = e['arm'] or 0.0
+    return (e['dball'] is not None and e['dball'] <= 0.8 and arm >= 1.4) or arm >= 2.6
 def label(tr, flights, sounds, pairs):
-    rows = analyse(tr, flights, sounds, pairs); sc = score(rows); labs = viterbi(rows, sc)
-    # the rally is the longest row of shots without a break; shots before it and after it are not of the point
-    hits = [i for i, (lab, _) in enumerate(labs) if lab != 'other']; chains = []
-    for i in hits:
-        if chains and rows[i]['t'] - rows[chains[-1][-1]]['t'] <= DEAD: chains[-1].append(i)
-        else: chains.append([i])
-    main = set(max(chains, key=len)) if chains else set(); first = min(main) if main else 0
-    res = []
-    for i, (r, (lab, who), s) in enumerate(zip(rows, labs, sc)):
-        if lab != 'other' and i not in main: lab = 'before' if i < first else 'after'
-        res.append({'t': r['t'], 'label': lab, 'who': who, 'scores': [round(s[0][0], 1), round(s[1][0], 1), round(s[2], 1)], 'through': r['through'], 'per': r['per']})
+    """What can be said of each sound with confidence, and no more:
+      'other'      the ball flies on smoothly through that moment, and no player hits: not a shot of this ball
+      'near'/'far' a sure shot of that pair (the ball at the racket with a moving arm, or a very fast arm)
+      'shot'       a sound of the rally with no proof for or against
+    Two versions that decided everything in one pass (the turn of the pairs, the time between shots) cut long rallies to
+    three and five shots and joined the sounds after a point to the rally. The clues are too weak for that at 30 frames
+    a second. Where the rally ends is decided in build.py from the ball's quiet periods (see quiet())."""
+    rows = analyse(tr, flights, sounds, pairs); res = []
+    for r in rows:
+        ks = [k for k, e in r['per'].items() if sure_shot(e)]
+        c = [(3.2 * max(0.0, 1 - r['per'][k]['dball'] / 0.8) if r['per'][k]['dball'] is not None else 0.0) + (r['per'][k]['arm'] or 0.0) for k in ks]
+        who = ks[int(np.argmax(c))] if ks else None
+        lab = 'other' if (r['through'] and who is None) else (('near' if who in r['near'] else 'far') if who is not None else 'shot')
+        res.append({'t': r['t'], 'label': lab, 'who': who, 'sure': who is not None, 'through': r['through'], 'per': r['per']})
     return res
+def quiet(flights, n, t0, least=3.5):
+    """Periods of `least` seconds or more with no ball in flight (a flight of a ball in play: not slow, not short).
+    When a point is over the ball stops flying. It also happens in a rally (a lob leaves the picture), so this is used
+    only near the end of the sounds of a rally."""
+    seen = np.zeros(n, bool)
+    for x in flights:
+        if x['travel'] / x['n'] >= 3.0 and x['travel'] >= 40: seen[x['f0']:x['f1'] + 1] = True
+    out = []; i = 0
+    while i < n:
+        if seen[i]: i += 1; continue
+        j = i
+        while j < n and not seen[j]: j += 1
+        if (j - i) / FPS >= least: out.append([round(t0 + i / FPS, 2), round(t0 + j / FPS, 2)])
+        i = j
+    return out
 if __name__ == '__main__':
     tr = json.load(open(sys.argv[1])); z = np.load(sys.argv[2]); flights = json.loads(str(z['flights'])); A = json.load(open(sys.argv[3]))
     pairs = json.loads(sys.argv[5]) if len(sys.argv) > 5 else [[0, 3], [1, 2]]
     t0 = tr['t0']; t1 = t0 + tr['frames'] / FPS
     sounds = [(t, s) for t, s in A['hits'] if t0 + 0.2 <= t <= t1 - 0.2]
-    res = label(tr, flights, sounds, pairs)
-    json.dump(res, open(sys.argv[4], 'w'))
-    for r in res:
-        per = ' '.join(f"{k}:{'-' if e['dball'] is None else e['dball']}/{e['arm']}{'^' if e['up'] else ''}" for k, e in sorted(r['per'].items()))
-        print(f"{r['t']:8.2f} (+{r['t'] - t0:5.2f})  {r['label']:6s} {'' if r['who'] is None else r['who']!s:2s} n/f/o {r['scores']}  {'through ' if r['through'] else ''}{per}")
-    print('shots', sum(1 for r in res if r['label'] in ('near', 'far')), 'of', len(res), 'sounds')
+    res = label(tr, flights, sounds, pairs); q = quiet(flights, len(z['cand']), t0)
+    json.dump({'sounds': res, 'quiet': q}, open(sys.argv[4], 'w'))
+    if len(sys.argv) > 6:
+        for r in res:
+            per = ' '.join(f"{k}:{'-' if e['dball'] is None else e['dball']}/{e['arm']}{'^' if e['up'] else ''}" for k, e in sorted(r['per'].items()))
+            print(f"{r['t']:8.2f} (+{r['t'] - t0:5.2f})  {r['label']:6s} {'' if r['who'] is None else r['who']!s:2s} {'through ' if r['through'] else ''}{per}")
+    print('sounds', len(res), 'sure shots', sum(1 for r in res if r['sure']), 'not of this ball', sum(1 for r in res if r['label'] == 'other'), 'quiet periods', q)
