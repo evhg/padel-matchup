@@ -160,6 +160,10 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   the game limits, the rules and the typed final score, a detector that is right for 80% of the points gives
   a correct score on screen 62% of the time, 90% gives 81%, 95% gives 90%, and 98% gives 96%. So the score
   needs a detector that sees the end of almost every point, and matches with known winners to measure it.
+- **A heard score is a strong hint.** `score_decode.py simulate3`: with a detector that is right for 80% of
+  the points, the score on screen is right 60% of the time; with a score call heard before 40% of the points
+  (right four times in five) it is 79%, and before 70% of the points it is 87%. So a microphone on the
+  players' side of the glass is worth more than a better guess of each point.
 - **A serve is where a point starts, and the camera end shows it.** `serve.py` reads the formation before
   the first sound of a point from one picture a second: 140 points, 124 of them served from the camera end.
   The far end needs poses at the full frame rate. Loudness does not tell the two ends apart: the phone evens
