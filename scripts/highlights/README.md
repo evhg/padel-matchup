@@ -39,6 +39,8 @@ a frame or a `match.json`.
 engine: the most probable score history for weak guesses of who won each point, and a simulation of how much
 the rules repair.
 `cand_points.py` lists the best points and makes a sheet of frames of each end, for a person to say who won.
+`label_page.py` makes one page from those clips: a tap for the pair that won each point, and one line to copy.
+`hear_voice.py` finds where people speak; `hear_calls2.py` and `scribe.py` (a paid service) listen for scores.
 `hear.py` and `hear_calls.py` are the ears: speech recognition (faster-whisper) on a file or on the seconds
 before each point. `balldbg.py` and `ballstrip.py` draw what
 the ball finder saw.
@@ -59,6 +61,7 @@ The voice is Kokoro (`models/kokoro/kokoro-v1.0.onnx` and `voices-v1.0.bin`, Apa
 is permitted), 54 voices, `VOICE_NAME` selects one. Without those files `versus.py` uses the piper test
 voice (`models/voice/en_US-ryan-high.onnx`; its data has a non-commercial licence, so not for the public).
 Without both, the opening has no speech.
+`VOICE_DIR` and `VOICE_PREFIX` give `versus.py` four lines made before by another voice service.
 
 ```bash
 export HL_HOME=/path/to/work; H=/path/to/repo/scripts/highlights
@@ -161,6 +164,17 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   the first sound of a point from one picture a second: 140 points, 124 of them served from the camera end.
   The far end needs poses at the full frame rate. Loudness does not tell the two ends apart: the phone evens
   out the level.
+- **A recogniser with a hint invents what the hint says.** With a hint of score words, the strong recogniser
+  wrote "Four three. Four four" over the noise of the warm-up. `hear_calls2.py` counts a call only when the
+  pass without a hint agrees. `hear_voice.py` looks for speech in the whole match first: it found the set-up
+  at the phone and "Game is over" at the end, and nothing from the court. A phone behind the back glass does
+  not record the score calls in a usable way.
+- **Check that an instruction fits the place before you give it.** The owner was told "1x lens, it is
+  sharper". From the back wall the 1x lens sees the full width of the court only from 7 metres; the 0.5x
+  lens from 3.6 metres. The far half of the court is 70 pixels high from 1.3 metres; from 3 metres about 2.2
+  times that, from 4 metres about 2.8 times (calculated, not yet filmed).
+- **A person labels fast when the page asks one thing.** `label_page.py` makes one file with a clip for each
+  point and two buttons, and gives the answers as one line of text. It needs no account and no network.
 - **Fast forward is not a highlight.** The long rally at six times the speed was "not fun to watch". It is
   off (`FAST=1` turns it on); the rally shows its last seconds at the true speed.
 - **A phone on the back glass does not hear a score call.** In the ten seconds before each of 98 points the
