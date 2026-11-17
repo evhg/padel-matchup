@@ -35,6 +35,7 @@ a frame or a `match.json`.
     `SHOTS=<folder>` ends a rally where the ball stops flying near the end of its sounds, leaves the sounds
     that are not of this ball out of the counter, and takes replays only from sure shots.
 
+`cand_points.py` lists the best points and makes a sheet of frames of each end, for a person to say who won.
 `hear.py` and `hear_calls.py` are the ears: speech recognition (faster-whisper) on a file or on the seconds
 before each point. `serve_probe.py` is a first test of who serves. `balldbg.py` and `ballstrip.py` draw what
 the ball finder saw.
@@ -143,6 +144,12 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   the one rally that was looked at in detail had looked right. The labeller now says only what is sure, and
   the end of a rally comes from one strong clue: the ball stops flying.
 - **A replay needs the whole player in the picture.** One showed an arm at the edge and a name tag.
+- **Equal ends is not equal winners.** The reel gave each pair three points at the camera end, and every
+  point in it was won by the same pair. A player of the other pair said so at once. The pipeline does not
+  know who won a point, and six still frames of a rally's end do not show it to a careful reader. Until
+  that is solved, `cand_points.py` lists the best points with a sheet of each end, and a person says who won.
+- **Fast forward is not a highlight.** The long rally at six times the speed was "not fun to watch". It is
+  off (`FAST=1` turns it on); the rally shows its last seconds at the true speed.
 - **A phone on the back glass does not hear a score call.** In the ten seconds before each of 98 points the
   recogniser returned nothing or its own filler ("Thank you for watching"). Speech needs a microphone near
   the players.
