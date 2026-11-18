@@ -253,5 +253,8 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   `LINKED=1` the page points at `clips/001.mp4` and so on (`label_clips.py`), and it keeps the answers in the
   browser so a person can stop and go on. Make the picture small before the colour change: the other order
   took 2.5 times the processor time.
+- **The court lines belong to the camera place, not to the code.** A second match was filmed with the wide
+  lens from higher up: the net's foot moved from y 570 to y 455 and the side walls became twice as steep.
+  `court.py` now reads `match/court.json`; draw the lines and the zones on two frames before the long steps.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
