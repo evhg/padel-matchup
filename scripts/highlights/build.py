@@ -75,6 +75,14 @@ for c in P['clips']:
         x = info.get(h)
         if h > end or (x and x['label'] == 'other') or h - last < 0.3: continue        # not of this ball, or an echo
         real.append(x or {'t': h, 'label': 'shot', 'who': None, 'sure': False, 'per': {}}); last = h
+    # A "rally" of most of a minute where the camera saw few of the shots is several points that the sounds of the next
+    # courts joined (second match: 60 sounds in 88 seconds, 11 seen, and the ball stopped four times). Then only the
+    # part after the last long stop of the ball is this point, and it is no marathon.
+    if real and real[-1]['t'] - real[0]['t'] > 45 and sum(1 for x in real if x.get('sure')) < len(real) / 3:
+        stops = [q1 for q0, q1 in sh['quiet'] if q1 - q0 >= 3.5 and q1 < end - 2]
+        if stops:
+            real = [x for x in real if x['t'] >= max(stops) - 0.3]; c['joined'] = True; c.pop('marathon', None)
+            if c.get('title') == 'The marathon': c['title'] = 'Great rally'
     if len(real) < 3: continue
     c['shots'] = real; c['hitTimes'] = [x['t'] for x in real]; c['hits'] = len(real); c['lastHit'] = end
     c['track_file'] = trk                     # the players were followed through the whole rally

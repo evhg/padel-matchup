@@ -264,5 +264,19 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   machine handed to a person. Estimate first, then ask about the unsure ones and a small random sample.
   And cut each clip to the end of the point: where the sound sources disagreed about the last hit (75 of
   142 candidates, by more than 2 seconds), the middle value showed a serve and no result.
+- **Sounds of the next courts join points into one "rally".** In a hall with play on both sides, the last
+  point of a match came out as "the marathon, 57 shots": 60 sounds in 88 seconds, of which the camera saw
+  11, and the ball stopped four times in between. The point had 10 shots. `build.py` now splits such a
+  case at the last long stop of the ball; the numbers card had shown 57 as the longest rally.
+- **Two recorders on the fence do not say which half a hit came from, yet.** The arrival-time difference
+  against 54 shots that the camera was sure of: far shots +32 ms in the middle and 87% on the right side
+  of zero, near shots -5 ms and 56%. 65% right in all. The far recorder hears a near hit badly, and the
+  next court fills the gap. A try to place each sound with the phone as third microphone gave noise.
+  The camera says the hitter's end; the sound does not.
+- **A portrait with a fence behind it is cut out as a fence.** The chooser took the largest sharp face; the
+  person-cutter then kept the fence post and a wrist. The sheet of all cut-outs showed it in a minute, and
+  portraits on plain grass came out whole. The choice was made by hand for that reel; a rule is not written.
+- **A long step can outlive its job.** One job may run two hours. The shot count of a rally of 95 seconds
+  took 40 minutes, and the reel would have been stopped in the middle. Give each long step its own job.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
