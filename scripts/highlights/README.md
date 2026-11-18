@@ -237,10 +237,24 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   sound track of four channels (tag `apac`). FFmpeg cannot decode it, and its plain copy drops the settings
   block that the decoder needs. `apac_cut.py` copies the track by hand into a file of 3 MB a minute, with no
   picture and no location tags; the copied bytes equal the source. A Mac with macOS 15 decodes that file
-  with `afconvert` (the documented command; not yet run on a file from this tool).
+  with `afconvert`: a cut of 90 seconds came back as four channels, and 21 of 39 hits arrived from one narrow
+  direction. The error in degrees is not measured yet: the piece had six hits with a known hitter. Choose a
+  test piece where the truth exists before a person is asked to do a step.
 - **A rented machine behind a proxy needs two things that no error names well.** The Modal client says
   "Could not connect" until `modal[api-proxy-support]` is installed. A function with a graphics card says
   "add a payment method", also inside the free credit. `modal/ingest.py` brought 7.4 GB from a shared link
   to a volume in 3 minutes; `modal/gpu_check.py` decoded 120 seconds of video in 6 on an L4 card.
+- **Three microphones find more points than one.** The phone alone, at four hits or more, gave 117 rallies in
+  96 minutes, with gaps of two minutes. At two hits or more (the third argument of `audio.js`), and with both recorders on the
+  fence on the same clock, the list has 248 candidates: 71 from all three, 71 from two, 106 from one. Frames
+  of the ones from a single source show play on the court and also an empty court. So the labelling page
+  has a "Not a point" answer, and no guess removes a candidate before a person sees it.
+- **A page for hundreds of points links its clips.** Eighteen clips fit inside one file; 248 do not. With
+  `LINKED=1` the page points at `clips/001.mp4` and so on (`label_clips.py`), and it keeps the answers in the
+  browser so a person can stop and go on. Make the picture small before the colour change: the other order
+  took 2.5 times the processor time.
+- **The court lines belong to the camera place, not to the code.** A second match was filmed with the wide
+  lens from higher up: the net's foot moved from y 570 to y 455 and the side walls became twice as steep.
+  `court.py` now reads `match/court.json`; draw the lines and the zones on two frames before the long steps.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

@@ -5,6 +5,7 @@ usage: modal run prep.py::spatial_main --name <folder>          (processor only)
 spatial: /vol/<name>/spatial.mov, about 3 MB a minute, for Apple's decoder.
 proxy:   /vol/<name>/proxy.mov, 1920x1080 at 30 frames a second, 10-bit HEVC with the colours of the source.
          The decode, the resize and the encode all stay on the graphics card.
+         A key frame each second, so a clip can start at any second without a long decode.
 """
 import modal, subprocess, time, os, json
 app = modal.App('kicksmash-prep')
@@ -33,7 +34,7 @@ def proxy(name: str, seconds: int = 0):
     if seconds:
         res['decode_only'] = run(f'ffmpeg -v error -nostdin -hwaccel cuda -c:v hevc_cuvid -ss 600 {cut} -i {f} -an -f null -')
     res['proxy'] = run(f'ffmpeg -v error -nostdin -y -hwaccel cuda -hwaccel_output_format cuda -c:v hevc_cuvid -resize 1920x1080 '
-                       f'{"-ss 600" if seconds else ""} {cut} -i {f} -map 0:v:0 -map 0:a:0 -r 30000/1001 -c:v hevc_nvenc -preset p5 -rc vbr -cq 24 -b:v 0 -maxrate 9M -bufsize 18M '
+                       f'{"-ss 600" if seconds else ""} {cut} -i {f} -map 0:v:0 -map 0:a:0 -r 30000/1001 -c:v hevc_nvenc -g 30 -preset p5 -rc vbr -cq 24 -b:v 0 -maxrate 9M -bufsize 18M '
                        f'-profile:v main10 -color_primaries bt2020 -color_trc arib-std-b67 -colorspace bt2020nc -tag:v hvc1 -c:a aac -b:a 160k {o}')
     res['size_mb'] = round(os.path.getsize(o) / 1e6, 1) if os.path.exists(o) else 0
     res['probe'] = run(f'ffprobe -v error -show_entries stream=codec_name,width,height,avg_frame_rate,pix_fmt,color_transfer,nb_frames:format=duration -of json {o}')[2]
