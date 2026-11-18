@@ -42,6 +42,7 @@ kbd{background:#2a2f36;border-radius:5px;padding:1px 6px;font-size:13px}
   <p class="sub">The clip shows the last 5 seconds of the rally and 3 seconds after it. It repeats. Tap as soon as you know. A warm-up, a pause or a ball of another court is not a point.</p>
   <div class="pick"><button id="a">__TA__</button><button id="b">__TB__</button></div>
   <div class="row"><button id="back">Back</button><button id="nop">Not a point</button><button id="skip">I cannot tell</button><button id="snd">Sound on</button></div>
+  <button id="sofar" style="background:var(--card);color:#fff;font-weight:600;font-size:15px;padding:13px 6px">Stop here and copy my answers</button>
   <p class="sub">Keyboard: <kbd>←</kbd> __TA__ · <kbd>→</kbd> __TB__ · <kbd>↓</kbd> cannot tell · <kbd>N</kbd> not a point · <kbd>↑</kbd> back</p>
 </div>
 <div id="done">
@@ -49,7 +50,7 @@ kbd{background:#2a2f36;border-radius:5px;padding:1px 6px;font-size:13px}
   <div class="tally"><div><b id="ca">0</b>__TA__</div><div><b id="cb">0</b>__TB__</div><div><b id="cn">0</b>not a point</div><div><b id="cu">0</b>cannot tell</div></div>
   <p class="sub">Copy this line and send it in the chat:</p>
   <textarea id="res" readonly></textarea>
-  <div class="pick"><button id="copy" style="background:var(--lime)">Copy</button><button id="again" style="background:var(--card);color:#fff">Change an answer</button></div>
+  <div class="pick"><button id="copy" style="background:var(--lime)">Copy</button><button id="again" style="background:var(--card);color:#fff">Go on or change an answer</button></div>
   <p class="sub" id="copied"></p>
 </div>
 </main>
@@ -72,13 +73,15 @@ function show() {
 function pick(x) { ans[i] = x; i += 1; keep(); show(); }
 function finish() {
   $('work').style.display = 'none'; $('done').style.display = 'flex'; v.pause();
-  const n = (x) => ans.filter((y) => y === x).length; $('ca').textContent = n('A'); $('cb').textContent = n('B'); $('cn').textContent = n('N'); $('cu').textContent = n('?') + n(null);
-  $('res').value = 'Who won: ' + CLIPS.map((c, k) => c.n + (ans[k] || '?')).join(' ') + '   (A = __TA__, B = __TB__)';
+  const n = (x) => ans.filter((y) => y === x).length; $('ca').textContent = n('A'); $('cb').textContent = n('B'); $('cn').textContent = n('N'); $('cu').textContent = n('?');
+  // Only the clips with an answer are in the line, so a person can stop at any clip.
+  $('res').value = 'Who won: ' + CLIPS.map((c, k) => (ans[k] ? c.n + ans[k] : '')).filter(Boolean).join(' ') + '   (A = __TA__, B = __TB__)';
 }
 $('a').onclick = () => pick('A'); $('b').onclick = () => pick('B'); $('skip').onclick = () => pick('?'); $('nop').onclick = () => pick('N');
 $('back').onclick = () => { if (i > 0) { i -= 1; show(); } };
 $('snd').onclick = () => { v.muted = !v.muted; $('snd').textContent = v.muted ? 'Sound on' : 'Sound off'; };
-$('again').onclick = () => { i = CLIPS.length - 1; show(); };
+$('again').onclick = () => { const k = ans.indexOf(null); i = k < 0 ? CLIPS.length - 1 : k; show(); };
+$('sofar').onclick = finish;
 $('copy').onclick = () => { const t = $('res'); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(() => { $('copied').textContent = 'Copied.'; }).catch(() => { try { document.execCommand('copy'); $('copied').textContent = 'Copied.'; } catch (e) { $('copied').textContent = 'Select the line and copy it by hand.'; } }); };
 document.addEventListener('keydown', (e) => { if ($('done').style.display === 'flex') return; if (e.key === 'ArrowLeft') pick('A'); else if (e.key === 'ArrowRight') pick('B'); else if (e.key === 'ArrowDown') pick('?'); else if (e.key === 'n' || e.key === 'N') pick('N'); else if (e.key === 'ArrowUp') $('back').onclick(); });
 show();
