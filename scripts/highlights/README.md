@@ -242,5 +242,14 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   "Could not connect" until `modal[api-proxy-support]` is installed. A function with a graphics card says
   "add a payment method", also inside the free credit. `modal/ingest.py` brought 7.4 GB from a shared link
   to a volume in 3 minutes; `modal/gpu_check.py` decoded 120 seconds of video in 6 on an L4 card.
+- **Three microphones find more points than one.** The phone alone, at four hits or more, gave 117 rallies in
+  96 minutes, with gaps of two minutes. At two hits or more (`MIN_HITS=2`), and with both recorders on the
+  fence on the same clock, the list has 248 candidates: 71 from all three, 71 from two, 106 from one. Frames
+  of the ones from a single source show play on the court and also an empty court. So the labelling page
+  has a "Not a point" answer, and no guess removes a candidate before a person sees it.
+- **A page for hundreds of points links its clips.** Eighteen clips fit inside one file; 248 do not. With
+  `LINKED=1` the page points at `clips/001.mp4` and so on (`label_clips.py`), and it keeps the answers in the
+  browser so a person can stop and go on. Make the picture small before the colour change: the other order
+  took 2.5 times the processor time.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

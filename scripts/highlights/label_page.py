@@ -1,11 +1,17 @@
 """One page to say who won each point: a short clip of each point, one tap for the pair that won it.
 usage: label_page.py <clips_dir with 01.mp4 ...> <cands.json> <match.json> <out.html>
-The page holds the clips inside itself, needs no network, and gives the answers as one line of text to copy."""
+The page holds the clips inside itself, needs no network, and gives the answers as one line of text to copy.
+With LINKED=1 the page points at clips/001.mp4, clips/002.mp4, ... beside it (the names label_clips.py gives):
+a match with hundreds of points is too large for one file. The answers stay in the browser, so a person can
+stop and go on later."""
 import sys, os, json, base64, subprocess, glob, html
 clips, candf, matchf, out = sys.argv[1:5]
 C = json.load(open(candf)); MT = json.load(open(matchf)); ta = MT.get('team_a') or MT['pair_a']; tb = MT.get('team_b') or MT['pair_b']
 items = []
+LINKED = os.environ.get('LINKED')
 for c in C:
+    if LINKED:
+        e = c['end']; items.append({'n': c['i'] + 1, 'at': f"{int(e // 60)}:{int(e % 60):02d}", 'src': f"clips/{c['i'] + 1:03d}.mp4"}); continue
     n = c['i'] + 1; src = f'{clips}/{n:02d}.mp4'; small = f'{clips}/s{n:02d}.mp4'
     if not os.path.exists(small):
         subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', src, '-vf', 'scale=640:360', '-c:v', 'libx264', '-preset', 'slow', '-crf', '29', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '48k', '-ac', '1', '-movflags', '+faststart', small], check=True)
@@ -24,23 +30,23 @@ video{width:100%;aspect-ratio:16/9;background:#000;border-radius:12px}
 button{font:inherit;border:0;border-radius:12px;padding:20px 8px;font-weight:800;font-size:19px;cursor:pointer;color:var(--ink)}
 button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #a{background:var(--lime)}#b{background:var(--blue);color:#fff}
-.row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.row button{background:var(--card);color:#fff;font-weight:600;font-size:15px;padding:13px 6px}
+.row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}@media(max-width:520px){.row{grid-template-columns:1fr 1fr}}.row button{background:var(--card);color:#fff;font-weight:600;font-size:15px;padding:13px 6px}
 #done{display:none;flex-direction:column;gap:12px}textarea{width:100%;height:96px;border-radius:10px;border:1px solid #4a525d;background:var(--card);color:#fff;font:15px ui-monospace,Menlo,monospace;padding:10px}
-.tally{display:flex;gap:10px}.tally div{flex:1;background:var(--card);border-radius:10px;padding:10px 12px}.tally b{display:block;font-size:26px}
+.tally{display:flex;flex-wrap:wrap;gap:10px}.tally div{flex:1 1 40%;background:var(--card);border-radius:10px;padding:10px 12px}.tally b{display:block;font-size:26px}
 kbd{background:#2a2f36;border-radius:5px;padding:1px 6px;font-size:13px}
 </style></head><body><main>
 <div id="work">
   <div class="top"><h1>Who won this point?</h1><span><b id="num">1</b> <span class="sub">of <span id="tot"></span> · match time <span id="at"></span></span></span></div>
   <div class="bar"><b id="prog"></b></div>
   <video id="v" playsinline muted loop autoplay></video>
-  <p class="sub">The clip shows the last 5 seconds of the rally and 3 seconds after it. It repeats. Tap as soon as you know.</p>
+  <p class="sub">The clip shows the last 5 seconds of the rally and 3 seconds after it. It repeats. Tap as soon as you know. A warm-up, a pause or a ball of another court is not a point.</p>
   <div class="pick"><button id="a">__TA__</button><button id="b">__TB__</button></div>
-  <div class="row"><button id="back">Back</button><button id="skip">I cannot tell</button><button id="snd">Sound on</button></div>
-  <p class="sub">Keyboard: <kbd>←</kbd> __TA__ · <kbd>→</kbd> __TB__ · <kbd>↓</kbd> cannot tell · <kbd>↑</kbd> back</p>
+  <div class="row"><button id="back">Back</button><button id="nop">Not a point</button><button id="skip">I cannot tell</button><button id="snd">Sound on</button></div>
+  <p class="sub">Keyboard: <kbd>←</kbd> __TA__ · <kbd>→</kbd> __TB__ · <kbd>↓</kbd> cannot tell · <kbd>N</kbd> not a point · <kbd>↑</kbd> back</p>
 </div>
 <div id="done">
   <h1>Done. Thank you.</h1>
-  <div class="tally"><div><b id="ca">0</b>__TA__</div><div><b id="cb">0</b>__TB__</div><div><b id="cu">0</b>cannot tell</div></div>
+  <div class="tally"><div><b id="ca">0</b>__TA__</div><div><b id="cb">0</b>__TB__</div><div><b id="cn">0</b>not a point</div><div><b id="cu">0</b>cannot tell</div></div>
   <p class="sub">Copy this line and send it in the chat:</p>
   <textarea id="res" readonly></textarea>
   <div class="pick"><button id="copy" style="background:var(--lime)">Copy</button><button id="again" style="background:var(--card);color:#fff">Change an answer</button></div>
@@ -49,26 +55,32 @@ kbd{background:#2a2f36;border-radius:5px;padding:1px 6px;font-size:13px}
 </main>
 <script>
 const CLIPS = __CLIPS__;
-const ans = new Array(CLIPS.length).fill(null); let i = 0;
+let ans = new Array(CLIPS.length).fill(null); let i = 0;
+// The answers stay in this browser, so a long match can be done in parts. A browser that refuses storage still works.
+const KEY = 'who-won:' + CLIPS.length + ':' + (CLIPS[0] ? CLIPS[0].at : '') + ':' + (CLIPS.length ? CLIPS[CLIPS.length - 1].at : '');
+try { const old = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(old) && old.length === ans.length) { ans = old; const k = ans.indexOf(null); i = k < 0 ? ans.length : k; } } catch (e) {}
+function keep() { try { localStorage.setItem(KEY, JSON.stringify(ans)); } catch (e) {} }
+const next = document.createElement('video'); next.preload = 'auto'; next.muted = true;
 const $ = (id) => document.getElementById(id), v = $('v');
 function show() {
   if (i >= CLIPS.length) return finish();
   $('work').style.display = ''; $('done').style.display = 'none';
   $('num').textContent = CLIPS[i].n; $('tot').textContent = CLIPS.length; $('at').textContent = CLIPS[i].at;
   $('prog').style.width = (100 * i / CLIPS.length) + '%'; v.src = CLIPS[i].src; v.play().catch(() => {});
+  if (i + 1 < CLIPS.length && !CLIPS[i + 1].src.startsWith('data:')) next.src = CLIPS[i + 1].src;
 }
-function pick(x) { ans[i] = x; i += 1; show(); }
+function pick(x) { ans[i] = x; i += 1; keep(); show(); }
 function finish() {
   $('work').style.display = 'none'; $('done').style.display = 'flex'; v.pause();
-  const n = (x) => ans.filter((y) => y === x).length; $('ca').textContent = n('A'); $('cb').textContent = n('B'); $('cu').textContent = n('?');
+  const n = (x) => ans.filter((y) => y === x).length; $('ca').textContent = n('A'); $('cb').textContent = n('B'); $('cn').textContent = n('N'); $('cu').textContent = n('?') + n(null);
   $('res').value = 'Who won: ' + CLIPS.map((c, k) => c.n + (ans[k] || '?')).join(' ') + '   (A = __TA__, B = __TB__)';
 }
-$('a').onclick = () => pick('A'); $('b').onclick = () => pick('B'); $('skip').onclick = () => pick('?');
+$('a').onclick = () => pick('A'); $('b').onclick = () => pick('B'); $('skip').onclick = () => pick('?'); $('nop').onclick = () => pick('N');
 $('back').onclick = () => { if (i > 0) { i -= 1; show(); } };
 $('snd').onclick = () => { v.muted = !v.muted; $('snd').textContent = v.muted ? 'Sound on' : 'Sound off'; };
 $('again').onclick = () => { i = CLIPS.length - 1; show(); };
 $('copy').onclick = () => { const t = $('res'); t.select(); (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(() => { $('copied').textContent = 'Copied.'; }).catch(() => { try { document.execCommand('copy'); $('copied').textContent = 'Copied.'; } catch (e) { $('copied').textContent = 'Select the line and copy it by hand.'; } }); };
-document.addEventListener('keydown', (e) => { if ($('done').style.display === 'flex') return; if (e.key === 'ArrowLeft') pick('A'); else if (e.key === 'ArrowRight') pick('B'); else if (e.key === 'ArrowDown') pick('?'); else if (e.key === 'ArrowUp') $('back').onclick(); });
+document.addEventListener('keydown', (e) => { if ($('done').style.display === 'flex') return; if (e.key === 'ArrowLeft') pick('A'); else if (e.key === 'ArrowRight') pick('B'); else if (e.key === 'ArrowDown') pick('?'); else if (e.key === 'n' || e.key === 'N') pick('N'); else if (e.key === 'ArrowUp') $('back').onclick(); });
 show();
 </script></body></html>'''
 page = page.replace('__TA__', html.escape('Team ' + ta if MT.get('team_a') else ta)).replace('__TB__', html.escape('Team ' + tb if MT.get('team_b') else tb)).replace('__CLIPS__', json.dumps(items))

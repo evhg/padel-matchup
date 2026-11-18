@@ -18,7 +18,8 @@ for (let pos = 0; pos < size; ) {
   pos += n;
 }
 const prep = RF.prepare(env);
-const p = Object.assign({}, RF.DEFAULTS);
+// MIN_HITS=2 also keeps a serve with one answer; the default of the page is 4.
+const p = Object.assign({}, RF.DEFAULTS, process.env.MIN_HITS ? { minHits: +process.env.MIN_HITS } : {});
 const h = RF.pickHits(prep, p);
 const rallies = RF.groupRallies(h.hits, prep, env, p);
 const r2 = (x) => Math.round(x * 100) / 100;
