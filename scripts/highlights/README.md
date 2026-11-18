@@ -223,8 +223,16 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   had a right text from any method, and this method was right on all three.
 - **Players do not call the score for a microphone on the fence.** Two recorders, 94 minutes, 563 pieces of
   20 seconds: 177 had text, ten looked like a score call, and a second recogniser (`tx_recheck.py`)
-  confirmed one. One "five-all" was "my fault". So speech is a check for the score, never its source. The
-  score must come from who won each point.
+  confirmed two, each in one of its two runs only. One "five-all" was "my ball". So speech is a check for
+  the score, never its source. The score must come from who won each point.
+- **A recorder keeps test recordings beside the match.** A tool that joined every file started each clip 4
+  to 6 seconds early, and its result was reported before the fault was seen. FFmpeg's `concat` of files
+  with two sample formats read noise and gave no error. So: take the files over 20 seconds, decode each on
+  its own, and run each new joining tool on a pair with a known answer first.
+- **Line up the phone and the fence by loudness, not by single hits.** A hit reaches the phone and a
+  recorder on the fence up to 50 ms apart, and the difference changes with the place of the hit. Rises in
+  steps of 5 ms gave a peak 6 times the spread, at a wrong place. The loudness curve with 50 values a second
+  and the slow level removed (`tx_phone.py`) gave a peak 105 times the spread, the same in each ten minutes.
 - **The phone records the sound field, and only Apple can open it.** An iPhone 16 or newer writes a second
   sound track of four channels (tag `apac`). FFmpeg cannot decode it, and its plain copy drops the settings
   block that the decoder needs. `apac_cut.py` copies the track by hand into a file of 3 MB a minute, with no

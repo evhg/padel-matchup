@@ -14,7 +14,8 @@ m = WhisperModel('large-v3-turbo', device='cpu', compute_type='int8', cpu_thread
 
 
 def cut(folder, t, n=20):
-    files, at = sorted(glob.glob(folder + '/*.WAV') + glob.glob(folder + '/*.wav')), 0.0
+    # A recorder also keeps test recordings of a few seconds. They are not part of the match clock.
+    files, at = sorted(f for f in glob.glob(folder + '/*.WAV') + glob.glob(folder + '/*.wav') if sf.info(f).duration > 20), 0.0
     for f in files:
         d = sf.info(f).duration
         if at <= t < at + d:
