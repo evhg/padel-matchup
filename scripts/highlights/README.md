@@ -243,7 +243,7 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   "add a payment method", also inside the free credit. `modal/ingest.py` brought 7.4 GB from a shared link
   to a volume in 3 minutes; `modal/gpu_check.py` decoded 120 seconds of video in 6 on an L4 card.
 - **Three microphones find more points than one.** The phone alone, at four hits or more, gave 117 rallies in
-  96 minutes, with gaps of two minutes. At two hits or more (`MIN_HITS=2`), and with both recorders on the
+  96 minutes, with gaps of two minutes. At two hits or more (the third argument of `audio.js`), and with both recorders on the
   fence on the same clock, the list has 248 candidates: 71 from all three, 71 from two, 106 from one. Frames
   of the ones from a single source show play on the court and also an empty court. So the labelling page
   has a "Not a point" answer, and no guess removes a candidate before a person sees it.

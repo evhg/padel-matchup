@@ -1,12 +1,12 @@
 // The page's own sound core on the match's sound track: hits, rallies, points, reactions.
-// usage: node audio.js <mono f32le 48 kHz raw file> <out.json>
+// usage: node audio.js <mono f32le 48 kHz raw file> <out.json> [least hits in a rally, default 4]
 const fs = require('fs');
 // the page's own core, cut out of the lab page between its two markers
 const html = fs.readFileSync(__dirname + '/../../public/lab/rally-finder.html', 'utf8');
 const m = { exports: {} };
 new Function('module', html.split('/*CORE-START*/')[1].split('/*CORE-END*/')[0])(m);
 const RF = m.exports;
-const [, , raw, out] = process.argv;
+const [, , raw, out, minHits] = process.argv;
 const SR = 48000;
 const size = fs.statSync(raw).size, seconds = size / 4 / SR;
 const env = new RF.Envelope(SR, seconds);
@@ -18,8 +18,8 @@ for (let pos = 0; pos < size; ) {
   pos += n;
 }
 const prep = RF.prepare(env);
-// MIN_HITS=2 also keeps a serve with one answer; the default of the page is 4.
-const p = Object.assign({}, RF.DEFAULTS, process.env.MIN_HITS ? { minHits: +process.env.MIN_HITS } : {});
+// 2 also keeps a serve with one answer; the default of the page is 4.
+const p = Object.assign({}, RF.DEFAULTS, minHits ? { minHits: +minHits } : {});
 const h = RF.pickHits(prep, p);
 const rallies = RF.groupRallies(h.hits, prep, env, p);
 const r2 = (x) => Math.round(x * 100) / 100;
