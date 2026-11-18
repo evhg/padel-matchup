@@ -24,7 +24,7 @@ TALL = os.environ.get('TALL') == '1'; TRACKS = os.environ.get('TRACKS', work)
 segs = []
 TEAMS = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']]
 def add(seg, name):
-    seg['venue'] = MT['venue']; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
+    seg['venue'] = MT.get('venue') or ''; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
 def mmss(t): return f'{int(t // 60)}:{int(t % 60):02d}'
 
 # a calm wide frame for the cards: a moment in play
@@ -40,7 +40,7 @@ vs = os.environ.get('VERSUS')
 if vs and os.path.exists(vs + '-wide.mp4') and os.path.exists(vs + '-tall.mp4'):
     add({'kind': 'file', 'path': vs + '-wide.mp4', 'path_tall': vs + '-tall.mp4'}, 'versus')
 else:
-    cv2.imwrite(f'{work}/intro.jpg', (gfx.intro_card_tall if TALL else gfx.intro_card)(bg, MT['venue'], MT['date'], MT['pair_a'], MT['pair_b'], MT['score']))
+    cv2.imwrite(f'{work}/intro.jpg', (gfx.intro_card_tall if TALL else gfx.intro_card)(bg, MT.get('venue') or '', MT['date'], MT['pair_a'], MT['pair_b'], MT['score']))
     add({'kind': 'card', 'image': f'{work}/intro.jpg', 'dur': 3.6}, 'intro')
 
 # One replay for each player: the player's hardest swing at a shot that was heard, late in a rally. Nobody is singled
@@ -138,7 +138,7 @@ if SHOTS and any(c['shots'] for c in P['clips']):
 else: nums = [(st['rallies'], 'rallies'), (st['longest'], 'longest rally'), (f"{st['shots']:,}", 'shots'), (st['minutes'], 'minutes')]
 cv2.imwrite(f'{work}/stats.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(bg, 'The match in numbers', nums))
 add({'kind': 'card', 'image': f'{work}/stats.jpg', 'dur': 4.5}, 'stats')
-cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, 'Your match. Your highlights.', f"{MT['venue']} · {MT['date']}"))
+cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, 'Your match. Your highlights.', ' · '.join(x for x in (MT.get('venue'), MT['date']) if x)))
 add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6}, 'outro')
 json.dump(report, open(f'{work}/hitters.json', 'w'), indent=1, default=str)
 print('segments', len(segs)); [print(' ', os.path.basename(s)) for s in segs]

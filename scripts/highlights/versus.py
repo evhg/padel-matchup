@@ -98,7 +98,7 @@ GO = plate('GAME ON', LIME, INK, 190 if not TALL else 112, pad=44 if not TALL el
 GO_AT = VS_AT if not TALL else (VS_AT[0], VS_AT[1] + 22)      # vertical: it must not cover the name plates above it
 T_A = fit_words(title_a.upper(), 104, MAXW, WHITE, INK); T_B = fit_words(title_b.upper(), 104, MAXW, WHITE, INK)
 SC = plate(MT['score'].replace('   ', '  ·  '), INK, LIME, 84 if not TALL else 70, pad=40, skew=24)
-META = words(f"{MT['venue']}  ·  {MT['date']}".upper(), 34, (200, 205, 212))
+META = words('  ·  '.join(x for x in (MT.get('venue'), MT['date']) if x).upper(), 34, (200, 205, 212))      # a match can have no venue
 NAME = {k: plate(names[k].upper(), LIME if team[k] == 0 else BLUE, INK if team[k] == 0 else WHITE, 62) for k in range(4)}
 
 # when things happen (seconds)
