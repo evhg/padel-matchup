@@ -1,5 +1,5 @@
 """One page to say who won each point: a short clip of each point, one tap for the pair that won it.
-usage: label_page.py <clips_dir with 01.mp4 ...> <cands.json> <match.json> <out.html>
+usage: label_page.py <clips_dir with 01.mp4 ...> <cands.json> <match.json> <out.html> [page title]
 The page holds the clips inside itself, needs no network, and gives the answers as one line of text to copy.
 With LINKED=1 the page points at clips/001.mp4, clips/002.mp4, ... beside it (the names label_clips.py gives):
 a match with hundreds of points is too large for one file. The answers stay in the browser, so a person can
@@ -17,7 +17,7 @@ for c in C:
         subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', src, '-vf', 'scale=640:360', '-c:v', 'libx264', '-preset', 'slow', '-crf', '29', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '48k', '-ac', '1', '-movflags', '+faststart', small], check=True)
     e = c['end']; items.append({'n': n, 'at': f"{int(e // 60)}:{int(e % 60):02d}", 'src': 'data:video/mp4;base64,' + base64.b64encode(open(small, 'rb').read()).decode()})
 page = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Who won the point?</title>
+<title>__TITLE__</title>
 <style>
 :root{--ink:#14161a;--card:#20262e;--lime:#c8f135;--blue:#5b86ff;--soft:#a9b2bf}
 *{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--ink);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column;align-items:center}
@@ -39,7 +39,7 @@ kbd{background:#2a2f36;border-radius:5px;padding:1px 6px;font-size:13px}
   <div class="top"><h1>Who won this point?</h1><span><b id="num">1</b> <span class="sub">of <span id="tot"></span> · match time <span id="at"></span></span></span></div>
   <div class="bar"><b id="prog"></b></div>
   <video id="v" playsinline muted loop autoplay></video>
-  <p class="sub">The clip shows the last 5 seconds of the rally and 3 seconds after it. It repeats. Tap as soon as you know. A warm-up, a pause or a ball of another court is not a point.</p>
+  <p class="sub">The clip shows the last seconds of the rally and the seconds after it. It repeats. Tap as soon as you know. A warm-up, a pause or a ball of another court is not a point.</p>
   <div class="pick"><button id="a">__TA__</button><button id="b">__TB__</button></div>
   <div class="row"><button id="back">Back</button><button id="nop">Not a point</button><button id="skip">I cannot tell</button><button id="snd">Sound on</button></div>
   <button id="sofar" style="background:var(--card);color:#fff;font-weight:600;font-size:15px;padding:13px 6px">Stop here and copy my answers</button>
@@ -86,5 +86,5 @@ $('copy').onclick = () => { const t = $('res'); t.select(); (navigator.clipboard
 document.addEventListener('keydown', (e) => { if ($('done').style.display === 'flex') return; if (e.key === 'ArrowLeft') pick('A'); else if (e.key === 'ArrowRight') pick('B'); else if (e.key === 'ArrowDown') pick('?'); else if (e.key === 'n' || e.key === 'N') pick('N'); else if (e.key === 'ArrowUp') $('back').onclick(); });
 show();
 </script></body></html>'''
-page = page.replace('__TA__', html.escape('Team ' + ta if MT.get('team_a') else ta)).replace('__TB__', html.escape('Team ' + tb if MT.get('team_b') else tb)).replace('__CLIPS__', json.dumps(items))
+page = page.replace('__TITLE__', html.escape(sys.argv[5] if len(sys.argv) > 5 else 'Who won the point?')).replace('__TA__', html.escape('Team ' + ta if MT.get('team_a') else ta)).replace('__TB__', html.escape('Team ' + tb if MT.get('team_b') else tb)).replace('__CLIPS__', json.dumps(items))
 open(out, 'w').write(page); print('wrote', out, round(os.path.getsize(out) / 1e6, 1), 'MB', len(items), 'clips')
