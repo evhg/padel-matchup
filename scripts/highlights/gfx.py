@@ -93,7 +93,7 @@ def intro_card(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HIGHLIG
     centred(d, 438, 'VS', font(60, 'SemiBold'), LIME, 8)
     centred(d, 520, pair_b.upper(), fa, WHITE, 3)
     centred(d, 740, score, font(110, 'ExtraBold'), LIME, 12)
-    centred(d, 900, f'{venue}  ·  {date}'.upper(), font(40, 'SemiBold'), (200, 205, 212), 6)
+    centred(d, 900, '  ·  '.join(x for x in (venue, date) if x).upper(), font(40, 'SemiBold'), (200, 205, 212), 6)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def stats_card(bg_bgr, title, rows, foot='kicksma.sh'):

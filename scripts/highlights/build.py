@@ -24,7 +24,7 @@ TALL = os.environ.get('TALL') == '1'; TRACKS = os.environ.get('TRACKS', work)
 segs = []
 TEAMS = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']]
 def add(seg, name):
-    seg['venue'] = MT['venue']; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
+    seg['venue'] = MT.get('venue') or ''; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)
 def mmss(t): return f'{int(t // 60)}:{int(t % 60):02d}'
 
 # a calm wide frame for the cards: a moment in play
@@ -40,7 +40,7 @@ vs = os.environ.get('VERSUS')
 if vs and os.path.exists(vs + '-wide.mp4') and os.path.exists(vs + '-tall.mp4'):
     add({'kind': 'file', 'path': vs + '-wide.mp4', 'path_tall': vs + '-tall.mp4'}, 'versus')
 else:
-    cv2.imwrite(f'{work}/intro.jpg', (gfx.intro_card_tall if TALL else gfx.intro_card)(bg, MT['venue'], MT['date'], MT['pair_a'], MT['pair_b'], MT['score']))
+    cv2.imwrite(f'{work}/intro.jpg', (gfx.intro_card_tall if TALL else gfx.intro_card)(bg, MT.get('venue') or '', MT['date'], MT['pair_a'], MT['pair_b'], MT['score']))
     add({'kind': 'card', 'image': f'{work}/intro.jpg', 'dur': 3.6}, 'intro')
 
 # One replay for each player: the player's hardest swing at a shot that was heard, late in a rally. Nobody is singled
@@ -75,6 +75,16 @@ for c in P['clips']:
         x = info.get(h)
         if h > end or (x and x['label'] == 'other') or h - last < 0.3: continue        # not of this ball, or an echo
         real.append(x or {'t': h, 'label': 'shot', 'who': None, 'sure': False, 'per': {}}); last = h
+    # A "rally" of most of a minute where the camera saw few of the shots is several points that the sounds of the next
+    # courts joined (second match: 60 sounds in 88 seconds, 11 seen, and the ball stopped four times). Then only the
+    # part after the last long stop of the ball is this point, and it is no marathon.
+    # The rule is narrow on purpose: the first match has a true rally of 48 seconds (29 sounds, 8 seen, one stop of the
+    # ball that the camera lost) and a true marathon of 59 seconds (33 sounds, 12 seen). Neither may be cut.
+    if real and real[-1]['t'] - real[0]['t'] > 45 and sum(1 for x in real if x.get('sure')) < len(real) / 4:
+        stops = [q1 for q0, q1 in sh['quiet'] if q1 - q0 >= 3.5 and q1 < end - 2]
+        if len(stops) >= 2:
+            real = [x for x in real if x['t'] >= max(stops) - 0.3]; c['joined'] = True; c.pop('marathon', None)
+            if c.get('title') == 'The marathon': c['title'] = 'Great rally'
     if len(real) < 3: continue
     c['shots'] = real; c['hitTimes'] = [x['t'] for x in real]; c['hits'] = len(real); c['lastHit'] = end
     c['track_file'] = trk                     # the players were followed through the whole rally
@@ -138,7 +148,7 @@ if SHOTS and any(c['shots'] for c in P['clips']):
 else: nums = [(st['rallies'], 'rallies'), (st['longest'], 'longest rally'), (f"{st['shots']:,}", 'shots'), (st['minutes'], 'minutes')]
 cv2.imwrite(f'{work}/stats.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(bg, 'The match in numbers', nums))
 add({'kind': 'card', 'image': f'{work}/stats.jpg', 'dur': 4.5}, 'stats')
-cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, 'Your match. Your highlights.', f"{MT['venue']} · {MT['date']}"))
+cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, 'Your match. Your highlights.', ' · '.join(x for x in (MT.get('venue'), MT['date']) if x)))
 add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6}, 'outro')
 json.dump(report, open(f'{work}/hitters.json', 'w'), indent=1, default=str)
 print('segments', len(segs)); [print(' ', os.path.basename(s)) for s in segs]

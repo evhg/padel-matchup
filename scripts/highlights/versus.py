@@ -98,8 +98,10 @@ GO = plate('GAME ON', LIME, INK, 190 if not TALL else 112, pad=44 if not TALL el
 GO_AT = VS_AT if not TALL else (VS_AT[0], VS_AT[1] + 22)      # vertical: it must not cover the name plates above it
 T_A = fit_words(title_a.upper(), 104, MAXW, WHITE, INK); T_B = fit_words(title_b.upper(), 104, MAXW, WHITE, INK)
 SC = plate(MT['score'].replace('   ', '  ·  '), INK, LIME, 84 if not TALL else 70, pad=40, skew=24)
-META = words(f"{MT['venue']}  ·  {MT['date']}".upper(), 34, (200, 205, 212))
+META = words('  ·  '.join(x for x in (MT.get('venue'), MT['date']) if x).upper(), 34, (200, 205, 212))      # a match can have no venue
 NAME = {k: plate(names[k].upper(), LIME if team[k] == 0 else BLUE, INK if team[k] == 0 else WHITE, 62) for k in range(4)}
+# A match where nobody said who is who has the team's name for each player: the title says it once, so no plate under the portrait.
+PLATE = {k: names[k].strip().lower() not in ('', str(MT.get('team_a', '')).lower(), str(MT.get('team_b', '')).lower()) for k in range(4)}
 
 # when things happen (seconds)
 T_IN = {A[0]: 0.30, A[1]: 0.52, B[0]: 2.70, B[1]: 2.92}; T_VS = 2.0; T_SCORE = 4.35; T_GO = 5.05
@@ -119,7 +121,7 @@ def frame(t):
         put(c, tint(img, LIME if team[k] == 0 else BLUE), px + side * 18, py)            # a flat shadow in the team's colour
         put(c, img, px, py)
         n = e_back((t - T_IN[k] - 0.22) / 0.2)
-        if t >= T_IN[k] + 0.22:
+        if t >= T_IN[k] + 0.22 and PLATE[k]:
             pl = NAME[k]; s = 1.6 - 0.6 * n; q = pl.resize((int(pl.width * s), int(pl.height * s)), Image.BILINEAR) if s != 1 else pl
             put(c, q, SLOT[k][0] - q.width / 2 + shake[0], SLOT[k][1] - 8 - (q.height - pl.height) / 2 + shake[1])
     for (x, y, al), img, t0 in ((TITLE_A, T_A, 0.75), (TITLE_B, T_B, 3.15)):
