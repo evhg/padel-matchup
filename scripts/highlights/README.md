@@ -47,6 +47,11 @@ the rules repair.
 before each point. `balldbg.py` and `ballstrip.py` draw what
 the ball finder saw.
 
+Two small recorders on the fence of the court (one in each half) give clean sound. `tx_first.py` lines the two
+recordings up and measures their levels; `tx_tdoa.py` says for each sharp sound which recorder heard it first;
+`tx_listen.py` writes down the speech; `tx_compare.py` and `tx_score.py` compare ways to do that;
+`speech_check_page.py` makes a page where a person says if the text is right.
+
 `peek.py`, `dbg.py` and `dbgfar.py` put frames on one sheet. Use them: see the last lesson.
 
 ## Run it
@@ -198,5 +203,19 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   score. Two free recognisers and one paid one agree: the sound is the limit, not the recogniser.
 - **Let a recogniser judge a voice when no person can listen.** It wrote "Jarek" and "Tikalai" for the team
   names, and "Barzoo" for "versus" with the deepest voice behind the effects. That voice was dropped.
+- **Two microphones on one fence hear the court behind the fence as well as their own.** A sound from the next
+  court arrives with the same time difference and the same level as a sound from the mirror place on this
+  court. The time difference says which half, not which court. A third microphone that is not on the same
+  line (the phone), the video, or the voices of the four players must tell the courts apart.
+- **A voice detector in front of the recogniser drops far voices.** With it, a match of 94 minutes had speech
+  at the start and at the end only. With a low threshold it kept 8 words in ten minutes; the recogniser
+  without it wrote 400. The detector expects a voice near the microphone.
+- **Two runs of one recogniser on the same sound write different sentences.** Even loudness against raw sound,
+  ten minutes: 91 of 261 words agree. Where nobody speaks it writes filler ("Thank you.", "We'll be right
+  back."). So a word of a far voice counts only when two runs agree, and free text is not a fact. A paid
+  service returned no text at all for the same ten minutes.
+- **A recorder that writes 32-bit numbers does not distort a hit.** The loudest hits were above the normal
+  maximum and kept their shape. Two recorders of one kit stayed together to a hundredth of a second in 90
+  minutes. A person who says the side aloud at the start ("this is the left side") names the file for good.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
