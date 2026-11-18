@@ -217,5 +217,22 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **A recorder that writes 32-bit numbers does not distort a hit.** The loudest hits were above the normal
   maximum and kept their shape. Two recorders of one kit stayed together to a hundredth of a second in 90
   minutes. A person who says the side aloud at the start ("this is the left side") names the file for good.
+- **A paid recogniser wants short pieces and a raised level.** One file of ten minutes of far voices came
+  back as one tag, "[background noise]", and was charged in full. The same sound in pieces of 20 seconds,
+  30 dB up behind a limiter (`scribe_chunks.py`), came back as sentences. A person checked ten clips: three
+  had a right text from any method, and this method was right on all three.
+- **Players do not call the score for a microphone on the fence.** Two recorders, 94 minutes, 563 pieces of
+  20 seconds: 177 had text, ten looked like a score call, and a second recogniser (`tx_recheck.py`)
+  confirmed one. One "five-all" was "my fault". So speech is a check for the score, never its source. The
+  score must come from who won each point.
+- **The phone records the sound field, and only Apple can open it.** An iPhone 16 or newer writes a second
+  sound track of four channels (tag `apac`). FFmpeg cannot decode it, and its plain copy drops the settings
+  block that the decoder needs. `apac_cut.py` copies the track by hand into a file of 3 MB a minute, with no
+  picture and no location tags; the copied bytes equal the source. A Mac with macOS 15 decodes that file
+  with `afconvert` (the documented command; not yet run on a file from this tool).
+- **A rented machine behind a proxy needs two things that no error names well.** The Modal client says
+  "Could not connect" until `modal[api-proxy-support]` is installed. A function with a graphics card says
+  "add a payment method", also inside the free credit. `modal/ingest.py` brought 7.4 GB from a shared link
+  to a volume in 3 minutes; `modal/gpu_check.py` decoded 120 seconds of video in 6 on an L4 card.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
