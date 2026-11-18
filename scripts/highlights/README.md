@@ -237,7 +237,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   sound track of four channels (tag `apac`). FFmpeg cannot decode it, and its plain copy drops the settings
   block that the decoder needs. `apac_cut.py` copies the track by hand into a file of 3 MB a minute, with no
   picture and no location tags; the copied bytes equal the source. A Mac with macOS 15 decodes that file
-  with `afconvert` (the documented command; not yet run on a file from this tool).
+  with `afconvert`: a cut of 90 seconds came back as four channels, and 21 of 39 hits arrived from one narrow
+  direction. The error in degrees is not measured yet: the piece had six hits with a known hitter. Choose a
+  test piece where the truth exists before a person is asked to do a step.
 - **A rented machine behind a proxy needs two things that no error names well.** The Modal client says
   "Could not connect" until `modal[api-proxy-support]` is installed. A function with a graphics card says
   "add a payment method", also inside the free credit. `modal/ingest.py` brought 7.4 GB from a shared link
