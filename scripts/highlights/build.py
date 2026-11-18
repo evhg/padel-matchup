@@ -78,9 +78,11 @@ for c in P['clips']:
     # A "rally" of most of a minute where the camera saw few of the shots is several points that the sounds of the next
     # courts joined (second match: 60 sounds in 88 seconds, 11 seen, and the ball stopped four times). Then only the
     # part after the last long stop of the ball is this point, and it is no marathon.
-    if real and real[-1]['t'] - real[0]['t'] > 45 and sum(1 for x in real if x.get('sure')) < len(real) / 3:
+    # The rule is narrow on purpose: the first match has a true rally of 48 seconds (29 sounds, 8 seen, one stop of the
+    # ball that the camera lost) and a true marathon of 59 seconds (33 sounds, 12 seen). Neither may be cut.
+    if real and real[-1]['t'] - real[0]['t'] > 45 and sum(1 for x in real if x.get('sure')) < len(real) / 4:
         stops = [q1 for q0, q1 in sh['quiet'] if q1 - q0 >= 3.5 and q1 < end - 2]
-        if stops:
+        if len(stops) >= 2:
             real = [x for x in real if x['t'] >= max(stops) - 0.3]; c['joined'] = True; c.pop('marathon', None)
             if c.get('title') == 'The marathon': c['title'] = 'Great rally'
     if len(real) < 3: continue
