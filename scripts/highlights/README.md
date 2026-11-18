@@ -256,5 +256,13 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **The court lines belong to the camera place, not to the code.** A second match was filmed with the wide
   lens from higher up: the net's foot moved from y 570 to y 455 and the side walls became twice as steep.
   `court.py` now reads `match/court.json`; draw the lines and the zones on two frames before the long steps.
+- **Answers that live in a browser are lost by a new version of the page.** A person answered 33 clips; the
+  page showed its copy line only after the last clip, so a new version with a copy button was published,
+  and the answers were gone. Give the copy button in the first version, and do not publish over a page
+  that a person is using. Answers that matter belong in a store on the server.
+- **Ask a person for a check, not for the work.** 248 clips with no estimate beside them is the work of the
+  machine handed to a person. Estimate first, then ask about the unsure ones and a small random sample.
+  And cut each clip to the end of the point: where the sound sources disagreed about the last hit (75 of
+  142 candidates, by more than 2 seconds), the middle value showed a serve and no result.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
