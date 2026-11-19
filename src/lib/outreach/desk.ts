@@ -149,8 +149,20 @@ export async function askOwnerOutreach(db: Db, now = new Date()): Promise<number
 const paragraphs = (text: string) =>
   text
     .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 14px 0">${esc(p).replace(/\n/g, "<br>")}</p>`)
+    .map((p) => `<p style="margin:0 0 14px 0">${p.split("\n").map(lineOrPicture).join("<br>")}</p>`)
     .join("");
+
+/**
+ * A line that is only a link to a picture of this site under /built/ shows as that picture: the thank-you for a
+ * note carries one (`withPicture` in src/lib/feedback/store.ts). The plain-text twin keeps the link. Any other
+ * line, a link to another site included, stays text.
+ */
+function lineOrPicture(line: string): string {
+  const own = `${baseUrl()}/built/`;
+  if (line.startsWith(own) && /^[a-z0-9][a-z0-9-]{0,79}\.(png|jpg|jpeg|webp)$/.test(line.slice(own.length)))
+    return `<img src="${esc(line)}" alt="" width="360" style="display:block;max-width:100%;height:auto;border:1px solid #e3e6ea;border-radius:12px">`;
+  return esc(line);
+}
 
 /** A personal email: plain text first, a light HTML twin, no branding box. */
 export function renderDeskEmail(body: string): { text: string; html: string } {

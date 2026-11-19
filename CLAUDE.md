@@ -29,6 +29,9 @@ rather than rediscovering it.
    the player, say what changed, and invite them to try it. Give it its one line for `/built`
    (`publicSummary`: the change in our words, never theirs). The player's first name shows beside
    it; send `publicName: ""` for a test user or a name unfit for a public page. Do not ask the owner first.
+   Where the change is visible, add a picture of it (`publicImage`). Take the picture from the test
+   database, put the file in `public/built/` in the pull request of the change, and mark the note after
+   the deploy. The thank-you and `/built` then show the picture.
 6. **Ask production through `/api/admin/sql`, never through the Supabase MCP**, and put the questions in
    one query. Every MCP call waits for the owner's approval, and that breaks rule 3.
 7. **A question for the owner is a decision, set out in full.** Name each option, give its pros and

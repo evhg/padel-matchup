@@ -408,6 +408,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
   demand: a proxy in front of `next start` that sends the first 30,000 bytes of the document, waits
   1.5 s and trickles the rest. The lean messages below made the window smaller, not gone: that proxy
   still gives 418 on both builds. It stays open (ROADMAP.md, "Open, small"); never call it fixed.
+- **A picture in a message is checked where it will be read from.** The thank-you for a shipped note can
+  carry a picture of the change (`publicImage`, a file in `public/built/`). The desk refuses the picture
+  until the file answers on the live site (`picture_not_live`), because the link goes to a person: a
+  note marked before the deploy would have sent a link to nothing. Order: ship the pull request with
+  the picture, wait for the deploy, then mark the note. Take the picture at phone width from the test
+  database or from a public page with no player on it, and keep it small (the first one is 19 KB).
 - **A `<Link>` does not move `document.referrer`.** The feedback page wrote down the screen a player came
   from by reading the referrer. That held while people reached it from a full page load. The footer link is a
   `<Link>`: no new document loads, so the referrer still named the page the visit began on, and every note
