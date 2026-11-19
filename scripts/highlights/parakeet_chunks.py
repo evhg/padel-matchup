@@ -17,7 +17,9 @@ def clip(a, n):
             return np.frombuffer(raw, np.float32)
 res = {'words': [], 'pieces': []}; a = 0.0; t = time.time()
 while a < dur:
-    n = min(piece, dur - a); x = clip(t0 + a, n); st = rec.create_stream(); st.accept_waveform(16000, x); rec.decode_stream(st); r = st.result
+    n = min(piece, dur - a); x = clip(t0 + a, n)
+    if x is None or len(x) == 0: break                              # past the end of the sound: keep what is written (a run of 15 minutes once ended here with nothing saved)
+    st = rec.create_stream(); st.accept_waveform(16000, x); rec.decode_stream(st); r = st.result
     # tokens are pieces of words: a token that starts with a space starts a word
     w = ''; wt = 0.0
     for tok, ts in zip(r.tokens, r.timestamps):

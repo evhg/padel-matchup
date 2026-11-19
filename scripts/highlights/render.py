@@ -1,4 +1,4 @@
-"""Render one segment of the reel to an mp4 (H.264, AAC 48 kHz stereo, 1920x1080, 30000/1001 fps).
+"""Render one segment of the reel to an mp4 (H.264, AAC 48 kHz stereo, 30000/1001 fps; 1920x1080, or 1080x1920 with TALL=1).
 
 Segments (JSON, one per call):
   {"kind": "card", "image": "x.jpg", "dur": 3.5}
@@ -6,6 +6,10 @@ Segments (JSON, one per call):
       optional "won": {"team": 0|1, "name": "Team X", "at": seconds of the video}: a person said who won the point, and the clip says it after the last shot
   {"kind": "replay", "t0", "t1", "track": "clip.json", "focus": id or null, "zoom": 2.2, "speed": 0.5, "title"}
 usage: render.py <video> <segment.json> <out.mp4>
+Environment: TALL=1 (the vertical reel). SCALE (K: the output is K times as large; 2 gives 3840x2160). HIRES (a folder
+of 4K pieces of the match with their index.json: a segment that lies inside one piece takes its pictures from it, and
+a replay at half speed then shows only real pictures). SRMIX and CACHE (replays). COUNTER=0 (a clip without the shot
+counter). Each run prints one line that says where its pictures came from.
 """
 import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,14 +26,32 @@ W, H = 1920, 1080
 TALL = os.environ.get('TALL') == '1'
 OW, OH = (1080, 1920) if TALL else (W, H)
 VY, VS, VX = 480, 0.75, 240
+# The scale. Every position and size in this file is a design number: it belongs to the 1920x1080 picture (the
+# vertical reel: 1080x1920), and the boxes of a track file do too. SCALE=K makes the output K times as large. Only
+# this block knows K: px() (a design number -> pixels of the output), fit() (a picture -> the size of the output
+# picture), Art and put() (a graphic of gfx.py: drawn K times as large, measured and placed in design numbers), and
+# stage(). The replay has one more number of this kind, the pixels of a 4K piece for one design unit.
+K = gfx.reel_scale()
+def px(v): return int(round(v * K))
+PW, PH = px(W), px(H)                    # the picture of the match, in pixels of the output
+def fit(img):
+    """A picture at the size of the output picture."""
+    h, w = img.shape[:2]
+    return img if (w, h) == (PW, PH) else cv2.resize(img, (PW, PH), interpolation=cv2.INTER_CUBIC if PW > w else cv2.INTER_AREA)
+class Art:
+    """A graphic of gfx.py. `shape` is its design size: the layout below measures with it."""
+    def __init__(self, img): self.img = img; self.shape = (img.shape[0] / K, img.shape[1] / K)
+def put(fr, a, x, y, alpha=1.0):
+    """Blend a graphic onto the frame, its top left corner at the design point (x, y)."""
+    gfx.blit(fr, a.img, px(x), px(y), alpha)
 BASE = gfx.tall_base(seg.get('venue', ''), *seg.get('foot', ['', '', ''])) if TALL else None
 def stage(fr, frame=False):
-    """The picture on its stage: itself (wide), or cropped and set into the vertical frame."""
+    """The picture (PW x PH) on its stage: itself (wide), or cropped and set into the vertical frame."""
     if not TALL:
-        if frame: cv2.rectangle(fr, (0, 0), (W - 1, H - 1), gfx.LIME[::-1], 10)
+        if frame: cv2.rectangle(fr, (0, 0), (PW - 1, PH - 1), gfx.LIME[::-1], px(10))
         return fr
-    c = BASE.copy(); c[VY:VY + 810] = cv2.resize(fr[:, VX:VX + 1440], (1080, 810), interpolation=cv2.INTER_AREA)
-    if frame: cv2.rectangle(c, (0, VY), (OW - 1, VY + 809), gfx.LIME[::-1], 8)
+    c = BASE.copy(); c[px(VY):px(VY) + px(810)] = cv2.resize(fr[:, px(VX):px(VX) + px(1440)], (px(1080), px(810)), interpolation=cv2.INTER_AREA)
+    if frame: cv2.rectangle(c, (0, px(VY)), (px(OW) - 1, px(VY) + px(810) - 1), gfx.LIME[::-1], px(8))
     return c
 def pt(x, y): return (x, y) if not TALL else ((x - VX) * VS, y * VS + VY)
 # where the standing graphics go
@@ -38,10 +60,11 @@ BADGE_L = (48, 104) if not TALL else (40, 140)
 LT = (48, 900) if not TALL else (40, 250)
 def right(img, y=None): return (OW - img.shape[1] - (48 if not TALL else 40), (40 if not TALL else 70) if y is None else y)
 
+X264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p']      # one setting for every segment: build.py joins them with a stream copy
 def encoder(out, audio_args):
     """ffmpeg that takes raw BGR frames on stdin and the given audio input, and writes the mp4."""
-    cmd = ['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{OW}x{OH}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', *audio_args,
-           '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-shortest', '-movflags', '+faststart', out]
+    cmd = ['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{px(OW)}x{px(OH)}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', *audio_args,
+           '-map', '0:v:0', '-map', '1:a:0', *X264, '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-shortest', '-movflags', '+faststart', out]
     return subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
 def ease(x): x = min(1.0, max(0.0, x)); return x * x * (3 - 2 * x)
@@ -66,7 +89,48 @@ def track_at(tr, f):
     return out
 
 HDR = hdr.kind(video) if seg['kind'] in ('clip', 'fast', 'replay') else None; SDRVF = hdr.vf(HDR) if HDR else None
-bugimg = gfx.bug(seg.get('venue', ''))
+
+# Where the pictures come from: the working video (1920x1080, 30 pictures a second), or a 4K piece of the same match.
+# HIRES names the folder of the pieces. Its index.json says for each file at which second of the match its first
+# picture is ("start"): the picture of the match time t is at the time t - start of the piece. A piece is used only
+# when it holds the whole window of the segment. If none does, the working video is read as before and enlarged.
+from types import SimpleNamespace
+def probe(path):
+    """-> (width, height, pictures a second, seconds) of the video in a file."""
+    r = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,r_frame_rate,duration', '-of', 'json', path], capture_output=True, text=True)
+    s = json.loads(r.stdout)['streams'][0]; a, b = s['r_frame_rate'].split('/')
+    return s['width'], s['height'], float(a) / float(b), float(s.get('duration') or 0)
+def source(t0, t1, rate=FPS):
+    """The source of the pictures of [t0, t1] of the match, and one line that says which it is.
+    rate: the pictures a second that the segment needs (a replay at half speed needs 60); a piece with fewer is not used."""
+    d = os.environ.get('HIRES'); why = ''
+    if d and os.path.exists(os.path.join(d, 'index.json')):
+        why = ', no 4K piece holds this window'
+        for name, e in sorted(json.load(open(os.path.join(d, 'index.json'))).items()):
+            f = os.path.join(d, name)
+            if not (e['start'] <= t0 and os.path.exists(f)): continue
+            w, h, fps, dur = probe(f)
+            if t1 > e['start'] + dur - 0.1: continue
+            if fps < 0.99 * rate: why = f', the 4K piece {name} has {fps:.2f} pictures a second and the segment needs {rate:.2f}'; continue
+            print(f'source: 4K piece {name} ({w}x{h}, {fps:.2f} pictures a second) for {t0:.2f}-{t1:.2f} -> {PW}x{PH}')
+            return SimpleNamespace(hires=True, file=f, shift=e['start'], w=w, h=h, fps=fps, trc=hdr.kind(f))
+    print(f'source: working video for {t0:.2f}-{t1:.2f} -> {PW}x{PH}' + (f' (enlarged {K} times)' if K != 1 else '') + why)
+    return SimpleNamespace(hires=False, file=video, shift=0.0, w=W, h=H, fps=FPS, trc=HDR)
+def pictures(src, t0, dur, fps=None):
+    """The pictures of [t0, t0 + dur) of the match with their times, in normal colours (hdr.py) and at PW x PH."""
+    if not src.hires:
+        for t, img in read_frames(video, t0, dur, fps=fps, vf=SDRVF): yield t, fit(img)
+        return
+    # the size first, the colours after it: this is the order in which the working video itself was made
+    vf = ([] if (src.w, src.h) == (PW, PH) else [f'scale={PW}:{PH}:flags=lanczos']) + ([hdr.vf(src.trc)] if src.trc else [])
+    for t, img in read_frames(src.file, t0 - src.shift, dur, fps=fps or FPS, size=(PW, PH), vf=','.join(vf) or None): yield t + src.shift, img
+def count(path):
+    """How many pictures a video file has."""
+    r = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-count_packets', '-show_entries', 'stream=nb_read_packets', '-of', 'csv=p=0', path], capture_output=True, text=True)
+    return int(r.stdout.strip().strip(','))
+
+bugimg = Art(gfx.bug(seg.get('venue', '')))
+COUNTER = os.environ.get('COUNTER') != '0'       # COUNTER=0: a clip without the shot counter (build.py then leaves "N shots" out of its sub-title)
 _cnt = {}
 def draw_counter(fr, hits, t, last_extra=1.6, calm=False):
     """The rally counter at the top right: it rises with each shot heard; after the last one it shows the total."""
@@ -77,11 +141,13 @@ def draw_counter(fr, hits, t, last_extra=1.6, calm=False):
     pop = max(0.0, 1 - (t - hits[k - 1]) / 0.22) if not final else max(0.0, 1 - (t - hits[-1] - 0.5) / 0.3)
     if calm: final, pop = False, 0.0       # at six times the speed the number only counts: no jump at each shot
     key = (k, final, round(pop, 1))
-    if key not in _cnt: _cnt[key] = gfx.counter(k, final, key[2])
-    c = _cnt[key]; gfx.blit(fr, c, *right(c))
+    if key not in _cnt: _cnt[key] = Art(gfx.counter(k, final, key[2]))
+    c = _cnt[key]; put(fr, c, *right(c))
 
 if seg['kind'] == 'card':
+    print('source: the card', seg['image'])
     img = cv2.imread(seg['image']); n = int(round(seg['dur'] * FPS))
+    if img.shape[:2] != (px(OH), px(OW)): img = cv2.resize(img, (px(OW), px(OH)), interpolation=cv2.INTER_CUBIC)      # a card that was made at another scale
     enc = encoder(out, ['-f', 'lavfi', '-t', f"{seg['dur']:.3f}", '-i', 'anullsrc=r=48000:cl=stereo'])
     black = np.zeros_like(img)
     for i in range(n):
@@ -93,22 +159,23 @@ elif seg['kind'] == 'clip':
     t0, t1 = seg['t0'], seg['t1']
     tr = json.load(open(seg['track'])) if seg.get('track') else None
     off = int(round((t0 - tr['t0']) * FPS)) if tr else 0
-    tags = {i: gfx.name_tag(nm, seg['team'][i]) for i, nm in enumerate(seg.get('names', [])) if nm}
-    lt = gfx.lower_third(seg['title'], seg.get('sub')) if seg.get('title') else None
+    tags = {i: Art(gfx.name_tag(nm, seg['team'][i])) for i, nm in enumerate(seg.get('names', [])) if nm}
+    lt = Art(gfx.lower_third(seg['title'], seg.get('sub'))) if seg.get('title') else None
     tag_until = seg.get('tags_until', 4.0)
     wb = None
     if seg.get('won'):
         # after the ball is dead, never before: the picture tells the end, the line only names it
-        wn = seg['won']; wb = gfx.lower_third(wn['name'], 'wins the point', gfx.LIME if wn['team'] == 0 else (120, 160, 255))
+        wn = seg['won']; wb = Art(gfx.lower_third(wn['name'], 'wins the point', gfx.LIME if wn['team'] == 0 else (120, 160, 255)))
         w_at = max(4.7, min(wn['at'] - t0 + 1.4, t1 - t0 - 1.8))
     # "says": [{"t0", "t1" (seconds of the video), "who": player, "text"}]: a bubble over that player's head
-    says = [dict(x, img=gfx.speech(x['text'], seg['team'][x['who']])) for x in seg.get('says', [])]; say_at = {}
+    says = [dict(x, img=Art(gfx.speech(x['text'], seg['team'][x['who']]))) for x in seg.get('says', [])]; say_at = {}
     smooth = {}
+    src = source(t0, t1)
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video])
     n = 0
-    for t, img in read_frames(video, t0, t1 - t0, vf=SDRVF):
+    for t, img in pictures(src, t0, t1 - t0):
         fr = stage(img.copy()); s = n / FPS
-        gfx.blit(fr, bugimg, *BUG)
+        put(fr, bugimg, *BUG)
         if tr and s < tag_until + 0.5:
             a = min(ease((s - 0.3) / 0.4), ease((tag_until + 0.5 - s) / 0.5))
             placed = []
@@ -130,13 +197,13 @@ elif seg['kind'] == 'clip':
                 for _ in range(3):
                     if any(x < px + pw + 6 and px < x + tg.shape[1] + 6 and y < py + ph + 4 and py < y + tg.shape[0] + 4 for (px, py, pw, ph) in placed): y -= tg.shape[0] + 4
                 placed.append((x, y, tg.shape[1], tg.shape[0]))
-                gfx.blit(fr, tg, x, max(96 if not TALL else VY + 4, y), a)
+                put(fr, tg, x, max(96 if not TALL else VY + 4, y), a)
         if lt is not None and s < 4.5:
             a = min(ease((s - 0.2) / 0.4), ease((4.5 - s) / 0.5))
-            gfx.blit(fr, lt, int(LT[0] - 60 * (1 - ease((s - 0.2) / 0.4))), LT[1], a)
+            put(fr, lt, int(LT[0] - 60 * (1 - ease((s - 0.2) / 0.4))), LT[1], a)
         if wb is not None and s >= w_at:
             a = min(ease((s - w_at) / 0.35), ease((t1 - t0 - s) / 0.3))
-            gfx.blit(fr, wb, int(LT[0] - 60 * (1 - ease((s - w_at) / 0.35))), LT[1], a)
+            put(fr, wb, int(LT[0] - 60 * (1 - ease((s - w_at) / 0.35))), LT[1], a)
         for q in says:
             if not (q['t0'] <= t0 + s <= q['t1'] + 0.3) or not tr: continue
             b = track_at(tr, n + off).get(q['who'])
@@ -145,8 +212,8 @@ elif seg['kind'] == 'clip':
             if id(q) not in say_at: continue
             tx, ty = say_at[id(q)]; im = q['img']; a = min(ease((t0 + s - q['t0']) / 0.25), ease((q['t1'] + 0.3 - t0 - s) / 0.3))
             x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 28))
-            gfx.blit(fr, im, x, y, a)
-        draw_counter(fr, seg.get('hits'), t0 + s)
+            put(fr, im, x, y, a)
+        if COUNTER: draw_counter(fr, seg.get('hits'), t0 + s)
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()
 
@@ -157,33 +224,43 @@ elif seg['kind'] == 'fast':
     while r > 2.0: chain.append('atempo=2.0'); r /= 2.0
     chain.append(f'atempo={r:.4f}')
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video, '-af', ','.join(chain) + ',volume=0.6'])
-    ff = gfx.badge(f'x{sp}', gfx.INK, gfx.LIME, 44); lt = gfx.lower_third(seg['title'], seg.get('sub')) if seg.get('title') else None
+    ff = Art(gfx.badge(f'x{sp}', gfx.INK, gfx.LIME, 44)); lt = Art(gfx.lower_third(seg['title'], seg.get('sub'))) if seg.get('title') else None
     n = 0
-    for t, img in read_frames(video, t0, t1 - t0, fps=FPS / sp, vf=SDRVF):
+    for t, img in pictures(source(t0, t1), t0, t1 - t0, fps=FPS / sp):
         fr = stage(img.copy()); s = n / FPS
-        gfx.blit(fr, bugimg, *BUG); gfx.blit(fr, ff, *BADGE_L)
+        put(fr, bugimg, *BUG); put(fr, ff, *BADGE_L)
         if lt is not None and s < 4.5:
-            a = min(ease((s - 0.2) / 0.4), ease((4.5 - s) / 0.5)); gfx.blit(fr, lt, LT[0], LT[1], a)
+            a = min(ease((s - 0.2) / 0.4), ease((4.5 - s) / 0.5)); put(fr, lt, LT[0], LT[1], a)
         draw_counter(fr, seg.get('hits'), t, calm=True)
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()
 
 elif seg['kind'] == 'file':
-    # a part made elsewhere (the versus opening): taken as it is
-    import shutil; shutil.copyfile(seg['path_tall'] if TALL else seg['path'], out)
+    # a part made elsewhere (the versus opening): taken as it is. versus.py makes it at the design size; at another
+    # scale it is enlarged and encoded like every other segment, or the join of build.py would not hold.
+    import shutil; part = seg['path_tall'] if TALL else seg['path']
+    if K == 1 or probe(part)[:2] == (px(OW), px(OH)): print('source: the file', part); shutil.copyfile(part, out)
+    else:
+        print(f'source: the file {part}, enlarged {K} times')
+        subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', part, '-vf', f'scale={px(OW)}:{px(OH)}:flags=lanczos', '-r', f'{FPS_N}/{FPS_D}', *X264, '-c:a', 'copy', '-movflags', '+faststart', out], check=True)
 
 elif seg['kind'] == 'replay':
     t0, t1 = seg['t0'], seg['t1']; speed = seg.get('speed', 0.5); zoom = seg.get('zoom', 2.0)
     tr = json.load(open(seg['track'])) if seg.get('track') else None
     off = int(round((t0 - tr['t0']) * FPS)) if tr else 0
-    rb = gfx.badge('Replay'); lt = gfx.lower_third(seg['title'], seg.get('sub')) if seg.get('title') else None
-    tag = gfx.name_tag(seg['focus_name'], seg.get('focus_team', 0)) if seg.get('focus_name') else None
+    # 'badge': null in the segment = no badge (a close look at a reaction is not a replay of a shot)
+    rb = Art(gfx.badge(seg.get('badge', 'Replay'))) if seg.get('badge', 'Replay') else None; lt = Art(gfx.lower_third(seg['title'], seg.get('sub'))) if seg.get('title') else None
+    tag = Art(gfx.name_tag(seg['focus_name'], seg.get('focus_team', 0))) if seg.get('focus_name') else None
+    steps = int(round(1 / speed))
+    # True slow motion: a 4K piece has 60 pictures a second, so at half speed every picture of the replay is a real one.
+    # A piece with too few pictures for the speed is not used; then the working video and the interpolation do it as before.
+    src = source(t0, t1, FPS * steps)
     # the window follows the focus player (or the given point), smoothed
     cw, ch = int(W / zoom) // 2 * 2, int(H / zoom) // 2 * 2
     cx, cy = seg.get('cx', W / 2), seg.get('cy', H / 2)
-    frames = list(read_frames(video, t0, t1 - t0))
+    frames = [] if src.hires else list(read_frames(video, t0, t1 - t0))
     centres = []; first = None
-    for n in range(len(frames)):
+    for n in range(int(np.ceil((t1 - t0) * FPS)) if src.hires else len(frames)):
         b = track_at(tr, n + off).get(seg.get('focus')) if tr and seg.get('focus') is not None else None
         if b is not None:
             cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2 - 0.05 * (b[3] - b[1])
@@ -194,16 +271,45 @@ elif seg['kind'] == 'replay':
     if first: centres[:first] = [centres[first]] * first
     c = np.array(centres); k = 9
     c = np.stack([np.convolve(np.pad(c[:, j], k, mode='edge'), np.ones(2 * k + 1) / (2 * k + 1), mode='valid') for j in (0, 1)], 1)
-    def origin(cc): return int(np.clip(cc[0] - cw / 2, 0, W - cw)), int(np.clip(cc[1] - ch / 2, 0, H - ch))
+    def origin(cc, r=1):
+        """The top left corner of the window around a centre. r: the pixels of the source for one design unit."""
+        return int(np.clip((cc[0] - cw / 2) * r, 0, (W - cw) * r)), int(np.clip((cc[1] - ch / 2) * r, 0, (H - ch) * r))
+    def centre(nf):
+        """The centre of the window at the (broken) frame number nf of the working video."""
+        n = min(int(nf), len(c) - 1); wgt = nf - n
+        return (1 - wgt) * c[n] + wgt * c[min(n + 1, len(c) - 1)]
     # 1. the zoomed pictures of the real frames. The upscale model makes cloth, lines and rackets crisper; it is mixed
     #    in at half strength and kept off the heads, where it paints over what little of a face the camera recorded.
-    SRMIX = float(os.environ.get('SRMIX', '0.5'))
-    steps = int(round(1 / speed))
+    #    At a scale above 1 the model is off unless SRMIX asks for it: it is far too slow there on a processor.
+    SRMIX = float(os.environ.get('SRMIX') or ('0.5' if K == 1 else '0'))
     import hashlib
     cdir = os.environ.get('CACHE') or os.path.join(os.path.dirname(os.path.abspath(out)), 'cache'); os.makedirs(cdir, exist_ok=True)
-    cfile = os.path.join(cdir, 'replay-' + hashlib.md5(json.dumps([t0, t1, zoom, seg.get('focus'), seg.get('cx'), seg.get('cy'), speed, SRMIX] + ([first] if first else [])).encode()).hexdigest()[:12] + '.mkv')
+    key = [t0, t1, zoom, seg.get('focus'), seg.get('cx'), seg.get('cy'), speed, SRMIX] + ([first] if first else [])
+    # An entry of the cache belongs to one scale and one source: an entry of a 1080p render is never taken for a 4K
+    # render. (The plain entry, scale 1 from the working video, keeps the key that it always had.)
+    if K != 1 or src.hires: key += [f'scale {K}', 'piece ' + os.path.basename(src.file) if src.hires else 'working video']
+    cfile = os.path.join(cdir, 'replay-' + hashlib.md5(json.dumps(key).encode()).hexdigest()[:12] + '.mkv')
+    CACHE_X264 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '8', '-pix_fmt', 'yuv444p']
     views = []
-    if os.path.exists(cfile):
+    if src.hires:
+        # The real pictures, each one cut from the 4K picture where the window is at its own moment. They arrive in
+        # normal colours, nothing is invented, and the upscale model has nothing to add. One picture at a time goes
+        # through memory (a 4K picture is 25 MB): into the cache, and then from the cache onto the stage.
+        if not os.path.exists(cfile):
+            r = src.w / W; cws, chs = int(round(cw * r)), int(round(ch * r))
+            # ffmpeg hands over only the part of the picture that the window ever touches (and 4 pixels around it,
+            # for the colour samples at its edge): less to convert
+            xs, ys = zip(*(origin(cc, r) for cc in c)); ux, uy = max(0, min(xs) - 4) // 2 * 2, max(0, min(ys) - 4) // 2 * 2
+            uw, uh = min(src.w - ux, (max(xs) + cws - ux + 5) // 2 * 2), min(src.h - uy, (max(ys) + chs - uy + 5) // 2 * 2)
+            # setpts: each picture of the piece exactly once (a phone does not keep the time between two pictures exactly even)
+            vf = ','.join([f'crop={uw}:{uh}:{ux}:{uy}'] + ([hdr.vf(src.trc)] if src.trc else []) + ['setpts=N/FRAME_RATE/TB'])
+            wr = subprocess.Popen(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{PW}x{PH}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', *CACHE_X264, '-f', 'matroska', cfile + '.part'], stdin=subprocess.PIPE)
+            for m, (t, img) in enumerate(read_frames(src.file, t0 - src.shift, t1 - t0, size=(uw, uh), vf=vf)):
+                x0, y0 = origin(centre(m / steps), r)
+                wr.stdin.write(cv2.resize(img[y0 - uy:y0 - uy + chs, x0 - ux:x0 - ux + cws], (PW, PH), interpolation=cv2.INTER_CUBIC if PW > cws else cv2.INTER_AREA).tobytes())
+            wr.stdin.close(); wr.wait(); os.replace(cfile + '.part', cfile)
+        total = count(cfile); slow = (img for t, img in read_frames(cfile, 0, 36000, size=(PW, PH)))
+    elif os.path.exists(cfile):
         raw = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-i', cfile, '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], capture_output=True).stdout
         slow = np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3); frames = []
     elif SRMIX > 0: import sr
@@ -225,24 +331,26 @@ elif seg['kind'] == 'replay':
                         input=b''.join(v.tobytes() for v in views), capture_output=True)
     if views:
         slow = np.frombuffer(mi.stdout, np.uint8).reshape(-1, H, W, 3)
-        subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '8', '-pix_fmt', 'yuv444p', cfile], input=slow.tobytes())
+        subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}', '-r', f'{FPS_N}/{FPS_D}', '-i', '-', *CACHE_X264, cfile], input=slow.tobytes())
     atempo = f'atempo={speed}' if speed >= 0.5 else f'atempo=0.5,atempo={speed / 0.5}'
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video, '-af', f'{atempo},volume=0.45'])
-    if HDR: slow = hdr.sdr(np.ascontiguousarray(np.array(slow)), HDR)      # the cache holds the frames as read; the colours are made right here
-    total = len(slow)
-    for m in range(total):
-        nf = m / steps; n = min(int(nf), len(c) - 1); wgt = nf - n
-        cc = (1 - wgt) * c[n] + wgt * c[min(n + 1, len(c) - 1)]; x0, y0 = origin(cc)
-        fr = stage(slow[m].copy(), frame=True)       # a thin lime frame marks the replay
-        gfx.blit(fr, bugimg, *BUG); gfx.blit(fr, rb, *right(rb))
+    if not src.hires:
+        if HDR: slow = hdr.sdr(np.ascontiguousarray(np.array(slow)), HDR)      # the cache holds the frames as read; the colours are made right here
+        total = len(slow)
+    r = src.w / W if src.hires else 1
+    for m, pic in enumerate(slow):
+        nf = m / steps; x0, y0 = (v / r for v in origin(centre(nf), r))
+        fr = stage(fit(pic).copy(), frame=True)       # a thin lime frame marks the replay
+        put(fr, bugimg, *BUG)
+        if rb: put(fr, rb, *right(rb))
         if tag is not None and tr:
             bx = track_at(tr, nf + off).get(seg.get('focus'))
             if bx is not None:
                 tx, ty = pt((bx[4] - x0) * W / cw, (bx[5] - y0) * H / ch)
-                gfx.blit(fr, tag, int(tx - tag.shape[1] / 2), int(max(60 if not TALL else VY + 4, ty - tag.shape[0] - 10)))
+                put(fr, tag, int(tx - tag.shape[1] / 2), int(max(60 if not TALL else VY + 4, ty - tag.shape[0] - 10)))
         if lt is not None:
             s = m / FPS; a2 = min(ease((s - 0.2) / 0.4), ease((total / FPS - s) / 0.5))
-            gfx.blit(fr, lt, LT[0], LT[1], a2)
+            put(fr, lt, LT[0], LT[1], a2)
         enc.stdin.write(fr.tobytes())
     enc.stdin.close(); enc.wait()
 print('wrote', out)

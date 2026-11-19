@@ -334,5 +334,30 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   16 dB; the loud parts (hits, voices) stayed within 0.3 dB. Removal alone, without the lead, gave 4 to 6 dB.
 - **A team with no name gets one from its players** (`teams.py`, the owner's rule): the first letter of one
   player and the name of the other.
+- **The copy of the video is for finding, the camera file is for the picture.** The owner said the reel
+  looked like 720p. It was 1080p from a 1080p copy of a 4K file, and a replay zoom took a third of that.
+  `modal/cut.py` now cuts the chosen points out of the camera file without a new encode, and `render.py`
+  renders from those pieces (`HIRES`) at `SCALE=2`. Measured on the same frames: a near player 2.2 times
+  sharper, the far players 2.75 times. The pieces have 60 pictures a second, so a replay at half speed
+  shows real pictures. Time on four processors: 6 s for a second of a clip, 10 s for a second of a replay.
+- **A highlight is a point the players react to, not a long rally** (the owner, on the reel of the second
+  match). Two of six clips ended with an error and no reaction: "not a highlight". The moments of a shout, a
+  laugh or a cheer in the transcripts of the recorders found the points the owner liked, and three more.
+  `reel_points.py` builds from such points: from the serve, to before the next serve.
+- **After the point: the reaction first, then the replay.** A reel of a professional editor, measured: no cut
+  and no zoom inside a rally; after each point a close look at a player (1.2 to 3.2 s), then a replay (3 to
+  14 s); cheers from the winning shot, 3.5 to 5 s, 17 to 24 dB over the rally.
+- **A bubble shows only words a viewer can hear.** The owner could not hear the words of one bubble; they
+  came from one recogniser. A second line of the same player was audible and stays.
+- **No shot counter until a person has counted the same rallies.** It was wrong in three reels (12 for 8,
+  19 and 26 "at random"). `COUNTER=0`, and `reel_points.py` always sets it.
+- **A cheer waits for the players** (`cheers.py`): it starts when no voice is heard for 1.5 s after the last
+  shot, and goes down by 12 dB if a voice comes back. One file for one point. A made cheer can hold words: a
+  recogniser heard a sentence in one of eight, and that one is not used.
+- **A clock on the wall is a second timeline.** Players remembered three line calls by the time on the hall
+  clock. The clock is readable in the 4K picture (not in the 1080p copy), so clock time = video time + a
+  constant, and the transcripts of those minutes held the calls.
+- **A long job writes its result before it can fail.** A recogniser ran 15 minutes over the full sound and
+  ended on the last piece, past the end of the file, with nothing saved. It stops at the end now.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
