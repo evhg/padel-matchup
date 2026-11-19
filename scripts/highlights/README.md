@@ -79,6 +79,18 @@ bash $H/run_all.sh B      # follow the clips, the opening, both reels, the files
 
 `run_all.sh` has each command, and writes the wall time of each step to `match/timings.tsv`.
 
+What a second match added, each as its own tool until `run_all.sh` takes it in:
+
+- `match/court.json`: the court lines of this camera place (see `court.py`). Draw them on two frames first.
+- `tx_first.py`, `tx_phone.py`, `tx_mix.py`: two recorders on the fence, lined up with the phone, mixed into one
+  sound track. Put that track into the working copy and the reel has the hits and the voices.
+- `GRADE=glass` for a camera behind the glass; `CUTOUT=birefnet-general-lite` for clean portraits; `SAYS=<file>`
+  for what a player said; `START=<seconds>` when a person knows the start of the match.
+- `gallery.py`: the names of the four players from face templates of players who agreed, so nobody is asked
+  "who is who" unless two or more of the four are new. The gallery is a file of the work folder.
+- `label_clips.py`, `label_page.py`, `context_page.py`: clips and a page for the people who build the
+  detector. Never for a player: the score is automatic.
+
 `match.json` has the venue, the date, the score, the four names, the two pairs and, when the players have
 them, `team_a` and `team_b`. Look at the two contact sheets of `ident.py` to give each of the four groups
 its name. In the app, the match page knows the names.
@@ -278,5 +290,49 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   portraits on plain grass came out whole. The choice was made by hand for that reel; a rule is not written.
 - **A long step can outlive its job.** One job may run two hours. The shot count of a rally of 95 seconds
   took 40 minutes, and the reel would have been stopped in the middle. Give each long step its own job.
+- **The score is automatic, and a player is never asked who won a point** (the owner, 19 November 2026). A
+  page that asks about points is a tool for the people who build the detector. It asks for context, not for
+  a bare label (`context_page.py`): how the point ended, who hit the last shot, and why a clip is not a point.
+- **In a busy hall a third of the "rallies" are not points.** Of 19 random rallies of four hits or more that
+  a person checked, 7 were not a point: one in the warm-up and six inside the match, one of them with 14
+  sounds. The candidate list from sound needs the picture before it is a list of points.
+- **A warm-up has a shape.** Over 3 minutes the share of time inside rallies goes above a half, then falls
+  under a quarter when the game starts; two matches gave the same drop at 9 minutes, and the second one had
+  "ready?" in the speech and the first serve formation on the frames a minute later. The first reel of
+  that match opened with a warm-up rally of 26 shots called "Point of the match". Where the players stand
+  at the first hit, and the hits a minute, did not separate warm-up from game.
+- **An arm that moves is not a shot.** A "smash replay" showed a player who lifted his hand while he talked:
+  the wrist was fast, and a ball of the next court gave the sound. Two "sure" shots at one end under 0.9
+  seconds apart cannot both be shots. The counter now goes by the turn of the teams between the shots the
+  camera is sure of (`by_turn` in `build.py`); its numbers were not checked against a count by a person.
+- **A lost ball is not a dead ball.** The rule "the ball stopped, so the rally ended" cut a rally 3 seconds
+  early where the tracker lost the ball at the far end. Two sure shots after the stop, at most 2 seconds
+  apart, now keep the rally alive; one alone can be an arm that picks up a ball. Both rules rest on one
+  match and wait for a ball tracker that sees the far end.
+- **One recorder can hang beside a machine.** Its floor was 13 dB above the other one's, so "the louder one
+  leads" gave it the lead 93% of the time. By level over each recorder's own floor it leads 31%
+  (`tx_mix.py`). Three full recordings of a match do not fit in memory together: the mix goes minute by minute.
+- **Say which team is A in the answer itself.** Two pages for one match were built from two match files with
+  the teams in the other order. A test in the browser showed the wrong team on a filled-in answer before a
+  person saw it. The answer line of `context_page.py` carries `"A"` and `"B"` with the team names.
+- **A better cut-out model, and a smaller one.** On the same four portraits `birefnet-general-lite` left no
+  fence behind a player; the first model and a second one did. The full-size model of that family ended
+  the process for lack of memory (15 GB); the lite one takes 7 seconds a portrait on the processor.
+- **Words that only one recogniser heard are shown as "roughly".** A player's line after a point came from
+  one recogniser only; the second one wrote other words. It went on the screen as a bubble because a person
+  asked for it and can hear the sound; it is not a fact.
+- **A replay waits where its player will be found.** The tracker found a player 37 frames into the 80 frames
+  of his replay. Until then the window sat at the middle of the picture, so the replay opened on two seconds
+  of empty grass. The window now holds the player's first known place from the start. The store of slow
+  replays did not know the track either: its key now carries the late start, or the old pictures come back.
+- **The noise of the hall comes out before the mix, and the quiet recorder leads when nothing happens.** The
+  owner heard an air conditioner in the reel. Two causes, both measured. One recorder hung beside a machine
+  (floor 13 dB over the other), and with equal shares at rest, half of its noise was always in the mix: the
+  lead now goes by the level over each recorder's own floor, and at rest the recorder with less noise leads
+  (its share went from 31% to 8%). And `tx_mix.py` now takes the steady noise down by 18 dB, for each
+  recorder with its own noise picture. The noise floor inside the six points of the reel fell by 10 to
+  16 dB; the loud parts (hits, voices) stayed within 0.3 dB. Removal alone, without the lead, gave 4 to 6 dB.
+- **A team with no name gets one from its players** (`teams.py`, the owner's rule): the first letter of one
+  player and the name of the other.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

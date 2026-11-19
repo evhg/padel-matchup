@@ -6,7 +6,8 @@ a match with hundreds of points is too large for one file. The answers stay in t
 stop and go on later."""
 import sys, os, json, base64, subprocess, glob, html
 clips, candf, matchf, out = sys.argv[1:5]
-C = json.load(open(candf)); MT = json.load(open(matchf)); ta = MT.get('team_a') or MT['pair_a']; tb = MT.get('team_b') or MT['pair_b']
+import teams
+C = json.load(open(candf)); MT = teams.fill(json.load(open(matchf))); ta = MT.get('team_a') or MT['pair_a']; tb = MT.get('team_b') or MT['pair_b']
 items = []
 LINKED = os.environ.get('LINKED')
 for c in C:
