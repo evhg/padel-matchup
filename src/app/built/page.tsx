@@ -47,6 +47,8 @@ async function BuiltPage() {
             {items.map((item, i) => (
               <li key={i} className="py-3 first:pt-0 last:pb-0">
                 <p className="font-semibold">{item.summary}</p>
+                {/* The picture of the change, where one was taken: from the test database, so no real player is in it. */}
+                {item.image ? <img src={item.image} alt={item.summary} width={780} loading="lazy" className="mt-2 block h-auto w-full rounded-lg border border-line" data-testid="built-image" /> : null}
                 <p className="mt-0.5 text-xs text-faint">
                   {item.name ? <span data-testid="built-name">{t("builtFrom", { name: item.name })} · </span> : null}
                   {t("builtSince", { date: day.format(item.shippedAt) })}

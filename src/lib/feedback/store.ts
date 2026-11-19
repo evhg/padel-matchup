@@ -9,6 +9,7 @@ import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { baseUrl } from "@/lib/config";
 import { removePushSubscription, subscriptionsFor } from "@/lib/domain/push";
 import { pushEnabled, sendPush } from "@/lib/push";
+import { feedbackStrings } from "./strings";
 
 /**
  * The feedback loop's memory. Intake stores a row and says thanks at once;
@@ -308,7 +309,7 @@ export async function deliverToPerson(item: Feedback, text: string, fetchImpl: t
   return { status: "no_channel" };
 }
 
-export type Decision = { status: Exclude<FeedbackStatus, "new" | "acknowledged">; verdict?: string | null; assessment?: string | null; message?: string | null; prUrl?: string | null; publicSummary?: string | null; publicName?: string | null };
+export type Decision = { status: Exclude<FeedbackStatus, "new" | "acknowledged">; verdict?: string | null; assessment?: string | null; message?: string | null; prUrl?: string | null; publicSummary?: string | null; publicName?: string | null; publicImage?: string | null };
 
 /** Long enough for one sentence about a change, short enough that it stays one. */
 export const PUBLIC_SUMMARY_MAX = 200;
@@ -330,6 +331,27 @@ export function cleanPublicName(raw: string | null | undefined): string | null {
   return s.charAt(0).toLocaleUpperCase() + s.slice(1);
 }
 
+/**
+ * A picture of the change: a path under /built/ of this site, or nothing. Only a plain file name passes, so
+ * the link in a message can lead nowhere but to a picture that this repository ships (`public/built/`).
+ */
+export function cleanPublicImage(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").trim();
+  return /^\/built\/[a-z0-9][a-z0-9-]{0,79}\.(png|jpg|jpeg|webp)$/.test(s) ? s : null;
+}
+
+/**
+ * The thank-you with its picture (the owner, 19 November 2026: a player who sees what their note built
+ * writes again). The link stands on a line of its own at the end: an email shows that line as the picture
+ * (`renderDeskEmail`), Telegram and Discord show a preview of it. The text is cut to make room, never the link.
+ */
+export function withPicture(message: string, image: string | null | undefined, locale: string | null | undefined): string {
+  const text = message.trim();
+  if (!image || !text) return text;
+  const tail = `\n\n${feedbackStrings(locale).picture}\n${baseUrl()}${image}`;
+  return text.slice(0, FEEDBACK_LIMITS.messageMax - tail.length).trimEnd() + tail;
+}
+
 /** The author's first name as Kicksmash shows it on a match page; never what the note itself typed. */
 async function authorFirstName(db: Db, playerId: string | null): Promise<string | null> {
   if (!playerId) return null;
@@ -339,12 +361,14 @@ async function authorFirstName(db: Db, playerId: string | null): Promise<string 
 
 /**
  * The line and the name /built shows, for a note already shipped, without touching its status, its
- * date or its person. A field left out stays as it is; an empty name hides the name.
+ * date or its person. A field left out stays as it is; an empty name hides the name, an empty picture
+ * takes the picture away.
  */
-export async function setBuiltLine(db: Db, id: string, line: { summary?: string | null; name?: string | null }): Promise<Feedback | null> {
-  const set: { publicSummary?: string | null; publicName?: string | null } = {};
+export async function setBuiltLine(db: Db, id: string, line: { summary?: string | null; name?: string | null; image?: string | null }): Promise<Feedback | null> {
+  const set: { publicSummary?: string | null; publicName?: string | null; publicImage?: string | null } = {};
   if (typeof line.summary === "string") set.publicSummary = cleanPublicSummary(line.summary);
   if (typeof line.name === "string") set.publicName = cleanPublicName(line.name);
+  if (typeof line.image === "string") set.publicImage = cleanPublicImage(line.image);
   if (!Object.keys(set).length) return null;
   const [row] = await db
     .update(feedback)
@@ -354,7 +378,7 @@ export async function setBuiltLine(db: Db, id: string, line: { summary?: string 
   return row ?? null;
 }
 
-export type BuiltItem = { summary: string; name: string | null; shippedAt: Date };
+export type BuiltItem = { summary: string; name: string | null; image: string | null; shippedAt: Date };
 
 /**
  * The public page of ideas that became the app (/built): what changed, whose idea it was, and when.
@@ -363,12 +387,12 @@ export type BuiltItem = { summary: string; name: string | null; shippedAt: Date 
  */
 export async function listBuilt(db: Db, limit = 100): Promise<BuiltItem[]> {
   const rows = await db
-    .select({ summary: feedback.publicSummary, name: feedback.publicName, shippedAt: feedback.shippedAt })
+    .select({ summary: feedback.publicSummary, name: feedback.publicName, image: feedback.publicImage, shippedAt: feedback.shippedAt })
     .from(feedback)
     .where(and(eq(feedback.status, "shipped"), sql`${feedback.publicSummary} is not null`, sql`${feedback.shippedAt} is not null`))
     .orderBy(desc(feedback.shippedAt))
     .limit(limit);
-  return rows.map((r) => ({ summary: r.summary!, name: r.name ?? null, shippedAt: r.shippedAt! }));
+  return rows.map((r) => ({ summary: r.summary!, name: r.name ?? null, image: cleanPublicImage(r.image), shippedAt: r.shippedAt! }));
 }
 
 /** The daily session's verdict: recorded, and the person told, in one call. */
@@ -376,8 +400,11 @@ export async function decideFeedback(db: Db, id: string, d: Decision, now = new 
   const item = await getFeedback(db, id);
   if (!item) return { item: null, delivery: { status: "not_found" } };
   let delivery: Delivery | null = null;
-  if (d.message && d.message.trim()) {
-    delivery = await deliverToPerson(item, d.message, fetchImpl, db);
+  // Only a shipped note has a picture: the one sent with this verdict, else the one it already has.
+  const publicImage = d.status !== "shipped" ? item.publicImage : typeof d.publicImage === "string" ? cleanPublicImage(d.publicImage) : item.publicImage;
+  const message = d.message && d.message.trim() ? withPicture(d.message, d.status === "shipped" ? publicImage : null, item.locale) : "";
+  if (message) {
+    delivery = await deliverToPerson(item, message, fetchImpl, db);
   }
   const sent = delivery?.status === "sent";
   // The name beside the line on /built: the desk's ("" hides it), else the one kept, else the author's.
@@ -393,8 +420,9 @@ export async function decideFeedback(db: Db, id: string, d: Decision, now = new 
       // Only a shipped note has a line on /built; a summary sent with any other verdict is not kept.
       publicSummary: d.status === "shipped" && d.publicSummary ? cleanPublicSummary(d.publicSummary) : item.publicSummary,
       publicName,
+      publicImage,
       shippedAt: d.status === "shipped" ? now : item.shippedAt,
-      ...(sent ? { replyText: d.message!.trim().slice(0, FEEDBACK_LIMITS.messageMax), repliedAt: now, messagesSent: sql`${feedback.messagesSent} + 1` } : {}),
+      ...(sent ? { replyText: message.slice(0, FEEDBACK_LIMITS.messageMax), repliedAt: now, messagesSent: sql`${feedback.messagesSent} + 1` } : {}),
     })
     .where(eq(feedback.id, id))
     .returning();

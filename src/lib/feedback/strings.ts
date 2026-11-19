@@ -10,6 +10,7 @@ const STRINGS = {
     added: "Added to your note, thank you.",
     emailSubject: "Got it, thank you",
     tooMany: "That is plenty for today. Thank you.",
+    picture: "This is how it looks now:",
   },
   ru: {
     how: "Напишите, что стоит изменить, своими словами: /feedback и текст. Я читаю каждое сообщение, и если что-то из этого сделаю, напишу здесь.",
@@ -17,6 +18,7 @@ const STRINGS = {
     added: "Добавил к вашей заметке, спасибо.",
     emailSubject: "Получил, спасибо",
     tooMany: "На сегодня достаточно. Спасибо.",
+    picture: "Вот как это выглядит теперь:",
   },
   es: {
     how: "Cuéntame qué debería cambiar, con tus palabras: /feedback y el texto. Leo cada nota, y si construyo algo a partir de ella te lo diré aquí.",
@@ -24,6 +26,7 @@ const STRINGS = {
     added: "Añadido a tu nota, gracias.",
     emailSubject: "Recibido, gracias",
     tooMany: "Con eso basta por hoy. Gracias.",
+    picture: "Así se ve ahora:",
   },
 } as const;
 

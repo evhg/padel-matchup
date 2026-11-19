@@ -96,6 +96,27 @@ try {
   const keptQ = "select context from feedback where text like 'e2e: the list of clubs%' order by created_at desc limit 1";
   const kept = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(keptQ)}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
   check("a note from the footer's door keeps the screen it came from", kept.rows?.[0]?.context === "/clubs", JSON.stringify(kept).slice(0, 200));
+  // The thank-you for a note that became a change can carry a picture of the change (the owner, 19 November 2026).
+  // The desk refuses a picture that is not on the site, because the link goes into a message to a person. With
+  // one that is there, the page of what players built shows it, and it loads: public/built/ is served beside
+  // the page /built.
+  const noteQ = "select id from feedback where text like 'e2e: the list of clubs%' order by created_at desc limit 1";
+  const noteId = (await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(noteQ)}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json())).rows?.[0]?.id;
+  const desk = (body) =>
+    fetch(`${BASE}/api/admin/feedback`, { method: "POST", headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}`, "content-type": "application/json" }, body: JSON.stringify({ id: noteId, ...body }) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
+  const notLive = await desk({ status: "shipped", publicSummary: "Every screen has a feedback link at its foot", publicImage: "/built/not-on-the-site.png" });
+  check("a picture that is not on the site yet is refused", notLive.status === 409 && notLive.body?.error === "picture_not_live", JSON.stringify(notLive).slice(0, 200));
+  const badShape = await desk({ status: "shipped", publicImage: "https://example.com/picture.png" });
+  check("a picture from another site is refused", badShape.status === 400 && badShape.body?.error === "bad_picture", JSON.stringify(badShape).slice(0, 200));
+  const stillOpen = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent("select status, public_image from feedback where text like 'e2e: the list of clubs%'")}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+  check("a refused picture writes nothing to the note", stillOpen.rows?.[0]?.status !== "shipped" && stillOpen.rows?.[0]?.public_image == null, JSON.stringify(stillOpen).slice(0, 200));
+  const withPic = await desk({ status: "shipped", publicSummary: "Every screen has a feedback link at its foot", publicImage: "/built/feedback-door.png", publicName: "" });
+  check("the desk ships a note with its picture", withPic.status === 200 && withPic.body?.feedback?.publicImage === "/built/feedback-door.png", JSON.stringify(withPic).slice(0, 200));
+  await fd.goto(BASE + "/built");
+  const pic = fd.getByTestId("built-image").first();
+  await pic.scrollIntoViewIfNeeded({ timeout: 20000 }).catch(() => undefined);
+  const loaded = await pic.evaluate((el) => new Promise((done) => (el.complete ? done(el.naturalWidth > 0) : (el.addEventListener("load", () => done(el.naturalWidth > 0)), el.addEventListener("error", () => done(false)))))).catch(() => false);
+  check("the page of what players built shows the picture, and the picture loads", loaded === true && (await fd.getByText("Every screen has a feedback link at its foot").count()) === 1);
   await fd.context().close();
   // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
   // "there should be a feedback option on the main landing page which explains that kicksmash is a

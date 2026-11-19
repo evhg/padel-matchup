@@ -192,6 +192,13 @@ export const feedback = pgTable(
      * without a player.
      */
     publicName: text("public_name"),
+    /**
+     * A picture of the change, for the thank-you and for /built (the owner, 19 November 2026: "show them a
+     * screenshot of the new improvement which was built because of their feedback"). A path under /built/ of
+     * this site: the file is in `public/built/` and ships in the pull request of the change, so it is taken
+     * from the test database and holds no real player. Null when a change has nothing to show.
+     */
+    publicImage: text("public_image"),
     messagesSent: integer("messages_sent").notNull().default(0),
     /** "coach" when the author runs a lessons book; a coach's note is read first. */
     role: text("role"),
