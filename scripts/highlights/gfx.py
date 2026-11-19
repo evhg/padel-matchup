@@ -6,9 +6,42 @@ S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath
 LIME, INK, BLUE, WHITE = (200, 241, 53), (20, 22, 26), (27, 79, 216), (255, 255, 255)
 W, H = 1920, 1080
 _fonts = {}
+# The reel can be K times as large (SCALE: 2 gives 3840x2160). Every number in this file stays a design number (the
+# 1920x1080 picture, or 1080x1920). When K is not 1, the font, the canvas and the pen multiply by K: a graphic is
+# drawn sharp at its final size, not enlarged afterwards. K is 1 until reel_scale() is called (build.py and render.py
+# call it; versus.py does not, and gets what it always got).
+K = 1
+def reel_scale():
+    """Read SCALE, the one place that does. -> K (an int when it is whole)."""
+    global K
+    k = float(os.environ.get('SCALE') or 1); K = int(k) if k == int(k) else k; _fonts.clear()
+    return K
+class _Font:
+    """A font K times as large that measures in design units."""
+    def __init__(self, size, weight): self.size = size; self.real = ImageFont.truetype(f'{S}/fonts/BarlowCondensed-{weight}.ttf', int(round(size * K)))
+    def getbbox(self, s): return tuple(v / K for v in self.real.getbbox(s))
+    def getlength(self, s): return self.real.getlength(s) / K
+class _Pen:
+    """ImageDraw in design units on a canvas K times as large. A box covers whole design pixels, so two boxes that
+    touch in the design still touch."""
+    def __init__(self, im): self.d = ImageDraw.Draw(im)
+    def _box(self, b): return (b[0] * K, b[1] * K, (b[2] + 1) * K - 1, (b[3] + 1) * K - 1)
+    def rectangle(self, box, fill=None): self.d.rectangle(self._box(box), fill=fill)
+    def rounded_rectangle(self, box, radius, fill=None, outline=None, width=1): self.d.rounded_rectangle(self._box(box), radius * K, fill=fill, outline=outline, width=int(round(width * K)))
+    def polygon(self, pts, fill=None): self.d.polygon([(x * K, y * K) for x, y in pts], fill=fill)
+    def text(self, xy, s, font=None, fill=None): self.d.text((xy[0] * K, xy[1] * K), s, font=font.real, fill=fill)
+def _pen(im): return ImageDraw.Draw(im) if K == 1 else _Pen(im)
+def _sheet(mode, size, colour):
+    """An empty canvas of this design size, and its pen."""
+    im = Image.new(mode, (int(round(size[0] * K)), int(round(size[1] * K))), colour); return im, _pen(im)
+def _over(rgb):
+    """A picture of the design size as the canvas, and its pen."""
+    im = Image.fromarray(rgb)
+    if K != 1: im = im.resize((int(round(im.width * K)), int(round(im.height * K))), Image.BICUBIC)
+    return im, _pen(im)
 def font(size, weight='ExtraBold'):
     k = (size, weight)
-    if k not in _fonts: _fonts[k] = ImageFont.truetype(f'{S}/fonts/BarlowCondensed-{weight}.ttf', size)
+    if k not in _fonts: _fonts[k] = ImageFont.truetype(f'{S}/fonts/BarlowCondensed-{weight}.ttf', size) if K == 1 else _Font(size, weight)
     return _fonts[k]
 
 def text_w(s, f): return f.getbbox(s)[2]
@@ -39,7 +72,7 @@ def name_tag(name, team):
     """A small pill that floats over a player's head: lime for one pair, blue for the other; a pointer below."""
     f = font(34, 'ExtraBold'); s = name.upper()
     tw = int(tracked_w(s, f, 1.5)); pad = 14; h = 46
-    im = Image.new('RGBA', (tw + 2 * pad, h + 12), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGBA', (tw + 2 * pad, h + 12), (0, 0, 0, 0))
     bg, fg = (LIME, INK) if team == 0 else (BLUE, WHITE)
     d.rounded_rectangle((0, 0, tw + 2 * pad - 1, h - 1), 8, fill=bg + (255,))
     cx = (tw + 2 * pad) // 2
@@ -52,7 +85,7 @@ def speech(text, team, width=26):
     import textwrap
     f = font(46, 'SemiBold'); lines = textwrap.wrap(text, width)[:3]; pad = 22; lh = 56
     tw = max(int(text_w(s, f)) for s in lines); w, h = tw + 2 * pad, lh * len(lines) + 2 * pad - 8
-    im = Image.new('RGBA', (w, h + 16), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGBA', (w, h + 16), (0, 0, 0, 0))
     edge = LIME if team == 0 else BLUE
     d.rounded_rectangle((0, 0, w - 1, h - 1), 14, fill=(255, 255, 255, 245), outline=edge + (255,), width=4)
     cx = w // 2; d.polygon([(cx - 12, h - 3), (cx + 12, h - 3), (cx, h + 14)], fill=(255, 255, 255, 245))
@@ -64,7 +97,7 @@ def lower_third(title, sub=None, col=LIME):
     f1, f2 = font(64, 'ExtraBold'), font(34, 'SemiBold')
     t = title.upper(); w1 = int(tracked_w(t, f1, 2)); w2 = int(tracked_w(sub.upper(), f2, 2)) if sub else 0
     w = max(w1, w2) + 64; h = 86 + (48 if sub else 0)
-    im = Image.new('RGBA', (w + 14, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGBA', (w + 14, h), (0, 0, 0, 0))
     d.rectangle((0, 0, 13, h - 1), fill=tuple(col) + (255,))
     d.rectangle((14, 0, w + 13, h - 1), fill=INK + (235,))
     tracked(d, (40, 4), t, f1, WHITE + (255,), 2)
@@ -73,7 +106,7 @@ def lower_third(title, sub=None, col=LIME):
 
 def badge(text, bg=LIME, fg=INK, size=40):
     f = font(size, 'ExtraBold'); s = text.upper(); tw = int(tracked_w(s, f, 3)); pad = 18; h = int(size * 1.35)
-    im = Image.new('RGBA', (tw + 2 * pad, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGBA', (tw + 2 * pad, h), (0, 0, 0, 0))
     d.rectangle((0, 0, tw + 2 * pad - 1, h - 1), fill=bg + (255,))
     tracked(d, (pad, int(size * 0.02)), s, f, fg + (255,), 3)
     return rgba_to_bgra(im)
@@ -83,7 +116,7 @@ def bug(venue):
     f1, f2 = font(34, 'ExtraBold'), font(30, 'SemiBold')
     a, b = 'KICKSMASH', venue.upper()
     wa, wb = int(tracked_w(a, f1, 3)), int(tracked_w(b, f2, 3))
-    im = Image.new('RGBA', (wa + wb + 76, 50), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGBA', (wa + wb + 76, 50), (0, 0, 0, 0))
     d.rectangle((0, 0, wa + 31, 49), fill=LIME + (255,)); tracked(d, (16, 2), a, f1, INK + (255,), 3)
     d.rectangle((wa + 32, 0, wa + wb + 75, 49), fill=INK + (225,)); tracked(d, (wa + 48, 5), b, f2, WHITE + (255,), 3)
     return rgba_to_bgra(im)
@@ -97,7 +130,7 @@ def centred(d, y, s, f, fill, spacing=0):
 
 def intro_card(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HIGHLIGHTS'):
     """The opening card over a blurred frame of the court."""
-    im = Image.fromarray(darken(bg_bgr)); d = ImageDraw.Draw(im)
+    im, d = _over(darken(bg_bgr))
     centred(d, 150, kicker, font(44, 'SemiBold'), LIME, 10)
     d.rectangle((W / 2 - 60, 222, W / 2 + 60, 228), fill=LIME)
     fa = font(150, 'ExtraBold')
@@ -110,7 +143,7 @@ def intro_card(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HIGHLIG
 
 def stats_card(bg_bgr, title, rows, foot='kicksma.sh'):
     """rows: [(big number, label)], up to four across."""
-    im = Image.fromarray(darken(bg_bgr)); d = ImageDraw.Draw(im)
+    im, d = _over(darken(bg_bgr))
     centred(d, 150, title.upper(), font(72, 'ExtraBold'), WHITE, 6)
     d.rectangle((W / 2 - 60, 250, W / 2 + 60, 256), fill=LIME)
     n = len(rows); colw = W / (n + 0.6); x0 = (W - colw * n) / 2
@@ -133,7 +166,7 @@ def player_card(frame_bgr, box, name, team, sub=None):
     crop = cv2.resize(crop, (900, 1080), interpolation=cv2.INTER_LANCZOS4)
     canvas = darken(frame_bgr, 24, 0.3)
     canvas[:, W - 900:] = crop
-    im = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)); d = ImageDraw.Draw(im)
+    im, d = _over(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
     col = LIME if team == 0 else (120, 160, 255)
     d.rectangle((W - 900 - 14, 0, W - 900, H), fill=col)
     tracked(d, (110, 380), name.upper(), font(210, 'ExtraBold'), WHITE, 4)
@@ -146,7 +179,7 @@ def counter(n, final=False, pop=0.0):
     size = int(84 * (1 + 0.22 * pop)); f = font(size, 'ExtraBold'); f2 = font(30, 'SemiBold')
     s = str(n); lab = 'SHOTS'
     wn = int(text_w(s, f)); wl = int(tracked_w(lab, f2, 4)); w = max(150, wn + 44, wl + 44); h = 150
-    im = Image.new('RGBA', (w, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGBA', (w, h), (0, 0, 0, 0))
     d.rectangle((0, 0, w - 1, h - 1), fill=(LIME if final else INK) + (255 if final else 225,))
     d.rectangle((0, h - 8, w - 1, h - 1), fill=(INK if final else LIME) + (255,))
     d.text(((w - wn) / 2, 44 - size * 0.42 + 6), s, font=f, fill=(INK if final else WHITE) + (255,))
@@ -154,7 +187,7 @@ def counter(n, final=False, pop=0.0):
     return rgba_to_bgra(im)
 
 def outro_card(bg_bgr, line1, line2, foot='kicksma.sh'):
-    im = Image.fromarray(darken(bg_bgr, 22, 0.28)); d = ImageDraw.Draw(im)
+    im, d = _over(darken(bg_bgr, 22, 0.28))
     centred(d, 330, 'KICKSMASH', font(200, 'ExtraBold'), LIME, 10)
     d.rectangle((W / 2 - 60, 580, W / 2 + 60, 586), fill=LIME)
     centred(d, 630, line1.upper(), font(56, 'SemiBold'), WHITE, 6)
@@ -173,7 +206,7 @@ def _fit(s, size, spacing, maxw, weight='ExtraBold'):
     return font(size, weight)
 
 def intro_card_tall(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HIGHLIGHTS'):
-    im = Image.fromarray(_tall_bg(bg_bgr)); d = ImageDraw.Draw(im)
+    im, d = _over(_tall_bg(bg_bgr))
     _c(d, 420, kicker, font(44, 'SemiBold'), LIME, 10); d.rectangle((TW / 2 - 60, 492, TW / 2 + 60, 498), fill=LIME)
     fa = _fit(pair_a.upper(), 150, 3, TW - 120); fb = _fit(pair_b.upper(), 150, 3, TW - 120); f = fa if fa.size < fb.size else fb
     _c(d, 580, pair_a.upper(), f, WHITE, 3); _c(d, 770, 'VS', font(60, 'SemiBold'), LIME, 8); _c(d, 870, pair_b.upper(), f, WHITE, 3)
@@ -182,7 +215,7 @@ def intro_card_tall(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HI
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def stats_card_tall(bg_bgr, title, rows, foot='kicksma.sh'):
-    im = Image.fromarray(_tall_bg(bg_bgr)); d = ImageDraw.Draw(im)
+    im, d = _over(_tall_bg(bg_bgr))
     _c(d, 330, title.upper(), _fit(title.upper(), 72, 6, TW - 120), WHITE, 6); d.rectangle((TW / 2 - 60, 430, TW / 2 + 60, 436), fill=LIME)
     for i, (num, lab) in enumerate(rows):
         cx = TW * (0.27 if i % 2 == 0 else 0.73); y = 560 + 420 * (i // 2)
@@ -192,7 +225,7 @@ def stats_card_tall(bg_bgr, title, rows, foot='kicksma.sh'):
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def outro_card_tall(bg_bgr, line1, line2):
-    im = Image.fromarray(_tall_bg(bg_bgr, 0.26)); d = ImageDraw.Draw(im)
+    im, d = _over(_tall_bg(bg_bgr, 0.26))
     _c(d, 720, 'KICKSMASH', _fit('KICKSMASH', 200, 8, TW - 120), LIME, 8); d.rectangle((TW / 2 - 60, 950, TW / 2 + 60, 956), fill=LIME)
     _c(d, 1000, line1.upper(), _fit(line1.upper(), 52, 5, TW - 100, 'SemiBold'), WHITE, 5); _c(d, 1080, line2.upper(), font(36, 'SemiBold'), (200, 205, 212), 5)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
@@ -204,7 +237,7 @@ def player_card_tall(frame_bgr, box, name, team, sub=None):
     X0 = int(np.clip(cx - cw / 2, 0, frame_bgr.shape[1] - cw)); Y0 = int(np.clip(cy - ch / 2, 0, frame_bgr.shape[0] - ch))
     crop = cv2.resize(frame_bgr[Y0:Y0 + int(ch), X0:X0 + int(cw)], (1080, 1280), interpolation=cv2.INTER_LANCZOS4)
     canvas = np.zeros((TH, TW, 3), np.uint8); canvas[:] = INK[::-1]; canvas[:1280] = crop
-    im = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)); d = ImageDraw.Draw(im)
+    im, d = _over(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
     col = LIME if team == 0 else (120, 160, 255)
     d.rectangle((0, 1280, TW, 1294), fill=col)
     f = _fit(name.upper(), 230, 4, TW - 140); tracked(d, (70, 1350), name.upper(), f, WHITE, 4)
@@ -214,7 +247,7 @@ def player_card_tall(frame_bgr, box, name, team, sub=None):
 
 def tall_base(venue, pair_a, pair_b, score):
     """The standing frame of the vertical reel: ink, the two pairs and the score under the picture."""
-    im = Image.new('RGB', (TW, TH), INK); d = ImageDraw.Draw(im)
+    im, d = _sheet('RGB', (TW, TH), INK)
     d.rectangle((0, 0, TW, 10), fill=LIME)
     f = _fit(pair_a.upper(), 76, 3, TW - 160)
     tracked(d, (60, 1420), pair_a.upper(), f, LIME, 3); tracked(d, (60, 1512), 'VS', font(36, 'SemiBold'), (150, 156, 165), 6)

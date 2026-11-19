@@ -7,7 +7,10 @@ Environment: TRACKS (the folder of track_all.sh, default <workdir>), VERSUS (the
 <prefix>-wide.mp4 and <prefix>-tall.mp4), TALL=1 (the vertical reel), CACHE (the folder of the slow replays, so the
 second layout does not make them again), SRMIX (how much of the upscaled picture a replay takes, default 0.5),
 SHOTS (the folder of rally_shots.sh: a clip ends after the last shot, the counter leaves out what is not a shot),
-FAST=1 (the long rally at six times the speed; it is off, because it was not fun to watch).
+FAST=1 (the long rally at six times the speed; it is off, because it was not fun to watch),
+COUNTER=0 (a clip has no shot counter, and its sub-title has the time of the match without "N shots").
+For render.py and gfx.py: SCALE (2 gives a 3840x2160 reel; the cards are then drawn at that size) and HIRES (the
+folder of the 4K pieces of the match).
 """
 import sys, os, json, subprocess, numpy as np, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,6 +24,8 @@ S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath
 KF = f'{S}/match/kf'
 os.makedirs(work, exist_ok=True)
 TALL = os.environ.get('TALL') == '1'; TRACKS = os.environ.get('TRACKS', work)
+gfx.reel_scale()                                  # SCALE: the cards come out at the size of the reel. Every number in this file stays a design number.
+COUNTER = os.environ.get('COUNTER') != '0'        # COUNTER=0: no shot counter on a clip (render.py), and no "N shots" under its title
 segs = []
 import teams; teams.fill(MT)                                              # a team with no name gets one from its players
 TEAMS = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']]
@@ -171,7 +176,7 @@ for ci, c in enumerate(P['clips']):
         add({'kind': 'fast', 't0': c['fast_from'], 't1': c['t0'], 'speed': 6, 'title': c['title'], 'sub': sub, 'hits': hits}, f'fast{ci}')
         add({'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': None, 'sub': None, 'tags_until': 4.0, 'hits': hits}, f'point{ci}')
     else:
-        seg = {'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': c['title'], 'sub': sub, 'tags_until': 4.5, 'hits': hits}
+        seg = {'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': c['title'], 'sub': sub if COUNTER else mmss(c['lastHit']), 'tags_until': 4.5, 'hits': hits}
         # a person said who won this point (plan.py with WINNERS): the clip names the pair after the last shot
         if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS[c['won']], 'at': c['lastHit']}
         if SAYS: seg['says'] = [x for x in SAYS if x['t0'] < c['t1'] and x['t1'] > c['t0']]
