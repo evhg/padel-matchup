@@ -3,7 +3,9 @@
 Segments (JSON, one per call):
   {"kind": "card", "image": "x.jpg", "dur": 3.5}
   {"kind": "clip", "t0", "t1", "track": "clip.json", "names": [...], "team": [...], "title", "sub", "tags_until": 4.0}
-      optional "won": {"team": 0|1, "name": "Team X", "at": seconds of the video}: a person said who won the point, and the clip says it after the last shot
+      optional "won": {"team": 0|1, "name": "Team X", "at": seconds of the video}: who won the point, and the moment the
+          ball is dead (in the net, out, the second bounce). The line appears just after that moment, never before it.
+      optional "notes": [{"t0", "t1", "who": player, "value", "unit", "label"}]: a measured number over that player's head
   {"kind": "replay", "t0", "t1", "track": "clip.json", "focus": id or null, "zoom": 2.2, "speed": 0.5, "title"}
 usage: render.py <video> <segment.json> <out.mp4>
 Environment: TALL=1 (the vertical reel). SCALE (K: the output is K times as large; 2 gives 3840x2160). HIRES (a folder
@@ -174,10 +176,14 @@ elif seg['kind'] == 'clip':
     wb = None
     if seg.get('won'):
         # after the ball is dead, never before: the picture tells the end, the line only names it
-        wn = seg['won']; wb = Art(gfx.lower_third(wn['name'], 'wins the point', gfx.LIME if wn['team'] == 0 else (120, 160, 255)))
-        w_at = max(4.7, min(wn['at'] - t0 + 1.4, t1 - t0 - 1.8))
+        wn = seg['won']; wb = Art(gfx.lower_third(wn['name'], wn.get('what') or 'wins the point', gfx.LIME if wn['team'] == 0 else (120, 160, 255)))
+        # 'at' is the moment the ball is dead. The line once came 1.4 s after the last HIT, and at most 1.8 s before the
+        # end of the clip: it named the winner while a player was still running for the ball. reel_points.py now gives
+        # the dead moment and makes the clip long enough after it.
+        w_at = max(4.7, wn['at'] - t0 + 0.35)
     # "says": [{"t0", "t1" (seconds of the video), "who": player, "text"}]: a bubble over that player's head
     says = [dict(x, img=Art(gfx.speech(x['text'], seg['team'][x['who']]))) for x in seg.get('says', [])]; say_at = {}
+    says += [dict(x, img=Art(gfx.stat_bubble(x['value'], x.get('unit', ''), x.get('label'), seg['team'][x['who']]))) for x in seg.get('notes', [])]
     smooth = {}
     src = source(t0, t1)
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video])
@@ -218,7 +224,9 @@ elif seg['kind'] == 'clip':
             b = track_at(tr, n + off).get(q['who'])
             if b is not None:
                 tx, ty = pt(b[4], b[5]); old = say_at.get(id(q)); say_at[id(q)] = (tx, ty) if old is None else (0.8 * old[0] + 0.2 * tx, 0.8 * old[1] + 0.2 * ty)
-            if id(q) not in say_at: continue
+            # a measured number belongs to one body: when the tracker does not have that player, it is not shown
+            # (a bubble with a heart rate once stood over empty grass, and then over a player of the other pair)
+            if id(q) not in say_at or (b is None and 'value' in q): continue
             tx, ty = say_at[id(q)]; im = q['img']; a = min(ease((t0 + s - q['t0']) / 0.25), ease((q['t1'] + 0.3 - t0 - s) / 0.3))
             x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 28))
             put(fr, im, x, y, a)
@@ -352,7 +360,7 @@ elif seg['kind'] == 'replay':
         nf = m / steps; x0, y0 = (v / r for v in origin(centre(nf), r))
         fr = stage(fit(pic).copy(), frame=True)       # a thin lime frame marks the replay
         put(fr, bugimg, *BUG)
-        if rb: put(fr, rb, *right(rb))
+        if rb: put(fr, rb, *(BADGE_L if seg.get('badge_left') else right(rb)))      # "badge_left": the top right corner is kept free (scorebox.py)
         if tag is not None and tr:
             bx = track_at(tr, nf + off).get(seg.get('focus'))
             if bx is not None:
