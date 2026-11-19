@@ -6,9 +6,13 @@ An original design in Kicksmash colours: team A slides in from the left on lime,
 from the right on blue, the score sets, "GAME ON". Every sound is made here from numbers (no samples): whooshes, thumps,
 a boom, a short chord. The announcer's lines are spoken by an offline voice when one is installed (VOICE=0 turns it off).
 With times after the output name, it writes those frames as <out>.jpg and no video (to look before rendering).
+Environment: TALL=1 (the vertical reel). SCALE (K: the output is K times as large; 2 gives 3840x2160). KF4K (a folder of
+4K frames with the names of the sampled frames: a portrait whose frame is there is cut from it, so at SCALE=2 a face has
+the detail of the camera and is not an enlarged picture). Each run prints one line for each portrait that says where it
+came from.
 """
 import sys, os, json, subprocess, tempfile, numpy as np, cv2
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageFilter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gfx
 S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,13 +26,44 @@ names = [MT['names'][str(i)] for i in range(4)]; team = [MT['team'][str(i)] for 
 A = sorted([k for k in range(4) if team[k] == 0], key=lambda k: names[k]); B = sorted([k for k in range(4) if team[k] == 1], key=lambda k: names[k])
 import teams; teams.fill(MT)
 title_a = ('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a']; title_b = ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']
-def ital(size): return ImageFont.truetype(f'{S}/fonts/BarlowCondensed-ExtraBoldItalic.ttf', size)
+# The scale. Every position and size in this file is a design number: it belongs to the 1920x1080 picture (the vertical
+# reel: 1080x1920). SCALE=K makes the output K times as large. Only this block knows K: px() (a design number -> pixels
+# of the output), dw() and dh() (the design size of a picture that is drawn K times as large), sheet() and ital() (a
+# canvas and a font of gfx.py: the text and the plates are drawn sharp at the final size, and measured in design
+# numbers), and put() below (a picture at a design point). With K = 1 each of them does what the file did before.
+K = gfx.reel_scale()
+def px(v): return int(round(v * K))
+def dw(im): return im.width / K
+def dh(im): return im.height / K
+def sheet(size, mode='RGBA', colour=(0, 0, 0, 0)): return gfx._sheet(mode, size, colour)
+def ital(size): return gfx.font(size, 'ExtraBoldItalic')
 
 # ---- the portraits: the best face of each player, cut out of its background ----
+KF4K = os.environ.get('KF4K')
+def face_again(im, face, m):
+    """The face of a sampled frame, in a frame m times as large that the camera took up to a second before or after:
+    the player moved. -> the nearest face of about the same size around the old place (x, y, w, h, how far in faces,
+    how much to the camera), or None. The same detector as faces.py (YuNet, MIT licence), on the frame as stored."""
+    x, y, w, h = (v * m for v in face); cx, cy = x + w / 2, y + h / 2; R = 6 * max(w, h)
+    x0, y0 = int(max(0, cx - R)), int(max(0, cy - R)); cr = im[y0:int(cy + R), x0:int(cx + R)]
+    det = cv2.FaceDetectorYN.create(f'{S}/models/yunet.onnx', '', (cr.shape[1], cr.shape[0]), 0.6, 0.3, 50)
+    best = None; found = det.detect(cr)[1]
+    for f in ([] if found is None else found):
+        d = float(np.hypot(x0 + f[0] + f[2] / 2 - cx, y0 + f[1] + f[3] / 2 - cy)) / max(w, h)
+        if 0.5 <= f[2] / w <= 2 and d <= 3 and (best is None or d < best[4]): best = (x0 + float(f[0]), y0 + float(f[1]), float(f[2]), float(f[3]), d, float(abs(f[4] - f[6]) / f[2]))
+    return best
 def portrait(k, height):
+    """-> the portrait of player k, px(height) high, and the design place of the face inside it."""
     c = [o for o in FACES[str(k)] if o['sharp'] >= 220] or FACES[str(k)]
     o = max(c, key=lambda o: o['face'][2] ** 1.5 * min(o['sharp'], 450) * o['eyes'] ** 2)
-    im = cv2.imread(f"{frames}/{o['f']}"); x, y, w, h = o['face']; cx = x + w / 2; r = max(w, h)
+    im = cv2.imread(f"{frames}/{o['f']}"); x, y, w, h = o['face']; said = f"sampled frame {o['f']}"
+    if KF4K and os.path.exists(f"{KF4K}/{o['f']}"):      # the same name, not the same moment: find the player again
+        big = cv2.imread(f"{KF4K}/{o['f']}"); f = face_again(big, o['face'], big.shape[1] / im.shape[1])
+        if f is None: said += ' (the 4K frame has no face near the old place)'
+        else:
+            im = big; x, y, w, h = f[:4]; said = f"4K frame {KF4K}/{o['f']}, the face {f[4]:.1f} faces from its old place"
+            if f[5] < 0.6 * o['eyes']: said += f", and turned away more (eyes {f[5]:.2f} of the face width; sampled frame: {o['eyes']:.2f})"
+    cx = x + w / 2; r = max(w, h)
     if os.environ.get('HDR'):      # the frames of an HDR video are stored as read
         import hdr; im = hdr.sdr(im, os.environ['HDR'])
     x0, x1 = int(max(0, cx - 2.1 * r)), int(min(im.shape[1], cx + 2.1 * r)); y0, y1 = int(max(0, y - 1.1 * r)), int(min(im.shape[0], y + 3.9 * r))
@@ -39,7 +74,10 @@ def portrait(k, height):
     except NameError:
         # CUTOUT names the model that cuts the person out. The first one (u2net_human_seg) keeps a fence or a net
         # behind the player; birefnet-general-lite (MIT licence, about 7 seconds a portrait) does not.
-        os.environ.setdefault('U2NET_HOME', f'{S}/models/u2net'); _ses = new_session(os.environ.get('CUTOUT', 'u2net_human_seg'))
+        # Without the memory arena of the runtime: with it the process kept 12 GB from the second portrait to the end
+        # (and the kernel killed it); without it, 7 GB while one portrait is cut and under 1 GB after. The mask is the same.
+        import onnxruntime; so = onnxruntime.SessionOptions(); so.enable_cpu_mem_arena = False
+        os.environ.setdefault('U2NET_HOME', f'{S}/models/u2net'); _ses = new_session(os.environ.get('CUTOUT', 'u2net_human_seg'), sess_opts=so)
     if os.environ.get('GRADE'):      # under the lamps of a hall a face is pale and blue: a little warmer
         cr = np.clip(cr.astype(np.float32) * np.array([0.93, 1.0, 1.06], np.float32), 0, 255).astype(np.uint8)
     rgba = np.array(remove(cv2.cvtColor(cr, cv2.COLOR_BGR2RGB), session=_ses, post_process_mask=os.environ.get('CUTOUT', 'u2net_human_seg').startswith('u2net')))
@@ -49,27 +87,28 @@ def portrait(k, height):
     # the cut at the chest fades out, so no hard edge shows
     fade = np.ones(rgba.shape[0], np.float32); n = int(rgba.shape[0] * 0.14); fade[-n:] = np.linspace(1, 0, n) ** 0.7
     rgba[:, :, 3] = (rgba[:, :, 3] * fade[:, None]).astype(np.uint8)
-    p = Image.fromarray(rgba).resize((int(rgba.shape[1] * height / rgba.shape[0]), height), Image.LANCZOS)
-    rgb = p.convert('RGB').filter(ImageFilter.UnsharpMask(radius=2.2, percent=70, threshold=2))      # real pixels, a little crisper; no invented detail
+    print(f"portrait {k} {names[k]}: {said}; face {w:.0f} pixels wide, cut {rgba.shape[1]}x{rgba.shape[0]} -> {px(height)} high ({px(height) / rgba.shape[0]:.2f} times)")
+    p = Image.fromarray(rgba).resize((int(rgba.shape[1] * height * K / rgba.shape[0]), px(height)), Image.LANCZOS)
+    rgb = p.convert('RGB').filter(ImageFilter.UnsharpMask(radius=2.2 * K, percent=70, threshold=2))      # real pixels, a little crisper; no invented detail
     p = Image.merge('RGBA', (*rgb.split(), p.split()[3]))
     # the face's place inside the portrait, so two portraits can stand with their heads level
     return p, ((cx - x0) * height / rgba.shape[0], (y + h / 2 - y0) * height / rgba.shape[0])
 
 def put(canvas, img, x, y):
-    """alpha_composite that also takes a place partly outside the canvas."""
-    x, y = int(round(x)), int(round(y)); cx0, cy0 = max(0, x), max(0, y); cx1, cy1 = min(canvas.width, x + img.width), min(canvas.height, y + img.height)
+    """alpha_composite at the design point (x, y) that also takes a place partly outside the canvas."""
+    x, y = px(x), px(y); cx0, cy0 = max(0, x), max(0, y); cx1, cy1 = min(canvas.width, x + img.width), min(canvas.height, y + img.height)
     if cx1 <= cx0 or cy1 <= cy0: return
     canvas.alpha_composite(img.crop((cx0 - x, cy0 - y, cx1 - x, cy1 - y)), (cx0, cy0))
 def tint(img, colour):
     a = img.split()[3]; s = Image.new('RGBA', img.size, colour + (255,)); s.putalpha(a); return s
 def plate(text, bg, fg, size, pad=26, skew=16):
     f = ital(size); tw = int(f.getlength(text)); h = int(size * 1.18)
-    im = Image.new('RGBA', (tw + 2 * pad + skew, h), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = sheet((tw + 2 * pad + skew, h))
     d.polygon([(skew, 0), (tw + 2 * pad + skew, 0), (tw + 2 * pad, h), (0, h)], fill=bg + (255,))
     d.text((pad + skew // 2, -int(size * 0.06)), text, font=f, fill=fg + (255,)); return im
 def words(text, size, fill, shadow=None, off=8):
     f = ital(size); tw = int(f.getlength(text)); h = int(size * 1.2)
-    im = Image.new('RGBA', (tw + 40, h + 20), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = sheet((tw + 40, h + 20))
     if shadow: d.text((10 + off, off), text, font=f, fill=shadow + (255,))
     d.text((10, 0), text, font=f, fill=fill + (255,)); return im
 def fit_words(text, size, maxw, fill, shadow=None):
@@ -92,11 +131,11 @@ else:
     PANEL_A = [(0, 0), (1030, 0), (870, H), (0, H)]; PANEL_B = [(1050, 0), (W, 0), (W, H), (890, H)]
 P = {k: portrait(k, PH) for k in range(4)}
 def panel(poly, colour, phase):
-    im = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    im, d = sheet((W, H))
     base = tuple(int(INK[i] * 0.72 + colour[i] * 0.28) for i in range(3)); d.polygon(poly, fill=base + (255,))
-    st = Image.new('RGBA', (W, H), (0, 0, 0, 0)); ds = ImageDraw.Draw(st)
+    st, ds = sheet((W, H))
     for x in range(-H, W + H, 90): ds.polygon([(x + phase, 0), (x + 34 + phase, 0), (x + 34 - H * 0.3 + phase, H), (x - H * 0.3 + phase, H)], fill=colour + (26,))
-    mask = Image.new('L', (W, H), 0); ImageDraw.Draw(mask).polygon(poly, fill=255); im.paste(st, (0, 0), Image.composite(st.split()[3], Image.new('L', (W, H), 0), mask))
+    mask, dm = sheet((W, H), 'L', 0); dm.polygon(poly, fill=255); im.paste(st, (0, 0), Image.composite(st.split()[3], Image.new('L', im.size, 0), mask))
     return im
 VS_IMG = words('VS', VS_SIZE, WHITE, INK, off=VS_SIZE // 16)
 GO = plate('GAME ON', LIME, INK, 190 if not TALL else 112, pad=44 if not TALL else 30, skew=30)
@@ -111,7 +150,7 @@ PLATE = {k: names[k].strip().lower() not in ('', str(MT.get('team_a', '')).lower
 # when things happen (seconds)
 T_IN = {A[0]: 0.30, A[1]: 0.52, B[0]: 2.70, B[1]: 2.92}; T_VS = 2.0; T_SCORE = 4.35; T_GO = 5.05
 def frame(t):
-    c = Image.new('RGBA', (W, H), INK + (255,))
+    c = sheet((W, H), colour=INK + (255,))[0]
     ka = e_out((t - 0.15) / 0.35); kb = e_out((t - 2.55) / 0.35)
     shake = (0, 0)
     for t0, amp in ((T_VS, 16), (T_GO, 10)):
@@ -128,31 +167,31 @@ def frame(t):
         n = e_back((t - T_IN[k] - 0.22) / 0.2)
         if t >= T_IN[k] + 0.22 and PLATE[k]:
             pl = NAME[k]; s = 1.6 - 0.6 * n; q = pl.resize((int(pl.width * s), int(pl.height * s)), Image.BILINEAR) if s != 1 else pl
-            put(c, q, SLOT[k][0] - q.width / 2 + shake[0], SLOT[k][1] - 8 - (q.height - pl.height) / 2 + shake[1])
+            put(c, q, SLOT[k][0] - dw(q) / 2 + shake[0], SLOT[k][1] - 8 - (dh(q) - dh(pl)) / 2 + shake[1])
     for (x, y, al), img, t0 in ((TITLE_A, T_A, 0.75), (TITLE_B, T_B, 3.15)):
         k = e_out((t - t0) / 0.3)
         if k > 0:
             im2 = img.copy(); im2.putalpha(im2.split()[3].point(lambda v: int(v * k)))
-            put(c, im2, (x if al == 'l' else x - img.width) + (-60 if al == 'l' else 60) * (1 - k), y)
+            put(c, im2, (x if al == 'l' else x - dw(img)) + (-60 if al == 'l' else 60) * (1 - k), y)
     if t >= T_VS and t < T_GO + 0.1:
         k = min(1.0, (t - T_VS) / 0.16); s = 3.4 - 2.4 * k if k < 1 else 1 + 0.06 * np.exp(-(t - T_VS - 0.16) * 9) * np.cos((t - T_VS) * 30)
         v = VS_IMG.resize((int(VS_IMG.width * s), int(VS_IMG.height * s)), Image.BILINEAR)
         if t > T_GO: v.putalpha(v.split()[3].point(lambda a: int(a * max(0, 1 - (t - T_GO) / 0.1))))
-        put(c, v, VS_AT[0] - v.width / 2 + shake[0], VS_AT[1] - v.height / 2 + shake[1])
+        put(c, v, VS_AT[0] - dw(v) / 2 + shake[0], VS_AT[1] - dh(v) / 2 + shake[1])
     k = e_out((t - T_SCORE) / 0.3)
     if k > 0:
-        s2 = SC.crop((0, 0, max(2, int(SC.width * k)), SC.height)); put(c, s2, W / 2 - SC.width / 2, SCORE_Y - SC.height / 2)
-        m = META.copy(); m.putalpha(m.split()[3].point(lambda v: int(v * e_out((t - T_SCORE - 0.25) / 0.3)))); put(c, m, W / 2 - META.width / 2, SCORE_Y + SC.height / 2 + 10)
+        s2 = SC.crop((0, 0, max(2, int(SC.width * k)), SC.height)); put(c, s2, W / 2 - dw(SC) / 2, SCORE_Y - dh(SC) / 2)
+        m = META.copy(); m.putalpha(m.split()[3].point(lambda v: int(v * e_out((t - T_SCORE - 0.25) / 0.3)))); put(c, m, W / 2 - dw(META) / 2, SCORE_Y + dh(SC) / 2 + 10)
     if t >= T_GO:
         k = min(1.0, (t - T_GO) / 0.14); s = 2.6 - 1.6 * k
-        g = GO.resize((int(GO.width * s), int(GO.height * s)), Image.BILINEAR); put(c, g, GO_AT[0] - g.width / 2 + shake[0], GO_AT[1] - g.height / 2 + shake[1])
+        g = GO.resize((int(GO.width * s), int(GO.height * s)), Image.BILINEAR); put(c, g, GO_AT[0] - dw(g) / 2 + shake[0], GO_AT[1] - dh(g) / 2 + shake[1])
     a = np.array(c.convert('RGB'))[:, :, ::-1].astype(np.float32)
     for t0, peak, d in ((T_VS, 0.85, 0.28), (T_GO, 0.6, 0.22), (DUR - 0.12, 1.0, 0.12)):          # white flashes; the last one is the cut to the first point
         if t0 <= t < t0 + d: a += (255 - a) * peak * ((1 - (t - t0) / d) if t0 < DUR - 0.2 else (t - t0) / d)
     return np.clip(a, 0, 255).astype(np.uint8)
 
 if stills:
-    cv2.imwrite(out, (np.hstack if TALL else np.vstack)([cv2.resize(frame(t), (W // 2, H // 2)) for t in stills]), [cv2.IMWRITE_JPEG_QUALITY, 88]); sys.exit(0)
+    cv2.imwrite(out, (np.hstack if TALL else np.vstack)([cv2.resize(frame(t), (px(W) // 2, px(H) // 2)) for t in stills]), [cv2.IMWRITE_JPEG_QUALITY, 88]); sys.exit(0)
 
 # ---- the sound, made from numbers ----
 SR = 48000; N = int(DUR * SR); rng = np.random.default_rng(5); mix = np.zeros(N)
@@ -229,7 +268,7 @@ mix = np.tanh(mix * 0.9); mix = mix / np.abs(mix).max() * 0.4                 # 
 mix[-int(0.05 * SR):] *= np.linspace(1, 0, int(0.05 * SR))
 wav = out + '.f32'; np.stack([mix, mix], 1).astype(np.float32).tofile(wav)
 
-enc = subprocess.Popen(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{W}x{H}', '-r', '30000/1001', '-i', '-',
+enc = subprocess.Popen(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', f'{px(W)}x{px(H)}', '-r', '30000/1001', '-i', '-',
                         '-f', 'f32le', '-ar', '48000', '-ac', '2', '-i', wav, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-pix_fmt', 'yuv420p',
                         '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-ac', '2', '-shortest', '-movflags', '+faststart', out], stdin=subprocess.PIPE)
 n = int(round(DUR * FPS))

@@ -359,5 +359,20 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   constant, and the transcripts of those minutes held the calls.
 - **A long job writes its result before it can fail.** A recogniser ran 15 minutes over the full sound and
   ended on the last piece, past the end of the file, with nothing saved. It stops at the end now.
+- **A sampled frame is half a second later than its listed time.** `kf_times.txt` lists whole seconds; the
+  picture of frame N is the one 0.47 s after that (found by matching a frame against the working video:
+  41 dB at +0.47 s, 28 dB beside it). It did not matter at one frame a second. It mattered when the opening
+  needed the same moment from the camera file: the nearest key frame was up to a second away, and two
+  approved portraits came out as a player who looks at the floor.
+- **The opening in 4K** (`versus.py`: `SCALE`, and `KF4K` for a folder of camera frames with the names of the
+  chosen frames). The cut-out model held 12 GB with the memory arena of its runtime and the kernel ended two
+  runs; without the arena the peak is 6.7 GB and the masks are the same.
+- **A number on the screen is a measured number** (`"meter"` in `reel_points.py`, the box where the counter
+  was). The first one is a heart rate from a player's watch: one mean value a minute, put on the clock of the
+  video through the clock on the wall, and read off the line between two minutes. One value a minute is what
+  the box shows; it is not a beat-by-beat reading, and the card at the end says "highest minute".
+- **A line call is a part of the reel** (`review.py`): the shot, then the last 0.2 s at one eighth of the
+  speed and closer, then the landing picture held with a verdict a person wrote. Nothing is drawn over the
+  ball or the line.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
