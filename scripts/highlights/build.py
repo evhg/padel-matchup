@@ -50,6 +50,8 @@ def track_of(c):
     trf = c.get('track_file') or f"{TRACKS}/t{c['track_key'][0]:.2f}-{c['track_key'][1]:.2f}.json"
     return (trf, json.load(open(trf))) if os.path.exists(trf) else (None, None)
 # The checked shots of each rally (rally_shots.sh): which sounds are shots, who hit them, where the rally ends.
+# SAYS: a file with what players said, [{"t0", "t1" (seconds of the video), "who": player, "text"}], drawn as bubbles
+SAYS = json.load(open(os.environ['SAYS'])) if os.environ.get('SAYS') else []
 SHOTS = os.environ.get('SHOTS'); AFTER = 3.4      # a clip ends this long after the last shot of the rally
 FAST = os.environ.get('FAST') == '1'              # the long rally at six times the speed. Off: the owner, 17 November 2026: "not fun to watch, remove it"
 def shots_of(c):
@@ -59,6 +61,38 @@ def shots_of(c):
         r0, r1 = [float(x) for x in os.path.basename(f)[1:-11].split('-')]
         if r0 <= c['lastHit'] <= r1: return json.load(open(f)), f[:-11] + '.json'
     return None, None
+def by_turn(real, lo=0.45, hi=3.0):
+    """The shots of one rally, counted by the turn of the teams and not by every sound.
+
+    The two teams hit in turn. The camera is sure of some shots and of their end (near, far). Between two sure shots
+    at opposite ends the number of shots is even; at the same end it is odd; and each gap between two shots is
+    between 0.45 and 3 seconds. The sounds between two sure shots are kept only as far as that allows: a sound too
+    many is a ball of the next court, and the one with the least arm movement on this court goes. A shot too few
+    (a soft shot that the phone did not hear) is put in the middle of the longest gap.
+    Before the first sure shot and after the last one there is nothing to hold on to, and the sounds stay."""
+    anchors = [i for i, x in enumerate(real) if x.get('sure') and x.get('label') in ('near', 'far')]
+    # two sure shots at one end under 0.9 seconds apart cannot both be shots (the other team had no time): the
+    # second one was an arm that moved for another reason
+    keep = []
+    for i in anchors:
+        if keep and real[keep[-1]]['label'] == real[i]['label'] and real[i]['t'] - real[keep[-1]]['t'] < 2 * lo: continue
+        keep.append(i)
+    gone = set(anchors) - set(keep); real = [x for i, x in enumerate(real) if i not in gone]
+    anchors = [i for i, x in enumerate(real) if x.get('sure') and x.get('label') in ('near', 'far')]
+    if len(anchors) < 2: return real
+    arm = lambda x: max([v.get('arm') or 0 for v in (x.get('per') or {}).values()] or [0])
+    out = list(real[:anchors[0]])
+    for a, b in zip(anchors, anchors[1:]):
+        A, B = real[a], real[b]; mid = list(real[a + 1:b]); span = B['t'] - A['t']
+        odd = A['label'] == B['label']
+        ok = [k for k in range(0, 40) if (k % 2 == 1) == odd and (k + 1) * lo <= span <= (k + 1) * hi]
+        k = min(ok, key=lambda k: (abs(k - len(mid)), k)) if ok else len(mid)
+        while len(mid) > k: mid.remove(min(mid, key=arm))
+        while len(mid) < k:
+            ts = [A['t']] + [x['t'] for x in mid] + [B['t']]; g = max(range(len(ts) - 1), key=lambda i: ts[i + 1] - ts[i])
+            mid.insert(g, {'t': round((ts[g] + ts[g + 1]) / 2, 2), 'label': 'shot', 'who': None, 'sure': False, 'per': {}, 'by_turn': True})
+        out += [A] + mid
+    return out + list(real[anchors[-1]:])
 for c in P['clips']:
     c['track_key'] = (c['t0'], c['t1']); c['track_file'] = None; sh, trk = shots_of(c); c['shots'] = None
     if not sh: continue
@@ -68,6 +102,11 @@ for c in P['clips']:
     # four sounds after it were the ball on the glass, a racket tap, the ball sent back and the next server).
     for a, b in sh['quiet']:
         if end - 12.0 <= a < end:
+            # ... unless the camera is sure of two shots after that moment, at most 2 seconds apart: then the tracker
+            # lost the ball (the far end, a small picture) and the rally went on (second match, 48:58). One sure
+            # "shot" alone can be an arm that picks up a ball or shakes a hand (the last point of the same match).
+            later = [x['t'] for x in sh['sounds'] if x.get('sure') and a + 0.8 < x['t'] <= end]
+            if any(t2 - t1 <= 2.0 for t1, t2 in zip(later, later[1:])): continue
             before = [h for h in hits if h <= a + 0.8]
             if len(before) >= 3 and len(hits) - len(before) <= 4: end = before[-1]; c['cut_by_ball'] = True; break
     real = []; last = -9.0
@@ -85,6 +124,7 @@ for c in P['clips']:
         if len(stops) >= 2:
             real = [x for x in real if x['t'] >= max(stops) - 0.3]; c['joined'] = True; c.pop('marathon', None)
             if c.get('title') == 'The marathon': c['title'] = 'Great rally'
+    c['sounds_counted'] = len(real); real = by_turn(real)
     if len(real) < 3: continue
     c['shots'] = real; c['hitTimes'] = [x['t'] for x in real]; c['hits'] = len(real); c['lastHit'] = end
     c['track_file'] = trk                     # the players were followed through the whole rally
@@ -93,7 +133,7 @@ for c in P['clips']:
     c['t1'] = round(min(c['t1'], r1 - 0.2, end + (4.5 if c.get('cut_by_ball') else 6.5)), 2)
     if c.get('marathon') and FAST: c['t0'] = round(end - 9.0, 2); c['fast_from'] = round(max(r0 + 0.1, real[0]['t'] - 1.5), 2)
     else: c['t0'] = round(max(r0 + 0.1, end - pre, real[0]['t'] - 2.5), 2)
-    print(f"point at {mmss(end)}: {len(hits)} sounds, {len(real)} counted, end {'moved to ' + mmss(end) if c.get('cut_by_ball') else 'as before'}, clip {c['t0']}-{c['t1']}")
+    print(f"point at {mmss(end)}: {len(hits)} sounds, {c['sounds_counted']} of this ball, {len(real)} shots by the turn of the teams ({sum(1 for x in real if x.get('sure'))} seen), end {'moved to ' + mmss(end) if c.get('cut_by_ball') else 'as before'}, clip {c['t0']}-{c['t1']}")
 cand = {k: [] for k in range(4)}
 for ci, c in enumerate(P['clips']):
     trf, tr = track_of(c)
@@ -133,6 +173,7 @@ for ci, c in enumerate(P['clips']):
         seg = {'kind': 'clip', 't0': c['t0'], 't1': c['t1'], 'track': trf, 'names': shown, 'team': team, 'title': c['title'], 'sub': sub, 'tags_until': 4.5, 'hits': hits}
         # a person said who won this point (plan.py with WINNERS): the clip names the pair after the last shot
         if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS[c['won']], 'at': c['lastHit']}
+        if SAYS: seg['says'] = [x for x in SAYS if x['t0'] < c['t1'] and x['t1'] > c['t0']]
         add(seg, f'point{ci}')
     if ci in replay_at:
         k, h, hi = replay_at[ci]; p = tr['players'][str(k)]

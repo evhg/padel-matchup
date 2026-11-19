@@ -36,8 +36,12 @@ def portrait(k, height):
     global _ses
     try: _ses
     except NameError:
-        os.environ.setdefault('U2NET_HOME', f'{S}/models/u2net'); _ses = new_session('u2net_human_seg')
-    rgba = np.array(remove(cv2.cvtColor(cr, cv2.COLOR_BGR2RGB), session=_ses, post_process_mask=True))
+        # CUTOUT names the model that cuts the person out. The first one (u2net_human_seg) keeps a fence or a net
+        # behind the player; birefnet-general-lite (MIT licence, about 7 seconds a portrait) does not.
+        os.environ.setdefault('U2NET_HOME', f'{S}/models/u2net'); _ses = new_session(os.environ.get('CUTOUT', 'u2net_human_seg'))
+    if os.environ.get('GRADE'):      # under the lamps of a hall a face is pale and blue: a little warmer
+        cr = np.clip(cr.astype(np.float32) * np.array([0.93, 1.0, 1.06], np.float32), 0, 255).astype(np.uint8)
+    rgba = np.array(remove(cv2.cvtColor(cr, cv2.COLOR_BGR2RGB), session=_ses, post_process_mask=os.environ.get('CUTOUT', 'u2net_human_seg').startswith('u2net')))
     # only the person: a loose hand of somebody else, or a piece of a racket, goes
     al = (rgba[:, :, 3] > 100).astype(np.uint8); nlab, lab, stats, _ = cv2.connectedComponentsWithStats(al, 8)
     if nlab > 2: rgba[:, :, 3] = np.where(lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA])), rgba[:, :, 3], 0)
