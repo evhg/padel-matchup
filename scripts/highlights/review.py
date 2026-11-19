@@ -6,7 +6,8 @@ review.json: {"from": s, "land": s,          the first moment to show, and the p
               "x": px, "y": px,               the landing place in the picture of the piece
               "title": "Line call", "sub": "64:42",
               "verdict": "Too close to call", "verdict_sub": "Ball and line: about 1 cm apart",
-              "close": 3}                      optional: how many times closer the slow part is
+              "close": 3,                      optional: how many times closer the slow part is
+              "after": 0.7}                    optional: how long the full picture runs on after the landing
 All times are on the clock of the whole match video; <piece start s> is where the piece begins on that clock
 (index.json of modal/cut.py).
 
@@ -15,9 +16,11 @@ of them better than any player could: at 60 pictures a second the landing is one
 24 pixels wide beside a line of 25. The review shows exactly those pictures: no drawn line, no drawn ball.
 The verdict is a sentence a person wrote after measuring; this script measures nothing.
 
-Three parts: the full picture at normal speed until just before the landing; the last 0.2 s at one eighth of the
-speed, three times closer ("close"); the landing picture held for 2.2 s with the verdict. The sound of the first part is the
-reel's sound; the rest is silent.
+Three parts: the full picture at normal speed until 0.7 s after the landing ("after"); then the last 0.2 s before
+the landing again, at one eighth of the speed, three times closer ("close"); the landing picture held for 2.2 s with
+the verdict. The sound of the first part is the reel's sound; the rest is silent.
+The first version cut to the close part just before the landing. The owner (19 November 2026): the full view stops
+before the ball has bounced. A viewer must first see the whole serve land at normal speed, and only then the detail.
 Environment: SCALE (2 for a 4K reel), GRADE (hdr.py).
 """
 import sys, os, json, subprocess, cv2
@@ -45,7 +48,7 @@ def png(name, img):
 
 
 PW, PH = size(piece)
-a, land = R['from'], R['land']; d1 = round(land - BEFORE - a, 3); d2 = BEFORE + 0.02; slow_len = round(d2 * SLOW, 3); total = round(d1 + slow_len + HOLD, 3)
+a, land = R['from'], R['land']; d1 = round(land + float(R.get('after', 0.7)) - a, 3); d2 = BEFORE + 0.02; slow_len = round(d2 * SLOW, 3); total = round(d1 + slow_len + HOLD, 3)
 bug = png('bug', gfx.bug(MT.get('venue') or '')); badge = png('badge', gfx.badge('Review'))
 lt1 = png('lt1', gfx.lower_third(R.get('title', 'Line call'), R.get('sub'))); lt2 = png('lt2', gfx.lower_third(R['verdict'], R.get('verdict_sub')))
 bw = cv2.imread(badge, cv2.IMREAD_UNCHANGED).shape[1]

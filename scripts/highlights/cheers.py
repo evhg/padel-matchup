@@ -8,8 +8,9 @@ The owner asked for that sound (19 November 2026) with two rules:
 - each point gets a different cheer ("cheer": "<file>" in a point of points.json; a file is used once);
 - a cheer never sounds at the same time as a player who shouts or celebrates.
 
-So a cheer starts at the first moment after the last shot when no voice is heard for 1.5 seconds, inside the
-clip of the point or at its end. If a voice comes back while the cheer runs, the cheer goes down by 12 dB for as
+So a cheer starts at the first moment after the point is decided ("dead_t"; without it, the last shot) when no
+voice is heard for 1.5 seconds, inside the clip of the point or at its end. A smash that flies out is not cheered
+while it is in the air. If a voice comes back while the cheer runs, the cheer goes down by 12 dB for as
 long as the voice lasts. A voice is 150 ms or more of sound in the speech band, 6 dB over the level of the rally:
 a racket hit is shorter than that.
 
@@ -47,7 +48,7 @@ for i, c in enumerate(P):
     if not c.get('cheer') or i not in clips: continue
     if c['cheer'] in used: sys.exit(f"cheer {c['cheer']} is used twice: each point needs its own")
     used.add(c['cheer'])
-    a, ln, d = clips[i]; last = a + (c['last_t'] - d['t0']); end = a + ln
+    a, ln, d = clips[i]; last = a + ((c.get('dead_t') or c['last_t']) - d['t0']); end = a + ln      # the crowd answers the end of the point, not the last hit
     f0, f1, fe = int(a * 20), int(last * 20), int(end * 20)
     thr = float(np.median(lev[f0:max(f0 + 1, f1)])) + 6.0
     loud = lev > thr
@@ -73,5 +74,5 @@ import soundfile as sf
 sf.write(tmp, x, SR, subtype='PCM_24')
 subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', reel, '-i', tmp, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart', out], check=True)
 os.remove(tmp)
-for r in report: print('point %d  %s  last shot %.2f s  cheer from %.2f s (%.2f s after)  %.1f s long  voice under it %d ms' % r)
+for r in report: print('point %d  %s  decided %.2f s  cheer from %.2f s (%.2f s after)  %.1f s long  voice under it %d ms' % r)
 print('CHEERS_DONE', len(report))

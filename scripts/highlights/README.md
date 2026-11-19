@@ -38,7 +38,11 @@ a frame or a `match.json`.
 
 `serve.py` finds the serving pair, the server and the side of each point. `score_decode.py` is the rules
 engine: the most probable score history for weak guesses of who won each point, and a simulation of how much
-the rules repair.
+the rules repair. `score_log.py` turns a log of every point into the score before and after each point and
+checks it against the rules and the final score; `scorebox.py` draws that score on a finished reel.
+`reel_points.py` builds a reel from points that are already described (serve, dead moment, winner, reaction,
+replay, heard words, a measured number over a head); `review.py` makes a line-call review; `cheers.py` adds the
+sound of an audience.
 `cand_points.py` lists the best points and makes a sheet of frames of each end, for a person to say who won.
 `label_page.py` makes one page from those clips: a tap for the pair that won each point, and one line to copy.
 `winners.py` turns that line into `winners.json` for `plan.py`.
@@ -125,8 +129,10 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - The shot counter is an estimate. With `SHOTS` it leaves out the sounds that are proven not to be shots
   of this ball; a bounce can still count. No rally has a count that a person made to compare with. A video
   at 60 frames a second is the next test.
-- The score is not found. Nothing here says who won a point. `serve.py` gives the serving pair for the
-  points served from the camera end; `score_decode.py` is ready for a detector that does not exist yet.
+- The score is not proven for a whole match. `score_log.py` checks a log of every point against the rules
+  and the final score, and `scorebox.py` draws the result, but the only log so far covers 106 of about 170
+  points and its last set does not agree with the typed score (see the lessons). No detector writes the log
+  yet: a model that reads frames did, at a cost that is too high for every match.
 - The picture is not 4K and the slow motion is not true 60 frames a second. An upscale of a whole frame is
   28 seconds here, and a frame in between is a guess: a racket at full speed stays a blur.
 - No music, and no "funny moments" part: the laugh measure found nothing strong in this match.
@@ -374,5 +380,40 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **A line call is a part of the reel** (`review.py`): the shot, then the last 0.2 s at one eighth of the
   speed and closer, then the landing picture held with a verdict a person wrote. Nothing is drawn over the
   ball or the line.
+- **The winner line belongs to the moment the ball is dead, not to the last hit.** The fifth reel said "wins the
+  point" while a rally went on for five more seconds, and once before a player had tried his return. The cause
+  was two things together: the time came from the last hit that a reader of frames had found, and the renderer
+  moved the line forward so that it fitted before the end of the clip. `reel_points.py` now takes `dead_t` (the
+  ball in the net, out, the second bounce), shows the line 0.35 s after it, and makes the clip run 2.6 s past it.
+  One winner was wrong too: a smash that hit the far glass before a bounce is out, and it was read as a winner.
+- **A close look at the far end is a blur.** The camera has about 300 pixels for a player at the far end. A
+  window is never narrower than half the picture (`ZMAX`), and a reaction or a replay is taken at the near end
+  where there is one. A point whose only reaction is at the far end shows it in the wide picture.
+- **A replay starts when the tracker has its player.** A player who walked into the picture late gave a replay
+  two seconds of empty grass: the window waited where the player would be found. Now the replay starts there, and
+  with less than 1.2 s left there is no replay. A measured number over a head (`"notes"`) obeys the same rule:
+  without the player in the track it is not drawn.
+- **A line-call review first shows the whole serve land** (`review.py`, `"after"`): the full picture runs 0.7 s
+  past the landing, and only then comes the slow close part. The first version cut away before the bounce.
+- **The score is added last, from a log that the rules have checked** (`score_log.py`, `scorebox.py`). A log has
+  every point with its server, its side and its winner. The rules check it: a new server is a new game, the side
+  of a serve says how many points the game has had, a game ends at four points and two clear (or at a golden
+  point), and the sets must come out as the final score that a player typed. `scorebox.py` draws nothing when
+  that check fails, when a point of the reel is not in the log, or when the reel and the log name different
+  winners. The box is an overlay on the finished reel, so a score that is proven later costs no new render.
+- **The first point log did not prove the score, and the check said where.** Six readers of frames (a model
+  that looks at sheets of frames and listens to the two recorders, one reader for each sixth of the match)
+  wrote the log of the second match. A usage limit stopped five of them: 106 points of about 170 were logged.
+  What the 106 points showed:
+  - One set was complete: 8 games, 47 points, every game with the right serve sides, and the games came out as
+    the typed 6-2. A score that a recorder heard in that set ("three-two") agreed with the log at that moment.
+  - The last set as logged was 4 games to 2 and one more point, against a typed 6-0. Either two games were
+    read wrongly or the typed score is not what was played. `score_log.py` refused, so the reel has no box.
+  - The players used advantage in one set and a deciding point at 40-40 in the next. `score_log.py` tries
+    both rules for each game.
+  - A reader corrected the reel twice: a point that the reel gave to the server of the wrong end, and a high
+    ball that landed 1.9 s later than a person had measured on frames (the ball was above the picture crop).
+    A time that only one reading supports is not yet a fact.
+  A reader logs about 20 points an hour of its own time, and all six together log a match in about 100 minutes.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

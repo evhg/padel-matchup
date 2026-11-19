@@ -29,6 +29,7 @@ class _Pen:
     def rectangle(self, box, fill=None): self.d.rectangle(self._box(box), fill=fill)
     def rounded_rectangle(self, box, radius, fill=None, outline=None, width=1): self.d.rounded_rectangle(self._box(box), radius * K, fill=fill, outline=outline, width=int(round(width * K)))
     def polygon(self, pts, fill=None): self.d.polygon([(x * K, y * K) for x, y in pts], fill=fill)
+    def ellipse(self, box, fill=None): self.d.ellipse(self._box(box), fill=fill)
     def text(self, xy, s, font=None, fill=None): self.d.text((xy[0] * K, xy[1] * K), s, font=font.real, fill=fill)
 def _pen(im): return ImageDraw.Draw(im) if K == 1 else _Pen(im)
 def _sheet(mode, size, colour):
@@ -187,6 +188,77 @@ def counter(n, final=False, pop=0.0, label='SHOTS'):
     tracked(d, ((w - wl) / 2, 100), lab, f2, (INK if final else LIME) + (255,), 4)
     return rgba_to_bgra(im)
 
+RED = (235, 64, 82)
+def _heart(d, x, y, s, fill):
+    """A heart of width s with its top left corner at (x, y): two discs and a point."""
+    r = s / 4
+    d.ellipse((x, y, x + 2 * r, y + 2 * r), fill=fill); d.ellipse((x + 2 * r, y, x + 4 * r, y + 2 * r), fill=fill)
+    d.polygon([(x + 0.12 * r, y + 1.45 * r), (x + 3.88 * r, y + 1.45 * r), (x + 2 * r, y + 3.7 * r)], fill=fill)
+
+def stat_bubble(value, unit, label=None, team=0):
+    """A measured number over a player's head: a heart, the number and its unit on ink, one small line under it, a
+    pointer below. Only for a number that a device measured for this player at this moment."""
+    f1, f2, f3 = font(76, 'ExtraBold'), font(34, 'ExtraBold'), font(28, 'SemiBold')
+    v = str(value); wv = int(text_w(v, f1)); wu = int(tracked_w(unit.upper(), f2, 3)); wl = int(tracked_w(label.upper(), f3, 2)) if label else 0
+    pad = 22; top = 46 + 12 + wv + 10 + wu; w = max(top, wl) + 2 * pad; h = 88 + (36 if label else 0)
+    edge = LIME if team == 0 else BLUE
+    im, d = _sheet('RGBA', (w, h + 16), (0, 0, 0, 0))
+    d.rounded_rectangle((0, 0, w - 1, h - 1), 14, fill=INK + (240,), outline=edge + (255,), width=4)
+    cx = w // 2; d.polygon([(cx - 12, h - 3), (cx + 12, h - 3), (cx, h + 14)], fill=edge + (255,))
+    x = (w - top) // 2
+    _heart(d, x, 26, 46, RED + (255,))
+    d.text((x + 58, 0), v, font=f1, fill=WHITE + (255,)); tracked(d, (x + 58 + wv + 10, 38), unit.upper(), f2, edge + (255,), 3)
+    if label: tracked(d, ((w - wl) / 2, 84), label.upper(), f3, (200, 205, 212, 255), 2)
+    return rgba_to_bgra(im)
+
+def score_box(names, serving, sets, games, points, hot=None):
+    """Top-right: the score at this moment of the match, as on television. Two rows, one for each pair: a bar in the
+    colour of the pair, a dot when that pair serves, the name, the sets won, the games of this set, the points of
+    this game. `sets`, `games`: two whole numbers; `points`: two words ('0', '15', '30', '40', 'AD').
+    `hot`: the row whose points have just changed; that cell is white for a moment.
+    A score box says a fact: it is drawn only from a score that was checked against the final score of the match."""
+    f1, f2 = font(36, 'ExtraBold'), font(42, 'ExtraBold')
+    nw = max(int(tracked_w(n.upper(), f1, 2)) for n in names); rh, cw = 56, 60
+    x_name = 46; x_c = x_name + nw + 20; w = x_c + 3 * cw; h = 2 * rh + 2
+    im, d = _sheet('RGBA', (w, h), (0, 0, 0, 0))
+    for r in (0, 1):
+        y = r * (rh + 2); col = LIME if r == 0 else (120, 160, 255)
+        d.rectangle((0, y, x_c - 1, y + rh - 1), fill=INK + (235,)); d.rectangle((0, y, 7, y + rh - 1), fill=col + (255,))
+        if serving == r: d.ellipse((20, y + rh / 2 - 7, 34, y + rh / 2 + 7), fill=LIME + (255,))
+        tracked(d, (x_name, y + 5), names[r].upper(), f1, WHITE + (255,), 2)
+        cells = [(str(sets[r]), (44, 48, 56), (170, 176, 186)), (str(games[r]), INK, WHITE), (str(points[r]), WHITE if hot == r else LIME, INK)]
+        for i, (txt, bg, fg) in enumerate(cells):
+            x = x_c + i * cw; d.rectangle((x, y, x + cw - 1, y + rh - 1), fill=tuple(bg) + (245,))
+            d.text((x + (cw - text_w(txt, f2)) / 2, y + 2), txt, font=f2, fill=tuple(fg) + (255,))
+    return rgba_to_bgra(im)
+
+def _shot(im, shot_bgr, x, y, h):
+    """Paste a screenshot of the app, h design pixels high, with a lime edge. -> its design width."""
+    sh = Image.fromarray(cv2.cvtColor(shot_bgr, cv2.COLOR_BGR2RGB)); w = int(round(h * sh.width / sh.height))
+    sh = sh.resize((int(round(w * K)), int(round(h * K))), Image.LANCZOS); e = int(round(6 * K))
+    im.paste(Image.new('RGB', (sh.width + 2 * e, sh.height + 2 * e), LIME), (int(round(x * K)) - e, int(round(y * K)) - e)); im.paste(sh, (int(round(x * K)), int(round(y * K))))
+    return w
+
+def end_card(bg_bgr, line1, line2, shot_bgr=None, shot_title=None, shot_sub=None, site='kicksma.sh'):
+    """The last card: the name, what a player gets, where; and, with a screenshot of the app, an invitation."""
+    im, d = _over(darken(bg_bgr, 22, 0.24))
+    if shot_bgr is None:
+        centred(d, 300, 'KICKSMASH', font(200, 'ExtraBold'), LIME, 10); d.rectangle((W / 2 - 60, 550, W / 2 + 60, 556), fill=LIME)
+        centred(d, 600, line1.upper(), font(64, 'ExtraBold'), WHITE, 5); centred(d, 690, line2.upper(), font(52, 'SemiBold'), LIME, 5)
+        return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
+    sw = _shot(im, shot_bgr, 1240, 150, 780); x = 130; mw = 1240 - 60 - x
+    tracked(d, (x, 170), 'KICKSMASH', _fitw('KICKSMASH', 170, 8, mw), LIME, 8); d.rectangle((x + 4, 390, x + 124, 396), fill=LIME)
+    tracked(d, (x, 430), line1.upper(), _fitw(line1.upper(), 76, 4, mw), WHITE, 4)
+    tracked(d, (x, 530), line2.upper(), _fitw(line2.upper(), 60, 4, mw, 'SemiBold'), LIME, 4)
+    if shot_title: tracked(d, (x, 700), shot_title.upper(), _fitw(shot_title.upper(), 54, 4, mw), WHITE, 4)
+    if shot_sub: tracked(d, (x, 775), shot_sub.upper(), _fitw(shot_sub.upper(), 40, 4, mw, 'SemiBold'), (200, 205, 212), 4)
+    tracked(d, (x, 880), site.upper(), font(48, 'ExtraBold'), LIME, 10)
+    return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
+
+def _fitw(s, size, spacing, maxw, weight='ExtraBold'):
+    while size > 30 and tracked_w(s, font(size, weight), spacing) > maxw: size -= 4
+    return font(size, weight)
+
 def outro_card(bg_bgr, line1, line2, foot='kicksma.sh'):
     im, d = _over(darken(bg_bgr, 22, 0.28))
     centred(d, 330, 'KICKSMASH', font(200, 'ExtraBold'), LIME, 10)
@@ -229,6 +301,18 @@ def outro_card_tall(bg_bgr, line1, line2):
     im, d = _over(_tall_bg(bg_bgr, 0.26))
     _c(d, 720, 'KICKSMASH', _fit('KICKSMASH', 200, 8, TW - 120), LIME, 8); d.rectangle((TW / 2 - 60, 950, TW / 2 + 60, 956), fill=LIME)
     _c(d, 1000, line1.upper(), _fit(line1.upper(), 52, 5, TW - 100, 'SemiBold'), WHITE, 5); _c(d, 1080, line2.upper(), font(36, 'SemiBold'), (200, 205, 212), 5)
+    return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
+
+def end_card_tall(bg_bgr, line1, line2, shot_bgr=None, shot_title=None, shot_sub=None, site='kicksma.sh'):
+    im, d = _over(_tall_bg(bg_bgr, 0.24)); m = TW - 120
+    _c(d, 150, 'KICKSMASH', _fit('KICKSMASH', 190, 8, m), LIME, 8); d.rectangle((TW / 2 - 60, 370, TW / 2 + 60, 376), fill=LIME)
+    _c(d, 410, line1.upper(), _fitw(line1.upper(), 76, 4, m), WHITE, 4); _c(d, 505, line2.upper(), _fitw(line2.upper(), 56, 4, m, 'SemiBold'), LIME, 4)
+    y = 640
+    if shot_bgr is not None:
+        hh = 800; ww = hh * shot_bgr.shape[1] / shot_bgr.shape[0]; _shot(im, shot_bgr, (TW - ww) / 2, y, hh); y += hh + 60
+    if shot_title: _c(d, y, shot_title.upper(), _fitw(shot_title.upper(), 54, 4, m), WHITE, 4)
+    if shot_sub: _c(d, y + 76, shot_sub.upper(), _fitw(shot_sub.upper(), 40, 4, m, 'SemiBold'), (200, 205, 212), 4)
+    _c(d, 1760, site.upper(), font(48, 'ExtraBold'), LIME, 10)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def player_card_tall(frame_bgr, box, name, team, sub=None):
