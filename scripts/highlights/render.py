@@ -101,6 +101,8 @@ elif seg['kind'] == 'clip':
         # after the ball is dead, never before: the picture tells the end, the line only names it
         wn = seg['won']; wb = gfx.lower_third(wn['name'], 'wins the point', gfx.LIME if wn['team'] == 0 else (120, 160, 255))
         w_at = max(4.7, min(wn['at'] - t0 + 1.4, t1 - t0 - 1.8))
+    # "says": [{"t0", "t1" (seconds of the video), "who": player, "text"}]: a bubble over that player's head
+    says = [dict(x, img=gfx.speech(x['text'], seg['team'][x['who']])) for x in seg.get('says', [])]; say_at = {}
     smooth = {}
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video])
     n = 0
@@ -135,6 +137,15 @@ elif seg['kind'] == 'clip':
         if wb is not None and s >= w_at:
             a = min(ease((s - w_at) / 0.35), ease((t1 - t0 - s) / 0.3))
             gfx.blit(fr, wb, int(LT[0] - 60 * (1 - ease((s - w_at) / 0.35))), LT[1], a)
+        for q in says:
+            if not (q['t0'] <= t0 + s <= q['t1'] + 0.3) or not tr: continue
+            b = track_at(tr, n + off).get(q['who'])
+            if b is not None:
+                tx, ty = pt(b[4], b[5]); old = say_at.get(id(q)); say_at[id(q)] = (tx, ty) if old is None else (0.8 * old[0] + 0.2 * tx, 0.8 * old[1] + 0.2 * ty)
+            if id(q) not in say_at: continue
+            tx, ty = say_at[id(q)]; im = q['img']; a = min(ease((t0 + s - q['t0']) / 0.25), ease((q['t1'] + 0.3 - t0 - s) / 0.3))
+            x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 64))
+            gfx.blit(fr, im, x, y, a)
         draw_counter(fr, seg.get('hits'), t0 + s)
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()

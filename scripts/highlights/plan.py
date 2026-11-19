@@ -17,6 +17,21 @@ def bin_of(t): return min(len(near_pair) - 1, int(t // BIN))
 # the match starts when the pairs first stand in pairs for a minute
 start_bin = next((b for b in range(len(sure) - 3) if all(sure[b:b + 3])), 0)
 t_start = start_bin * BIN
+# The warm-up is not the match. In a warm-up the ball is in play more than half of the time; in a game most of the
+# time is walking and waiting. Two matches showed the same shape: over 3 minutes the share of time inside rallies
+# went above 0.5, then fell under 0.25 at about 9 minutes, and the first serve came about a minute later.
+# START=<seconds> sets the start by hand (a player's word, a "ready?" in the speech).
+def after_warmup(points, seconds, window=180, step=30, first=1200):
+    play = np.zeros(int(seconds) + 1)
+    for p in points: play[int(p['start']):int(p['end']) + 1] = 1
+    share = [(t, float(play[t:t + window].mean())) for t in range(0, min(first, int(seconds) - window), step)]
+    busy = next((i for i, (t, v) in enumerate(share) if v >= 0.5), None)
+    if busy is None: return None
+    calm = next((t for t, v in share[busy:] if v <= 0.25), None)
+    return None if calm is None else calm + 60.0
+warm = float(os.environ['START']) if os.environ.get('START') else after_warmup(A['points'], dur)
+if warm and warm > t_start:
+    print(f"warm-up until {int(warm // 60)}:{int(warm % 60):02d} ({'by hand' if os.environ.get('START') else 'by the share of time in rallies'})"); t_start = warm
 # a point of the match has both pairs on the court: two friends who hit to each other in a break are not a rally
 # (in this match: 55 "shots" in 109 seconds at 42:28, with only two people on the court)
 byf = {}
