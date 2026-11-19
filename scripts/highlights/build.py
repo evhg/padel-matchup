@@ -22,6 +22,7 @@ KF = f'{S}/match/kf'
 os.makedirs(work, exist_ok=True)
 TALL = os.environ.get('TALL') == '1'; TRACKS = os.environ.get('TRACKS', work)
 segs = []
+import teams; teams.fill(MT)                                              # a team with no name gets one from its players
 TEAMS = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']]
 def add(seg, name):
     seg['venue'] = MT.get('venue') or ''; seg['foot'] = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b'], MT['score']]; p = f'{work}/{len(segs):02d}-{name}.json'; json.dump(seg, open(p, 'w')); segs.append(p)

@@ -47,10 +47,10 @@ def name_tag(name, team):
     tracked(d, (pad, 1), s, f, fg + (255,), 1.5)
     return rgba_to_bgra(im)
 
-def speech(text, team, width=30):
+def speech(text, team, width=26):
     """What a player says, as a white bubble over the head with a pointer below, in up to three lines."""
     import textwrap
-    f = font(34, 'SemiBold'); lines = textwrap.wrap(text, width)[:3]; pad = 18; lh = 42
+    f = font(46, 'SemiBold'); lines = textwrap.wrap(text, width)[:3]; pad = 22; lh = 56
     tw = max(int(text_w(s, f)) for s in lines); w, h = tw + 2 * pad, lh * len(lines) + 2 * pad - 8
     im = Image.new('RGBA', (w, h + 16), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
     edge = LIME if team == 0 else BLUE

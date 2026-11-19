@@ -20,6 +20,7 @@ FPS = 30000 / 1001; DUR = 6.5
 LIME, INK, BLUE, WHITE = gfx.LIME, gfx.INK, (60, 110, 255), (255, 255, 255)
 names = [MT['names'][str(i)] for i in range(4)]; team = [MT['team'][str(i)] for i in range(4)]
 A = sorted([k for k in range(4) if team[k] == 0], key=lambda k: names[k]); B = sorted([k for k in range(4) if team[k] == 1], key=lambda k: names[k])
+import teams; teams.fill(MT)
 title_a = ('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a']; title_b = ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']
 def ital(size): return ImageFont.truetype(f'{S}/fonts/BarlowCondensed-ExtraBoldItalic.ttf', size)
 

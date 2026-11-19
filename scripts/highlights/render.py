@@ -144,7 +144,7 @@ elif seg['kind'] == 'clip':
                 tx, ty = pt(b[4], b[5]); old = say_at.get(id(q)); say_at[id(q)] = (tx, ty) if old is None else (0.8 * old[0] + 0.2 * tx, 0.8 * old[1] + 0.2 * ty)
             if id(q) not in say_at: continue
             tx, ty = say_at[id(q)]; im = q['img']; a = min(ease((t0 + s - q['t0']) / 0.25), ease((q['t1'] + 0.3 - t0 - s) / 0.3))
-            x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 64))
+            x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 28))
             gfx.blit(fr, im, x, y, a)
         draw_counter(fr, seg.get('hits'), t0 + s)
         enc.stdin.write(fr.tobytes()); n += 1
@@ -182,11 +182,16 @@ elif seg['kind'] == 'replay':
     cw, ch = int(W / zoom) // 2 * 2, int(H / zoom) // 2 * 2
     cx, cy = seg.get('cx', W / 2), seg.get('cy', H / 2)
     frames = list(read_frames(video, t0, t1 - t0))
-    centres = []
+    centres = []; first = None
     for n in range(len(frames)):
         b = track_at(tr, n + off).get(seg.get('focus')) if tr and seg.get('focus') is not None else None
-        if b is not None: cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2 - 0.05 * (b[3] - b[1])
+        if b is not None:
+            cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2 - 0.05 * (b[3] - b[1])
+            if first is None: first = n
         centres.append((cx, cy))
+    # Before the tracker has the player, the window waits where the player will be found, not at the middle of the
+    # picture: a replay once opened on two seconds of empty grass, because the track began late.
+    if first: centres[:first] = [centres[first]] * first
     c = np.array(centres); k = 9
     c = np.stack([np.convolve(np.pad(c[:, j], k, mode='edge'), np.ones(2 * k + 1) / (2 * k + 1), mode='valid') for j in (0, 1)], 1)
     def origin(cc): return int(np.clip(cc[0] - cw / 2, 0, W - cw)), int(np.clip(cc[1] - ch / 2, 0, H - ch))
@@ -196,7 +201,7 @@ elif seg['kind'] == 'replay':
     steps = int(round(1 / speed))
     import hashlib
     cdir = os.environ.get('CACHE') or os.path.join(os.path.dirname(os.path.abspath(out)), 'cache'); os.makedirs(cdir, exist_ok=True)
-    cfile = os.path.join(cdir, 'replay-' + hashlib.md5(json.dumps([t0, t1, zoom, seg.get('focus'), seg.get('cx'), seg.get('cy'), speed, SRMIX]).encode()).hexdigest()[:12] + '.mkv')
+    cfile = os.path.join(cdir, 'replay-' + hashlib.md5(json.dumps([t0, t1, zoom, seg.get('focus'), seg.get('cx'), seg.get('cy'), speed, SRMIX] + ([first] if first else [])).encode()).hexdigest()[:12] + '.mkv')
     views = []
     if os.path.exists(cfile):
         raw = subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-i', cfile, '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], capture_output=True).stdout

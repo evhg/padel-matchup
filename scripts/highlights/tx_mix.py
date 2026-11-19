@@ -1,18 +1,29 @@
 """One sound track for the reel from two recorders on the fence, on the clock of the phone.
 
-    python tx_mix.py <phone sound file> <left_dir> <right_dir> <phone.json of tx_phone.py> <out.wav>
+    python tx_mix.py <phone sound file> <left_dir> <right_dir> <phone.json of tx_phone.py> <out.wav> [quieter dB=18]
 
 A phone behind the glass sounds dull; a recorder on the fence hears the hits and the voices. At each moment the
-recorder with more level leads (its share is its power against the sum, squared), and the share moves slowly, so
-no jump is heard. The two recorders are up to 34 ms apart for one sound; with one of them in the lead that is not
+recorder with more level over its own noise floor leads, and the share moves slowly, so no jump is heard. When
+nothing happens, the recorder with less noise leads. The two recorders are up to 34 ms apart for one sound; with one of them in the lead that is not
 heard as an echo. The offsets of tx_phone.py for each ten minutes give the drift of the clocks. Where no recorder
 ran (before the players switched them on), the phone sound stays, at the level of the mix. The file keeps the
 full range (32-bit); a compressor and a loudness step after it set the level for the reel.
 The work goes in pieces of one minute: three full recordings of a match do not fit in memory at once.
+
+The steady noise of the hall (air conditioning, a machine beside one recorder) comes out before the mix, for each
+recorder with its own noise picture: the level of each frequency in the quiet moments of that recorder. A sound
+that stands over that picture passes whole; what is at the level of the picture goes down by "quieter dB"
+(0 = leave the noise in). It has to happen here: the compressor after this step lifts whatever is quiet, so the
+noise of the hall became the loudest thing between two points.
 """
 import sys, glob, json, subprocess, numpy as np, soundfile as sf
 
+from scipy.signal import stft, istft
+from scipy.ndimage import uniform_filter1d
+
 phone_f, ld, rd, pj, out = sys.argv[1:6]
+QUIETER = float(sys.argv[6]) if len(sys.argv) > 6 else 18.0
+NFFT, HOP, PAD = 2048, 512, 8192                                       # 43 ms windows; PAD hides the edges of a piece
 SR = 48000; BLOCK = SR * 60; WIN = int(SR * 0.05); SLOW = 6           # level over 50 ms, smoothed over 0.3 s
 PJ = json.load(open(pj))
 
@@ -60,6 +71,33 @@ def floor_of(rec):
         v.append(power(rec.read(a, a + SR * 20)))
     return float(np.percentile(np.concatenate(v), 30)) + 1e-30
 FR, FL = floor_of(R), floor_of(L)
+
+
+def noise_picture(rec):
+    """The level of each frequency when nothing happens: the 30th percentile of 20 seconds from each five minutes.
+    A hit or a voice fills a few of those moments, the hall fills all of them."""
+    m = []
+    for a in range(SR * 300, max(SR * 301, rec.n - SR * 60), SR * 300):
+        m.append(np.abs(stft(rec.read(a, a + SR * 20), SR, nperseg=NFFT, noverlap=NFFT - HOP)[2]).astype(np.float32))
+    return np.percentile(np.concatenate(m, 1), 30, axis=1) * 1.48      # the 30th percentile of noise is 0.68 of its mean level
+
+
+def box(x, k, axis):
+    return uniform_filter1d(x, k, axis=axis, mode='nearest')
+
+
+def quieter(x, pic):
+    """x with the steady noise taken down. Two looks at each moment: the sound itself, with a strict bar (a hit is
+    short and strong), and its mean over 50 ms, with a low bar (a voice is long and soft). The kinder one decides."""
+    if QUIETER <= 0 or not np.any(x): return x
+    Z = stft(x, SR, nperseg=NFFT, noverlap=NFFT - HOP)[2]; P = np.abs(Z) ** 2; N = (pic ** 2)[:, None]
+    low = 10 ** (-QUIETER / 20)
+    g1 = np.sqrt(np.clip(1 - 4.0 * N / (P + 1e-30), 0, 1)); g2 = np.sqrt(np.clip(1 - 1.7 * N / (box(P, 5, 1) + 1e-30), 0, 1))
+    g = np.maximum(low, box(np.maximum(g1, g2), 3, 0))
+    return istft(Z * g, SR, nperseg=NFFT, noverlap=NFFT - HOP)[1][:len(x)].astype(np.float32)
+
+
+NR, NL = (noise_picture(R), noise_picture(L)) if QUIETER > 0 else (None, None)
 blocks = []; a = 0; num = den = 0.0
 while True:
     raw = ph.stdout.read(BLOCK * 4)
@@ -68,8 +106,12 @@ while True:
     if n == 0: break
     p = p[:n]; r, l = R.on_phone_clock(a, n), L.on_phone_clock(a, n)
     pr, pl, pp = power(r), power(l), power(p)
-    qr, ql = (pr / FR) ** 2, (pl / FL) ** 2
-    w = np.repeat(qr / (qr + ql + 1e-30), WIN).astype(np.float32); have = np.repeat((pr + pl) > 1e-12, WIN)
+    # The lead goes by the level over the floor. When nothing happens, both are at their floor: then the recorder
+    # with less noise leads. With equal shares there, half of the noise of the louder recorder was always in the mix.
+    qr, ql = np.maximum(pr / FR - 1, 0) ** 2, np.maximum(pl / FL - 1, 0) ** 2; e = 0.05
+    w = np.repeat((qr + e * FL / (FR + FL)) / (qr + ql + e), WIN).astype(np.float32); have = np.repeat((pr + pl) > 1e-12, WIN)
+    if QUIETER > 0:                                                    # the lead above went by the sound as recorded
+        r = quieter(R.on_phone_clock(a - PAD, n + 2 * PAD), NR)[PAD:PAD + n]; l = quieter(L.on_phone_clock(a - PAD, n + 2 * PAD), NL)[PAD:PAD + n]
     mix = w * r + (1 - w) * l
     loud = have & np.repeat(pp > np.percentile(pp, 60), WIN)
     num += float((p[loud].astype(np.float64) ** 2).sum()); den += float((mix[loud].astype(np.float64) ** 2).sum())
@@ -82,4 +124,4 @@ with sf.SoundFile(out, 'w', SR, 1, 'FLOAT') as fh:
         fh.write(np.where(have, mix, p / gain).astype(np.float32))
 lead = [x[3] for x in blocks if x[3] is not None]
 print('TX_MIX seconds', round(a / SR, 1), 'phone is louder by', round(gain, 2), 'floors', round(10 * np.log10(FR), 1), round(10 * np.log10(FL), 1), 'right leads', round(float(np.mean(lead)), 2),
-      'drift ppm', round(R.slope * 1e6, 1), round(L.slope * 1e6, 1))
+      'drift ppm', round(R.slope * 1e6, 1), round(L.slope * 1e6, 1), 'quieter dB', QUIETER)
