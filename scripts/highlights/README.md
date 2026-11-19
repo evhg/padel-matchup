@@ -130,9 +130,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   of this ball; a bounce can still count. No rally has a count that a person made to compare with. A video
   at 60 frames a second is the next test.
 - The score is not proven for a whole match. `score_log.py` checks a log of every point against the rules
-  and the final score, and `scorebox.py` draws the result, but the only log so far covers 106 of about 170
-  points and its last set does not agree with the typed score (see the lessons). No detector writes the log
-  yet: a model that reads frames did, at a cost that is too high for every match.
+  and the final score, and `scorebox.py` draws the result. The only log so far agrees with the typed score in
+  two sets of four (see the lessons). No detector writes the log yet: a model that reads frames did, at a
+  cost that is too high for every match.
 - The picture is not 4K and the slow motion is not true 60 frames a second. An upscale of a whole frame is
   28 seconds here, and a frame in between is a guess: a racket at full speed stays a blur.
 - No music, and no "funny moments" part: the laugh measure found nothing strong in this match.
@@ -401,19 +401,26 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   point), and the sets must come out as the final score that a player typed. `scorebox.py` draws nothing when
   that check fails, when a point of the reel is not in the log, or when the reel and the log name different
   winners. The box is an overlay on the finished reel, so a score that is proven later costs no new render.
-- **The first point log did not prove the score, and the check said where.** Six readers of frames (a model
-  that looks at sheets of frames and listens to the two recorders, one reader for each sixth of the match)
-  wrote the log of the second match. A usage limit stopped five of them: 106 points of about 170 were logged.
-  What the 106 points showed:
-  - One set was complete: 8 games, 47 points, every game with the right serve sides, and the games came out as
-    the typed 6-2. A score that a recorder heard in that set ("three-two") agreed with the log at that moment.
-  - The last set as logged was 4 games to 2 and one more point, against a typed 6-0. Either two games were
-    read wrongly or the typed score is not what was played. `score_log.py` refused, so the reel has no box.
-  - The players used advantage in one set and a deciding point at 40-40 in the next. `score_log.py` tries
-    both rules for each game.
-  - A reader corrected the reel twice: a point that the reel gave to the server of the wrong end, and a high
-    ball that landed 1.9 s later than a person had measured on frames (the ball was above the picture crop).
+- **The first point log proved two sets of four, and the check said where the rest fails.** Six readers of
+  frames (a model that looks at sheets of frames and listens to the two recorders, one reader for each sixth of
+  the match) wrote the log of the second match: 183 points in 30 games. The typed score has 30 games too.
+  - Sets one and two agree with the typed 6-3 and 6-2: 17 games, 102 points, every serve from the side that the
+    count gives. Five scores that a recorder heard ("two-one", "30-40", "three-two" and two more) agree with
+    the log at their moments. `scorebox.py` drew the box on the reel's four points of these sets
+    (`MISSING=skip`).
+  - Set three does not agree. It has the seven games of a 6-1, but the winners read four to three, one game has
+    eleven points and one stops at 40-15. So no box there.
+  - Set four first read four games to two. Told of the conflict, its reader looked again at larger frames and
+    changed three points; the set now reads 6-0. A reading that changes after the reader knows the wanted
+    answer is weak proof. It is used for nothing yet.
+  - Two readers disagreed on who served one point, and the fixed order of servers settled it. The readers
+    also corrected the reel four times: a server at the wrong end, a high ball that landed 1.9 s later than a
+    person had measured on frames (the ball was above the crop), a net-cord winner whose end came 0.9 s after
+    the sound that was taken for it, and a last serve by another player.
     A time that only one reading supports is not yet a fact.
-  A reader logs about 20 points an hour of its own time, and all six together log a match in about 100 minutes.
+  - The players used advantage in the first two sets and a deciding point at 40-40 later. `score_log.py`
+    tries both rules for each game.
+  - The cost: about 400,000 tokens for each reader, and about 100 minutes for the match when all six read at
+    once. That burst reached the usage limit of the account. This is far too much for every match.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
