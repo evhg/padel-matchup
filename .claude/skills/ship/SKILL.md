@@ -408,6 +408,16 @@ learning can be a test, a gate step or a script, make it one and put the story i
   demand: a proxy in front of `next start` that sends the first 30,000 bytes of the document, waits
   1.5 s and trickles the rest. The lean messages below made the window smaller, not gone: that proxy
   still gives 418 on both builds. It stays open (ROADMAP.md, "Open, small"); never call it fixed.
+- **A `<Link>` does not move `document.referrer`.** The feedback page wrote down the screen a player came
+  from by reading the referrer. That held while people reached it from a full page load. The footer link is a
+  `<Link>`: no new document loads, so the referrer still named the page the visit began on, and every note
+  from the new door would have carried the wrong screen. The door now sends the screen itself (`?from=`),
+  and the core suite sends a note from `/clubs` and reads the row. When a value comes from the browser's
+  navigation state, send a note through the real path and read what was stored.
+- **A path can hold a key.** `/p/<token>`, `/<code>/i/<invite>` and the two manage links carry a secret in
+  the path, and "keep the path with the note" would have put that secret in a table that more people read.
+  `screenOf` (`src/lib/feedback/screen.ts`) names the segment in its place. Before a path is stored or
+  logged, grep `src/app` for the routes whose folder is `[token]`, `[invite]` or `[manage]`.
 - **A Date in a raw `sql` template is rule 1, and the local gate cannot see it.** PGlite accepts one
   and postgres-js throws `Received an instance of Date`, so the gate goes green and CI's real-Postgres
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use

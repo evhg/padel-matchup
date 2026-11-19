@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FeedbackDoor } from "./FeedbackDoor";
 import { getTranslations } from "next-intl/server";
 import { getDb } from "@/db";
 import { APP_NAME } from "@/lib/config";
@@ -64,14 +65,25 @@ export async function Header({ minimal = false, current }: { minimal?: boolean; 
   );
 }
 
-/** Brand + the fine print, quietly. `spacious` leaves room below so a phone can scroll the CTA to mid-screen. */
+/**
+ * Brand + the fine print, quietly, and the door for a note. `spacious` leaves room below so a phone can scroll
+ * the CTA to mid-screen.
+ *
+ * The feedback door is here because the owner asked for it on every screen (19 November 2026): until then it
+ * was pasted into ten pages, and about forty screens (/play, the clubs, the coaches, the tournaments, a player's
+ * page, the personal link) had none. One link in the footer that those screens share reaches them all, and it
+ * hands /feedback the screen the player came from (`FeedbackDoor`), so a note still says where to look.
+ * Its label is the short one ("Feedback"), so a page that also carries the inline door has one button named
+ * "Tell us what should change", not two.
+ */
 export async function Footer({ spacious = false }: { spacious?: boolean }) {
   const t = await getTranslations();
   return (
-    <footer className={`mx-auto mt-10 flex w-full max-w-xl items-center justify-between px-4 text-xs text-faint ${spacious ? "pb-[45vh]" : "pb-16"}`}>
+    <footer className={`mx-auto mt-10 flex w-full max-w-xl items-center justify-between gap-3 px-4 text-xs text-faint ${spacious ? "pb-[45vh]" : "pb-16"}`}>
       <Link href="/privacy" prefetch={false} className="hover:text-muted">
         {t("about.footerLink")}
       </Link>
+      <FeedbackDoor label={t("feedback.footerLink")} />
       <span>{APP_NAME}</span>
     </footer>
   );

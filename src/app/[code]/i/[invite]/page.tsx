@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { nameOnly } from "@/actions/shared";
 import { CalendarEmail } from "@/components/CalendarEmail";
-import { Header } from "@/components/Header";
+import { Header, Footer } from "@/components/Header";
 import { InviteActions } from "@/components/InviteActions";
 import { RestoreWithEmail } from "@/components/RestoreWithEmail";
 import { getDb } from "@/db";
@@ -59,6 +59,7 @@ async function InvitePage({ params, searchParams }: Props) {
             </Link>
           </section>
         </main>
+        <Footer />
       </>
     );
   }
@@ -236,6 +237,7 @@ async function InvitePage({ params, searchParams }: Props) {
           )}
         </section>
       </main>
+      <Footer />
     </>
   );
 }

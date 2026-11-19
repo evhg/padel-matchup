@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getViewer, manageUrlFor, personalTokenFor } from "@/actions/shared";
 import { EmailField } from "@/components/EmailField";
-import { Header } from "@/components/Header";
+import { Header, Footer } from "@/components/Header";
 import { HomeScreenPrompt } from "@/components/HomeScreenPrompt";
 import { KeepTogether } from "@/components/KeepTogether";
 import { PushToggle } from "@/components/PushToggle";
@@ -176,6 +176,7 @@ async function SharePage({ params }: Props) {
           </div>
         </details>
       </main>
+      <Footer />
     </>
   );
 }

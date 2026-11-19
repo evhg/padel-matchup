@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
 import { FeedbackError, createFeedback, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore, webReplyRoute } from "@/lib/feedback/store";
+import { screenOf } from "@/lib/feedback/screen";
 import { subscriptionsFor } from "@/lib/domain/push";
 import { pushEnabled } from "@/lib/push";
 import { LIMITS } from "@/lib/domain/ratelimit";
@@ -31,7 +32,7 @@ export async function sendFeedbackAction(text: string, contact: string, context:
       locale,
       name: player?.displayName ?? null,
       playerId: player?.id ?? null,
-      context: context.startsWith("/") ? context.slice(0, 200) : null,
+      context: screenOf(context),
       email,
       telegramUserId: player?.telegramId ?? null,
       telegramChatId: player?.telegramId ?? null,

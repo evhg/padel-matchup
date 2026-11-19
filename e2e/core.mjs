@@ -70,7 +70,33 @@ try {
   await a.getByRole("button", { name: "Send code" }).click();
   await a.getByText(/We don't know that email yet/).waitFor({ timeout: 20000 });
   check("the landing page's way back in answers when it is used", (await a.getByText(/We don't know that email yet/).count()) === 1);
-  check("footer carries only the faint privacy link, named \"Privacy and terms\"", (await a.locator("footer a").count()) === 1 && (await a.locator("footer a").getAttribute("href")) === "/privacy" && (await a.locator("footer a").textContent())?.trim() === "Privacy and terms");
+  // The footer had one link until 19 November 2026. The owner then asked for a feedback door on every screen:
+  // about forty screens had none, and the footer is what they share. So it has two links now, and the second
+  // one has the short name, so the landing page still has one button named "Tell us what should change".
+  check(
+    "footer carries the privacy link and the feedback door, and nothing else",
+    (await a.locator("footer a").count()) === 2 &&
+      (await a.locator("footer a").first().getAttribute("href")) === "/privacy" &&
+      (await a.locator("footer a").first().textContent())?.trim() === "Privacy and terms" &&
+      (await a.getByTestId("footer-feedback").getAttribute("href")) === "/feedback?from=%2F" &&
+      /Feedback/.test((await a.getByTestId("footer-feedback").textContent()) ?? ""),
+  );
+  // A screen that never had the door (the clubs) gets it from the footer, and the form opens from there.
+  const fd = await newPage();
+  await fd.goto(BASE + "/clubs");
+  check("a screen that had no feedback door has one in its footer", (await fd.getByTestId("footer-feedback").count()) === 1);
+  await fd.getByTestId("footer-feedback").click();
+  await fd.locator("#feedback-text").waitFor({ timeout: 20000 });
+  check("the footer's feedback door opens the form and names the screen", new URL(fd.url()).pathname === "/feedback" && new URL(fd.url()).searchParams.get("from") === "/clubs", fd.url());
+  // The note keeps the screen the player was on. A link inside the app loads no new document, so the browser's
+  // referrer still names the page the visit began on: the door sends the screen itself, and the row proves it.
+  await fd.locator("#feedback-text").fill("e2e: the list of clubs should show the price of a court");
+  await fd.getByRole("button", { name: "Send", exact: true }).click();
+  await fd.getByText(/Got it, thank you|That one I cannot act on/).waitFor({ timeout: 30000 });
+  const keptQ = "select context from feedback where text like 'e2e: the list of clubs%' order by created_at desc limit 1";
+  const kept = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(keptQ)}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+  check("a note from the footer's door keeps the screen it came from", kept.rows?.[0]?.context === "/clubs", JSON.stringify(kept).slice(0, 200));
+  await fd.context().close();
   // The doors for the organiser and the club: two links under the form, and the More menu everyone gets.
   // "there should be a feedback option on the main landing page which explains that kicksmash is a
   // self-learning app with community feedback." Eight pages carried this door; the busiest did not.

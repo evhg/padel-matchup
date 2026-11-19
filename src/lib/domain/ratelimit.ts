@@ -98,7 +98,12 @@ export const LIMITS = {
    * can fake, so a stranger gets three answers a day at most, and one address cannot spend the thirty.
    */
   bookMailAnswersPerAddressPerDay: 3,
-  feedbackPerIpPerDay: 5,
+  /**
+   * Notes from one network in a day. It was 5, and four friends who test the app on one club network share an
+   * address: the second friend met "That is plenty for today". One person still stops at ten
+   * (`FEEDBACK_LIMITS.perPersonPerDay`), and each note costs one short model call, so 20 stays cheap.
+   */
+  feedbackPerIpPerDay: 20,
   // Public API and MCP: open without a key, roomier with one.
   apiKeysPerIpPerDay: 10,
   apiWritesPerIpPerDay: 12,

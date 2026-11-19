@@ -33,7 +33,9 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
     }
     start(async () => {
       const here = typeof location === "undefined" ? "" : location.pathname;
-      const context = here === "/feedback" && typeof document !== "undefined" && document.referrer ? new URL(document.referrer).pathname : here || "/feedback";
+      // On the page of its own, the form names the screen the person came from: the footer sends it as `from`, and a visit that began elsewhere on the site has it as the referrer.
+      const from = here === "/feedback" ? new URLSearchParams(location.search).get("from") : null;
+      const context = from?.startsWith("/") ? from : here === "/feedback" && typeof document !== "undefined" && document.referrer ? new URL(document.referrer).pathname : here || "/feedback";
       const r = await sendFeedbackAction(text, contact, context);
       if (r.ok) {
         setState({ kind: "sent", channel: r.data.channel, reply: r.data.reply, feedback: r.data.kind === "feedback" });
