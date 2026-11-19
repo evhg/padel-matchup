@@ -17,7 +17,12 @@ points.json: {"points": [{
     "react":  {"who": id, "t0": s, "t1": s},                 optional: a slow close look at one player after the point
     "replay": {"who": id, "t": s, "before": 1.7, "after": 1.0},   optional: the moment to show again, slowly
     "says":   [{"t0": s, "t1": s, "who": id, "text": "..."}]      optional: words a viewer can HEAR in the clip
-}], "outro": "Your match. Your highlights."}
+}], "outro": "Your match. Your highlights.",
+ "meter": {"label": "<NAME> BPM", "series": [[s, value], ...]},      optional: a measured number shown on every clip
+ "card": {"title": "...", "rows": [[value, "label"], ...]}}          optional: a card of numbers before the outro
+
+An item of "points" can also be {"file": "wide.mp4", "file_tall": "tall.mp4"}: a part made elsewhere (review.py),
+shown at that place.
 
 A line in "says" is only for words that are audible in the reel. A recogniser's guess is not enough: the owner
 could not hear the words of one bubble, and a bubble a viewer cannot check against the sound reads as a mistake.
@@ -72,12 +77,17 @@ if vs and os.path.exists(vs + '-wide.mp4') and os.path.exists(vs + '-tall.mp4'):
     add({'kind': 'file', 'path': vs + '-wide.mp4', 'path_tall': vs + '-tall.mp4'}, 'versus')
 
 for i, c in enumerate(P['points']):
+    if c.get('file'):
+        add({'kind': 'file', 'path': c['file'], 'path_tall': c.get('file_tall') or c['file']}, f'part{i}'); continue
     trf = c['track']; t0 = round(c['serve_t'] - LEAD, 2)
     t1 = c.get('end') or c['last_t'] + HOLD
     if c.get('next_serve_t'): t1 = min(t1, c['next_serve_t'] - 1.0)
     t1 = round(t1, 2)
-    seg = {'kind': 'clip', 't0': t0, 't1': t1, 'track': trf, 'names': names, 'team': team, 'title': c.get('title'), 'sub': mmss(c['last_t']),
-           'tags_until': 4.5, 'hits': []}
+    # the length of the rally is a fact (serve to last shot); the number of shots was wrong too often to show
+    seg = {'kind': 'clip', 't0': t0, 't1': t1, 'track': trf, 'names': names, 'team': team, 'title': c.get('title'),
+           'sub': f"{int(round(c['last_t'] - c['serve_t']))} s rally · {mmss(c['last_t'])}", 'tags_until': 4.5, 'hits': []}
+    if P.get('meter'):
+        seg['meter'] = {'label': P['meter']['label'], 'points': [q for q in P['meter']['series'] if t0 - 90 <= q[0] <= t1 + 90]}
     if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS[c['won']], 'at': c['last_t']}
     if c.get('says'): seg['says'] = c['says']
     add(seg, f'point{i}')
@@ -91,10 +101,18 @@ for i, c in enumerate(P['points']):
         add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']], 'focus_team': team[r['who']],
              'zoom': zoom_for(trf, r['who'], a, b), 'title': names[r['who']], 'sub': r.get('sub')}, f'replay{i}')
 
-if P.get('outro'):
+def backdrop():
     kf_times = [float(x) for x in open(f'{S}/match/kf_times.txt')]; HDRK = hdr.kind(video)
-    im = cv2.imread(f"{S}/match/kf/{int(np.argmin(np.abs(np.array(kf_times) - (P['points'][0]['serve_t'] + 4)))) + 1:06d}.jpg")
-    bg = hdr.sdr(im, HDRK) if HDRK else im
+    first = next(c for c in P['points'] if not c.get('file'))
+    im = cv2.imread(f"{S}/match/kf/{int(np.argmin(np.abs(np.array(kf_times) - (first['serve_t'] + 4)))) + 1:06d}.jpg")
+    return hdr.sdr(im, HDRK) if HDRK else im
+
+
+if P.get('card'):
+    cv2.imwrite(f'{work}/card.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(backdrop(), P['card']['title'], [tuple(r) for r in P['card']['rows']]))
+    add({'kind': 'card', 'image': f'{work}/card.jpg', 'dur': 4.0}, 'card')
+if P.get('outro'):
+    bg = backdrop()
     cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, P['outro'], ' · '.join(x for x in (MT.get('venue'), MT['date']) if x)))
     add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6}, 'outro')
 

@@ -144,6 +144,15 @@ def draw_counter(fr, hits, t, last_extra=1.6, calm=False):
     if key not in _cnt: _cnt[key] = Art(gfx.counter(k, final, key[2]))
     c = _cnt[key]; put(fr, c, *right(c))
 
+_met = {}
+def draw_meter(fr, m, t):
+    """A measured number at the top right, where the counter was: {"label": "<NAME> BPM", "points": [[t, value], ...]}.
+    The value at t is read off the line between the two nearest points. Only a number that was measured belongs here."""
+    if not m or not m.get('points'): return
+    v = int(round(float(np.interp(t, [q[0] for q in m['points']], [q[1] for q in m['points']]))))
+    if v not in _met: _met[v] = Art(gfx.counter(v, False, 0.0, m.get('label', '')))
+    c = _met[v]; put(fr, c, *right(c))
+
 if seg['kind'] == 'card':
     print('source: the card', seg['image'])
     img = cv2.imread(seg['image']); n = int(round(seg['dur'] * FPS))
@@ -214,6 +223,7 @@ elif seg['kind'] == 'clip':
             x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 28))
             put(fr, im, x, y, a)
         if COUNTER: draw_counter(fr, seg.get('hits'), t0 + s)
+        draw_meter(fr, seg.get('meter'), t0 + s)
         enc.stdin.write(fr.tobytes()); n += 1
     enc.stdin.close(); enc.wait()
 

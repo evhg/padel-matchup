@@ -8,8 +8,8 @@ W, H = 1920, 1080
 _fonts = {}
 # The reel can be K times as large (SCALE: 2 gives 3840x2160). Every number in this file stays a design number (the
 # 1920x1080 picture, or 1080x1920). When K is not 1, the font, the canvas and the pen multiply by K: a graphic is
-# drawn sharp at its final size, not enlarged afterwards. K is 1 until reel_scale() is called (build.py and render.py
-# call it; versus.py does not, and gets what it always got).
+# drawn sharp at its final size, not enlarged afterwards. K is 1 until reel_scale() is called (build.py, render.py and
+# versus.py call it).
 K = 1
 def reel_scale():
     """Read SCALE, the one place that does. -> K (an int when it is whole)."""
@@ -174,10 +174,11 @@ def player_card(frame_bgr, box, name, team, sub=None):
     if sub: tracked(d, (114, 650), sub.upper(), font(48, 'SemiBold'), col, 6)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
-def counter(n, final=False, pop=0.0):
-    """Top-right: the rally's shot count. `pop` (0..1) makes the number larger for a moment when it rises."""
+def counter(n, final=False, pop=0.0, label='SHOTS'):
+    """Top-right: the rally's shot count. `pop` (0..1) makes the number larger for a moment when it rises.
+    With another label it is the box for any measured number (a heart rate: label "<NAME> BPM")."""
     size = int(84 * (1 + 0.22 * pop)); f = font(size, 'ExtraBold'); f2 = font(30, 'SemiBold')
-    s = str(n); lab = 'SHOTS'
+    s = str(n); lab = label
     wn = int(text_w(s, f)); wl = int(tracked_w(lab, f2, 4)); w = max(150, wn + 44, wl + 44); h = 150
     im, d = _sheet('RGBA', (w, h), (0, 0, 0, 0))
     d.rectangle((0, 0, w - 1, h - 1), fill=(LIME if final else INK) + (255 if final else 225,))
