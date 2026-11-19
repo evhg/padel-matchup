@@ -48,7 +48,7 @@ for f in files:
         p = dict(p, src=os.path.basename(f), w=pair(p.get('winner')), st=pair(p.get('server'))); pts.append(p)
 pts.sort(key=lambda p: p['serve_t']); merged = []
 for p in pts:
-    if merged and abs(p['serve_t'] - merged[-1]['serve_t']) < 4.0 and p['src'] != merged[-1]['src']:
+    if merged and abs(p['serve_t'] - merged[-1]['serve_t']) < 6.0 and p['src'] != merged[-1]['src']:
         if (p.get('confidence') or 0) > (merged[-1].get('confidence') or 0): merged[-1] = p
         continue
     merged.append(p)
@@ -100,13 +100,14 @@ for gi, g in enumerate(games):
     if g.get('bad'): notes.append(f"game {gi + 1} ({g['server']}): {g['bad']}")
     for k, p in enumerate(g['points']):
         if p.get('side') in ('R', 'L') and (p['side'] == 'R') != (k % 2 == 0): notes.append(f"game {gi + 1} point {k + 1} at {p['serve_t']:.1f}: served from the {p['side']} side, the count says the other")
-for a, b in zip(games, games[1:]):
-    if a['st'] is not None and a['st'] == b['st']: notes.append(f"games {a['n']} and {b['n']}: the same pair serves two games in a row")
 
 # 4. sets, and the score before and after every point
 want = [tuple(int(x) for x in s.split('-')) for s in final.split()]
-sets = [0, 0]; gm = [0, 0]; got = []; rows = []; good = True
+sets = [0, 0]; gm = [0, 0]; got = []; rows = []; good = True; prev = None
 for g in games:
+    # inside a set the two pairs serve in turn; a new set may start with either pair
+    if prev is not None and gm != [0, 0] and g['st'] is not None and g['st'] == prev['st']: notes.append(f"games {prev['n']} and {g['n']}: the same pair serves two games in a row")
+    prev = g
     if 'winner' not in g: good = False
     for k, p in enumerate(g['points']):
         if 'winner' in g:

@@ -14,6 +14,9 @@ The box is at the top right ("score_box": true in points.json keeps that corner 
 shows the score before the point; 0.35 s after the dead moment it changes, and the row that won is white for a
 moment. It stays through the close look and the replay of that point. Other parts (opening, review, cards) have none.
 Environment: SCALE as for the reel; AF (an ffmpeg sound filter for the same pass; default: the sound is copied).
+MISSING=skip: a point of the reel that the log does not hold gets no box, and the run says which. This is for a log
+that is proven for some sets only (score_log.py was then run on those sets with their final score): the first real
+log agreed with the typed score in two sets of four, and the box stands only on the points of those two.
 """
 import sys, os, glob, json, subprocess, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -45,7 +48,9 @@ for s in segs:
     d = json.load(open(s)); n = os.path.basename(s)[3:-5]; ln = length(s[:-5] + '.mp4')
     if d['kind'] == 'clip' and n.startswith('point'):
         c = P['points'][int(n[5:])]; row = min(SC['points'], key=lambda q: abs(q['serve_t'] - c['serve_t']))
-        if abs(row['serve_t'] - c['serve_t']) > 4.0: sys.exit(f"no score box: the point served at {c['serve_t']} is not in the log")
+        if abs(row['serve_t'] - c['serve_t']) > 4.0:
+            if os.environ.get('MISSING') != 'skip': sys.exit(f"no score box: the point served at {c['serve_t']} is not in the log")
+            print(f"no box on the point served at {c['serve_t']}: the log does not hold it"); cur = None; at += ln; continue
         if not row.get('sure'): sys.exit(f"no score box: the game of the point served at {c['serve_t']} could not be counted")
         if c.get('won') in (0, 1) and c['won'] != row['won']: sys.exit(f"no score box: the reel says pair {c['won']} won the point served at {c['serve_t']}, the log says pair {row['won']}")
         dead = at + d['dead'] - d['t0'] + 0.35
