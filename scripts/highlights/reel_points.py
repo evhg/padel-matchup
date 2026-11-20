@@ -20,7 +20,7 @@ points.json: {"points": [{
     "replay": {"who": id, "t": s, "before": 1.7, "after": 1.0},   optional: the moment to show again, slowly
     "says":   [{"t0": s, "t1": s, "who": id, "text": "..."}]      optional: words a viewer can HEAR in the clip
     "notes":  [{"t0": s, "t1": s, "who": id, "value": 157, "unit": "bpm", "label": "..."}]   optional: a measured number over a head
-}], "outro": "Your match. Your highlights.",          or {"line1", "line2", "shot": "screenshot.png", "shot_title", "shot_sub", "dur"}: the end card
+}], "outro": "Your match. Your highlights.",          or {"line1", "line2", "shot": "screenshot.png", "shot_title", "shot_sub" (a line or a list of lines), "dur"}: the end card
  "meter": {"label": "<NAME> BPM", "series": [[s, value], ...]},      optional: a measured number shown on every clip
  "card": {"title": "...", "rows": [[value, "label"], ...]}}          optional: a card of numbers before the outro
  "score_box": true                                                    optional: scorebox.py draws the score later; the "Replay" badge moves to the left
@@ -143,11 +143,11 @@ if P.get('card'):
 if isinstance(P.get('outro'), dict):
     o = P['outro']; shot = cv2.imread(o['shot']) if o.get('shot') else None
     cv2.imwrite(f'{work}/outro.png', (gfx.end_card_tall if TALL else gfx.end_card)(backdrop(), o['line1'], o['line2'], shot, o.get('shot_title'), o.get('shot_sub')))
-    add({'kind': 'card', 'image': f'{work}/outro.png', 'dur': o.get('dur', 5.0)}, 'outro')
+    add({'kind': 'card', 'image': f'{work}/outro.png', 'dur': o.get('dur', 5.0), 'hold_end': True}, 'outro')
 elif P.get('outro'):
     bg = backdrop()
     cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, P['outro'], ' · '.join(x for x in (MT.get('venue'), MT['date']) if x)))
-    add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6}, 'outro')
+    add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6, 'hold_end': True}, 'outro')
 
 print('segments', len(segs)); [print(' ', os.path.basename(s)) for s in segs]
 if len(sys.argv) > 6 and sys.argv[6] == 'plan': sys.exit(0)

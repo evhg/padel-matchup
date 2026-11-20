@@ -10,8 +10,8 @@ and match.json (HL_MATCH, default match/match.json under HL_HOME) says which pla
 Who made the log does not matter here: a person, a reader of frames, one day a detector. This file only does what
 the rules allow, and it says where the log and the rules do not agree:
 - a new server is a new game; inside a game the points are counted to four, two clear, or to a deciding point at
-  40-40. Friends use both in one match (one set with advantage, the next with a deciding point), so each game
-  is tried with both rules and keeps the one that makes it end on its last point;
+  40-40, or to a deciding point at the third deuce (the eleventh point). Friends use more than one of these in
+  one match, so each game is tried with each rule and keeps the one that makes it end on its last point;
 - the side of a serve says how many points the game has had (right = even): a point on the wrong side is reported;
 - a point with no clear winner is filled in only when exactly one answer makes its game end where it ended;
 - the sets are counted from the games, and the result is compared with the final score a player typed.
@@ -60,30 +60,32 @@ for p in merged:
     games[-1]['points'].append(p)
 
 
-def play(ws, golden):
-    """Walk a game. ws: the winner (0 or 1) of each point. -> (the winner of the game or None, the index of the
-    point that ended it or None, the score before each point as [a, b])."""
+def play(ws, mode):
+    """Walk a game. ws: the winner (0 or 1) of each point. mode: 'adv' (two clear), 'golden' (a deciding point at
+    40-40) or 'star' (advantage two times, then a deciding point at the third deuce: the eleventh point).
+    -> (the winner of the game or None, the index of the point that ended it or None, the score before each point)."""
     a = b = 0; before = []
     for i, w in enumerate(ws):
         before.append([a, b])
         if w == 0: a += 1
         else: b += 1
-        if (golden and max(a, b) >= 4) or (not golden and max(a, b) >= 4 and abs(a - b) >= 2): return (0 if a > b else 1), i, before
+        over = max(a, b) >= 4 and (abs(a - b) >= 2 or (mode == 'golden') or (mode == 'star' and a + b == 11))
+        if over: return (0 if a > b else 1), i, before
     return None, None, before
 
 
-def fits(ws, golden): w, i, _ = play(ws, golden); return w is not None and i == len(ws) - 1
+def fits(ws, mode): w, i, _ = play(ws, mode); return w is not None and i == len(ws) - 1
 
 
 def rule(ws):
-    """The rule at 40-40 that makes this game end on its last point: True (deciding point), False (advantage), or
-    None when neither does. A game that never reached 40-40 fits both, and the answer is the match's usual rule."""
-    return next((r for r in (GOLDEN, not GOLDEN) if fits(ws, r)), None)
+    """The rule at 40-40 that makes this game end on its last point: 'adv', 'golden' or 'star', or None when none
+    does. A game that never reached 40-40 fits all, and the answer is the match's usual rule."""
+    return next((r for r in (USUAL, 'adv', 'golden', 'star') if fits(ws, r)), None)
 
 
 # 3. which rule at 40-40? A game that goes on after 4-3 was played with advantage.
 long_games = [g for g in games if len(g['points']) > 7]
-GOLDEN = not long_games
+USUAL = 'adv' if long_games else 'golden'; GOLDEN = USUAL == 'golden'
 notes = []; filled = 0
 for gi, g in enumerate(games):
     ws = [p['w'] for p in g['points']]; unk = [i for i, w in enumerate(ws) if w is None]; g['n'] = gi + 1
@@ -93,7 +95,7 @@ for gi, g in enumerate(games):
             for i, c in zip(unk, ok[0]): g['points'][i]['w'] = c; g['points'][i]['filled'] = True; filled += 1
             ws = [p['w'] for p in g['points']]
         else: g['bad'] = f'{len(unk)} points with no clear winner and {len(ok)} ways to end the game'; notes.append(f"game {gi + 1} ({g['server']}): {g['bad']}"); continue
-    r = rule(ws); w, i, before = play(ws, GOLDEN if r is None else r)
+    r = rule(ws); w, i, before = play(ws, USUAL if r is None else r)
     if w is None: g['bad'] = 'the points do not end a game'
     elif i != len(ws) - 1: g['bad'] = f'the game is won at point {i + 1} of {len(ws)}'
     else: g['winner'] = w; g['before'] = before; g['golden'] = r

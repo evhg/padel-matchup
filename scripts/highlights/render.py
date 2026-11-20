@@ -1,7 +1,7 @@
 """Render one segment of the reel to an mp4 (H.264, AAC 48 kHz stereo, 30000/1001 fps; 1920x1080, or 1080x1920 with TALL=1).
 
 Segments (JSON, one per call):
-  {"kind": "card", "image": "x.jpg", "dur": 3.5}
+  {"kind": "card", "image": "x.jpg", "dur": 3.5}       optional "hold_end": true: no fade to black at the end (the last card of a reel)
   {"kind": "clip", "t0", "t1", "track": "clip.json", "names": [...], "team": [...], "title", "sub", "tags_until": 4.0}
       optional "won": {"team": 0|1, "name": "Team X", "at": seconds of the video}: who won the point, and the moment the
           ball is dead (in the net, out, the second bounce). The line appears just after that moment, never before it.
@@ -162,7 +162,8 @@ if seg['kind'] == 'card':
     enc = encoder(out, ['-f', 'lavfi', '-t', f"{seg['dur']:.3f}", '-i', 'anullsrc=r=48000:cl=stereo'])
     black = np.zeros_like(img)
     for i in range(n):
-        a = min(ease(i / 8), ease((n - 1 - i) / 8))
+        # the last card of a reel stays to its last picture: a reel that ends on black shows black where it stops
+        a = ease(i / 8) if seg.get('hold_end') else min(ease(i / 8), ease((n - 1 - i) / 8))
         enc.stdin.write(cv2.addWeighted(img, a, black, 1 - a, 0).tobytes() if a < 1 else img.tobytes())
     enc.stdin.close(); enc.wait()
 
