@@ -420,6 +420,17 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
     A time that only one reading supports is not yet a fact.
   - The players used advantage in the first two sets and a deciding point at 40-40 later. `score_log.py`
     tries both rules for each game.
+  - A player then checked the third set by eye, on a page with one clip for each point (41 clear answers).
+    The readers had 12 of those 41 winners wrong: seven of ten is not enough for a score. Most wrong ones were
+    balls that went out, into the fence or into a player's own glass. With the player's answers the set came
+    out as the typed 6-1 with no fault, and one game had eleven points: advantage two times, then a deciding
+    point at the third deuce. `score_log.py` knows that rule now.
+  - The page showed the log's fixed score at first, and the player could not use it: a corrected point did not
+    change the points after it. The count must follow each answer at once, and a game is a run of serves by
+    one player. "The same player still serves, so the game is not over" was the player's own check, and it
+    found the faults faster than any confidence number.
+  - One answer of the player did not fit the rules either (a game that stopped at 40-40). The frames showed a
+    racket that touched the ball before it went out. The rules check the person too.
   - The cost: about 400,000 tokens for each reader, and about 100 minutes for the match when all six read at
     once. That burst reached the usage limit of the account. This is far too much for every match.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
