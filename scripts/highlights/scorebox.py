@@ -64,8 +64,11 @@ for f in files: ins += ['-i', f]
 for k, (a, b, f) in enumerate(spans):
     w = cv2.imread(f, cv2.IMREAD_UNCHANGED).shape[1]
     g.append(f"[{last}][{files.index(f) + 1}:v]overlay={RW - w - int(edge * K)}:{int(top * K)}:enable='between(t,{a:.3f},{b - 0.001:.3f})'[v{k}]"); last = f'v{k}'
+# The sound of a joined reel is a little longer than its picture (each part ends on a whole block of sound). A player
+# shows black for that last half second, so the output stops with the last picture.
+vd = float(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=duration', '-of', 'csv=p=0', reel], capture_output=True, text=True).stdout.strip().strip(','))
 af = os.environ.get('AF'); sound = ['-af', af, '-ar', '48000', '-c:a', 'aac', '-b:a', '192k'] if af else ['-c:a', 'copy']
 subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', reel, *ins, '-filter_complex', ';'.join(g), '-map', f'[{last}]', '-map', '0:a:0', '-c:v', 'libx264', '-preset', 'medium',
-                '-crf', crf, '-pix_fmt', 'yuv420p', *sound, '-movflags', '+faststart', out], check=True)
+                '-crf', crf, '-pix_fmt', 'yuv420p', *sound, '-t', f'{vd:.3f}', '-movflags', '+faststart', out], check=True)
 for a, b, f in spans: print('%7.2f - %7.2f  %s' % (a, b, os.path.basename(f)))
 print('SCOREBOX_DONE', len(spans), 'spans', len(files), 'pictures')

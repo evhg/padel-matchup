@@ -240,7 +240,8 @@ def _shot(im, shot_bgr, x, y, h):
     return w
 
 def end_card(bg_bgr, line1, line2, shot_bgr=None, shot_title=None, shot_sub=None, site='kicksma.sh'):
-    """The last card: the name, what a player gets, where; and, with a screenshot of the app, an invitation."""
+    """The last card: the name, what a player gets, where; and, with a screenshot of the app, an invitation.
+    shot_sub: one line, or a list of lines."""
     im, d = _over(darken(bg_bgr, 22, 0.24))
     if shot_bgr is None:
         centred(d, 300, 'KICKSMASH', font(200, 'ExtraBold'), LIME, 10); d.rectangle((W / 2 - 60, 550, W / 2 + 60, 556), fill=LIME)
@@ -250,9 +251,12 @@ def end_card(bg_bgr, line1, line2, shot_bgr=None, shot_title=None, shot_sub=None
     tracked(d, (x, 170), 'KICKSMASH', _fitw('KICKSMASH', 170, 8, mw), LIME, 8); d.rectangle((x + 4, 390, x + 124, 396), fill=LIME)
     tracked(d, (x, 430), line1.upper(), _fitw(line1.upper(), 76, 4, mw), WHITE, 4)
     tracked(d, (x, 530), line2.upper(), _fitw(line2.upper(), 60, 4, mw, 'SemiBold'), LIME, 4)
-    if shot_title: tracked(d, (x, 700), shot_title.upper(), _fitw(shot_title.upper(), 54, 4, mw), WHITE, 4)
-    if shot_sub: tracked(d, (x, 775), shot_sub.upper(), _fitw(shot_sub.upper(), 40, 4, mw, 'SemiBold'), (200, 205, 212), 4)
-    tracked(d, (x, 880), site.upper(), font(48, 'ExtraBold'), LIME, 10)
+    subs = [shot_sub] if isinstance(shot_sub, str) else list(shot_sub or []); many = len(subs) > 1
+    if shot_title: tracked(d, (x, 676 if many else 700), shot_title.upper(), _fitw(shot_title.upper(), 54, 4, mw), WHITE, 4)
+    if shot_title and many: d.rectangle((x - 24, 690, x - 16, 772 + 50 * len(subs)), fill=LIME)     # one block: the invitation
+    fs = min((_fitw(t.upper(), 40, 3, mw, 'SemiBold') for t in subs), key=lambda f: f.size) if subs else None
+    for i, t in enumerate(subs): tracked(d, (x, (760 + 50 * i) if many else 775), t.upper(), fs, (200, 205, 212), 3)
+    tracked(d, (x, 880 if len(subs) < 3 else 940), site.upper(), font(48, 'ExtraBold'), LIME, 10)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def _fitw(s, size, spacing, maxw, weight='ExtraBold'):
@@ -309,10 +313,12 @@ def end_card_tall(bg_bgr, line1, line2, shot_bgr=None, shot_title=None, shot_sub
     _c(d, 410, line1.upper(), _fitw(line1.upper(), 76, 4, m), WHITE, 4); _c(d, 505, line2.upper(), _fitw(line2.upper(), 56, 4, m, 'SemiBold'), LIME, 4)
     y = 640
     if shot_bgr is not None:
-        hh = 800; ww = hh * shot_bgr.shape[1] / shot_bgr.shape[0]; _shot(im, shot_bgr, (TW - ww) / 2, y, hh); y += hh + 60
+        hh = 760; ww = hh * shot_bgr.shape[1] / shot_bgr.shape[0]; _shot(im, shot_bgr, (TW - ww) / 2, y, hh); y += hh + 50
     if shot_title: _c(d, y, shot_title.upper(), _fitw(shot_title.upper(), 54, 4, m), WHITE, 4)
-    if shot_sub: _c(d, y + 76, shot_sub.upper(), _fitw(shot_sub.upper(), 40, 4, m, 'SemiBold'), (200, 205, 212), 4)
-    _c(d, 1760, site.upper(), font(48, 'ExtraBold'), LIME, 10)
+    subs = [shot_sub] if isinstance(shot_sub, str) else list(shot_sub or [])
+    fs = min((_fitw(t.upper(), 40, 3, m, 'SemiBold') for t in subs), key=lambda f: f.size) if subs else None
+    for i, t in enumerate(subs): _c(d, y + 76 + 50 * i, t.upper(), fs, (200, 205, 212), 3)
+    _c(d, 1790, site.upper(), font(48, 'ExtraBold'), LIME, 10)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def player_card_tall(frame_bgr, box, name, team, sub=None):
