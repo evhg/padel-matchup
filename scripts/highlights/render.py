@@ -366,7 +366,9 @@ elif seg['kind'] == 'replay':
             bx = track_at(tr, nf + off).get(seg.get('focus'))
             if bx is not None:
                 tx, ty = pt((bx[4] - x0) * W / cw, (bx[5] - y0) * H / ch)
-                put(fr, tag, int(tx - tag.shape[1] / 2), int(max(60 if not TALL else VY + 4, ty - tag.shape[0] - 10)))
+                top = 60 if not TALL else VY + 4
+                if seg.get('badge_left') and not TALL and tx + tag.shape[1] / 2 > OW - 48 - 440: top = 168      # the score box has that corner: the tag stays under it
+                put(fr, tag, int(tx - tag.shape[1] / 2), int(max(top, ty - tag.shape[0] - 10)))
         if lt is not None:
             s = m / FPS; a2 = min(ease((s - 0.2) / 0.4), ease((total / FPS - s) / 0.5))
             put(fr, lt, LT[0], LT[1], a2)
