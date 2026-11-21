@@ -48,6 +48,7 @@ import { pruneRateRows } from "@/lib/domain/ratelimit";
 import { pruneDeviceHints } from "@/lib/domain/deviceHints";
 import { eq } from "drizzle-orm";
 import { events } from "@/db/schema";
+import { measured } from "@/lib/ops/cpu";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -60,7 +61,7 @@ export const maxDuration = 60;
  *  4. the single post-match score reminder to organizers
  *  5. automatic group matches (weekly slots) + member notifications
  */
-export async function GET(req: Request) {
+async function handle(req: Request) {
   // Vercel sends "Authorization: Bearer $CRON_SECRET" when the variable is set.
   // Without it the job still runs; every step is idempotent and rate-limited by DB state.
   const secret = process.env.CRON_SECRET;
@@ -365,3 +366,5 @@ export async function GET(req: Request) {
 
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), ...summary });
 }
+
+export const GET = measured("cron/hourly", handle);

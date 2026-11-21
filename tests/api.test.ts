@@ -4,6 +4,7 @@ import type { Db } from "@/db";
 import { webhookDeliveries } from "@/db/schema";
 import { authenticate, createApiKey, generateKey, hashKey } from "@/lib/api/keys";
 import { handleMcpPost, mcpCaller } from "@/lib/api/mcp";
+import { measured } from "@/lib/ops/cpu";
 import { openapiDocument } from "@/lib/api/openapi";
 import { createMatch, generateSchedule, joinMatch, NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { matchToPublic } from "@/lib/api/serialize";
@@ -221,5 +222,28 @@ describe("mcpCaller", () => {
     expect(c.method).toBe("");
     expect(mcpCaller("a", null)).toEqual({ ua: "a", method: "", client: "" });
     expect(mcpCaller("a", "text")).toEqual({ ua: "a", method: "", client: "" });
+  });
+});
+
+describe("measured", () => {
+  it("returns the route's answer and writes one line with what the call cost", async () => {
+    const lines: unknown[][] = [];
+    vi.spyOn(console, "info").mockImplementation((...a: unknown[]) => void lines.push(a));
+    const wrapped = measured("test/route", async (n: number) => new Response(String(n * 2)));
+    expect(await (await wrapped(21)).text()).toBe("42");
+    expect(lines).toHaveLength(1);
+    const [word, cost] = lines[0] as [string, Record<string, unknown>];
+    expect(word).toBe("cpu");
+    expect(cost.route).toBe("test/route");
+    for (const k of ["cpu_ms", "wall_ms", "up_s"]) expect(typeof cost[k], k).toBe("number");
+    vi.restoreAllMocks();
+  });
+  it("writes the line for a call that throws, and the error still reaches the caller", async () => {
+    const lines: unknown[][] = [];
+    vi.spyOn(console, "info").mockImplementation((...a: unknown[]) => void lines.push(a));
+    const wrapped = measured("test/broken", async () => { throw new Error("no"); });
+    await expect(wrapped()).rejects.toThrow("no");
+    expect(lines).toHaveLength(1);
+    vi.restoreAllMocks();
   });
 });

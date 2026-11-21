@@ -8,12 +8,13 @@ import type { OpContext } from "@/lib/api/operations";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { later } from "@/lib/alerts";
+import { measured } from "@/lib/ops/cpu";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 /** MCP over streamable HTTP, stateless: every POST is complete in itself; no server-initiated streams. */
-export async function POST(req: Request) {
+async function post(req: Request) {
   try {
     const db = await getDb();
     const c = await caller(db, req);
@@ -38,6 +39,8 @@ export async function POST(req: Request) {
     return fail(e);
   }
 }
+
+export const POST = measured("mcp", post);
 
 /** No SSE stream: clients that ask for one get a clear 405 and keep using POST. */
 export async function GET() {
