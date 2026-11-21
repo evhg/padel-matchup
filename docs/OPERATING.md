@@ -196,13 +196,19 @@ One hour of those lines, 05:15 to 06:13 UTC, with the Playtomic reader at rest a
   2 minutes a day, about 1 hour a month. The 7 November reading above gave the jobs 95% of the CPU by
   a division of the account's total by the number of job starts; it did not know of the `/mcp` calls,
   and nothing had measured a route.
-- **The measured routes explain about a third of what Vercel counted** (about 9 minutes a day in this
-  cycle). The rest is not measured yet. The likely parts: days when a crawler renders thousands of
-  pages (the invocations of a day went from about 4,300 to between 8,000 and 19,000 on ten days
-  from 28 October to 15 November; on the two largest, 7 and 8 November, people opened about 130 pages), the Playtomic reader until its block on
-  18 November (1,660 requests a day), the work a route hands to `after()`, and what the runtime itself
-  uses. A public page is rendered for each request, so a crawler's page costs a function call and
-  about 20 ms and more of CPU. Measure the pages before the next change that is meant to save CPU.
+- **The measured routes explain about a third of what Vercel counted** (about 6 minutes a day over
+  the last 30 days). The rest is not measured yet. The likely parts: the other projects of the
+  account (the next point), the Playtomic reader until its block on 18 November (1,660 requests a
+  day), the pages, the work a route hands to `after()`, and what the runtime itself uses. A public
+  page is rendered for each request, so each page costs a function call and about 20 ms and more of
+  CPU. Measure the pages before the next change that is meant to save CPU.
+- **The 4 hours are the account's, and the page counts the last 30 days.** The owner's Usage page on
+  21 November: 3 h 12 min of 4 h, "last 30 days", so no day of reset: each day the oldest day leaves
+  the sum. The invocations of the account went from about 4,300 a day to between 8,000 and 19,000 on
+  ten days from 28 October to 15 November. The first reading called those days crawlers on Kicksmash,
+  from a share of 98% that `GET /v2/usage` gave for one day. The Usage page's chart by project showed
+  the second project of the account on exactly those days. Read a share over the whole period, by
+  project, before a day is given a cause. A heavy day on any project of the account can pause all.
 Since 28 October 2026 a signed-in browser adds one invocation in 30 days for its new year
 (`POST /api/me/session?do=renew`, no read), a browser whose record is gone one in its life (`?do=dead`),
 and the "Remember me on this phone" card one a day for a browser that sees it (`passkey_shown`). At 1,000
