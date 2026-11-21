@@ -4,10 +4,12 @@ usage: score_rows.py <engine.json> <out.json> [a serve time to print ...]
 
 The games and the sets of a row are the engine's. The point score of a moment is given only where every way to count
 its game (the winner of the game and the winners a person confirmed, confidence 1.0, held) gives the same score there.
-Where the ways differ, the row has no "points", and scorebox.py draws sets and games only."""
+Where the ways differ, the row has no "points", and scorebox.py draws sets and games only.
+A point the engine added (nobody saw it; the serve sides say it was played) keeps its place in the count of its game
+and gets no row. A game with a serve from the wrong side for its place gets no point score at all."""
 import json, itertools, sys
 src, dst = sys.argv[1], sys.argv[2]
-E=json.load(open(src)); R=[r for r in E['points'] if r.get('serve_t')]
+E=json.load(open(src)); R=E['points']
 W=['0','15','30','40']
 def words(a,b):
     if a>=3 and b>=3: return ['40','40'] if a==b else (['AD','40'] if a>b else ['40','AD'])
@@ -31,15 +33,16 @@ for r in R:
     games[-1][1].append(r)
 rows=[]; shown=0
 for gi,(k,g) in enumerate(games):
-    n=len(g); winner=0 if sum(r['won']==0 for r in g)>sum(r['won']==1 for r in g) else 1
-    fixed=[r['won'] if (r.get('confidence')==1.0) else None for r in g]
+    n=len(g); odd=any(r.get('side_fits') is False for r in g); winner=0 if sum(r['won']==0 for r in g)>sum(r['won']==1 for r in g) else 1
+    fixed=[r['won'] if (r.get('confidence')==1.0 and not r.get('unseen')) else None for r in g]
     ws=ways(n,fixed,winner) or [tuple(r['won'] for r in g)]
     nxt=games[gi+1][1][0]['before'] if gi+1<len(games) else None
     for i,r in enumerate(g):
+        if r.get('unseen'): continue
         b=r['before']; bef={(sum(w==0 for w in x[:i]),sum(w==1 for w in x[:i])) for x in ws}
         aft={(sum(w==0 for w in x[:i+1]),sum(w==1 for w in x[:i+1])) for x in ws}
         st={'serving':b['serving'],'sets':b['sets'],'games':b['games']}
-        if len(bef)==1: st['points']=words(*next(iter(bef))); shown+=1
+        if len(bef)==1 and not odd: st['points']=words(*next(iter(bef))); shown+=1
         if i==n-1:
             if nxt: en={'serving':None,'sets':nxt['sets'],'games':nxt['games'],'points':['0','0']}
             else:
@@ -50,5 +53,6 @@ for gi,(k,g) in enumerate(games):
         rows.append({'serve_t':r['serve_t'],'dead_t':r.get('dead_t'),'won':r['won'],'sure':True,'before':st,'after':en})
 json.dump({'pairs':E['pairs'],'final':E['final'],'verdict':'agrees with the final score' if E['ok'] else 'does NOT agree','points':rows},open(dst,'w'),indent=1)
 print(len(rows),'points;',shown,'with a sure point score before them')
+print(sum(1 for r in R if r.get('unseen')),'points that nobody saw are in the count;',sum(1 for r in R if r.get('side_fits') is False),'serves from a side that does not fit')
 for t in [float(x) for x in sys.argv[3:]]:
     r=min(rows,key=lambda q:abs(q['serve_t']-t)); print(round(t),r['won'],r['before'],'->',r['after'])
