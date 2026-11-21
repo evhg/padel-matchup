@@ -714,6 +714,14 @@ learning can be a test, a gate step or a script, make it one and put the story i
   "55-shot rally" was serve practice, and a replay's "shot" was a high five. Each was found on a sheet
   of frames in one look. `scripts/highlights/README.md` has the full list for the highlight reel.
 
+- **A count is not a cost: measure on the machine that sends the bill.** Vercel warned at 75% of the
+  active CPU, and three of four function calls were `/mcp`. The first answer to the owner named those
+  calls as the waste. One hour of `cpu` lines from production said otherwise: 4.4 ms a call, about a
+  tenth of an hour a month, against an hour for the scheduled jobs and a larger part that no route had
+  measured. An earlier reading had divided the account's total by the job starts and called the result
+  the cost of a start. Where a platform does not show a cost by route, make the route write it down
+  (`measured()` in `src/lib/ops/cpu.ts`), and read that before naming a cause.
+
 ### Wall clock
 
 Wall clock first, credits second. What actually moved it, measured:
