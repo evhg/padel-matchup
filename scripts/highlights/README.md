@@ -472,6 +472,22 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **The crowd answers in the slow look, and a funny clip gets a jeer** (`CHEER_AT=slowmo`; the owner). After the
   point the players talk and laugh, and that is the best sound of a reel of friends. A cheer file is used once in a
   reel, so twelve clips need twelve sounds.
+- **The drop of the music lands on a click, and the click is before the dead ball** (`music.py`; the owner's idea,
+  21 November 2026: "time the drop with a sudden hit or smash"). The quiet start of the track plays under the
+  opening, and the beat starts again from its first bar on one hit of each clip: the serve of a full rally, the last
+  hit of a clip that starts late. The time of the plan is a reader's time and can be 0.8 s off, so the hit is set on
+  the sharpest click near it (the sound above 2 kHz). The first rule took the loudest click within a second: in one
+  clip that was the ball in the fence after the point, when the winner line was on the screen. A far serve is
+  quieter than a ball that rolls into a fence. A track of a free model (`modal/music.py`, MusicGen, licence for
+  use that earns no money) had 93% of its energy under 60 Hz, which a phone does not play: a layer one octave up
+  is made from the bass. A moving average over 11 million samples with `np.convolve` did not end in ten minutes;
+  `uniform_filter1d` needs a second.
+- **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
+  with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
+  before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three
+  versions: an empty dark box beside the logo (a venue with no name still got its box), a name tag under the score
+  box, a label that named one player on a close look at another, and a title of 28 seconds over a line of 27. Give
+  the reader the facts of each part and one sheet of frames for each, and ask for the second that proves a fault.
 - **A full disk cuts a segment short and says nothing at the next build.** The renderer died on a full disk, and
   two segments stayed as files with no end. A segment that exists is not made again. Before a build is started
   again after "No space left on device", remove the segments written last (`ffprobe` says "moov atom not found").

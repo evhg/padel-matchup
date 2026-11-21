@@ -117,9 +117,9 @@ def bug(venue):
     f1, f2 = font(34, 'ExtraBold'), font(30, 'SemiBold')
     a, b = 'KICKSMASH', venue.upper()
     wa, wb = int(tracked_w(a, f1, 3)), int(tracked_w(b, f2, 3))
-    im, d = _sheet('RGBA', (wa + wb + 76, 50), (0, 0, 0, 0))
+    im, d = _sheet('RGBA', (wa + wb + 76 if b else wa + 32, 50), (0, 0, 0, 0))
     d.rectangle((0, 0, wa + 31, 49), fill=LIME + (255,)); tracked(d, (16, 2), a, f1, INK + (255,), 3)
-    d.rectangle((wa + 32, 0, wa + wb + 75, 49), fill=INK + (225,)); tracked(d, (wa + 48, 5), b, f2, WHITE + (255,), 3)
+    if b: d.rectangle((wa + 32, 0, wa + wb + 75, 49), fill=INK + (225,)); tracked(d, (wa + 48, 5), b, f2, WHITE + (255,), 3)   # no venue: no empty box
     return rgba_to_bgra(im)
 
 def darken(bg_bgr, blur=18, dim=0.38):
