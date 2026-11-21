@@ -21,6 +21,7 @@ import { eq } from "drizzle-orm";
 import { channels, sendReminders } from "@/lib/channels";
 import { matchParams, recordNotices } from "@/lib/domain/notices";
 import { scrapeIfDue } from "@/lib/booking/scrape";
+import { measured } from "@/lib/ops/cpu";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -56,7 +57,7 @@ async function readCourtTimes(db: Awaited<ReturnType<typeof getDb>>, now: Date, 
  * there, or it waits for the next tick that something else wakes (`tests/push-gate.test.ts`).
  * Guarded by CRON_SECRET when set. Idempotent: the event is claimed first.
  */
-export async function GET(req: Request) {
+async function handle(req: Request) {
   const started = performance.now();
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization");
@@ -153,3 +154,5 @@ export async function GET(req: Request) {
   const scrape = await readCourtTimes(db, now, started);
   return NextResponse.json({ ok: summary.errors.length === 0, at: now.toISOString(), push: "enabled", ...summary, coach: coachTick, scrape });
 }
+
+export const GET = measured("cron/push", handle);
