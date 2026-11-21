@@ -156,9 +156,12 @@ print('segments', len(segs)); [print(' ', os.path.basename(s)) for s in segs]
 if len(sys.argv) > 6 and sys.argv[6] == 'plan': sys.exit(0)
 
 parts = []
+# A part is built again when its plan is newer than its file, and also when the code that draws it is: a
+# correction in gfx.py reached two parts of thirty, because only those two had a new plan.
+HERE = os.path.dirname(os.path.abspath(__file__)); code = max(os.path.getmtime(os.path.join(HERE, f)) for f in ('render.py', 'gfx.py'))
 for s in segs:
     mp4 = s[:-5] + '.mp4'
-    if not os.path.exists(mp4) or os.path.getmtime(mp4) < os.path.getmtime(s):
+    if not os.path.exists(mp4) or os.path.getmtime(mp4) < max(os.path.getmtime(s), code):
         subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'render.py'), video, s, mp4], check=True)
     parts.append(mp4)
 with open(f'{work}/list.txt', 'w') as fh:

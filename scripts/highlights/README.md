@@ -488,6 +488,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   versions: an empty dark box beside the logo (a venue with no name still got its box), a name tag under the score
   box, a label that named one player on a close look at another, and a title of 28 seconds over a line of 27. Give
   the reader the facts of each part and one sheet of frames for each, and ask for the second that proves a fault.
+- **A part of the reel is as old as the code that drew it.** `reel_points.py` built a part again only when its
+  plan had changed. Two corrections in the drawing code then reached two parts of thirty, and the run said nothing.
+  The frames of an old part showed it. A part is now built again when `render.py` or `gfx.py` is newer than it.
 - **A full disk cuts a segment short and says nothing at the next build.** The renderer died on a full disk, and
   two segments stayed as files with no end. A segment that exists is not made again. Before a build is started
   again after "No space left on device", remove the segments written last (`ffprobe` says "moov atom not found").
