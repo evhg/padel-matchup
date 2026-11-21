@@ -170,6 +170,39 @@ The average of 0.85 s a start fits a mix of warm and cold starts. That is why th
 starts, not work. These numbers do not measure a cold start on Vercel itself, the network waits (which
 count against the memory, not the CPU), TLS to the platforms and to Supabase, or the hourly and
 calendar jobs. Read Vercel's usage page a week after the change to know the real figure.
+
+**What the routes measured on Vercel itself (21 November 2026).** Vercel wrote that the account had used
+75% of the 4 hours. The free plan does not say which route used them: the observability query answers
+402 ("Observability Plus is required"), and `GET /v2/usage?type=requests` with `VERCEL_TOKEN` gives the
+invocations and the GB-hours of each day, not the active CPU. So the routes that run with no person
+behind them measure themselves: `measured()` in `src/lib/ops/cpu.ts` writes one `cpu` line a call to
+the runtime log (`cpu_ms`, `wall_ms`, the age of the process, and `boot_cpu_ms` for a young process),
+and `/mcp` writes a `mcp_call` line that names its caller. The log keeps one hour on the free plan.
+One hour of those lines, 05:15 to 06:13 UTC, with the Playtomic reader at rest after a block:
+
+| Route | Calls in the hour | Active CPU in the hour | Of that, cold starts |
+|---|---|---|---|
+| `/api/cron/sync` | 6 | 1.5 s | 2 starts, 0.96 s |
+| `/api/cron/push` | 3 (the gate let 3 of 12 ticks through) | 2.3 s | 2 starts, 1.0 s |
+| `/api/cron/hourly` | 1 | 1.2 s | 1 start, 0.45 s |
+| `POST /mcp` | about 150 | about 0.7 s (4.4 ms a call, 26 calls read) | none: the process was 68 minutes old |
+
+- **A cold start on Vercel costs about 0.5 s of CPU, not 2 s.** The 2 s of 7 November was a build
+  machine with `next start`. The jobs start cold at :00 and :30, when two or three of them arrive in
+  the same second, and stay warm between.
+- **A count is not a cost.** `/mcp` takes about 3,300 calls a day, three of every four function calls
+  of the account, and nearly all come from monitors of public MCP directories (one of them every two
+  minutes). They cost about 16 s of CPU a day, about 0.13 hours a month. The three jobs cost about
+  2 minutes a day, about 1 hour a month. The 7 November reading above gave the jobs 95% of the CPU by
+  a division of the account's total by the number of job starts; it did not know of the `/mcp` calls,
+  and nothing had measured a route.
+- **The measured routes explain about a third of what Vercel counted** (about 9 minutes a day in this
+  cycle). The rest is not measured yet. The likely parts: days when a crawler renders thousands of
+  pages (the invocations of a day went from about 4,300 to between 8,000 and 19,000 on ten days
+  from 28 October to 15 November; on the two largest, 7 and 8 November, people opened about 130 pages), the Playtomic reader until its block on
+  18 November (1,660 requests a day), the work a route hands to `after()`, and what the runtime itself
+  uses. A public page is rendered for each request, so a crawler's page costs a function call and
+  about 20 ms and more of CPU. Measure the pages before the next change that is meant to save CPU.
 Since 28 October 2026 a signed-in browser adds one invocation in 30 days for its new year
 (`POST /api/me/session?do=renew`, no read), a browser whose record is gone one in its life (`?do=dead`),
 and the "Remember me on this phone" card one a day for a browser that sees it (`passkey_shown`). At 1,000
