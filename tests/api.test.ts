@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { webhookDeliveries } from "@/db/schema";
 import { authenticate, createApiKey, generateKey, hashKey } from "@/lib/api/keys";
-import { handleMcpPost } from "@/lib/api/mcp";
+import { handleMcpPost, mcpCaller } from "@/lib/api/mcp";
 import { openapiDocument } from "@/lib/api/openapi";
 import { createMatch, generateSchedule, joinMatch, NO_SIDE_EFFECTS } from "@/lib/api/operations";
 import { matchToPublic } from "@/lib/api/serialize";
@@ -205,5 +205,21 @@ describe("calendar feed", () => {
     expect(ics).toContain("SEQUENCE:2");
     expect(ics).toContain("STATUS:CANCELLED");
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
+  });
+});
+
+
+describe("mcpCaller", () => {
+  it("names the program and the method, and nothing else", () => {
+    expect(mcpCaller("node-fetch/3.3 (+https://example.test)", { jsonrpc: "2.0", id: 1, method: "initialize", params: { clientInfo: { name: "some-directory", version: "1" } } }))
+      .toEqual({ ua: "node-fetch/3.3 (+https://example.test)", method: "initialize", client: "some-directory" });
+    expect(mcpCaller(null, [{ jsonrpc: "2.0", method: "tools/list" }, { jsonrpc: "2.0", method: "ping" }])).toEqual({ ua: "", method: "tools/list +1", client: "" });
+  });
+  it("cuts a long or strange value short and does not throw on a body that is not a call", () => {
+    const c = mcpCaller("x".repeat(500) + "\u0007", { method: 7, params: "no" });
+    expect(c.ua).toHaveLength(80);
+    expect(c.method).toBe("");
+    expect(mcpCaller("a", null)).toEqual({ ua: "a", method: "", client: "" });
+    expect(mcpCaller("a", "text")).toEqual({ ua: "a", method: "", client: "" });
   });
 });
