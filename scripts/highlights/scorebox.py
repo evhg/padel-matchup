@@ -39,7 +39,7 @@ segs = sorted(glob.glob(f'{work}/[0-9][0-9]-*.json')); at = 0.0; spans = []; img
 def img(st, hot=None):
     key = json.dumps([st, hot])
     if key not in imgs:
-        f = f'{work}/score-{len(imgs):02d}.png'; cv2.imwrite(f, gfx.score_box(names, st.get('serving'), st['sets'], st['games'], st['points'], hot)); imgs[key] = f
+        f = f'{work}/score-{len(imgs):02d}.png'; cv2.imwrite(f, gfx.score_box(names, st.get('serving'), st['sets'], st['games'], st.get('points'), hot if st.get('points') else None)); imgs[key] = f
     return imgs[key]
 
 

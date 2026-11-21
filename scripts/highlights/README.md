@@ -433,5 +433,31 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
     racket that touched the ball before it went out. The rules check the person too.
   - The cost: about 400,000 tokens for each reader, and about 100 minutes for the match when all six read at
     once. That burst reached the usage limit of the account. This is far too much for every match.
+- **The score is counted backwards from what is sure** (`score_engine.py`, `score_rows.py`; the owner, 21 November
+  2026). A new server is a new game, and the typed set score says how many games each pair won. The engine takes,
+  for a set, the way to give every point a winner that ends each game on its last point, gives each pair its games,
+  and agrees with the reader as much as it can. Measured on the third set of the second match against a player's
+  answers for all 43 points: the readers alone had 32 of 43 points and 4 of 7 games right; the engine had 34 of 43
+  points and 7 of 7 games. So the games and the sets of the box are sure, and the point score is not. `score_rows.py`
+  gives a point score only where every valid count of the game agrees (102 of 182 moments of that match), and
+  `scorebox.py` draws sets and games alone for the rest. The players did not call the score aloud: of 43 points, the
+  recorders heard no score before a serve.
+- **A highlight is chosen by what the players did after it, then read in the picture** (`cand7.py` is in the work
+  folder of that reel, not here). Every point got a number from the recorders' transcript in the seconds after the
+  ball was dead (a laugh, a shout, a cheer, words) and from the rally length. The point a player later named "should
+  have been a highlight" came out sixth of 188 with no help. Two readers then described the 18 best clips frame by
+  frame: 7 were "in", 9 "maybe", 2 "out", and one of the "out" clips had been in the reel before. A clip of the reel
+  before that the owner called boring had no reaction in the picture.
+- **A moment late in an ordinary rally starts late** (`"start_t"`). The rally before a blooper is the boring part.
+  The clip starts about 4.5 s before the ball is dead, so the title has time, and `"serve_t"` stays the true serve.
+- **The crowd answers in the slow look, and a funny clip gets a jeer** (`CHEER_AT=slowmo`; the owner). After the
+  point the players talk and laugh, and that is the best sound of a reel of friends. A cheer file is used once in a
+  reel, so twelve clips need twelve sounds.
+- **A full disk cuts a segment short and says nothing at the next build.** The renderer died on a full disk, and
+  two segments stayed as files with no end. A segment that exists is not made again. Before a build is started
+  again after "No space left on device", remove the segments written last (`ffprobe` says "moov atom not found").
+- **One more replay moves the number of every segment after it.** The old numbered files stayed in the folder, and
+  the score box and the cheers read the folder: a reel of 4 minutes was counted as 6. `reel_points.py` now removes
+  the numbered files that its plan does not use.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

@@ -214,19 +214,20 @@ def stat_bubble(value, unit, label=None, team=0):
 def score_box(names, serving, sets, games, points, hot=None):
     """Top-right: the score at this moment of the match, as on television. Two rows, one for each pair: a bar in the
     colour of the pair, a dot when that pair serves, the name, the sets won, the games of this set, the points of
-    this game. `sets`, `games`: two whole numbers; `points`: two words ('0', '15', '30', '40', 'AD').
+    this game. `sets`, `games`: two whole numbers; `points`: two words ('0', '15', '30', '40', 'AD'), or None where
+    the point score is not sure: the box then has sets and games only.
     `hot`: the row whose points have just changed; that cell is white for a moment.
     A score box says a fact: it is drawn only from a score that was checked against the final score of the match."""
     f1, f2 = font(36, 'ExtraBold'), font(42, 'ExtraBold')
     nw = max(int(tracked_w(n.upper(), f1, 2)) for n in names); rh, cw = 56, 60
-    x_name = 46; x_c = x_name + nw + 20; w = x_c + 3 * cw; h = 2 * rh + 2
+    x_name = 46; x_c = x_name + nw + 20; w = x_c + (3 if points else 2) * cw; h = 2 * rh + 2
     im, d = _sheet('RGBA', (w, h), (0, 0, 0, 0))
     for r in (0, 1):
         y = r * (rh + 2); col = LIME if r == 0 else (120, 160, 255)
         d.rectangle((0, y, x_c - 1, y + rh - 1), fill=INK + (235,)); d.rectangle((0, y, 7, y + rh - 1), fill=col + (255,))
         if serving == r: d.ellipse((20, y + rh / 2 - 7, 34, y + rh / 2 + 7), fill=LIME + (255,))
         tracked(d, (x_name, y + 5), names[r].upper(), f1, WHITE + (255,), 2)
-        cells = [(str(sets[r]), (44, 48, 56), (170, 176, 186)), (str(games[r]), INK, WHITE), (str(points[r]), WHITE if hot == r else LIME, INK)]
+        cells = [(str(sets[r]), (44, 48, 56), (170, 176, 186)), (str(games[r]), INK, WHITE)] + ([(str(points[r]), WHITE if hot == r else LIME, INK)] if points else [])
         for i, (txt, bg, fg) in enumerate(cells):
             x = x_c + i * cw; d.rectangle((x, y, x + cw - 1, y + rh - 1), fill=tuple(bg) + (245,))
             d.text((x + (cw - text_w(txt, f2)) / 2, y + 2), txt, font=f2, fill=tuple(fg) + (255,))

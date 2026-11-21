@@ -8,6 +8,10 @@ The owner asked for that sound (19 November 2026) with two rules:
 - each point gets a different cheer ("cheer": "<file>" in a point of points.json; a file is used once);
 - a cheer never sounds at the same time as a player who shouts or celebrates.
 
+CHEER_AT=slowmo: the cheer starts with the first slow look after its point (the "react" or the "replay" of that
+point), where no player talks; a point with no slow look keeps the rule below. A funny clip takes a jeer or a
+laugh for its file, not a cheer.
+
 So a cheer starts at the first moment after the point is decided ("dead_t"; without it, the last shot) when no
 voice is heard for 1.5 seconds, inside the clip of the point or at its end. A smash that flies out is not cheered
 while it is in the air. If a voice comes back while the cheer runs, the cheer goes down by 12 dB for as
@@ -17,7 +21,7 @@ a racket hit is shorter than that.
 The picture is copied as it is. The level is the loudest half second of a cheer, in dB under full scale: the
 players stay the loudest thing in the reel.
 """
-import sys, os, glob, json, subprocess, numpy as np
+import sys, os, re, glob, json, subprocess, numpy as np
 from scipy.signal import butter, sosfilt
 
 reel, work, pointsf, cdir, out = sys.argv[1:6]
@@ -35,10 +39,12 @@ def length(f):
 
 
 P = json.load(open(pointsf))['points']
-segs = sorted(glob.glob(f'{work}/[0-9][0-9]-*.json')); at = 0.0; clips = {}
+segs = sorted(glob.glob(f'{work}/[0-9][0-9]-*.json')); at = 0.0; clips = {}; slow = {}
 for s in segs:
     d = json.load(open(s)); n = os.path.basename(s)[3:-5]; ln = length(s[:-5] + '.mp4')
     if d['kind'] == 'clip' and n.startswith('point'): clips[int(n[5:])] = (at, ln, d)
+    m = re.match(r'(react|replay)(\d+)$', n)
+    if m and int(m.group(2)) not in slow: slow[int(m.group(2))] = at          # the first slow look after point i
     at += ln
 x = sound(reel, 2); mono = x.mean(1)
 band = sosfilt(butter(4, [300, 3000], 'bandpass', fs=SR, output='sos'), mono)
@@ -57,6 +63,8 @@ for i, c in enumerate(P):
     start = fe
     for f in range(f1 + 3, fe):
         if not voice[f:f + 30].any(): start = f; break       # a shout often comes half a second after the point: look 1.5 s ahead
+    # CHEER_AT=slowmo (the owner, 21 November 2026): the crowd answers in the slow look after the point, where no player talks
+    if os.environ.get('CHEER_AT') == 'slowmo' and i in slow: start = int((slow[i] + 0.2) * 20)
     ch = sound(os.path.join(cdir, c['cheer']), 1)[:, 0]
     kk = len(ch) // (SR // 2); peak = max(float(np.sqrt((ch[j * (SR // 2):(j + 1) * (SR // 2)] ** 2).mean())) for j in range(max(kk, 1)))
     ch = ch * (10 ** (LEVEL / 20) / (peak + 1e-9))
