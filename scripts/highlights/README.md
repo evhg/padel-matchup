@@ -442,6 +442,25 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   gives a point score only where every valid count of the game agrees (102 of 182 moments of that match), and
   `scorebox.py` draws sets and games alone for the rest. The players did not call the score aloud: of 43 points, the
   recorders heard no score before a serve.
+- **The side of the serve counts the points, and it does not care who won** (`score_engine.py`, 21 November 2026).
+  The first point of a game is served from the right, and the side changes with each point. Two serves in a row
+  from one side mean that a point is missing between them. The reader's log of the fourth set had three such
+  places. Two were points that nobody had written down: one a player had to add by hand, and one made a 40-AD
+  read as 40-40, so a clip of the seventh reel had the title "Deciding point" on a point that was not one. The
+  third was a row that a player later called "not a point". The engine now puts an unseen point where the sides
+  ask for one, and `score_rows.py` keeps it in the count. A game with a serve from the wrong side for its place
+  gets no point score. The winners did not show these faults: the sets, the games and the last point of each
+  game all agreed before.
+- **A recogniser writes the nearest common sentence, not the padel word** (21 November 2026). A player shouted
+  "Golden" before the last point, and a person who watched the reel heard it. Five recognisers did not (Scribe,
+  Whisper turbo, Whisper large-v3, Parakeet, and Voxtral, a model that answers questions about a sound), on three
+  microphones, with the voices taken out of the hall sound first (Demucs) and without. A picture of the sound
+  showed the shout on all three microphones, so the recording has it. Three recognisers wrote the same words
+  for it: "Go ahead, I'll take it". With score words as a hint, Whisper wrote "forty, forty, forty" and repeated
+  the hint on clips with no call. Asked to choose one call of six, Voxtral gave the same letter for 23 of 30
+  clips. All five wrote a sentence spoken beside the microphone right. So the count gives the context that the
+  ear does not have: at 40-40, "I'll take it" before the serve is the receiver's choice at a deciding point. A
+  heard word stays a check on the count, and a check needs a list of the words that a call is mistaken for.
 - **A highlight is chosen by what the players did after it, then read in the picture** (`cand7.py` is in the work
   folder of that reel, not here). Every point got a number from the recorders' transcript in the seconds after the
   ball was dead (a laugh, a shout, a cheer, words) and from the rally length. The point a player later named "should
