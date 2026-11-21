@@ -3,7 +3,7 @@ import { after } from "next/server";
 import { getDb } from "@/db";
 import { CORS_HEADERS, fail, json, options, readJson } from "@/lib/api/http";
 import { caller, guard } from "@/lib/api/keys";
-import { handleMcpPost, MCP_PROTOCOL_VERSIONS } from "@/lib/api/mcp";
+import { handleMcpPost, mcpCaller, MCP_PROTOCOL_VERSIONS } from "@/lib/api/mcp";
 import type { OpContext } from "@/lib/api/operations";
 import { emitMatchEvent } from "@/lib/api/webhooks";
 import { bumpMetric } from "@/lib/domain/metrics";
@@ -17,14 +17,20 @@ export async function POST(req: Request) {
   try {
     const db = await getDb();
     const c = await caller(db, req);
-    await guard(db, c, "mcp");
+    // A refused call costs a function start too, so the log names its caller as well (the body is not read for it).
+    await guard(db, c, "mcp").catch((e) => {
+      console.info("mcp_call", { ...mcpCaller(req.headers.get("user-agent"), null), refused: true });
+      throw e;
+    });
     await later(() => bumpMetric(db, "mcp_calls"));
     const ctx: OpContext = {
       afterwards: (fn) => after(fn),
       emit: (event, code, extra) => after(() => emitMatchEvent(db, event, code, extra, { channel: "mcp" })),
       channel: "mcp",
     };
-    const out = await handleMcpPost(db, await readJson(req), ctx);
+    const body = await readJson(req);
+    console.info("mcp_call", mcpCaller(req.headers.get("user-agent"), body));
+    const out = await handleMcpPost(db, body, ctx);
     const version = req.headers.get("mcp-protocol-version") ?? MCP_PROTOCOL_VERSIONS[0];
     if (out.body === null) return new NextResponse(null, { status: out.status, headers: { ...CORS_HEADERS, "MCP-Protocol-Version": version } });
     return json(out.body, { status: out.status, headers: { "MCP-Protocol-Version": version } });

@@ -312,6 +312,20 @@ export function toolErrorText(e: unknown): string {
 export type McpOutcome = { status: number; body: unknown | null };
 
 /** Handles one HTTP POST body: a single JSON-RPC message or a batch. */
+/**
+ * Who calls the MCP door, in one short line for the runtime log: the program's own name for itself (its
+ * User-Agent, and `clientInfo.name` on `initialize`) and the method it calls. No address and no key. Vercel
+ * keeps the log for an hour on the free plan, and that is long enough to name a caller that comes every
+ * few seconds: about 3,300 calls a day reached this door in November 2026 while people opened about 200
+ * pages, and each call costs a function start that counts against the account's active CPU.
+ */
+export function mcpCaller(userAgent: string | null, body: unknown): { ua: string; method: string; client: string } {
+  const clip = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/[^\x20-\x7e]/g, "").slice(0, n) : "");
+  const first = (Array.isArray(body) ? body[0] : body) as { method?: unknown; params?: { clientInfo?: { name?: unknown } } } | null;
+  const method = clip(first?.method, 40) + (Array.isArray(body) && body.length > 1 ? ` +${body.length - 1}` : "");
+  return { ua: clip(userAgent, 80), method, client: clip(first?.params?.clientInfo?.name, 40) };
+}
+
 export async function handleMcpPost(db: Db, body: unknown, ctx: OpContext): Promise<McpOutcome> {
   const messages = Array.isArray(body) ? body : [body];
   if (messages.length === 0) return { status: 400, body: rpcError(null, -32600, "Empty batch.") };
