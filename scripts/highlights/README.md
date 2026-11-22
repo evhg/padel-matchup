@@ -523,6 +523,28 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   shows 0.18 m/s at both ends, and two players move 24% and 31% more at the far end than at the near end, the
   other two 8% and -1%. Without a walk of known length there is no proof of the 10%. One player who walks the
   lines of one half before the match (40 m) gives that proof.
+- **A speed is a time between two known places, and a reader checks both ends** (`ball_places.py`, `flight.py`,
+  `modal/strip.py`, 22 November 2026). The camera file at 4K and 60 pictures a second shows the ball in almost
+  every picture: `ball_places.py` found its candidates for all 182 points on Modal in 10 minutes. What failed
+  after that, in the order it failed:
+  - *One camera does not see depth.* A fit of a free flight reads the depth from the bend that gravity gives.
+    Spin changes that bend. The fit put a smash 0.9 m short and a drive 3 m short, with a stated error of 1 km/h.
+    So a speed is the distance between two places that are known without the fit (a hitter, a bounce on the
+    floor, the net), divided by the time between them.
+  - *A far player is known to about 1 m.* One pixel of the working video is 0.17 m at the far service line, and
+    the foot of the box and the ankle points differed by 1.5 m. A shot from the far end has an error near 10%
+    for that reason alone. A shot from the near end has about 5%.
+  - *A chain that starts late makes a shot too fast.* With the first picture of the chain as the hit, the list
+    began with 388 km/h. The hit must be seen: a ball that came from another direction, at the same player.
+  - *"Down, then up" is also a low volley.* The candidate with the smallest stated error (3%) was a volley that the
+    code took for a bounce. Of eight candidates the reader confirmed two as the code had them.
+  - *The first clear picture of the ball is not the hit.* The first hand measure of a drive took it for the hit and
+    was 0.26 s late. With a path that was 1.6 m too long, that gave 73 km/h for a drive of 52 km/h, and the number
+    went on a card. The rule: `flight.py` gives candidates; `modal/strip.py` cuts the pictures around each end; a
+    reader who does not know the expected number names the picture of the contact; then the speed is computed.
+  Checked this way: a smash of 84 km/h (10.2 m in 0.434 s, far hitter, 76 to 93), a drive into the net of 75 km/h
+  (8.8 m in 0.425 s, near hitter, 70 to 79), a drive of 52 km/h, an overhead of 50 km/h. The time between two hits
+  ("quickest hands") has no checked value yet: the shortest one that the code found ended in the net.
 - **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
   with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
   before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three

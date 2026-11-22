@@ -913,6 +913,10 @@ Wall clock first, credits second. What actually moved it, measured:
   column is qualified, which is why `reminders.ts` works. Alias the inner table and name the outer
   one by hand: `(select count(*) from ${slots} s where s.event_id = ${events}.id)`. `.toSQL()` shows
   what drizzle actually wrote.
+- **Look for the name before you write the file.** A new script was written as `scripts/highlights/ball.py`, a
+  name that an older script already had, and `rally_shots.sh` calls that older script. The write tool said
+  "updated", not "created", and the difference went unread for two hours. `git status` showed `M` where `??` was
+  expected: that is the signal. `ls` the name first, and read the status letter after the first write.
 - **A line that recurs in a file is not an anchor.** `const t = await getTranslations("coach")` appears
   in both `generateMetadata` and the page; a replace on the first put `locale` in the wrong function
   and the page did not compile. Anchor on a neighbouring line unique to the function (the one after
