@@ -135,6 +135,12 @@ for i, c in enumerate(P['points']):
             add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']], 'focus_team': team[r['who']],
                  'zoom': r.get('zoom') or zoom_for(trf, r['who'], a, b), 'title': r.get('title') or names[r['who']], 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}')
 
+def picture(path, img):
+    """Write a card's picture only when it is not the same as the file: a part is built again when its picture is newer."""
+    ok, buf = cv2.imencode(os.path.splitext(path)[1], img); new = buf.tobytes()
+    if not os.path.exists(path) or open(path, 'rb').read() != new: open(path, 'wb').write(new)
+
+
 def backdrop():
     kf_times = [float(x) for x in open(f'{S}/match/kf_times.txt')]; HDRK = hdr.kind(video)
     first = next(c for c in P['points'] if not c.get('file'))
@@ -147,15 +153,15 @@ if P.get('card'):
     if any(len(r) > 2 for r in rows) or len(rows) > 4:      # rows with a name: [value, label, who, team], six to a card
         import cards; card = (cards.stats_grid_tall if TALL else cards.stats_grid)(backdrop(), P['card']['title'], rows)
     else: card = (gfx.stats_card_tall if TALL else gfx.stats_card)(backdrop(), P['card']['title'], rows)
-    cv2.imwrite(f'{work}/card.jpg', card)
+    picture(f'{work}/card.jpg', card)
     add({'kind': 'card', 'image': f'{work}/card.jpg', 'dur': P['card'].get('dur', 4.0)}, 'card')
 if isinstance(P.get('outro'), dict):
     o = P['outro']; shot = cv2.imread(o['shot']) if o.get('shot') else None
-    cv2.imwrite(f'{work}/outro.png', (gfx.end_card_tall if TALL else gfx.end_card)(backdrop(), o['line1'], o['line2'], shot, o.get('shot_title'), o.get('shot_sub')))
+    picture(f'{work}/outro.png', (gfx.end_card_tall if TALL else gfx.end_card)(backdrop(), o['line1'], o['line2'], shot, o.get('shot_title'), o.get('shot_sub')))
     add({'kind': 'card', 'image': f'{work}/outro.png', 'dur': o.get('dur', 5.0), 'hold_end': True}, 'outro')
 elif P.get('outro'):
     bg = backdrop()
-    cv2.imwrite(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, P['outro'], ' · '.join(x for x in (MT.get('venue'), MT['date']) if x)))
+    picture(f'{work}/outro.jpg', (gfx.outro_card_tall if TALL else gfx.outro_card)(bg, P['outro'], ' · '.join(x for x in (MT.get('venue'), MT['date']) if x)))
     add({'kind': 'card', 'image': f'{work}/outro.jpg', 'dur': 2.6, 'hold_end': True}, 'outro')
 
 print('segments', len(segs)); [print(' ', os.path.basename(s)) for s in segs]
@@ -165,9 +171,13 @@ parts = []
 # A part is built again when its plan is newer than its file, and also when the code that draws it is: a
 # correction in gfx.py reached two parts of thirty, because only those two had a new plan.
 HERE = os.path.dirname(os.path.abspath(__file__)); code = max(os.path.getmtime(os.path.join(HERE, f)) for f in ('render.py', 'gfx.py'))
+def newest(s):
+    """The newest thing a part is made from: its plan, the drawing code, and a picture that the plan names (a card)."""
+    im = json.load(open(s)).get('image'); im = im if im and os.path.isabs(im) else (f'{S}/{im}' if im else None)
+    return max(os.path.getmtime(s), code, os.path.getmtime(im) if im and os.path.exists(im) else 0)
 for s in segs:
     mp4 = s[:-5] + '.mp4'
-    if not os.path.exists(mp4) or os.path.getmtime(mp4) < max(os.path.getmtime(s), code):
+    if not os.path.exists(mp4) or os.path.getmtime(mp4) < newest(s):
         subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'render.py'), video, s, mp4], check=True)
     parts.append(mp4)
 with open(f'{work}/list.txt', 'w') as fh:
