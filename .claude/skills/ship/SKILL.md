@@ -765,7 +765,10 @@ Wall clock first, credits second. What actually moved it, measured:
   script held 599 MB for six hours; a spinning wait loop held a core for longer. `pgrep -af` for the
   things this repo starts (`gate.sh`, `vitest`, `next build`, `next start`, `e2e/run.mjs`, and any
   loop you wrote) before calling work finished. Kill by **PID**, never by pattern: `pkill -f
-  "next start"` once matched the backgrounding shell's own command line and killed the caller.
+  "next start"` once matched the backgrounding shell's own command line and killed the caller. A second
+  time it was `pgrep -f "render.py"` in a loop of `kill`: the gate ran in a shell whose command line held a
+  commit message with that file name in it, and the gate died half way. A pattern matches every command line
+  that quotes it. Take the PID from the job you started, or match the whole start of the command (`^bash scripts/gate.sh`).
   Finding the PIDs has the same trap: `for p in $(pgrep -f "bash scripts/gate.sh")` listed its own
   shell, whose text holds the pattern, and killed it (exit 144, 24 September 2026). List with a
   pattern the command cannot match, `ps -eo pid,cmd | grep "[g]ate\.sh"`, and never start a long

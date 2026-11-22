@@ -500,6 +500,17 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   hours, because renders shared the processor and the disk filled once. One machine for each point gives the
   same file (equal sightings and boxes on a test point). The session's own disk is about 40 GB and the store
   is not a drive of it: work that makes large files belongs where the store is attached.
+- **A sharp sound and a moving arm are not a hit** (22 November 2026). For a card of numbers, every sharp sound
+  of the phone that a recorder confirmed was given to the player with the fastest wrist, and two such hits in a
+  row by the two pairs made a "shot" with a time, a distance (the players' places on the court, from their feet
+  and a map of five measured court points) and a speed. An independent reader then checked the 30 best
+  candidates on 1,300 frames: 4 were right, and none of the 14 fastest. The sound was a bounce or the glass,
+  the time was 0.2 to 0.5 s off, or the second player never hit the ball. The best "shot" had 365 km/h. So no
+  speed and no reaction time went on the card. What passed its test: the numbers of the score engine (games in
+  a row, breaks, games at 40-40, points won on serve), the longest rally, and a heart rate from a watch
+  (`cards.py`). The distance a player ran did not pass either: the tracker held a player for 45% to 73% of the
+  play, and each player for a different share. A speed needs the ball in the picture, and a distance needs
+  every sighting of a person, also one without a name.
 - **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
   with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
   before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three
