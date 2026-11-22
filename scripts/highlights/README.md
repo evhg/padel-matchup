@@ -482,6 +482,24 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   use that earns no money) had 93% of its energy under 60 Hz, which a phone does not play: a layer one octave up
   is made from the bass. A moving average over 11 million samples with `np.convolve` did not end in ten minutes;
   `uniform_filter1d` needs a second.
+- **A track that a person likes on headphones is not the track that the numbers like** (22 November 2026). The
+  first track was 32 kHz and had 93% of its energy under 60 Hz, and on a phone speaker it sounded "narrow and
+  hollow". A stronger open model (`modal/music_long.py`, ACE-Step 1.5, 48 kHz stereo, four minutes in one
+  piece) gave four takes with a warmer balance by every measure. The owner then heard the first track on
+  headphones: "the best track of all". The measure said what a phone can play, not what a person likes. A new
+  take goes to a person's ears before a reel is built on it. `music.py` got two things from this round: the
+  music waits for the announcement of the opening and comes in with the first bar of the drop played backwards
+  (`MIXIN`), and a full-length track moves on one section at each hit (`SECTION`).
+- **A number over a head needs a stretch where the tracker holds that player.** A heart rate stood over a
+  player in one clip of the sixth reel, and went away with that clip. Back in every clip, the first try put it
+  after the dead ball: the tracker had the player for 8 of 110 frames there, and no bubble came. The plan now
+  takes, in each clip, the longest stretch of 1.6 s or more in which the player is followed with no gap of
+  0.45 s, after the name tags; 8 of 11 clips have one. A clip with no such stretch has no number.
+- **Many short jobs go to many machines** (`modal/trackall.py`). The tracker needs 3.6 s for a second of
+  video. For the 182 points of a match that is two hours on one machine, and here it was 80 points in two
+  hours, because renders shared the processor and the disk filled once. One machine for each point gives the
+  same file (equal sightings and boxes on a test point). The session's own disk is about 40 GB and the store
+  is not a drive of it: work that makes large files belongs where the store is attached.
 - **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
   with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
   before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three

@@ -230,6 +230,7 @@ elif seg['kind'] == 'clip':
             if id(q) not in say_at or (b is None and 'value' in q): continue
             tx, ty = say_at[id(q)]; im = q['img']; a = min(ease((t0 + s - q['t0']) / 0.25), ease((q['t1'] + 0.3 - t0 - s) / 0.3))
             x = int(min(max(tx - im.shape[1] / 2, 8), OW - im.shape[1] - 8)); y = int(max(96 if not TALL else VY + 4, ty - im.shape[0] - 28))
+            if seg.get('score_box') and not TALL and y < 168 and x + im.shape[1] > OW - 48 - 440: y = 168      # the score box has that corner
             put(fr, im, x, y, a)
         if COUNTER: draw_counter(fr, seg.get('hits'), t0 + s)
         draw_meter(fr, seg.get('meter'), t0 + s)

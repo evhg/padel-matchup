@@ -112,6 +112,7 @@ for i, c in enumerate(P['points']):
     # the length of the rally is a fact (serve to last shot); the number of shots was wrong too often to show
     seg = {'kind': 'clip', 't0': t0, 't1': t1, 'track': trf, 'names': names, 'team': team, 'title': c.get('title'),
            'sub': c.get('sub') or (f"late in a {int(round(c['last_t'] - c['serve_t']))} s rally · {mmss(c['last_t'])}" if c.get('start_t') else f"{int(round(c['last_t'] - c['serve_t']))} s rally · {mmss(c['last_t'])}"), 'tags_until': 4.5, 'hits': []}
+    if BADGE_LEFT: seg['score_box'] = True        # render.py keeps a number over a head out of that corner
     if P.get('meter'):
         seg['meter'] = {'label': P['meter']['label'], 'points': [q for q in P['meter']['series'] if t0 - 90 <= q[0] <= t1 + 90]}
     if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS[c['won']], 'at': dead, 'what': c.get('won_what')}
