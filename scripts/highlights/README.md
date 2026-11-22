@@ -511,6 +511,18 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   (`cards.py`). The distance a player ran did not pass either: the tracker held a player for 45% to 73% of the
   play, and each player for a different share. A speed needs the ball in the picture, and a distance needs
   every sighting of a person, also one without a name.
+- **A distance needs every person, and a name by elimination** (`walk.py`, `court_map.py`, 22 November 2026).
+  The tracker held a player for 45% to 73% of the play: it keeps a sighting only when it can name it, and it
+  drops a person who stands still (a rule against spectators). `walk.py` keeps every person on the court ten
+  times a second with no name. A half of the court has two players, so two chains by nearest place are enough,
+  and a chain takes its name from the tracked player at its boxes; the other chain is the partner. Result: 93%
+  to 95% of the play for each player, and 99.1% of the name votes agree with their chain. Two faults on the way:
+  the place of a foot comes from a map of five measured court points (the first map, from guessed numbers, put
+  the service line 140 pixels off), and two boxes on one person made the chains change places (a "sprint" of
+  28 km/h). What is not proven: the total is within about 10% between sensible settings, but a waiting player
+  shows 0.18 m/s at both ends, and two players move 24% and 31% more at the far end than at the near end, the
+  other two 8% and -1%. Without a walk of known length there is no proof of the 10%. One player who walks the
+  lines of one half before the match (40 m) gives that proof.
 - **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
   with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
   before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three

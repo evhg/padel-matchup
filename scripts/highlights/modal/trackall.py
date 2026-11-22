@@ -1,5 +1,6 @@
 """Follow the four players through many pieces of a match at once: one Modal machine for each piece.
-usage: modal run trackall.py --clips clips.txt --out <dir> [--folder <folder on the volume>]
+usage: modal run trackall.py --clips clips.txt --out <dir> [--folder <folder on the volume>] [--what track|walk]
+--what walk: every person on the court with no name (walk.py), for the distance a player moved.
 clips.txt: one line "name t0 t1" for each piece. The volume holds <folder>/proxy.mov (the working video) and
 <folder>/hl/ with models/ (yolox_s.onnx, dinov2_small.onnx, rtmpose-m/) and match/ (ident.json, ident-model.pkl,
 ident-far.pkl, ident-colours.json, match.json, court.json). The result of a piece is the same file that track.py
@@ -23,11 +24,23 @@ def track(job):
     return name, open('/tmp/out.json').read(), r.stdout[-120:]
 
 
+@app.function(image=image, cpu=4, memory=8192, timeout=1800, volumes={'/vol': vol}, max_containers=60)
+def walk(job):
+    """Every person on the court in one piece (walk.py), with no name."""
+    import subprocess
+    folder, name, t0, t1 = job; os.makedirs('/work', exist_ok=True)
+    for d in ('models', 'match'):
+        if not os.path.exists(f'/work/{d}'): os.symlink(f'/vol/{folder}/hl/{d}', f'/work/{d}')
+    r = subprocess.run(['python', '-u', '/root/hl/walk.py', f'/vol/{folder}/proxy.mov', str(t0), str(t1), '/tmp/out.json'], capture_output=True, text=True, env=dict(os.environ, HL_HOME='/work', PYTHONDONTWRITEBYTECODE='1'))
+    if r.returncode != 0 or not os.path.exists('/tmp/out.json'): return name, None, (r.stdout + r.stderr)[-700:]
+    return name, open('/tmp/out.json').read(), r.stdout[-120:]
+
+
 @app.local_entrypoint()
-def main(clips: str, out: str, folder: str = 'match2'):
+def main(clips: str, out: str, folder: str = 'match2', what: str = 'track'):
     jobs = [(folder, a, float(b), float(c)) for a, b, c in (l.split() for l in open(clips) if l.strip()) if not os.path.exists(f'{out}/{a}.json')]
     print(len(jobs), 'pieces to follow'); ok = bad = 0
-    for name, text, log in track.map(jobs, order_outputs=False, return_exceptions=True) if jobs else []:
+    for name, text, log in (walk if what == 'walk' else track).map(jobs, order_outputs=False, return_exceptions=True) if jobs else []:
         if text: open(f'{out}/{name}.json', 'w').write(text); ok += 1
         else: bad += 1; print('FAILED', name, str(log)[-300:])
     print('TRACKALL_MODAL_DONE', ok, 'ok', bad, 'failed')
