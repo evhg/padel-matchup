@@ -51,7 +51,7 @@ describe("how a number reads", () => {
 });
 
 describe("bests and boards", () => {
-  const row = (kind: string, value: number, playerId: string, partnerId: string | null = null) => ({ kind, value, playerId, partnerId });
+  const row = (kind: string, value: number, playerId: string, partnerId: string | null = null, eventId = "e1") => ({ eventId, kind, value, playerId, partnerId });
   const rows = [
     row("fastestShot", 84, "a"), row("fastestShot", 52, "b"), row("fastestShot", 75, "a"), row("fastestShot", 50, "c"),
     row("gamesInRow", 8, "c", "d"), row("gamesInRow", 8, "d", "c"), row("gamesInRow", 3, "a", "b"), row("gamesInRow", 3, "b", "a"),
@@ -62,8 +62,10 @@ describe("bests and boards", () => {
     expect(bestsOf(rows).map((r) => [r.kind, r.value])).toEqual([["gamesInRow", 8], ["fastestShot", 84]]);
   });
 
-  it("names a pair once", () => {
+  it("names a pair once for a match, and again for another match", () => {
     expect(oncePerPair(rows.filter((r) => r.kind === "gamesInRow")).map((r) => r.playerId)).toEqual(["c", "a"]);
+    const two = [row("gamesInRow", 5, "d", "c", "e2"), row("gamesInRow", 8, "d", "c"), row("gamesInRow", 8, "c", "d")];
+    expect(oncePerPair(two).map((r) => [r.eventId, r.playerId])).toEqual([["e2", "d"], ["e1", "d"]]);
   });
 
   it("orders a board from the top and stops at its length", () => {

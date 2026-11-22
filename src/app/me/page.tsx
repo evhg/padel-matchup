@@ -27,6 +27,7 @@ import { countShipped, showsShipped } from "@/lib/feedback/store";
 import { CoachCard } from "@/components/coach/CoachCard";
 import { getCoachForActor } from "@/lib/domain/coaching";
 import { MomentsStrip } from "@/components/MomentsStrip";
+import { MyNumbers } from "@/components/MyNumbers";
 import { WhenIPlay } from "@/components/WhenIPlay";
 import { listWants } from "@/lib/domain/demand";
 import { getVenues, playerHasEvents } from "@/lib/domain/queries";
@@ -115,6 +116,7 @@ async function MePage({ searchParams }: Props) {
             confirmation outlives the render that the action's cookie change brings. */}
         {canSavePasskey && <RememberPhone offer={phones.length === 0} where="me" />}
         <MomentsStrip db={db} playerId={me.id} />
+        <MyNumbers db={db} playerId={me.id} />
         {/* The screen is the inbox, the matches and "New match"; everything you set is behind one line, in the
             order it always had (the owner, 9 November 2026: "Tidy both"). `e2e/player-states.mjs` reads that
             order inside the fold. Open on the way back from Telegram, whose sign-in lives in here. */}

@@ -545,6 +545,14 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   Checked this way: a smash of 84 km/h (10.2 m in 0.434 s, far hitter, 76 to 93), a drive into the net of 75 km/h
   (8.8 m in 0.425 s, near hitter, 70 to 79), a drive of 52 km/h, an overhead of 50 km/h. The time between two hits
   ("quickest hands") has no checked value yet: the shortest one that the code found ended in the net.
+- **A number that passed the check goes to the app through one door** (22 November 2026). The app keeps the
+  numbers of a match in `match_stats` and shows them on the match page, on "My stats", on the public
+  profile and on the club's board. The door is `POST /api/admin/match-stats` with the operator's bearer:
+  `{ "code": "<the match code>", "stats": [{ "player": "<first name or id>", "kind": "fastestShot",
+  "value": 84, "margin": 0.1 }, { "player": "…", "partner": "…", "kind": "gamesInRow", "value": 8 }] }`.
+  The kinds are in `src/lib/domain/matchStatKinds.ts`. The door refuses a number with a margin above
+  0.10, and a heart rate of a player who did not switch on "Keep my heart rate". The match must exist in
+  the app: a filmed match with no match page has no place for its numbers.
 - **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
   with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
   before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three

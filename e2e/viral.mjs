@@ -261,6 +261,48 @@ try {
     "a pasted YouTube share text becomes Watch highlights, and the person who added it can take it down",
     (await p.getByTestId("highlights-watch").getAttribute("href")) === "https://www.youtube.com/watch?v=dQw4w9WgXcQ" && (await p.getByTestId("highlights-remove").count()) === 1,
   );
+  // The numbers of a filmed match (the owner, 22 November 2026): the reel engine sends them through the
+  // operator's door, and the match page, My matches and "My stats" show them. A heart rate waits for the
+  // player's own yes.
+  const CRON = { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}`, "content-type": "application/json" };
+  const sendStats = (stats) => fetch(`${BASE}/api/admin/match-stats`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, stats }) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
+  const numbers = [
+    { player: "Ana", kind: "fastestShot", value: 84, margin: 0.1 },
+    { player: "Ana", partner: "Bo", kind: "gamesInRow", value: 8 },
+    { player: "Ana", kind: "heartRateMax", value: 157 },
+    { player: "Cy", kind: "fastestShot", value: 73, margin: 0.2 },
+  ];
+  const sent = await sendStats(numbers);
+  check(
+    "the operator's door keeps the numbers of a match, and refuses a heart rate with no yes and a number known to worse than 10%",
+    sent.status === 200 && sent.body?.saved === 3 && JSON.stringify(sent.body?.refused) === JSON.stringify([{ index: 2, why: "needs_yes" }, { index: 3, why: "bad_margin" }]),
+    JSON.stringify(sent.body),
+  );
+  check("the door is the operator's: no token, no write", (await fetch(`${BASE}/api/admin/match-stats`, { method: "POST", body: "{}" })).status === 401);
+  await p.goto(`${BASE}/${mcode}`);
+  const card = p.getByTestId("match-numbers");
+  await card.waitFor({ timeout: 20000 });
+  const cardText = (await card.innerText()).replace(/\s+/g, " ");
+  check("the match page shows its numbers: the shot with its unit and \"≈\", the pair's games once, no heart rate", /≈ 84 km\/h/.test(cardText) && /fastest shot/i.test(cardText) && /Ana & Bo|Bo & Ana/.test(cardText) && (await card.locator("[data-stat]").count()) === 2 && !/heart/i.test(cardText), cardText);
+  await shot(p, "v3-match-numbers");
+  await p.goto(`${BASE}/me`);
+  await p.getByTestId("my-numbers").waitFor({ timeout: 20000 });
+  await p.getByTestId("my-stats-link").click();
+  await p.waitForURL((u) => u.pathname === "/me/stats", { timeout: 20000 });
+  check("My matches leads to My stats, with the bests and the match", (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 2 && (await p.getByTestId("my-stats-matches").getByRole("link").getAttribute("href")) === `/${mcode}`);
+  await p.getByTestId("heart-rate-switch").check();
+  await p.getByText(/Keep my heart rate · On/).waitFor({ timeout: 20000 });
+  const again = await sendStats(numbers.slice(2, 3));
+  await p.reload();
+  check("after the player's yes the heart rate is kept and shown", again.body?.saved === 1 && (await p.getByTestId("my-bests").locator("[data-stat=heartRateMax]").count()) === 1, JSON.stringify(again.body));
+  await shot(p, "v3-my-stats");
+  await p.getByTestId("heart-rate-switch").uncheck();
+  await p.getByText(/Keep my heart rate · Off/).waitFor({ timeout: 20000 });
+  await p.reload();
+  check("the no deletes it", (await p.getByTestId("my-bests").locator("[data-stat=heartRateMax]").count()) === 0 && (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 2);
+  const boardPage = await fetch(`${BASE}/v/rawai-padel-club/ranking`);
+  check("the club's page lists no record of a player who did not say \"Show me in rankings\"", boardPage.status === 200 && !(await boardPage.text()).includes('data-testid="club-records"'));
+  await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);
   await p.getByTestId("play-again").getByRole("button", { name: /Play again/ }).click();

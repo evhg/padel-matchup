@@ -80,6 +80,12 @@ export const players = pgTable(
     /** LINE account linked by the bot: the user id LINE gives us inside our own channel. */
     lineId: text("line_id"),
     lineDisplayName: text("line_display_name"),
+    /**
+     * "Keep my heart rate" (the owner, 22 November 2026): the player's yes to health data. Off by default.
+     * While it is off, no heart rate of this player is written (`recordMatchStats`) and none is shown
+     * (`shownStats`); switching it off deletes the rows the player had (`setShareHeartRate`).
+     */
+    shareHeartRate: boolean("share_heart_rate").notNull().default(false),
     /** Opt-in public profile at /u/{public_slug}. Off by default; the slug is minted on the first opt-in and kept. */
     publicProfile: boolean("public_profile").notNull().default(false),
     publicSlug: text("public_slug"),

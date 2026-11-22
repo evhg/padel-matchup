@@ -913,6 +913,15 @@ Wall clock first, credits second. What actually moved it, measured:
   column is qualified, which is why `reminders.ts` works. Alias the inner table and name the outer
   one by hand: `(select count(*) from ${slots} s where s.event_id = ${events}.id)`. `.toSQL()` shows
   what drizzle actually wrote.
+- **Name a migration when you generate it, and read the file after any move.** A generated
+  `0111_burly_paladin.sql` was renamed with `git mv -k … || mv …`. `-k` skips an error in silence and the
+  file was untracked, so nothing moved, the `||` never ran, and the lines appended next made a second
+  file that held only the three lock statements. `check-migrations.sh` still said "agree". The first
+  database test said `relation "match_stats" does not exist`. Use `pnpm db:generate --name <name>`, or a
+  plain `mv`, and `ls drizzle | tail` plus `head` of the file before anything else.
+- **A `\n` typed in a shell argument is two characters.** `node scripts/i18n.mjs add privacy.x "• one\n• two"`
+  wrote a backslash and an n into all three locales, and the page would have shown them. For a message
+  with line breaks, pass real line breaks (`$'• one\n• two'`), then count the lines of the parsed value.
 - **Look for the name before you write the file.** A new script was written as `scripts/highlights/ball.py`, a
   name that an older script already had, and `rally_shots.sh` calls that older script. The write tool said
   "updated", not "created", and the difference went unread for two hours. `git status` showed `M` where `??` was

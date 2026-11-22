@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 import type { Db } from "@/db";
+import { playerNumbers } from "./matchStats";
 import {
   coachBlocks,
   coachManagers,
@@ -173,6 +174,9 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
   // The phones we recognise (device hints, the owner's decision of 28 October 2026): the words and the two
   // days, as My matches lists them. Never the key: the read names no such column.
   const deviceHints = (await deviceHintsOf(db, player.id)).map((h) => ({ label: h.label, savedAt: h.createdAt, lastSeenAt: h.lastSeenAt }));
+  // The numbers of the player's filmed matches (the owner, 22 November 2026): the kind, the value and the match.
+  // Never the partner of a pair's number: that is another person.
+  const matchNumbers = (await playerNumbers(db, player.id, 1000)).map((r) => ({ match: r.code, playedAt: r.startsAt, kind: r.kind, value: r.value, margin: r.margin }));
   const rest = await exportRest(db, player, base);
   return {
     exportedAt: now.toISOString(),
@@ -203,6 +207,8 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
       lineId: player.lineId,
       line: player.lineDisplayName,
       banter: player.banter,
+      // "Keep my heart rate" (My stats): the player's yes to health data.
+      shareHeartRate: player.shareHeartRate,
       homescreenAt: player.homescreenAt,
       levelVerifiedLevel: player.levelVerifiedLevel,
       levelVerifiedSource: player.levelVerifiedSource,
@@ -216,6 +222,7 @@ export async function exportPlayerData(db: Db, player: Player, base: string, now
     notices: { kinds: player.noticeKinds ?? {}, quietFrom: player.quietFrom, quietTo: player.quietTo, quietTz: player.quietTz, inbox },
     phones,
     deviceHints,
+    matchNumbers,
     ...rest,
     passport: await issuePassport(player, stats, base, now),
   };

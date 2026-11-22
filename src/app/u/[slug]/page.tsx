@@ -9,6 +9,9 @@ import { bandOf, formatLevel, isLevelVerified } from "@/lib/domain/levels";
 import { levelSeries } from "@/lib/domain/levelSeries";
 import { LevelLine } from "@/components/LevelLine";
 import { getPublicPlayer, profileStats } from "@/lib/domain/profile";
+import { bestsOf } from "@/lib/domain/matchStatKinds";
+import { playerNumbers } from "@/lib/domain/matchStats";
+import { StatTiles } from "@/components/StatTiles";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -24,13 +27,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title, description, alternates: { canonical: `/u/${slug}` }, openGraph: { title, description, type: "profile", url: `${baseUrl()}/u/${slug}` } };
 }
 
-/** The public page a player chose to have: first name, level, results, clubs, and a link to the signed level. Nothing else. */
+/** The public page a player chose to have: first name, level, results, clubs, the best numbers of filmed matches, and a link to the signed level. Nothing else. */
 export default async function PublicProfilePage({ params }: Props) {
   const { slug } = await params;
   const db = await getDb();
   const p = await getPublicPlayer(db, slug);
   if (!p) notFound();
   const [t, locale, stats] = await Promise.all([getTranslations(), getLocale(), profileStats(db, p)]);
+  // The player's best numbers from filmed matches (the owner, 22 November 2026): one read on the player's own index.
+  const bests = bestsOf(await playerNumbers(db, p.id));
   const verified = isLevelVerified(p);
   // The level as a line: every result that moved it, the confirmation, today. Two points or nothing.
   const series = levelSeries(p);
@@ -87,6 +92,13 @@ export default async function PublicProfilePage({ params }: Props) {
             </div>
           )}
         </section>
+
+        {bests.length > 0 && (
+          <section className="card" data-testid="profile-numbers">
+            <h2 className="text-lg font-extrabold">{t("stats.profileTitle")}</h2>
+            <StatTiles rows={bests.map((r) => ({ kind: r.kind, value: r.value, margin: r.margin }))} />
+          </section>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <Link href={`/u/${slug}/passport`} prefetch={false} className="link">

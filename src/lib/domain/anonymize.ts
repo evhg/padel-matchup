@@ -1,6 +1,6 @@
 import { and, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db";
-import { coachManagers, coaches, events, feedback, lessons, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
+import { coachManagers, coaches, events, feedback, lessons, matchStats, players, pushSubscriptions, slots, type Coach, type Event, type Lesson, type Player } from "@/db/schema";
 import { DELETED_PLAYER_NAME } from "./result";
 import { dropCoachWantsFor } from "./coachWants";
 import { dropWantsFor } from "./demand";
@@ -80,6 +80,11 @@ export async function anonymizePlayer(
   // A pair they were half of leaves the draw; the spot goes to the first pair waiting, if any.
   await withdrawEntriesOf(db, playerId, now);
   await db.delete(pushSubscriptions).where(eq(pushSubscriptions.playerId, playerId));
+  // The numbers of their filmed matches go, the heart rate among them (the owner, 22 November 2026). The row
+  // stays as "Deleted player", so the cascade never fires: left here, a board would name a number's owner
+  // "Deleted player". A partner keeps the pair's number, with no name beside it.
+  await db.delete(matchStats).where(eq(matchStats.playerId, playerId));
+  await db.update(matchStats).set({ partnerId: null }).where(eq(matchStats.partnerId, playerId));
   // A passkey is a way in (DECIDING rule 39). The row stays as "Deleted player", so the cascade never
   // fires: left here, a phone's Face ID would still sign in to the emptied record.
   await dropPasskeysFor(db, playerId);
@@ -109,6 +114,7 @@ export async function anonymizePlayer(
       previousToken: null,
       emailVerifiedAt: null,
       emailNotifications: false,
+      shareHeartRate: false,
       homescreenAt: null,
       // The objection to the device key goes with the rest: the rows are gone, and no door keeps a key for
       // "Deleted player", who signs in nowhere.

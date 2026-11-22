@@ -1229,7 +1229,9 @@
     "lawBody": "Thailand's Personal Data Protection Act (PDPA) applies. We use your data to run the app you came to use (our agreement with you), and to help you sign in on your own phone and keep the app free of duplicate players (our legitimate interest). We use it for nothing else: we never sell it, never show ads, and never build a profile of you for anybody else.",
     "termsLink": "Terms of use →",
     "shortLink": "The short version →",
-    "contactLink": "Write to us →"
+    "contactLink": "Write to us →",
+    "numbersTitle": "Numbers from a filmed match",
+    "numbersBody": "• If a match you played was filmed, we keep the numbers measured from the video: for example your fastest shot and the points you won on serve.\n• They show on the match page, on My stats, and on your public page if you switched it on. A club's records list you only after “Show me in rankings”.\n• Your heart rate is health data. We keep it only after you switch on “Keep my heart rate” on My stats. Switch it off and we delete it at once.\n• The numbers are in the file you can download, and they go when you delete your account."
   },
   "terms": {
     "title": "Terms of use",
@@ -2506,6 +2508,40 @@
     "cardNotTaking": "Not taking bookings yet",
     "cardAsksFirst": "New students ask first",
     "cardSeePage": "See {name}'s page"
+  },
+  "stats": {
+    "title": "Match numbers",
+    "lead": "Measured from the video of this match.",
+    "mineTitle": "My stats",
+    "mineLead": "Your best numbers from the matches that were filmed.",
+    "mineAll": "All my stats",
+    "mineEmpty": "No numbers yet. They come with the reel of a filmed match.",
+    "bests": "Your bests",
+    "byMatch": "Match by match",
+    "profileTitle": "Best numbers",
+    "recordsTitle": "Club records",
+    "recordsLead": "The best numbers measured at this club. Only players who opted in to the ranking appear.",
+    "heartTitle": "Keep my heart rate",
+    "heartOn": "On",
+    "heartOff": "Off",
+    "heartHelp": "Your heart rate is health data. Kicksmash keeps it and shows it only while this is on. Switching it off deletes it.",
+    "back": "My matches",
+    "kind": {
+      "gamesInRow": "games in a row",
+      "breaks": "breaks of serve",
+      "servePointsWon": "points won on serve",
+      "longestRally": "longest rally",
+      "fastestShot": "fastest shot",
+      "heartRateMax": "highest heart rate",
+      "distance": "distance run"
+    },
+    "unit": {
+      "percent": "%",
+      "seconds": "s",
+      "kmh": "km/h",
+      "bpm": "bpm",
+      "metres": "km"
+    }
   },
   "moments": {
     "title": "Your moments",

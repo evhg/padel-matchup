@@ -73,7 +73,7 @@ export function statNumber(kind: StatKind, value: number): { digits: string; uni
 }
 
 /** The shape a board and a list of bests read. A pair's number is one row for each of its two players. */
-export type StatLine = { kind: string; value: number; playerId: string; partnerId: string | null };
+export type StatLine = { eventId: string; kind: string; value: number; playerId: string; partnerId: string | null };
 
 /** The best row of each kind, in the order of `STAT_KINDS`. */
 export function bestsOf<T extends StatLine>(rows: readonly T[]): T[] {
@@ -88,15 +88,21 @@ export function bestsOf<T extends StatLine>(rows: readonly T[]): T[] {
 
 /**
  * One row for each pair: a pair's number is kept for both players, and a board names the pair once.
- * The row of the player whose id sorts first stays.
+ * The first row of a pair in the given order stays, so a caller that can show only one of the two
+ * players (the other did not opt in) still shows the pair's number.
  */
 export function oncePerPair<T extends StatLine>(rows: readonly T[]): T[] {
-  return rows.filter((r) => r.partnerId == null || r.playerId < r.partnerId);
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (r.partnerId == null) return true;
+    const key = `${r.eventId}:${r.kind}:${[r.playerId, r.partnerId].sort().join("+")}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** The board of one kind: the highest values first, a pair once, `BOARD_ROWS` at most. */
 export function boardOf<T extends StatLine>(rows: readonly T[], kind: StatKind, n = BOARD_ROWS): T[] {
-  return oncePerPair(rows.filter((r) => r.kind === kind))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, n);
+  return oncePerPair(rows.filter((r) => r.kind === kind).sort((a, b) => b.value - a.value)).slice(0, n);
 }
