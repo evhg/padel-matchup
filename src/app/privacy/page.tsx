@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("privacy.title"), description: t("privacy.sub"), alternates: localeAlternates("/privacy", locale) };
 }
 
-const SECTIONS = ["who", "store", "cookies", "ip", "helpers", "keep", "delete", "rights", "law"] as const;
+const SECTIONS = ["who", "store", "numbers", "cookies", "ip", "helpers", "keep", "delete", "rights", "law"] as const;
 
 /**
  * The privacy page in full, beside /about's short version. Every line is meant to be true of the code

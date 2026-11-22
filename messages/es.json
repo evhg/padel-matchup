@@ -1229,7 +1229,9 @@
     "lawBody": "Se aplica la Ley de Protección de Datos Personales de Tailandia (PDPA). Usamos tus datos para que funcione la app que viniste a usar (nuestro acuerdo contigo), y para ayudarte a iniciar sesión desde tu propio teléfono y evitar jugadores duplicados en la app (nuestro interés legítimo). Para nada más: nunca los vendemos, nunca mostramos anuncios y nunca creamos un perfil tuyo para nadie.",
     "termsLink": "Condiciones de uso →",
     "shortLink": "La versión corta →",
-    "contactLink": "Escríbenos →"
+    "contactLink": "Escríbenos →",
+    "numbersTitle": "Los números de un partido grabado",
+    "numbersBody": "• Si se grabó un partido que jugaste, guardamos los números medidos en el vídeo: por ejemplo, tu golpe más rápido y los puntos que ganaste al saque.\n• Se ven en la página del partido, en Mis estadísticas y en tu página pública si la activaste. Los récords de un club te incluyen solo después de «Mostrarme en los rankings».\n• Tu pulso es un dato de salud. Lo guardamos solo después de que actives «Guardar mi pulso» en Mis estadísticas. Si lo desactivas, lo borramos al momento.\n• Los números están en el archivo que puedes descargar, y desaparecen cuando borras tu cuenta."
   },
   "terms": {
     "title": "Condiciones de uso",
@@ -2506,6 +2508,40 @@
     "cardNotTaking": "Aún no acepta reservas",
     "cardAsksFirst": "Los alumnos nuevos preguntan primero",
     "cardSeePage": "Ver la página de {name}"
+  },
+  "stats": {
+    "title": "Los números del partido",
+    "lead": "Medidos en el vídeo de este partido.",
+    "mineTitle": "Mis estadísticas",
+    "mineLead": "Tus mejores números de los partidos grabados.",
+    "mineAll": "Todas mis estadísticas",
+    "mineEmpty": "Aún no hay números. Llegan con el vídeo de un partido grabado.",
+    "bests": "Tus récords",
+    "byMatch": "Partido a partido",
+    "profileTitle": "Mejores números",
+    "recordsTitle": "Récords del club",
+    "recordsLead": "Los mejores números medidos en este club. Solo aparecen los jugadores que activaron el ranking.",
+    "heartTitle": "Guardar mi pulso",
+    "heartOn": "Activado",
+    "heartOff": "Desactivado",
+    "heartHelp": "Tu pulso es un dato de salud. Kicksmash lo guarda y lo muestra solo mientras esto esté activado. Al desactivarlo se borra.",
+    "back": "Mis partidos",
+    "kind": {
+      "gamesInRow": "juegos seguidos",
+      "breaks": "roturas de saque",
+      "servePointsWon": "puntos ganados al saque",
+      "longestRally": "peloteo más largo",
+      "fastestShot": "golpe más rápido",
+      "heartRateMax": "pulso máximo",
+      "distance": "distancia recorrida"
+    },
+    "unit": {
+      "percent": "%",
+      "seconds": "s",
+      "kmh": "km/h",
+      "bpm": "ppm",
+      "metres": "km"
+    }
   },
   "moments": {
     "title": "Tus momentos",

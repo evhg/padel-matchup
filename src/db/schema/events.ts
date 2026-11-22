@@ -400,6 +400,46 @@ export const eventPhotos = pgTable(
 
 export type EventPhoto = typeof eventPhotos.$inferSelect;
 
+// ---------------------------------------------------------------------------
+// match_stats — the measured numbers of a filmed match (the owner, 22 November 2026: "we should definitely
+// store them in our database", and "players in kicksmash should have a my stats screen").
+// ---------------------------------------------------------------------------
+/**
+ * One number of one player in one match: the fastest shot, the points won on serve, the highest heart
+ * rate. `kind` is a key of `STAT_KINDS` in `src/lib/domain/matchStatKinds.ts`, a text and not an enum,
+ * so a new kind needs no migration. A pair's number (games in a row) is one row for each of its two
+ * players, each naming the other in `partner_id`: "my numbers" is then one read by `player_id`, and a
+ * board names the pair once (`oncePerPair`). `margin` is how far off the number may be, as a share of
+ * it; a number above `MAX_MARGIN` is never written. `venue_slug` is the match's venue at the time of
+ * the write, kept here so a club's board is one bounded read on its own index.
+ * Written only by the operator's door (`POST /api/admin/match-stats`, `recordMatchStats`).
+ */
+export const matchStats = pgTable(
+  "match_stats",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    partnerId: uuid("partner_id").references(() => players.id, { onDelete: "set null" }),
+    kind: text("kind").notNull(),
+    value: real("value").notNull(),
+    margin: real("margin"),
+    venueSlug: text("venue_slug"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("match_stats_event_player_kind_idx").on(t.eventId, t.playerId, t.kind),
+    index("match_stats_player_idx").on(t.playerId),
+    index("match_stats_venue_kind_value_idx").on(t.venueSlug, t.kind, t.value),
+  ],
+);
+
+export type MatchStat = typeof matchStats.$inferSelect;
+
 export const seriesRhythms = ["week", "fortnight", "month"] as const;
 
 export type SeriesRhythm = (typeof seriesRhythms)[number];

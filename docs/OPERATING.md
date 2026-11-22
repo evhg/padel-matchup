@@ -1055,7 +1055,9 @@ when waiting; end every batch with three lines: what shipped, what is next, what
 drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
 Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, below),
 `/api/admin/hints-stats` (the device keys in counts, below), `/api/admin/merge-players` (below),
-`/api/admin/cron` (the scheduled jobs, above).
+`/api/admin/cron` (the scheduled jobs, above), `/api/admin/match-stats` (the numbers of a filmed match:
+`POST { code, stats: [{ player, partner?, kind, value, margin? }] }`, the answer says what was saved and
+what was refused and why; a heart rate needs the player's own yes on My stats first).
 
 ## What the session's environment must hold
 

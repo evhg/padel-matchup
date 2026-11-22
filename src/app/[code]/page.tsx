@@ -47,6 +47,8 @@ import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { HighlightsLink } from "@/components/HighlightsLink";
+import { MatchNumbers } from "@/components/MatchNumbers";
+import { matchNumbers } from "@/lib/domain/matchStats";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, OtherShares } from "@/components/ShareSheet";
 import { HeldRowButton } from "@/components/TakeHeld";
@@ -291,6 +293,8 @@ async function EventPage({ params, searchParams }: Props) {
   // it by hand, so the hand has to find it here. One light read, only once a score exists.
   const result = showScore && detail.scores.length > 0 ? matchLine(t as unknown as (key: string, values?: Record<string, string | number>) => string, detail) : null;
   const resultPhoto = result ? await getEventPhotoMeta(db, ev.id).catch(() => null) : null;
+  // The numbers of a filmed match (`match_stats`): one read on the match's own index, and only once it has started.
+  const numbers = showScore ? await matchNumbers(db, ev.id).catch(() => []) : [];
   const resultCardUrl = taggedUrl(`${baseUrl()}/${code}/card`, "card");
   const resultCard = result
     ? {
@@ -1015,6 +1019,7 @@ async function EventPage({ params, searchParams }: Props) {
             <HighlightsLink code={code} url={ev.highlightsUrl ?? null} canRemove={Boolean(me && ev.highlightsUrl && (ev.highlightsBy === me.id || ev.creatorPlayerId === me.id))} />
           </div>
         )}
+        <MatchNumbers rows={numbers} />
         {over && otherShares}
         {seriesRow && (
           <p className="px-1 text-sm text-muted" data-testid="series-line">

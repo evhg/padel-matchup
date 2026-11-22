@@ -33,6 +33,7 @@ import {
   pushSubscriptions,
   series,
   venues,
+  matchStats,
   type Player,
 } from "@/db/schema";
 import { GET as exportRoute } from "@/app/api/me/export/route";
@@ -84,6 +85,7 @@ const IN: Record<string, string> = {
   lesson_waitlist: "lessons.waitlist",
   lesson_requests: "lessons.requests",
   milestones: "milestones",
+  match_stats: "matchNumbers (never the partner of a pair's number)",
   push_subscriptions: "pushDevices (the browser in words and two days; never the endpoint or its keys)",
   venues: "courts",
   series: "series",
@@ -150,6 +152,7 @@ describe("the export holds every row about the player", () => {
     await db.insert(lessonWaitlist).values({ coachId: other.id, studentPlayerId: ana.id, slotStartsAt: at });
     await db.insert(lessonRequests).values({ coachId: other.id, studentPlayerId: ana.id, startsAt: at, minutes: 60, note: "Early please" });
     await db.insert(milestones).values({ playerId: ana.id, kind: "matches_10", value: "10" });
+    await db.insert(matchStats).values({ eventId: ev.id, playerId: ana.id, partnerId: ben.id, kind: "gamesInRow", value: 8 });
     await db.insert(pushSubscriptions).values({ playerId: ana.id, endpoint: `https://push.example/${tag}`, p256dh: `p256-${tag}`, auth: `auth-${tag}`, userAgent: "iPhone, Safari" });
     await db.insert(venues).values({ creatorPlayerId: ana.id, name: "Rawai Padel", mapUrl: "https://maps.app.goo.gl/r" });
     await db.insert(series).values({ slug: `fri-${tag}`, name: "Friday nights", organizerPlayerId: ana.id, tz: "Asia/Bangkok", capacity: 8, dow: 5, time: "19:00", anchorAt: at });
@@ -166,6 +169,7 @@ describe("the export holds every row about the player", () => {
     expect(data.player).toMatchObject({ recoveryEmail: `old-${tag}@example.com`, telegramId: ana.telegramId, emailNotifications: false, phone: "+66 81 000 0000", banter: true });
     // One line per table, each with the row this test wrote.
     expect(data.wants).toMatchObject([{ weekday: 2, fromTime: "18:00", city: "phuket" }]);
+    expect(data.matchNumbers).toEqual([{ match: ev.code, playedAt: ev.startsAt, kind: "gamesInRow", value: 8, margin: null }]);
     expect(data.coachWants).toMatchObject([{ city: "phuket", when: "evenings" }]);
     expect(data.feedback.map((f) => f.text).sort()).toEqual([`From the bot ${tag}`, `More courts please ${tag}`]);
     expect(data.feedback.find((f) => f.source === "web")).toMatchObject({ name: "Ana", email: `ana-${tag}@example.com` });
