@@ -76,7 +76,7 @@ if talk_end is not None and 0.6 < first - talk_end < loopn / SR:
 else:
     i0 = int((first - DROP) * SR); a = max(0, i0); M[a:fi] = T[a - i0:fi - i0]; g[a:fi] = 1
 gap0 = int(0.12 * SR); M[fi - gap0:fi] *= np.linspace(1, 0, gap0)[:, None] ** 2
-outro = next((p for p in parts if p['kind'] == 'card' and p['name'] == 'outro'), None)
+outro = next((p for p in parts if p['kind'] == 'card'), None)      # the first card after the clips (the numbers, or the end card): the beat is whole from there
 starts = [h['hit'] for h in hits] + ([outro['at']] if outro else [])
 for j, st in enumerate(starts):
     a = int(st * SR); b = int(starts[j + 1] * SR) if j + 1 < len(starts) else N; n = b - a

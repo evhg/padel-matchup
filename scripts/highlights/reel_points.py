@@ -25,7 +25,8 @@ points.json: {"points": [{
     "notes":  [{"t0": s, "t1": s, "who": id, "value": 157, "unit": "bpm", "label": "..."}]   optional: a measured number over a head
 }], "outro": "Your match. Your highlights.",          or {"line1", "line2", "shot": "screenshot.png", "shot_title", "shot_sub" (a line or a list of lines), "dur"}: the end card
  "meter": {"label": "<NAME> BPM", "series": [[s, value], ...]},      optional: a measured number shown on every clip
- "card": {"title": "...", "rows": [[value, "label"], ...]}}          optional: a card of numbers before the outro
+ "card": {"title": "...", "rows": [[value, "label"], ...], "dur": 4.0}}   optional: a card of numbers before the outro;
+                                 rows of [value, "label", "who", team] make a grid of six (cards.py)
  "score_box": true                                                    optional: scorebox.py draws the score later; the "Replay" badge moves to the left
 
 An item of "points" can also be {"file": "wide.mp4", "file_tall": "tall.mp4"}: a part made elsewhere (review.py),
@@ -142,8 +143,12 @@ def backdrop():
 
 
 if P.get('card'):
-    cv2.imwrite(f'{work}/card.jpg', (gfx.stats_card_tall if TALL else gfx.stats_card)(backdrop(), P['card']['title'], [tuple(r) for r in P['card']['rows']]))
-    add({'kind': 'card', 'image': f'{work}/card.jpg', 'dur': 4.0}, 'card')
+    rows = [tuple(r) for r in P['card']['rows']]
+    if any(len(r) > 2 for r in rows) or len(rows) > 4:      # rows with a name: [value, label, who, team], six to a card
+        import cards; card = (cards.stats_grid_tall if TALL else cards.stats_grid)(backdrop(), P['card']['title'], rows)
+    else: card = (gfx.stats_card_tall if TALL else gfx.stats_card)(backdrop(), P['card']['title'], rows)
+    cv2.imwrite(f'{work}/card.jpg', card)
+    add({'kind': 'card', 'image': f'{work}/card.jpg', 'dur': P['card'].get('dur', 4.0)}, 'card')
 if isinstance(P.get('outro'), dict):
     o = P['outro']; shot = cv2.imread(o['shot']) if o.get('shot') else None
     cv2.imwrite(f'{work}/outro.png', (gfx.end_card_tall if TALL else gfx.end_card)(backdrop(), o['line1'], o['line2'], shot, o.get('shot_title'), o.get('shot_sub')))
