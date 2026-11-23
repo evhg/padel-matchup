@@ -552,7 +552,9 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   "value": 84, "margin": 0.1 }, { "player": "…", "partner": "…", "kind": "gamesInRow", "value": 8 }] }`.
   The kinds are in `src/lib/domain/matchStatKinds.ts`. The door refuses a number with a margin above
   0.10, and a heart rate of a player who switched off "Keep my heart rate". The match must exist in
-  the app: a filmed match with no match page has no place for its numbers.
+  the app. A filmed match with no match page gets one first, through `POST /api/admin/played-match`
+  (the four players by the id of their record, the two pairs, the sets): the public API refuses a join
+  to a match that is over.
 - **A stopped `modal run` leaves its machines running** (22 November 2026). A ball job was stopped on this
   side and started again. The 60 machines of the first run went on, the second run got 40, and Modal
   sent a mail: "reached the limit of 100 containers". Stop the app by its name (`modal app stop <id>`)

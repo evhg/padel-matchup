@@ -1055,7 +1055,10 @@ when waiting; end every batch with three lines: what shipped, what is next, what
 drafts wait for the owner's tap; nothing here sends), `/api/admin/notify` (one line to the owner's
 Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, below),
 `/api/admin/hints-stats` (the device keys in counts, below), `/api/admin/merge-players` (below),
-`/api/admin/cron` (the scheduled jobs, above), `/api/admin/match-stats` (the numbers of a filmed match:
+`/api/admin/cron` (the scheduled jobs, above), `/api/admin/played-match` (a match that was played with no
+match page, written as it was: `POST { startsAt, tz, durationMinutes?, venue?, teamA: [id or name, …],
+teamB: […], sets: [[a, b], …] }`; a name makes a new record, nothing is announced, and a second call
+with the same organiser and start writes nothing), `/api/admin/match-stats` (the numbers of a filmed match:
 `POST { code, stats: [{ player, partner?, kind, value, margin? }] }`, the answer says what was saved and
 what was refused and why; a heart rate is refused only for a player who switched off "Keep my heart rate").
 
