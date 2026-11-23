@@ -100,6 +100,7 @@ const OUT: Record<string, string> = {
   tournament_matches: "the rounds of a night in the file, with the other players in them",
   competition_matches: "the draw of a competition, with the other pairs in it; entered_by is who typed a result",
   event_photos: "a photo on a match page: the match is in the file with its link",
+  match_reels: "the reel of a match in the file; requested_by is who asked for it, and the reel's token is a key, never data",
 };
 
 let db: Db;

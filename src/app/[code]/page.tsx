@@ -49,6 +49,8 @@ import { ScorePanel } from "@/components/ScorePanel";
 import { FilmCard } from "@/components/FilmCard";
 import { HighlightsLink } from "@/components/HighlightsLink";
 import { MatchNumbers } from "@/components/MatchNumbers";
+import { MatchReel } from "@/components/MatchReel";
+import { matchReel } from "@/lib/domain/matchReel";
 import { matchNumbers } from "@/lib/domain/matchStats";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, OtherShares } from "@/components/ShareSheet";
@@ -320,6 +322,9 @@ async function EventPage({ params, searchParams }: Props) {
   const seatOf = seatOfPlayer(namedSlots);
   const nameOf = new Map<string, string>(namedSlots.filter((s) => s.playerId).map((s) => [s.playerId!, `${s.player?.displayName ?? s.invitedName ?? "?"}${me && s.playerId === me.id ? ` (${t("common.you")})` : ""}`]));
   const canPlayAgain = viewer.isCreator || isMember;
+  // The reel of a filmed match (`match_reels`), for the match's own players and organiser: one read on the
+  // match's unique index, only once it has started. A failed read shows no reel, never an error page.
+  const reel = started && !cancelled && ev.type === "match" && canPlayAgain ? await matchReel(db, ev.id, now).catch(() => null) : null;
   // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
   // the wall clock where it is played; and whether its one round already went out (one read, only for
   // somebody who is offered the button on a scored match or a locked americano), and whether this viewer's tap sends it.
@@ -1013,6 +1018,7 @@ async function EventPage({ params, searchParams }: Props) {
             correction={correction}
           />
         )}
+        {reel && <MatchReel reel={reel} keptUntil={formatEventDayLong(reel.keptUntil, ev.tz, locale)} />}
         {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their
             faces). From the start, as the rule allows (src/lib/domain/highlights.ts), like the court photo. */}
         {started && !cancelled && canPlayAgain && (

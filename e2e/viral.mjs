@@ -316,6 +316,28 @@ try {
     JSON.stringify(played.body).slice(0, 200),
   );
   check("that door is the operator's too", (await fetch(`${BASE}/api/admin/played-match`, { method: "POST", body: "{}" })).status === 401);
+  // The reel of a filmed match (the owner, 23 November 2026): the operator says where it is, and the players
+  // of the match see it play on the match page with its two save links. A visitor does not see it.
+  const reelToken = "e2e_reel_token_of_22_chars";
+  const reelSet = await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken }) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
+  await p.goto(`${BASE}/${mcode}`);
+  await p.getByTestId("match-reel").waitFor({ timeout: 20000 });
+  const reelBox = await p.getByTestId("reel-video").boundingBox();
+  check(
+    "a player of the match sees the reel on the match page, with the tall file to play and both files to save",
+    reelSet.status === 200 &&
+      !JSON.stringify(reelSet.body).includes(reelToken) &&
+      (await p.getByTestId("reel-video").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4#t=0.1` &&
+      (await p.getByTestId("reel-save-tall").getAttribute("href")) === `https://reels.example.test/r/${reelToken}/tall.mp4?dl=1` &&
+      (await p.getByTestId("reel-save-wide").getAttribute("href")) === `https://reels.example.test/r/${reelToken}/wide.mp4?dl=1` &&
+      Boolean(reelBox) && reelBox.x >= 0 && reelBox.x + reelBox.width <= 390,
+    JSON.stringify({ reelSet, reelBox }),
+  );
+  await shot(p, "v8-match-reel");
+  const reelVisitor = await newPage();
+  await reelVisitor.goto(`${BASE}/${mcode}`);
+  await reelVisitor.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
+  check("a visitor does not see the reel, and the door is the operator's", (await reelVisitor.getByTestId("match-reel").count()) === 0 && !(await reelVisitor.content()).includes(reelToken) && (await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", body: "{}" })).status === 401);
   await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);

@@ -490,6 +490,17 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   take goes to a person's ears before a reel is built on it. `music.py` got two things from this round: the
   music waits for the announcement of the opening and comes in with the first bar of the drop played backwards
   (`MIXIN`), and a full-length track moves on one section at each hit (`SECTION`).
+- **A reel on the store is not a reel a player can see** (23 November 2026). The eighth reel was on the
+  store for a day, and the player who opened his match in the app found a field for a YouTube link. The
+  store has no public address: a file there plays for nobody until something serves it. `modal/serve.py` is
+  that thing: one web function that answers `GET /r/<token>/<name>.mp4` with the part of the file a phone
+  asks for (a phone will not play a film from a host that cannot give parts), and a daily job that deletes
+  a reel after 30 days and a player's video after 7. It was checked with the real file: the first megabyte
+  and a part near the end equal the local file, a wrong token and a path that climbs out both answer 404,
+  and the whole 65 MB file comes in 1.2 s. A reel is finished when `POST /api/admin/match-reel` has put it
+  on the match page, not when `render.py` ends. Storage is not the limit: the store costs nothing for the
+  first 1 TiB a month and $0.09 a GiB after that (Modal's price page, 23 November 2026), deleted files
+  are billed for up to four more days, and a match video is 44 GB.
 - **"No music" is the reel before `music.py`, not a quiet track.** The owner, 23 November 2026: "add the no
   music, I will add my own". A player who puts a song on the reel inside Instagram or TikTok needs the reel
   with its own sound only: the hits, the voices, the crowd. `music.py` is the last step and writes a new

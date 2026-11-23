@@ -70,6 +70,10 @@ export const HIDDEN_COLUMNS: readonly string[] = [
   // browser tells every site. It signs nothing in, but it ties a phone to a player, and no question of the
   // operator needs it. Named with its table, because `key` elsewhere is the name of a metric or a message.
   "device_hints.key",
+  // The only key to a match's reel on the reel host, and a player's shared link to the match video
+  // (match_reels, the owner's decision of 23 November 2026). Whoever holds either can watch the players.
+  "reel_token",
+  "match_reels.source_url",
 ];
 
 /**

@@ -493,3 +493,36 @@ export const series = pgTable(
 );
 
 export type Series = typeof series.$inferSelect;
+
+/**
+ * The highlights reel of a filmed match (the owner, 23 November 2026: a player sees the reel on the match
+ * page, the reel is kept for 30 days on the store, a player's video for 7). One row for a match.
+ *
+ * The files are on the reel host (`scripts/highlights/modal/serve.py`) at
+ * `{host}/r/{reel_token}/tall.mp4` and `wide.mp4`. The token is the only key to them, so the operator's
+ * read-only door never sees it (`HIDDEN_COLUMNS`), nor `source_url`: a player's shared link to the video.
+ * `status` is a text and a list in `src/lib/domain/matchReel.ts`, not an enum: a new step is no migration.
+ */
+export const matchReels = pgTable(
+  "match_reels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    status: text("status").notNull(),
+    /** Where the reel plays from: the address of the reel host, no slash at its end. */
+    host: text("host"),
+    reelToken: text("reel_token").notNull(),
+    /** How the video came: "upload", "link" or "operator". */
+    source: text("source"),
+    sourceUrl: text("source_url"),
+    requestedBy: uuid("requested_by").references(() => players.id, { onDelete: "set null" }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    readyAt: timestamp("ready_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("match_reels_event_idx").on(t.eventId)],
+);
+export type MatchReel = typeof matchReels.$inferSelect;
+
