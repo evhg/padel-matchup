@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
+import { passportKeys } from "@/lib/config";
 import { later } from "@/lib/alerts";
 import { readUploadTicket, reelUploadReceived } from "@/lib/domain/matchReel";
-import { passportKeys } from "@/lib/domain/profile";
 import { tellOwnerVideoHere } from "@/lib/reelNotice";
 
 export const dynamic = "force-dynamic";

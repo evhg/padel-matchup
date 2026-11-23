@@ -2,9 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { later } from "@/lib/alerts";
-import { reelUploadUrl } from "@/lib/config";
+import { passportKeys, reelUploadUrl } from "@/lib/config";
 import { askReelUpload, setReelLink, signUploadTicket } from "@/lib/domain/matchReel";
-import { passportKeys } from "@/lib/domain/profile";
 import { tellOwnerVideoHere } from "@/lib/reelNotice";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, loadEvent, runA, type ActionResult } from "./shared";

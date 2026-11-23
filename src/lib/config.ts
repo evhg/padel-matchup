@@ -123,3 +123,15 @@ export function reelUploadUrl(): string | null {
     return null;
   }
 }
+
+/**
+ * The Ed25519 pair that signs a level passport (`src/lib/domain/profile.ts`) and the ticket of a match
+ * video's upload (`src/lib/domain/matchReel.ts`, under its own prefix). 64 hex each, or null: a copy with
+ * no keys signs nothing. Read here so that a page which needs only the answer does not carry the
+ * profile code: the match page went 25 KB over the weight a route may have when it imported them from there.
+ */
+export const passportKeys = (): { priv: string; pub: string } | null => {
+  const priv = process.env.PASSPORT_PRIVATE_KEY;
+  const pub = process.env.PASSPORT_PUBLIC_KEY;
+  return priv && pub && /^[0-9a-f]{64}$/i.test(priv) && /^[0-9a-f]{64}$/i.test(pub) ? { priv, pub } : null;
+};

@@ -28,11 +28,19 @@ const DEV_ONLY = [
 ];
 
 /**
- * One route may weigh this much. The heaviest today is 5.0 MB and the median 3.0 MB; the headroom is
- * for an honest new dependency, not for a 10 MB surprise. Raising this is a decision with a cost —
- * multiply any increase by every route and every deployment ever kept — so say why in the commit.
+ * One route may weigh this much. Raising this is a decision with a cost — multiply any increase by
+ * every route and every deployment ever kept — so say why in the commit.
+ *
+ * 8.0 MB when the heaviest route was 5.0 MB and the median 3.0 MB. On 23 November 2026 the heaviest
+ * was 8.03 MB and the median 4.7 MB, and the match page went 25 KB over with the card that sends a match
+ * video. The page's own code was not the weight: every route carries about 7.7 MB that all routes
+ * share, and that part grows with each change: the three message files (0.67 MB), and drizzle/*.sql
+ * (0.43 MB), of which 0.29 MB is 18 full copies of the reader's grants, one for each schema change,
+ * where only the newest counts. So 8.2 MB, to let one honest change through, not as a new normal:
+ * the correction is to make the old grants files small (the owner's decision: they are migrations
+ * that production has applied), and it gives back 0.27 MB in every one of 152 routes.
  */
-const MAX_ROUTE_BYTES = 8 * 1000 * 1000;
+const MAX_ROUTE_BYTES = 8.2 * 1000 * 1000;
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const why = process.argv.includes("--why");

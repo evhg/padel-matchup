@@ -37,6 +37,7 @@ import { deviceHintsOf } from "./deviceHints";
 import { placesOf } from "./fixedPairs";
 import { getPlayerGroups } from "./groups";
 import { bandOf, isLevelVerified } from "./levels";
+import { passportKeys } from "@/lib/config";
 import { signPassport, type Passport, type SignedPassport } from "./passport";
 import { getPlayerEvents, type MyEvent } from "./queries";
 import { venueSlug } from "./venueBoard";
@@ -116,11 +117,8 @@ export function buildPassport(player: Player, stats: Pick<ProfileStats, "played"
   };
 }
 
-export const passportKeys = () => {
-  const priv = process.env.PASSPORT_PRIVATE_KEY;
-  const pub = process.env.PASSPORT_PUBLIC_KEY;
-  return priv && pub && /^[0-9a-f]{64}$/i.test(priv) && /^[0-9a-f]{64}$/i.test(pub) ? { priv, pub } : null;
-};
+// The keys are read in src/lib/config.ts: the match page and the reel's upload ticket need them without this file's weight.
+export { passportKeys };
 
 /** The signed document, or the plain one with alg "none" when no key is configured (a self-hosted copy without keys). */
 export async function issuePassport(player: Player, stats: Pick<ProfileStats, "played" | "won">, base: string, now = new Date()): Promise<SignedPassport | (Passport & { alg: "none"; sig: null })> {

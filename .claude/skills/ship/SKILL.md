@@ -823,6 +823,12 @@ Wall clock first, credits second. What actually moved it, measured:
   `git fetch origin main && git log HEAD..origin/main -- drizzle`. When it lists anything, put the
   work on the new main and generate the migration and the reader grants again (both numbers move, and
   the snapshot chain in `drizzle/meta` must follow the new parent), never rename the files by hand.
+- **Weigh the functions before the long gate when a busy page gets a new import.** The gate runs the
+  unit suite (ten minutes), then the build, then `scripts/check-bundle.mjs`: the match page came out
+  25 KB over the 8.0 MB a route may weigh, twelve minutes into the gate. The build for the browser check
+  was already there: `node scripts/check-bundle.mjs` on it answers in a second. And moving one import
+  did nothing, because the weight was not the page's: read the note above `MAX_ROUTE_BYTES` before
+  looking for a culprit in the change.
 - **`node --check e2e/<suite>.mjs` before the build.** A suite is one long module: a new block that
   declares `sent` when line 300 already has a `sent` is a syntax error, and the whole suite fails in
   its first second, after a build of 100 seconds. The check answers at once. And a page object a
