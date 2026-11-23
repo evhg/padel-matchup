@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { setShareHeartRateAction } from "@/actions/identity";
 
-/** My stats: "Keep my heart rate", off by default. The heart rate is health data, so the yes is the player's own. */
+/** My stats: "Keep my heart rate", on by default. Off deletes the heart rates the player had. */
 export function HeartRateSwitch({ initial }: { initial: boolean }) {
   const t = useTranslations("stats");
   const [on, setOn] = useState(initial);

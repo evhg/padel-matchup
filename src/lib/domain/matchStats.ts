@@ -10,19 +10,21 @@ import { firstName } from "./result";
  * The numbers of a filmed match, as rows (the owner, 22 November 2026). The rules are in
  * `matchStatKinds.ts`; this file is the one write and the three reads.
  *
- * Who sees a number (the owner's decisions of the same day, and the promises the app already made):
+ * Who sees a number (the owner's decisions of 22 and 23 November 2026: "by default add all stats for
+ * everyone always", and "Show me in rankings is on by default"):
  *   - the match page shows the match's numbers to whoever sees the match,
  *   - the public profile shows a player's bests, and a profile exists only for a player who opened one,
- *   - the club's board lists a player only after "Show me in rankings" (`players.ranking_opt_in`), the
- *     same yes that the ranking beside it asks for: "Off by default" is a promise on that page,
- *   - a heart rate is written and shown only while the player's own yes stands (`share_heart_rate`).
+ *   - the club's board lists every player except one who chose "Remove me from rankings"
+ *     (`players.ranking_opt_in`, on by default), like the ranking beside it,
+ *   - a heart rate is kept and shown unless the player switched off "Keep my heart rate" on My stats
+ *     (`share_heart_rate`, on by default); off deletes it.
  */
 
 const HEALTH_KINDS = STAT_KIND_NAMES.filter(isHealthKind);
 /** A sender's list is one match: a handful of kinds for four players. */
 export const MAX_STATS_PER_WRITE = 60;
 
-export type StatWriteRefusal = StatRefusal | "unknown_player" | "needs_yes" | "not_an_entry";
+export type StatWriteRefusal = StatRefusal | "unknown_player" | "heart_off" | "not_an_entry";
 export type StatWriteResult = { saved: number; refused: { index: number; why: StatWriteRefusal }[] };
 
 /**
@@ -61,7 +63,7 @@ export async function recordMatchStats(db: Db, input: { code: string; stats: unk
     const player = find(e.player);
     const partner = STAT_KINDS[verdict.kind].pair ? find(e.partner) : null;
     if (!player || (STAT_KINDS[verdict.kind].pair && (!partner || partner.id === player.id))) return void refused.push({ index, why: "unknown_player" });
-    if (isHealthKind(verdict.kind) && !player.heartYes) return void refused.push({ index, why: "needs_yes" });
+    if (isHealthKind(verdict.kind) && !player.heartYes) return void refused.push({ index, why: "heart_off" });
     const base = { eventId: ev.id, kind: verdict.kind, value: verdict.value, margin: verdict.margin, venueSlug: ev.venueSlug };
     rows.set(`${player.id}:${verdict.kind}`, { ...base, playerId: player.id, partnerId: partner?.id ?? null });
     if (partner) rows.set(`${partner.id}:${verdict.kind}`, { ...base, playerId: partner.id, partnerId: player.id });
@@ -101,7 +103,7 @@ const shownColumns = {
   name: players.displayName,
   partnerName: partners.displayName,
 };
-/** A heart rate only while its player's yes stands; every other kind always. */
+/** A heart rate unless its player switched it off; every other kind always. */
 const heartRule = or(sql`${matchStats.kind} not in (${sql.join(HEALTH_KINDS.map((k) => sql`${k}`), sql`, `)})`, eq(players.shareHeartRate, true));
 const byKind = (a: { kind: StatKind }, b: { kind: StatKind }) => STAT_KIND_NAMES.indexOf(a.kind) - STAT_KIND_NAMES.indexOf(b.kind);
 function shown<T extends { kind: string; name: string; partnerName: string | null }>(rows: T[]) {
@@ -140,8 +142,8 @@ export async function playerNumbers(db: Db, playerId: string, limit = 200): Prom
 export type VenueRecord = ShownStat & { startsAt: Date };
 
 /**
- * The club's board: for each kind the highest numbers at this venue, of players who said "Show me in
- * rankings". A partner who did not say it is not named: the pair's number shows with one name. One
+ * The club's board: for each kind the highest numbers at this venue, without the players who chose
+ * "Remove me from rankings". A partner who chose it is not named: the pair's number shows with one name. One
  * read: a window over the venue's own index, cut at twice the board (a pair is two rows).
  */
 export async function venueRecords(db: Db, venueSlug: string): Promise<Map<StatKind, VenueRecord[]>> {
@@ -175,8 +177,8 @@ export async function venueRecords(db: Db, venueSlug: string): Promise<Map<StatK
 }
 
 /**
- * The player's yes or no to "Keep my heart rate". A no deletes every heart rate the player had, in the
- * same transaction, so the switch is the whole answer and nothing stays behind it.
+ * "Keep my heart rate", on by default. Off deletes every heart rate the player had, in the same
+ * transaction, so the switch is the whole answer and nothing stays behind it.
  */
 export async function setShareHeartRate(db: Db, playerId: string, on: boolean): Promise<void> {
   await db.transaction(async (tx) => {

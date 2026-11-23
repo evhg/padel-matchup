@@ -225,17 +225,18 @@ describe("formats, verified levels and rankings (db)", () => {
     expect(fresh.levelVerifiedLevel).toBe(4.5);
   });
 
-  it("rankings list opted-in players only, per club and per city", async () => {
+  it("rankings list every player by default and leave out one who left them, per club and per city", async () => {
     const { creator, ev, players } = await tournament("mexicano", 8, { venueName: "Kata Padel" });
     const r1 = await generateRound(db, { eventId: ev.id, actorPlayerId: creator.id });
     await scoreAll(ev.id, r1.matches, creator.id);
     await setTournamentLock(db, { eventId: ev.id, locked: true, actorPlayerId: creator.id });
     const before = await getRanking(db, { venueSlug: "kata-padel" });
     expect(before.events).toBe(1);
-    expect(before.rows).toEqual([]);
+    // On by default since 23 November 2026: all eight are listed with no step.
+    expect(before.rows).toHaveLength(8);
     const [first, second] = (await db.select().from((await import("@/db/schema")).events).where((await import("drizzle-orm")).eq((await import("@/db/schema")).events.id, ev.id)))[0].standings!;
-    await setRankingOptIn(db, first, true);
-    await setRankingOptIn(db, second, true);
+    // "Remove me from rankings": the other six leave, and the two who stay keep their places.
+    for (const p of players) if (p.id !== first && p.id !== second) await setRankingOptIn(db, p.id, false);
     const club = await getRanking(db, { venueSlug: "kata-padel" });
     expect(club.rows.map((r) => r.playerId)).toEqual([first, second]);
     expect(club.rows[0]).toMatchObject({ rank: 1, points: 3, played: 1, wins: 1, podiums: 1 });

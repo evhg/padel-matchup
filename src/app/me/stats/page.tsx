@@ -8,7 +8,7 @@ import { StatTiles, pairName } from "@/components/StatTiles";
 import { getDb } from "@/db";
 import { bestsOf } from "@/lib/domain/matchStatKinds";
 import { playerNumbers, type PlayerStat } from "@/lib/domain/matchStats";
-import { getSessionPlayer, signedInByName } from "@/lib/session";
+import { getSessionPlayer } from "@/lib/session";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
@@ -20,15 +20,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /**
  * My stats (the owner, 22 November 2026): the player's bests, then every filmed match with its
- * numbers, then the one switch that is theirs alone, "Keep my heart rate". A browser that is signed
- * in by name only reads: the yes to health data belongs to a session that proved who it is.
+ * numbers, then the one switch, "Keep my heart rate": on by default, and off deletes it (the owner,
+ * 23 November 2026: "by default add all stats for everyone always").
  */
 async function MyStatsPage() {
   const db = await getDb();
   const me = await getSessionPlayer(db);
   if (!me) redirect("/me");
   const rows = await playerNumbers(db, me.id);
-  const byName = await signedInByName(me.id);
   const [t, locale] = await Promise.all([getTranslations("stats"), getLocale()]);
   const day = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" });
   const matches = new Map<string, PlayerStat[]>();
@@ -66,11 +65,9 @@ async function MyStatsPage() {
             </section>
           </>
         )}
-        {!byName && (
-          <section className="card">
-            <HeartRateSwitch initial={me.shareHeartRate} />
-          </section>
-        )}
+        <section className="card">
+          <HeartRateSwitch initial={me.shareHeartRate} />
+        </section>
         <Link href="/me" prefetch={false} className="link text-sm">
           ← {t("back")}
         </Link>

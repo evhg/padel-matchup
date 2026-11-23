@@ -1057,7 +1057,7 @@ Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, bel
 `/api/admin/hints-stats` (the device keys in counts, below), `/api/admin/merge-players` (below),
 `/api/admin/cron` (the scheduled jobs, above), `/api/admin/match-stats` (the numbers of a filmed match:
 `POST { code, stats: [{ player, partner?, kind, value, margin? }] }`, the answer says what was saved and
-what was refused and why; a heart rate needs the player's own yes on My stats first).
+what was refused and why; a heart rate is refused only for a player who switched off "Keep my heart rate").
 
 ## What the session's environment must hold
 

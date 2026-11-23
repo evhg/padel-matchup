@@ -10,7 +10,7 @@ import { LevelImport } from "./LevelImport";
 
 /** "Your level" on My matches: declare once, see how results moved it. */
 /** `offerRanking`: show the opt-in once there is something to rank (a level or a played match), so a fresh screen stays quiet. */
-export function LevelEditor({ level, source, log, verified = false, rankingOptIn = false, offerRanking = false }: { level: number | null; source: string | null; log: LevelLogEntry[] | null; verified?: boolean; rankingOptIn?: boolean; offerRanking?: boolean }) {
+export function LevelEditor({ level, source, log, verified = false, rankingOptIn = true, offerRanking = false }: { level: number | null; source: string | null; log: LevelLogEntry[] | null; verified?: boolean; rankingOptIn?: boolean; offerRanking?: boolean }) {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState<number | null>(level);

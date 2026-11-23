@@ -1231,7 +1231,7 @@
     "shortLink": "The short version →",
     "contactLink": "Write to us →",
     "numbersTitle": "Numbers from a filmed match",
-    "numbersBody": "• If a match you played was filmed, we keep the numbers measured from the video: for example your fastest shot and the points you won on serve.\n• They show on the match page, on My stats, and on your public page if you switched it on. A club's records list you only after “Show me in rankings”.\n• Your heart rate is health data. We keep it only after you switch on “Keep my heart rate” on My stats. Switch it off and we delete it at once.\n• The numbers are in the file you can download, and they go when you delete your account."
+    "numbersBody": "• If a match you played was filmed, we keep the numbers measured from the video: for example your fastest shot and the points you won on serve.\n• They show on the match page, on My stats, in the records of your club, and on your public page if you switched it on. Uncheck “Show me in rankings” on My matches to leave the club's records.\n• Your heart rate is health data. We keep it with the other numbers. Switch off “Keep my heart rate” on My stats and we delete it at once.\n• The numbers are in the file you can download, and they go when you delete your account."
   },
   "terms": {
     "title": "Terms of use",
@@ -1550,17 +1550,18 @@
     "title": "Ranking",
     "clubTitle": "{venue} ranking",
     "sub": "Last 90 days, finalized results only. 3 points per win, 1 per draw; tournaments give 3, 2, 1 to the podium.",
-    "optInOnly": "Only players who opted in appear. Nobody is listed without their say.",
+    "optInOnly": "Players appear by first name. A player can leave the ranking at any time.",
     "empty": "No finalized results here yet. Play, enter the score, and let the organizer confirm it.",
-    "emptyOptIn": "There are results, but nobody has opted in to the ranking yet.",
+    "emptyOptIn": "There are results, but nobody is in the ranking yet.",
     "optInCta": "Show me in rankings",
     "optedIn": "You appear in rankings",
-    "optInHelp": "Club and city rankings list your first name, level and results from the last 90 days. Off by default; switch it off any time.",
+    "optInHelp": "Club and city rankings list your first name, level and results from the last 90 days. You can leave them at any time.",
     "colPts": "Pts",
     "colPlayed": "P",
     "colWins": "W",
     "verifiedLegend": "✓ level confirmed by an organizer",
-    "metaDescription": "Padel ranking at {name}: opted-in players, finalized results from the last 90 days."
+    "metaDescription": "Padel ranking at {name}: finalized results from the last 90 days.",
+    "removeCta": "Remove me from rankings"
   },
   "city": {
     "title": "Padel in {city}",
@@ -1638,7 +1639,7 @@
     "faq3q": "What is the tick next to a level?",
     "faq3a": "An organizer who played with that person confirmed the level after the result. It stays while the level moves less than half a step. Rankings can rely on it.",
     "faq4q": "Is my level public?",
-    "faq4a": "It shows as a small chip next to your first name on matches you are in. Club and city rankings list you only if you switch that on yourself.",
+    "faq4a": "It shows as a small chip next to your first name on matches you are in. Club and city rankings list you by first name, and you can leave them on My matches.",
     "ctaTitle": "Set yours in ten seconds",
     "ctaHelp": "No account. Your name and level live behind a personal link.",
     "metaDescription": "The padel level scale explained: what 0 to 7 means, how results move it, what a confirmed level is, and how level ranges work on a match."
@@ -2520,11 +2521,11 @@
     "byMatch": "Match by match",
     "profileTitle": "Best numbers",
     "recordsTitle": "Club records",
-    "recordsLead": "The best numbers measured at this club. Only players who opted in to the ranking appear.",
+    "recordsLead": "The best numbers measured at this club.",
     "heartTitle": "Keep my heart rate",
     "heartOn": "On",
     "heartOff": "Off",
-    "heartHelp": "Your heart rate is health data. Kicksmash keeps it and shows it only while this is on. Switching it off deletes it.",
+    "heartHelp": "Your heart rate is health data. Kicksmash keeps it and shows it while this is on. Switch it off and it is deleted.",
     "back": "My matches",
     "kind": {
       "gamesInRow": "games in a row",

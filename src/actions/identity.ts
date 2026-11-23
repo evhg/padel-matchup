@@ -295,14 +295,12 @@ export async function setPublicProfileAction(on: boolean): Promise<ActionResult<
   });
 }
 
-/** My stats: the player's yes or no to "Keep my heart rate". A no deletes the heart rates the player had. */
+/** My stats: "Keep my heart rate", on by default. Off deletes the heart rates the player had and keeps new ones out. */
 export async function setShareHeartRateAction(on: boolean): Promise<ActionResult<{ on: boolean }>> {
   return runA(async () => {
     const db = await getDb();
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
-    // The yes to health data belongs to a session that proved who it is, like the switch for the phones.
-    if (await signedInByName(me.id)) throw new ActionFailure("forbidden");
     const { setShareHeartRate } = await import("@/lib/domain/matchStats");
     await setShareHeartRate(db, me.id, Boolean(on));
     revalidatePath("/me");

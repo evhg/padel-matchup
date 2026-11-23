@@ -551,8 +551,12 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   `{ "code": "<the match code>", "stats": [{ "player": "<first name or id>", "kind": "fastestShot",
   "value": 84, "margin": 0.1 }, { "player": "…", "partner": "…", "kind": "gamesInRow", "value": 8 }] }`.
   The kinds are in `src/lib/domain/matchStatKinds.ts`. The door refuses a number with a margin above
-  0.10, and a heart rate of a player who did not switch on "Keep my heart rate". The match must exist in
+  0.10, and a heart rate of a player who switched off "Keep my heart rate". The match must exist in
   the app: a filmed match with no match page has no place for its numbers.
+- **A stopped `modal run` leaves its machines running** (22 November 2026). A ball job was stopped on this
+  side and started again. The 60 machines of the first run went on, the second run got 40, and Modal
+  sent a mail: "reached the limit of 100 containers". Stop the app by its name (`modal app stop <id>`)
+  and look at `modal container list` before a second start.
 - **A second reader of the finished file finds what the builder stopped seeing** (21 November 2026). One helper
   with no knowledge of the builder's opinion read 513 frames of the eighth reel against the notes on the seven
   before it. The score box was right in all 22 readings. Four faults were real and had been in the file for three
