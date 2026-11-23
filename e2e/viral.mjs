@@ -549,6 +549,72 @@ try {
   await v.getByTestId("reel-link-save").click();
   await v.getByTestId("reel-here").waitFor({ timeout: 20000 });
   check("a link to the film on a drive is kept, and the page says the video is here", (await v.getByTestId("reel-send").count()) === 0);
+  // ---- The two ways (the owner, 23 November 2026): the full reel first, and the fast reel with what it lacks ----
+  // The fast reel is the phone's own work: it reads the film's sound, finds the rallies and cuts them out of the
+  // file. The film here is a synthetic one with three rallies in its sound (e2e/fixtures/README.md).
+  const fastMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Wim" } } }).then((r) => r.json());
+  const wcode = fastMatch.match?.code;
+  const w = await newPage();
+  const fastHost = { puts: [], finish: null, ticket: null, body: null };
+  await w.route("https://reels.example.test/**", async (route) => {
+    const req = route.request();
+    const m = new URL(req.url()).pathname.match(/^\/u\/([^/]+)(?:\/(.+))?$/);
+    if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: corsOpen });
+    fastHost.ticket = (req.headers().authorization ?? "").replace(/^Bearer /, "");
+    if (!m || !fastHost.ticket) return route.fulfill({ status: 401, headers: corsOpen, json: { error: "unauthorized" } });
+    if (req.method() === "GET") return route.fulfill({ headers: corsOpen, json: { parts: {}, done: false } });
+    if (req.method() === "PUT") {
+      fastHost.puts.push(Number(m[2]));
+      fastHost.body = req.postDataBuffer();
+      return route.fulfill({ headers: corsOpen, json: { ok: true } });
+    }
+    fastHost.finish = req.postDataJSON();
+    return route.fulfill({ headers: corsOpen, json: { ok: true } });
+  });
+  await w.goto(`${fastMatch.organizer.personalUrl}?next=/${wcode}`);
+  await w.waitForURL((x) => x.pathname === `/${wcode}`, { timeout: 20000 });
+  await w.getByTestId("reel-send").waitFor({ timeout: 20000 });
+  const fullWay = w.getByTestId("reel-way-full");
+  const fastWay = w.getByTestId("reel-way-fast");
+  const waysFit = await w.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  check(
+    "the player chooses between two ways: the full reel is first and marked, and the fast reel says with three crosses what it lacks",
+    (await fullWay.getByText("Best", { exact: true }).count()) === 1 &&
+      (await fullWay.getByText("✓").count()) === 4 &&
+      (await fullWay.getByText("✕").count()) === 0 &&
+      (await fastWay.getByText("✓").count()) === 2 &&
+      (await fastWay.getByText("✕").count()) === 3 &&
+      (await fastWay.getByText("No score in the corner").count()) === 1 &&
+      (await w.getByTestId("reel-way-full").evaluate((el) => el.compareDocumentPosition(document.querySelector('[data-testid="reel-way-fast"]')) & Node.DOCUMENT_POSITION_FOLLOWING)) > 0 &&
+      (await w.getByTestId("reel-iphone-hint").count()) === 0 &&
+      waysFit,
+  );
+  await shot(w, "v11-reel-two-ways");
+  // A file that is no film: the page says so and still offers both ways.
+  await w.getByTestId("reel-fast-file").setInputFiles({ name: "notes.mov", mimeType: "video/quicktime", buffer: Buffer.from("this is not a film at all, only some words in a file") });
+  await w.getByTestId("reel-error").waitFor({ timeout: 30000 });
+  check("a file the phone cannot read is said in words, and nothing goes up", (await w.getByTestId("reel-error").innerText()) === "Your phone cannot read this video. Use the full reel." && fastHost.puts.length === 0 && (await fastWay.count()) === 1);
+  const fixture = path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures", "film-aac.mp4");
+  const fixtureBytes = fs.statSync(fixture).size;
+  await w.getByTestId("reel-fast-file").setInputFiles(fixture);
+  await w.getByTestId("reel-here").waitFor({ timeout: 90000 });
+  const cutIsFilm = fastHost.body ? fastHost.body.subarray(4, 8).toString("latin1") === "ftyp" && fastHost.body.length === fastHost.finish?.bytes : true;
+  check(
+    "Make a fast reel: the phone finds the rallies by sound, cuts them out of the film, and sends only the cut",
+    fastHost.puts.join(",") === "0" && fastHost.finish?.parts === 1 && fastHost.finish?.name === "film-aac-clips.mp4" && fastHost.finish?.bytes > 20000 && fastHost.finish?.bytes < fixtureBytes * 0.8 && cutIsFilm && (await w.getByTestId("reel-here").innerText()).includes("The clips are here"),
+    JSON.stringify({ puts: fastHost.puts, finish: fastHost.finish, fixtureBytes, body: fastHost.body ? fastHost.body.length : null }),
+  );
+  const clipsWord = await hostSays(fastHost.ticket);
+  await w.reload();
+  check("the reel host's word marks the clips as here, and the page says that the fast reel is in work", clipsWord.body?.changed === true && (await w.getByTestId("reel-here").innerText()).includes("the fast reel is in work"));
+  // An iPhone converts a film from the photo library before the page gets it: the card says how to avoid that.
+  const iosMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Xan" } } }).then((r) => r.json());
+  const iosCtx = await browser.newContext({ ...iphone, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });
+  const ios = await iosCtx.newPage();
+  await ios.goto(`${iosMatch.organizer.personalUrl}?next=/${iosMatch.match.code}`);
+  await ios.waitForURL((x) => x.pathname === `/${iosMatch.match.code}`, { timeout: 20000 });
+  await ios.getByTestId("reel-iphone-hint").waitFor({ timeout: 20000 });
+  check("on an iPhone the card says to choose the film from Files", (await ios.getByTestId("reel-iphone-hint").innerText()).includes("Save to Files"));
   // A new page: the other visitor's page was left in Russian by the check of /ru/film.
   const passerby = await newPage();
   await passerby.goto(`${BASE}/${ucode}`);

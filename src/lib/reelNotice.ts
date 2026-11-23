@@ -6,9 +6,9 @@ import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
  * itself, a person starts the reel, and a video that nobody knows about is a reel that never comes.
  * No address of the video and no token is in the message: the match's own link is enough.
  */
-export async function tellOwnerVideoHere(code: string, source: "upload" | "link"): Promise<void> {
+export async function tellOwnerVideoHere(code: string, source: "upload" | "clips" | "link"): Promise<void> {
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return;
-  const how = source === "upload" ? "an upload to the store" : "a link to a drive";
-  await sendMessage(owner, esc(`🎬 A match video is here (${how}): ${baseUrl()}/${code}\nThe reel is not started yet.`));
+  const what = source === "clips" ? "The clips of a fast reel are here (the phone's own cut, no score)" : `A match video is here (${source === "upload" ? "an upload to the store" : "a link to a drive"})`;
+  await sendMessage(owner, esc(`🎬 ${what}: ${baseUrl()}/${code}\nThe reel is not started yet.`));
 }

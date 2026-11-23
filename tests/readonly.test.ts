@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { bare, checkReadQuery, READ_QUERY_LIMITS } from "@/lib/api/readQuery";
 import { HIDDEN_COLUMNS, isHidden, readAsReader, readerGrantsSql, refusalOf, REVIEWED_SAFE, schemaTables, SUSPICIOUS } from "@/lib/db/readonly";
@@ -45,6 +46,15 @@ describe("the reader role sees no credential", () => {
     const grants = readerGrantsSql().split("\n");
     expect(grants.find((l) => l.includes(`on public."device_hints" to`))).toBe(`grant select ("created_at", "id", "label", "last_seen_at", "player_id") on public."device_hints" to "kicksmash_reader";`);
     expect(grants.find((l) => l.includes(`on public."metrics_daily" to`))).toContain(`"key"`);
+  });
+
+  it("only the newest grants migration is whole: an older one keeps the role and nothing else", () => {
+    // Every migration file ships in every function. 18 full copies of the grants were 0.27 MB of them (the
+    // owner's decision of 23 November 2026). After a new grants migration: node scripts/reader-grants-stub.mjs
+    expect(execFileSync("node", ["scripts/reader-grants-stub.mjs", "--check"], { encoding: "utf8" })).toContain("only the newest grants migration is whole");
+    const small = readdirSync("drizzle").filter((f) => f.endsWith(".sql") && readFileSync(`drizzle/${f}`, "utf8").startsWith("-- The reader's grants as they were at this point."));
+    expect(small.length).toBeGreaterThanOrEqual(18);
+    for (const f of small) expect(readFileSync(`drizzle/${f}`, "utf8").length, f).toBeLessThan(1200);
   });
 
   it("the migration on disk is what the live schema generates", () => {

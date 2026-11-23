@@ -22,10 +22,10 @@ export async function POST(req: Request) {
   const keys = passportKeys();
   const token = keys ? await readUploadTicket(body?.ticket, keys.pub, new Date()) : null;
   if (!token) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const code = await reelUploadReceived(await getDb(), token);
-  if (code) {
-    await later(() => tellOwnerVideoHere(code, "upload"));
-    revalidatePath(`/${code}`);
+  const got = await reelUploadReceived(await getDb(), token);
+  if (got) {
+    await later(() => tellOwnerVideoHere(got.code, got.way));
+    revalidatePath(`/${got.code}`);
   }
-  return NextResponse.json({ ok: true, changed: Boolean(code) });
+  return NextResponse.json({ ok: true, changed: Boolean(got) });
 }

@@ -1355,8 +1355,186 @@ const RF = (() => {
     return new Uint8Array(buf);
   }
 
+  // ---- Reading the sound of a file (moved here on 23 November 2026, so that the match page's fast reel reads a
+  // film with the same code as this page). `c` is the caller's own state: { env, read, path, force, cancelled(),
+  // stopped(), tick() }. `env` takes the samples, `read` counts bytes and milliseconds, `path` names the decoder.
+  async function pool(items, k, fn) {
+    const out = new Array(items.length);
+    let i = 0;
+    const worker = async () => { while (i < items.length) { const j = i++; out[j] = await fn(items[j]); } };
+    await Promise.all(Array.from({ length: Math.min(k, items.length) }, worker));
+    return out;
+  }
+
+  async function readAac(file, t, sr, progress, c) {
+    const tab = sampleTable(t);
+    const cfg = t.ascInfo;
+    const spf = 1024 * (cfg.sbr ? 2 : 1);
+    const perBatch = Math.max(64, Math.round((30 * sr) / spf));
+    const batches = [];
+    for (let i = 0; i < tab.n; i += perBatch) batches.push([i, Math.min(tab.n, i + perBatch)]);
+    const channels = t.channels || cfg.channelConfig || 2;
+    const env = c.env;
+
+    const readBatch = async (b) => {
+      const PRE = 3;
+      const i0 = Math.max(0, b[0] - PRE), i1 = b[1];
+      const { ranges, map } = planRanges(tab.offs, tab.sizes, i0, i1, 131072);
+      const bufs = await pool(ranges, 6, (r) => readRange(file, r.start, r.end));
+      c.read.reads += ranges.length;
+      for (const r of ranges) c.read.bytesRead += r.end - r.start;
+      const frames = [];
+      for (let i = i0; i < i1; i++) {
+        const ri = map[i - i0], rr = ranges[ri], o = tab.offs[i] - rr.start;
+        frames.push(bufs[ri].subarray(o, o + tab.sizes[i]));
+      }
+      return { frames, pre: b[0] - i0, first: b[0], count: b[1] - b[0] };
+    };
+
+    // Decoder choice: WebCodecs first, then ADTS through decodeAudioData, then an M4A wrapper.
+    let wc = null;
+    const force = c.force || ''; // test hook: 'adts' or 'm4a' skips the decoders before it
+    if (force) c.read.forcedDecoder = force;
+    if (force === 'm4a') c.path = 'M4A';
+    if (!force && typeof AudioDecoder !== 'undefined' && typeof EncodedAudioChunk !== 'undefined') {
+      const conf = { codec: 'mp4a.40.' + cfg.objectType, sampleRate: sr, numberOfChannels: channels, description: t.asc };
+      try {
+        const sup = await AudioDecoder.isConfigSupported(conf);
+        if (sup && sup.supported) {
+          let decErr = null;
+          const dec = new AudioDecoder({
+            output: (ad) => { const tf = performance.now(); try { env.push(audioDataToMono(ad)); } catch (e) { decErr = e; } finally { ad.close(); } c.read.featureMs += performance.now() - tf; },
+            error: (e) => { decErr = e; },
+          });
+          dec.configure(conf);
+          wc = { dec, get err() { return decErr; } };
+          c.path = 'AudioDecoder';
+        }
+      } catch (e) { c.read.webCodecsProbe = String(e && e.message || e); }
+    }
+    let ctx = null;
+    if (!wc) {
+      const OAC = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
+      if (!OAC) throw new Error('This browser has no audio decoder that the page can use.');
+      ctx = new OAC(1, 1, sr);
+    }
+    const decodeWrapped = (bytes) => new Promise((res, rej) => {
+      try { const p = ctx.decodeAudioData(bytes.buffer, res, rej); if (p && p.catch) p.catch(rej); } catch (e) { rej(e); }
+    });
+
+    let next = readBatch(batches[0]);
+    let expected = 0, got = 0;
+    for (let bi = 0; bi < batches.length; bi++) {
+      const data = await next;
+      if (c.cancelled()) return;
+      if (bi + 1 < batches.length && !c.stopped()) next = readBatch(batches[bi + 1]);
+      const td = performance.now();
+      if (wc) {
+        const fr = data.frames.slice(data.pre);
+        for (let k = 0; k < fr.length; k++) {
+          wc.dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round(((data.first + k) * spf * 1e6) / sr), data: fr[k] }));
+        }
+        await wc.dec.flush();
+        if (wc.err) throw wc.err;
+        c.read.decodeMs += performance.now() - td;
+      } else {
+        let ab = null;
+        if (c.path !== 'M4A') {
+          try { ab = await decodeWrapped(buildAdts(data.frames, cfg, channels)); c.path = 'ADTS'; }
+          catch (e) { if (c.path === 'ADTS') throw e; c.read.adtsError = String(e && e.message || e); }
+        }
+        if (!ab) { ab = await decodeWrapped(buildM4a(data.frames, t.asc, sr, channels)); c.path = 'M4A'; }
+        c.read.decodeMs += performance.now() - td;
+        const tf = performance.now();
+        const N = data.count * spf;
+        const L = ab.length;
+        let from = 0, len = Math.min(L, N);
+        if (data.pre > 0 && L >= N) { from = L - N; len = N; }
+        const chs = [];
+        for (let c = 0; c < ab.numberOfChannels; c++) chs.push(ab.getChannelData(c).subarray(from, from + len));
+        const mono = new Float32Array(len);
+        for (const ch of chs) for (let i = 0; i < len; i++) mono[i] += ch[i];
+        if (chs.length > 1) { const g = 1 / chs.length; for (let i = 0; i < len; i++) mono[i] *= g; }
+        env.push(mono);
+        got += len; expected += N;
+        c.read.featureMs += performance.now() - tf;
+      }
+      progress(env.seconds);
+      await c.tick();
+      if (c.stopped()) break;
+    }
+    if (wc) { try { wc.dec.close(); } catch (e) {} }
+    if (expected) c.read.decodeDriftMs = Math.round(((got - expected) / sr) * 1000);
+    c.read.decodeMs = Math.round(c.read.decodeMs); c.read.featureMs = Math.round(c.read.featureMs);
+  }
+
+  function audioDataToMono(ad) {
+    const n = ad.numberOfFrames, ch = ad.numberOfChannels;
+    const out = new Float32Array(n);
+    try {
+      const tmp = new Float32Array(n);
+      for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c, format: 'f32-planar' }); for (let i = 0; i < n; i++) out[i] += tmp[i]; }
+    } catch (e) {
+      const f = ad.format || '';
+      const planar = f.endsWith('-planar');
+      const Arr = f.startsWith('s16') ? Int16Array : f.startsWith('s32') ? Int32Array : f.startsWith('u8') ? Uint8Array : Float32Array;
+      const scale = Arr === Int16Array ? 1 / 32768 : Arr === Int32Array ? 1 / 2147483648 : Arr === Uint8Array ? 1 / 128 : 1;
+      const off = Arr === Uint8Array ? 128 : 0;
+      out.fill(0);
+      if (planar) {
+        const tmp = new Arr(n);
+        for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c }); for (let i = 0; i < n; i++) out[i] += (tmp[i] - off) * scale; }
+      } else {
+        const tmp = new Arr(n * ch);
+        ad.copyTo(tmp, { planeIndex: 0 });
+        for (let i = 0; i < n; i++) { let s = 0; for (let c = 0; c < ch; c++) s += tmp[i * ch + c] - off; out[i] = s * scale; }
+      }
+    }
+    if (ch > 1) { const g = 1 / ch; for (let i = 0; i < n; i++) out[i] *= g; }
+    return out;
+  }
+
+  async function readPcm(file, t, progress, c) {
+    const fmt = pcmFormat(t);
+    const chunks = pcmChunks(t, fmt);
+    c.path = 'PCM';
+    const env = c.env;
+    const sr = env.sr;
+    const batches = [];
+    let cur = [], bytes = 0;
+    for (const c of chunks) { cur.push(c); bytes += c.end - c.start; if (bytes >= 4e6) { batches.push(cur); cur = []; bytes = 0; } }
+    if (cur.length) batches.push(cur);
+    const readBatch = async (list) => {
+      const offs = Float64Array.from(list.map((c) => c.start)), sizes = Float64Array.from(list.map((c) => c.end - c.start));
+      const { ranges, map } = planRanges(offs, sizes, 0, list.length, 131072);
+      const bufs = await pool(ranges, 6, (r) => readRange(file, r.start, r.end));
+      c.read.reads += ranges.length;
+      for (const r of ranges) c.read.bytesRead += r.end - r.start;
+      return list.map((c, i) => { const rr = ranges[map[i]]; const o = c.start - rr.start; return bufs[map[i]].subarray(o, o + (c.end - c.start)); });
+    };
+    let next = readBatch(batches[0]);
+    for (let bi = 0; bi < batches.length; bi++) {
+      const parts = await next;
+      if (c.cancelled()) return;
+      if (bi + 1 < batches.length && !c.stopped()) next = readBatch(batches[bi + 1]);
+      const tf = performance.now();
+      for (const p of parts) {
+        const usable = p.length - (p.length % fmt.bytesPerFrame);
+        env.push(pcmToMono(p.subarray(0, usable), fmt));
+      }
+      c.read.featureMs += performance.now() - tf;
+      progress(env.seconds);
+      await c.tick();
+      if (c.stopped()) break;
+    }
+    c.read.featureMs = Math.round(c.read.featureMs);
+    c.read.pcm = fmt;
+    if (sr && t.durationSec) c.read.decodeDriftMs = Math.round((env.samples / sr - t.durationSec) * 1000);
+  }
+
   return { walkTop, children, parseMoov, parseAsc, parseEsds, trackKind, pcmFormat, sampleTable, pcmChunks, planRanges, pcmToMono, adtsHeader, buildAdts, buildM4a, readRange,
-    Envelope, prepare, pickHits, groupRallies, planCut, pointBounds, planReel, pictureReel, reactionOf, netBurst, REELS, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc };
+    Envelope, prepare, pickHits, groupRallies, planCut, pointBounds, planReel, pictureReel, reactionOf, netBurst, REELS, buildCut, evaluate, overlapShare, thresholds, DEFAULTS, synthMatch, wavBlobBytes, fourcc,
+    pool, readAac, readPcm, audioDataToMono };
 })();
 if (typeof module !== 'undefined') module.exports = RF;
 /*CORE-END*/
@@ -1366,7 +1544,7 @@ if (typeof module !== 'undefined') module.exports = RF;
 (() => {
   'use strict';
   if (typeof document === 'undefined') return;
-  const VERSION = 'rally-finder 2026-11-14.12';
+  const VERSION = 'rally-finder 2026-11-23.1';
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   $('#ver').textContent = VERSION + '. This page runs in your browser. On kicksma.sh it sends Kicksmash the numbers of each run, and 4 still pictures after the player finder; never the video, never its sound.';
@@ -1541,8 +1719,11 @@ if (typeof module !== 'undefined') module.exports = RF;
       $('#progSub').textContent = fmtBytes(state.read.bytesRead) + ' read in ' + state.read.reads + ' reads · ' + el.toFixed(1) + ' s · decoder: ' + (state.decodePath || 'starting');
     };
 
-    if (kind === 'pcm') await readPcm(file, atrak, progress, myRun);
-    else await readAac(file, atrak, sr, progress, myRun);
+    // The core reads the sound (RF.readAac, RF.readPcm); this object is its view of the page's state.
+    const c = { env: state.env, read: state.read, force: window.__rfForceDecoder || '', tick, cancelled: () => myRun !== state.runId, stopped: () => state.stop,
+      get path() { return state.decodePath; }, set path(v) { state.decodePath = v; } };
+    if (kind === 'pcm') await RF.readPcm(file, atrak, progress, c);
+    else await RF.readAac(file, atrak, sr, progress, c);
     if (myRun !== state.runId) return;
 
     const el = (performance.now() - tRead0) / 1000;
@@ -1555,180 +1736,6 @@ if (typeof module !== 'undefined') module.exports = RF;
     $('#progLine').textContent = (state.stop ? 'Stopped at ' + fmtT(state.env.seconds) + '. ' : 'Done. ') + 'Read ' + (state.env.seconds / 60).toFixed(1) + ' min of sound in ' + el.toFixed(1) + ' s (' + state.read.speedX + '× real time).';
     finishWork();
     analyseEnvelope();
-  }
-
-  async function pool(items, k, fn) {
-    const out = new Array(items.length);
-    let i = 0;
-    const worker = async () => { while (i < items.length) { const j = i++; out[j] = await fn(items[j]); } };
-    await Promise.all(Array.from({ length: Math.min(k, items.length) }, worker));
-    return out;
-  }
-
-  async function readAac(file, t, sr, progress, myRun) {
-    const tab = RF.sampleTable(t);
-    const cfg = t.ascInfo;
-    const spf = 1024 * (cfg.sbr ? 2 : 1);
-    const perBatch = Math.max(64, Math.round((30 * sr) / spf));
-    const batches = [];
-    for (let i = 0; i < tab.n; i += perBatch) batches.push([i, Math.min(tab.n, i + perBatch)]);
-    const channels = t.channels || cfg.channelConfig || 2;
-    const env = state.env;
-
-    const readBatch = async (b) => {
-      const PRE = 3;
-      const i0 = Math.max(0, b[0] - PRE), i1 = b[1];
-      const { ranges, map } = RF.planRanges(tab.offs, tab.sizes, i0, i1, 131072);
-      const bufs = await pool(ranges, 6, (r) => RF.readRange(file, r.start, r.end));
-      state.read.reads += ranges.length;
-      for (const r of ranges) state.read.bytesRead += r.end - r.start;
-      const frames = [];
-      for (let i = i0; i < i1; i++) {
-        const ri = map[i - i0], rr = ranges[ri], o = tab.offs[i] - rr.start;
-        frames.push(bufs[ri].subarray(o, o + tab.sizes[i]));
-      }
-      return { frames, pre: b[0] - i0, first: b[0], count: b[1] - b[0] };
-    };
-
-    // Decoder choice: WebCodecs first, then ADTS through decodeAudioData, then an M4A wrapper.
-    let wc = null;
-    const force = window.__rfForceDecoder || ''; // test hook: 'adts' or 'm4a' skips the decoders before it
-    if (force) state.read.forcedDecoder = force;
-    if (force === 'm4a') state.decodePath = 'M4A';
-    if (!force && typeof AudioDecoder !== 'undefined' && typeof EncodedAudioChunk !== 'undefined') {
-      const conf = { codec: 'mp4a.40.' + cfg.objectType, sampleRate: sr, numberOfChannels: channels, description: t.asc };
-      try {
-        const sup = await AudioDecoder.isConfigSupported(conf);
-        if (sup && sup.supported) {
-          let decErr = null;
-          const dec = new AudioDecoder({
-            output: (ad) => { const tf = performance.now(); try { env.push(audioDataToMono(ad)); } catch (e) { decErr = e; } finally { ad.close(); } state.read.featureMs += performance.now() - tf; },
-            error: (e) => { decErr = e; },
-          });
-          dec.configure(conf);
-          wc = { dec, get err() { return decErr; } };
-          state.decodePath = 'AudioDecoder';
-        }
-      } catch (e) { state.read.webCodecsProbe = String(e && e.message || e); }
-    }
-    let ctx = null;
-    if (!wc) {
-      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-      if (!OAC) throw new Error('This browser has no audio decoder that the page can use.');
-      ctx = new OAC(1, 1, sr);
-    }
-    const decodeWrapped = (bytes) => new Promise((res, rej) => {
-      try { const p = ctx.decodeAudioData(bytes.buffer, res, rej); if (p && p.catch) p.catch(rej); } catch (e) { rej(e); }
-    });
-
-    let next = readBatch(batches[0]);
-    let expected = 0, got = 0;
-    for (let bi = 0; bi < batches.length; bi++) {
-      const data = await next;
-      if (myRun !== state.runId) return;
-      if (bi + 1 < batches.length && !state.stop) next = readBatch(batches[bi + 1]);
-      const td = performance.now();
-      if (wc) {
-        const fr = data.frames.slice(data.pre);
-        for (let k = 0; k < fr.length; k++) {
-          wc.dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round(((data.first + k) * spf * 1e6) / sr), data: fr[k] }));
-        }
-        await wc.dec.flush();
-        if (wc.err) throw wc.err;
-        state.read.decodeMs += performance.now() - td;
-      } else {
-        let ab = null;
-        if (state.decodePath !== 'M4A') {
-          try { ab = await decodeWrapped(RF.buildAdts(data.frames, cfg, channels)); state.decodePath = 'ADTS'; }
-          catch (e) { if (state.decodePath === 'ADTS') throw e; state.read.adtsError = String(e && e.message || e); }
-        }
-        if (!ab) { ab = await decodeWrapped(RF.buildM4a(data.frames, t.asc, sr, channels)); state.decodePath = 'M4A'; }
-        state.read.decodeMs += performance.now() - td;
-        const tf = performance.now();
-        const N = data.count * spf;
-        const L = ab.length;
-        let from = 0, len = Math.min(L, N);
-        if (data.pre > 0 && L >= N) { from = L - N; len = N; }
-        const chs = [];
-        for (let c = 0; c < ab.numberOfChannels; c++) chs.push(ab.getChannelData(c).subarray(from, from + len));
-        const mono = new Float32Array(len);
-        for (const ch of chs) for (let i = 0; i < len; i++) mono[i] += ch[i];
-        if (chs.length > 1) { const g = 1 / chs.length; for (let i = 0; i < len; i++) mono[i] *= g; }
-        env.push(mono);
-        got += len; expected += N;
-        state.read.featureMs += performance.now() - tf;
-      }
-      progress(env.seconds);
-      await tick();
-      if (state.stop) break;
-    }
-    if (wc) { try { wc.dec.close(); } catch (e) {} }
-    if (expected) state.read.decodeDriftMs = Math.round(((got - expected) / sr) * 1000);
-    state.read.decodeMs = Math.round(state.read.decodeMs); state.read.featureMs = Math.round(state.read.featureMs);
-  }
-
-  function audioDataToMono(ad) {
-    const n = ad.numberOfFrames, ch = ad.numberOfChannels;
-    const out = new Float32Array(n);
-    try {
-      const tmp = new Float32Array(n);
-      for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c, format: 'f32-planar' }); for (let i = 0; i < n; i++) out[i] += tmp[i]; }
-    } catch (e) {
-      const f = ad.format || '';
-      const planar = f.endsWith('-planar');
-      const Arr = f.startsWith('s16') ? Int16Array : f.startsWith('s32') ? Int32Array : f.startsWith('u8') ? Uint8Array : Float32Array;
-      const scale = Arr === Int16Array ? 1 / 32768 : Arr === Int32Array ? 1 / 2147483648 : Arr === Uint8Array ? 1 / 128 : 1;
-      const off = Arr === Uint8Array ? 128 : 0;
-      out.fill(0);
-      if (planar) {
-        const tmp = new Arr(n);
-        for (let c = 0; c < ch; c++) { ad.copyTo(tmp, { planeIndex: c }); for (let i = 0; i < n; i++) out[i] += (tmp[i] - off) * scale; }
-      } else {
-        const tmp = new Arr(n * ch);
-        ad.copyTo(tmp, { planeIndex: 0 });
-        for (let i = 0; i < n; i++) { let s = 0; for (let c = 0; c < ch; c++) s += tmp[i * ch + c] - off; out[i] = s * scale; }
-      }
-    }
-    if (ch > 1) { const g = 1 / ch; for (let i = 0; i < n; i++) out[i] *= g; }
-    return out;
-  }
-
-  async function readPcm(file, t, progress, myRun) {
-    const fmt = RF.pcmFormat(t);
-    const chunks = RF.pcmChunks(t, fmt);
-    state.decodePath = 'PCM';
-    const env = state.env;
-    const sr = env.sr;
-    const batches = [];
-    let cur = [], bytes = 0;
-    for (const c of chunks) { cur.push(c); bytes += c.end - c.start; if (bytes >= 4e6) { batches.push(cur); cur = []; bytes = 0; } }
-    if (cur.length) batches.push(cur);
-    const readBatch = async (list) => {
-      const offs = Float64Array.from(list.map((c) => c.start)), sizes = Float64Array.from(list.map((c) => c.end - c.start));
-      const { ranges, map } = RF.planRanges(offs, sizes, 0, list.length, 131072);
-      const bufs = await pool(ranges, 6, (r) => RF.readRange(file, r.start, r.end));
-      state.read.reads += ranges.length;
-      for (const r of ranges) state.read.bytesRead += r.end - r.start;
-      return list.map((c, i) => { const rr = ranges[map[i]]; const o = c.start - rr.start; return bufs[map[i]].subarray(o, o + (c.end - c.start)); });
-    };
-    let next = readBatch(batches[0]);
-    for (let bi = 0; bi < batches.length; bi++) {
-      const parts = await next;
-      if (myRun !== state.runId) return;
-      if (bi + 1 < batches.length && !state.stop) next = readBatch(batches[bi + 1]);
-      const tf = performance.now();
-      for (const p of parts) {
-        const usable = p.length - (p.length % fmt.bytesPerFrame);
-        env.push(RF.pcmToMono(p.subarray(0, usable), fmt));
-      }
-      state.read.featureMs += performance.now() - tf;
-      progress(env.seconds);
-      await tick();
-      if (state.stop) break;
-    }
-    state.read.featureMs = Math.round(state.read.featureMs);
-    state.read.pcm = fmt;
-    if (sr && t.durationSec) state.read.decodeDriftMs = Math.round((env.samples / sr - t.durationSec) * 1000);
   }
 
   // ---------- the sample ----------

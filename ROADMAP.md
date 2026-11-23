@@ -1611,8 +1611,23 @@ Everything in this list is live. The README describes each in detail.
   and at 85% the owner gets Telegram and an email. Proven in `tests/match-reel.test.ts`,
   `tests/store-alert.test.ts`, `tests/legal.test.ts`, the browser suite viral, and with a real 65 MB
   file against a test copy of the reel host (the joined file equal to the source, byte for byte). Not
-  built yet: the fast way (the phone finds the moments by sound and sends only the clips, with no
-  score), and the engine with no person in the loop.
+  built yet: the engine with no person in the loop.
+- **Two ways to send the video, the player's choice** (the owner, 23 November 2026). The card shows the
+  full reel first, marked "Best", with four check marks, and the fast reel with two check marks and
+  three crosses: no score in the corner, no numbers, no fastest shot. "Make a fast reel" runs on the
+  phone: the Rally Finder's core reads the film's sound, finds the rallies, and cuts the best points
+  and the loudest reactions out of the file with no loss of quality; only that cut goes up. A file the
+  phone cannot read is said in words. On an iPhone the card says to choose the film from the Files
+  app, because an iPhone converts a film that a page takes from the photo library. Proven in
+  `tests/fast-plan.test.ts`, `tests/match-reel.test.ts` and the browser suite viral, with a synthetic
+  film of three rallies. Not proven: a real film of 44 GB on a real iPhone. Not built yet: the engine
+  for the clips of a fast reel; a person makes that reel too.
+- **The reader's grants no longer pile up** (the owner's decision A, 23 November 2026). Each schema
+  change wrote a full copy of the read-only role's grants, 17 KB, into every function of every
+  deployment: 18 copies, 0.27 MB. The older ones keep the role alone now
+  (`scripts/reader-grants-stub.mjs`, held by `tests/readonly.test.ts`), the heaviest route went from
+  8.03 to 7.8 MB, and the limit of a route is 8.0 MB again. Production was not touched: a migration is
+  applied by its date, never by its text.
 
 ## The finish line
 
