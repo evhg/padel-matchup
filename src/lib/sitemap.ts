@@ -52,6 +52,7 @@ export async function buildSitemap(db: Db | null, now = new Date()): Promise<Met
     ...inEveryLanguage("/americano", "monthly", 0.8),
     ...[8, 12, 16, 20, 24].flatMap((n) => inEveryLanguage(`/americano/${n}`, "yearly", 0.6)),
     ...inEveryLanguage("/levels", "monthly", 0.7),
+    ...inEveryLanguage("/film", "monthly", 0.6),
     { url: `${base}/developers`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/agents`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     ...CITIES.flatMap((c) => inEveryLanguage(`/${c.slug}`, "daily", 0.8)),

@@ -1435,7 +1435,7 @@
     "highlightsNotYoutube": "Paste a YouTube link, for example https://youtu.be/…",
     "removeHighlights": "Remove the video link",
     "removeHighlightsConfirm": "Remove the highlights link for everybody in this match?",
-    "filmTips": "To film a match: put the phone on the back glass, in the centre, in landscape. Record in 4K at 30 fps, in airplane mode, with a power bank."
+    "filmTips": "To film a match: put the phone behind the back glass, in the centre, on its side. Record in 4K at 60 fps, with a power bank."
   },
   "group": {
     "title": "Group",
@@ -2863,5 +2863,27 @@
     "citySub": "Tournaments that repeat. Sign up on the series page.",
     "metaTitle": "{name} · padel series",
     "metaDescription": "{rhythm}{venue}. Sign up for the next edition and see who stood on the podium."
+  },
+  "film": {
+    "cardTitle": "Film this match. Get a reel.",
+    "cardBody": "Put one phone behind the court. Kicksmash makes a highlights reel with the score from your video.",
+    "cardCta": "Show me how to film",
+    "cardNote": "One phone is enough. No app to install.",
+    "metaTitle": "How to film a padel match with one phone",
+    "metaDescription": "Four steps to film a padel match with one phone: where the phone goes, the camera settings and when to press record. Kicksmash makes a highlights reel from the video.",
+    "back": "The match",
+    "title": "Four things, then play",
+    "caption": "Your phone, behind the back glass",
+    "s1Title": "Behind the back glass, in the centre",
+    "s1Body": "As high as you can: on the fence or on a bag. Turn the phone until the service line is level in the picture.",
+    "s2Title": "Set the camera to 4K at 60",
+    "s2Body": "iPhone: Settings, Camera, Record Video, “4K at 60 fps”. Android: Camera, Settings, video size, “UHD 60”. The reel needs this for slow motion and for the ball.",
+    "s3Title": "Camera, Video, 0.5×, phone on its side",
+    "s3Body": "Use the camera of your phone, not this page. Connect a power bank. You need about 36 GB free for 90 minutes.",
+    "s4Title": "Press record before the first serve",
+    "s4Body": "One video for the whole match. Do not stop it between sets.",
+    "afterTitle": "After the match",
+    "afterBody": "Keep the video on your phone. On the match page, tap “{feedback}” and say that you filmed. Reels are new: today a person starts each one, and all four players get it.",
+    "gotIt": "Got it. Back to the match"
   }
 }
