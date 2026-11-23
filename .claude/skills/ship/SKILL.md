@@ -823,6 +823,18 @@ Wall clock first, credits second. What actually moved it, measured:
   `git fetch origin main && git log HEAD..origin/main -- drizzle`. When it lists anything, put the
   work on the new main and generate the migration and the reader grants again (both numbers move, and
   the snapshot chain in `drizzle/meta` must follow the new parent), never rename the files by hand.
+- **Run the tests that read the source tree before the long gate.** The film card used `text-white` on
+  its dark block, and `tests/contrast.test.ts` keeps a list of the files that may: the gate said so after
+  ten minutes of the unit suite, and the whole gate ran twice. The tests that read `src` hold the
+  project's rules (fixed white, client messages, documents, page names) and answer in 22 seconds:
+  `pnpm exec vitest run $(grep -ln readdirSync tests/*.test.ts)`. Run that line after the typecheck,
+  then start the gate.
+- **A browser check waits for the thing it reads, not for a line beside it.** The formats suite
+  clicked "Show me in rankings", waited for "You appear in rankings", and read the table. That line
+  comes from the button's own state; the table's new row comes with the page refresh, one round trip
+  later, and until then the button still says "Working…". It passed here and on one CI run, and failed
+  on the next (23 November 2026). After a click that refreshes a page, wait for the element the check
+  counts (the row, the button's final name), each with its own `waitFor`.
 - **A new button on a page an old suite already clicks needs a name of its own.** A second "Save"
   on the club's manage page made `getByRole("button", { name: "Save" })` match two elements and the
   clubs suite failed on a line the change never touched. Before adding a button, grep the suites

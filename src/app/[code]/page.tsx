@@ -46,6 +46,7 @@ import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
+import { FilmCard } from "@/components/FilmCard";
 import { HighlightsLink } from "@/components/HighlightsLink";
 import { MatchNumbers } from "@/components/MatchNumbers";
 import { matchNumbers } from "@/lib/domain/matchStats";
@@ -1155,6 +1156,10 @@ async function EventPage({ params, searchParams }: Props) {
             </a>
           )}
         </section>
+
+        {/* "Film this match. Get a reel.": before the start, for the match's own players and organiser (the owner's
+            screen 1 of the reel flow, 22 November 2026). The four instructions are on /film. */}
+        {ev.type === "match" && !cancelled && !started && canPlayAgain && <FilmCard code={code} />}
 
         {!over && otherShares}
 

@@ -1584,6 +1584,15 @@ Everything in this list is live. The README describes each in detail.
   `tests/match-stat-kinds.test.ts`, `tests/match-stats.test.ts` and the browser suite viral. Not built
   yet: the reel flow that fills the table with no person in the loop (today the operator sends the
   numbers of a match after the reel's check).
+- **"Film this match. Get a reel."** (the owner's screens 1 and 2 of the reel flow, 22 November 2026).
+  Before a match starts, its own players and organiser see one dark block on the match page, and it
+  leads to `/film`: four instructions with the drawing of the court (behind the back glass with the
+  service line level, 4K at 60, the phone's own camera at 0.5× on its side, record before the first
+  serve). The page reads no database, is in the sitemap in three languages and carries `HowTo` data.
+  It says the truth of today under "After the match": the player keeps the video and says so through
+  the feedback line, and a person starts the reel. Proven in `tests/codes.test.ts` (a page name of
+  four characters can never be a match code) and the browser suite viral. Not built yet: screens 3 to
+  8, where a player chooses the video and the reel comes back with no person in the loop.
 
 ## The finish line
 

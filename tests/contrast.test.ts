@@ -107,6 +107,8 @@ const KEEP_WHITE: Record<string, number> = {
   "src/components/EmbedSnippet.tsx": 1, // code on bg-night
   "src/app/developers/page.tsx": 2, // code on bg-night
   "src/app/admin/page.tsx": 2, // words on the fixed status colours
+  "src/components/FilmCard.tsx": 5, // "Film this match": words and the one button on bg-night, dark in both themes
+  "src/app/film/page.tsx": 1, // the caption under the court drawing, on bg-night
 };
 // Pictures, mail and the club's TV draw their own colours and never follow the theme.
 const OWN_COLOURS = /opengraph-image|\/story\/|\/api\/icon\/|apple-icon|\/tv\/|\/email\//;

@@ -490,6 +490,11 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   take goes to a person's ears before a reel is built on it. `music.py` got two things from this round: the
   music waits for the announcement of the opening and comes in with the first bar of the drop played backwards
   (`MIXIN`), and a full-length track moves on one section at each hit (`SECTION`).
+- **"No music" is the reel before `music.py`, not a quiet track.** The owner, 23 November 2026: "add the no
+  music, I will add my own". A player who puts a song on the reel inside Instagram or TikTok needs the reel
+  with its own sound only: the hits, the voices, the crowd. `music.py` is the last step and writes a new
+  file, so the file `render.py` wrote is that reel. The reel flow keeps both when a player has a track, and
+  only the first when the player chose "No music".
 - **A number over a head needs a stretch where the tracker holds that player.** A heart rate stood over a
   player in one clip of the sixth reel, and went away with that clip. Back in every clip, the first try put it
   after the dead ball: the tracker had the player for 8 of 110 frames there, and no bubble came. The plan now

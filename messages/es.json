@@ -1435,7 +1435,7 @@
     "highlightsNotYoutube": "Pega un enlace de YouTube, por ejemplo https://youtu.be/…",
     "removeHighlights": "Quitar el enlace del vídeo",
     "removeHighlightsConfirm": "¿Quitar el enlace de los mejores momentos para todos en este partido?",
-    "filmTips": "Para grabar un partido: pon el móvil en el cristal del fondo, en el centro y en horizontal. Graba en 4K a 30 fps, en modo avión y con una batería externa."
+    "filmTips": "Para grabar un partido: pon el móvil detrás del cristal del fondo, en el centro y en horizontal. Graba en 4K a 60 fps, con una batería externa."
   },
   "group": {
     "title": "Grupo",
@@ -2863,5 +2863,27 @@
     "citySub": "Torneos que se repiten. Apúntate en la página de la serie.",
     "metaTitle": "{name} · serie de pádel",
     "metaDescription": "{rhythm}{venue}. Apúntate a la próxima edición y mira quién subió al podio."
+  },
+  "film": {
+    "cardTitle": "Graba este partido. Llévate un reel.",
+    "cardBody": "Pon un móvil detrás de la pista. Kicksmash hace con tu vídeo un reel de las mejores jugadas, con el marcador.",
+    "cardCta": "Enséñame cómo grabar",
+    "cardNote": "Basta con un móvil. No hay que instalar nada.",
+    "metaTitle": "Cómo grabar un partido de pádel con un móvil",
+    "metaDescription": "Cuatro pasos para grabar un partido de pádel con un móvil: dónde va el móvil, los ajustes de la cámara y cuándo pulsar grabar. Kicksmash hace un reel de las mejores jugadas con el vídeo.",
+    "back": "El partido",
+    "title": "Cuatro cosas y a jugar",
+    "caption": "Tu móvil, detrás del cristal del fondo",
+    "s1Title": "Detrás del cristal del fondo, en el centro",
+    "s1Body": "Lo más alto que puedas: en la valla o sobre una bolsa. Gira el móvil hasta que la línea de saque quede recta en la imagen.",
+    "s2Title": "Pon la cámara en 4K a 60",
+    "s2Body": "iPhone: Ajustes, Cámara, Grabar vídeo, «4K a 60 fps». Android: Cámara, Ajustes, tamaño de vídeo, «UHD 60». El reel lo necesita para la cámara lenta y para ver la bola.",
+    "s3Title": "Cámara, Vídeo, 0,5×, móvil en horizontal",
+    "s3Body": "Usa la cámara de tu móvil, no esta página. Conecta una batería externa. Necesitas unos 45 GB libres para 90 minutos.",
+    "s4Title": "Pulsa grabar antes del primer saque",
+    "s4Body": "Un solo vídeo para todo el partido. No lo pares entre sets.",
+    "afterTitle": "Después del partido",
+    "afterBody": "Guarda el vídeo en tu móvil. En la página del partido, pulsa «{feedback}» y di que lo has grabado. Los reels son nuevos: hoy una persona pone en marcha cada uno, y lo reciben los cuatro jugadores.",
+    "gotIt": "Entendido. Volver al partido"
   }
 }

@@ -423,6 +423,38 @@ try {
   } else {
     console.log("· every city and day here had a game from another suite, so the empty state's button was not reached in this run");
   }
+
+  // ---- "Film this match. Get a reel." (the owner's screens 1 and 2 of the reel flow, 22 November 2026) ----
+  // Before the start, the match's own players see the dark block and the four instructions; a visitor does not.
+  const soon = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: new Date(Date.now() + 26 * 3600 * 1000).toISOString(), durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Fay" } } }).then((r) => r.json());
+  const fcode = soon.match?.code;
+  const f = await newPage();
+  await f.goto(`${soon.organizer.personalUrl}?next=/${fcode}`);
+  await f.waitForURL((u) => u.pathname === `/${fcode}`, { timeout: 20000 });
+  await f.getByTestId("film-card").waitFor({ timeout: 20000 });
+  check("a match that has not started offers its organiser the reel", (await f.getByTestId("film-card").getByRole("heading", { name: "Film this match. Get a reel." }).count()) === 1);
+  await shot(f, "v9-film-card");
+  const stranger = await newPage();
+  await stranger.goto(`${BASE}/${fcode}`);
+  await stranger.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
+  check("a visitor who is not in the match is not asked to film it", (await stranger.getByTestId("film-card").count()) === 0);
+  await p.goto(`${BASE}/${mcode}`);
+  check("a match that has started no longer asks", (await p.getByTestId("film-card").count()) === 0 && (await p.getByTestId("highlights-watch").count()) + (await p.getByTestId("highlights-add").count()) === 1);
+  await f.getByTestId("film-how").click();
+  await f.waitForURL((u) => u.pathname === "/film" && u.searchParams.get("m") === fcode, { timeout: 20000 });
+  await f.getByRole("heading", { name: "Four things, then play" }).waitFor({ timeout: 20000 });
+  const filmFits = await f.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  check(
+    "How to film: four instructions, the court drawing, and nothing wider than the phone",
+    (await f.getByTestId("film-steps").locator("li").count()) === 4 && (await f.locator("figure svg").count()) === 1 && (await f.getByText("Set the camera to 4K at 60").count()) === 1 && filmFits,
+  );
+  await shot(f, "v9-film-how");
+  await f.getByTestId("film-got-it").click();
+  await f.waitForURL((u) => u.pathname === `/${fcode}`, { timeout: 20000 });
+  check("Got it leads back to the match", (await f.getByTestId("film-card").count()) === 1);
+  await stranger.goto(`${BASE}/ru/film?m=n0pe`);
+  check("the page stands alone, in Russian too, and a code that is not a code makes no link", (await stranger.getByRole("heading", { name: "Четыре шага — и играйте" }).count()) === 1 && (await stranger.getByTestId("film-back").count()) === 0 && (await stranger.getByTestId("film-got-it").count()) === 0);
+  check("sitemap lists /film", sitemapText.includes("/film<"));
 } catch (e) {
   await crashed(browser, results, e);
 } finally {
