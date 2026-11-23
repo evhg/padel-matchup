@@ -1,5 +1,8 @@
 // Viral pieces: robots/sitemap, the public americano generator with its prefill link,
 // and the shareable result card.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { BASE, openMore, crashed, finish, iphone, launch, makeCheck, shot, switchLang, widestDayFits } from "./lib.mjs";
 
 const browser = await launch();
@@ -477,6 +480,80 @@ try {
   await stranger.goto(`${BASE}/ru/film?m=n0pe`);
   check("the page stands alone, in Russian too, and a code that is not a code makes no link", (await stranger.getByRole("heading", { name: "Четыре шага — и играйте" }).count()) === 1 && (await stranger.getByTestId("film-back").count()) === 0 && (await stranger.getByTestId("film-got-it").count()) === 0);
   check("sitemap lists /film", sitemapText.includes("/film<"));
+
+  // ---- A player sends the match video (the owner, 23 November 2026: an upload to the store, or a link) ----
+  // The reel host is not here: the browser's requests to it are answered in this test, as the host answers them
+  // (scripts/highlights/modal/serve.py). The first part is "already there", so the page must send the other two only.
+  const PART = 32 * 1024 * 1024;
+  const filmPath = path.join(os.tmpdir(), `e2e-film-${Date.now()}.mov`);
+  fs.writeFileSync(filmPath, Buffer.alloc(2 * PART + 5 * 1024 * 1024, 7));
+  const filmBytes = fs.statSync(filmPath).size;
+  const overAt = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
+  const filmMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Uma" } } }).then((r) => r.json());
+  const ucode = filmMatch.match?.code;
+  const u = await newPage();
+  const reelHost = { puts: [], finish: null, ticket: null, token: null };
+  const corsOpen = { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" };
+  await u.route("https://reels.example.test/**", async (route) => {
+    const req = route.request();
+    const m = new URL(req.url()).pathname.match(/^\/u\/([^/]+)(?:\/(.+))?$/);
+    if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: corsOpen });
+    const bearer = (req.headers().authorization ?? "").replace(/^Bearer /, "");
+    if (!m || !bearer) return route.fulfill({ status: 401, headers: corsOpen, json: { error: "unauthorized" } });
+    reelHost.token = m[1];
+    reelHost.ticket = bearer;
+    if (req.method() === "GET") return route.fulfill({ headers: corsOpen, json: { parts: { 0: PART }, done: false } });
+    if (req.method() === "PUT") {
+      reelHost.puts.push(Number(m[2]));
+      return route.fulfill({ headers: corsOpen, json: { ok: true } });
+    }
+    reelHost.finish = req.postDataJSON();
+    return route.fulfill({ headers: corsOpen, json: { ok: true } });
+  });
+  await u.goto(`${filmMatch.organizer.personalUrl}?next=/${ucode}`);
+  await u.waitForURL((x) => x.pathname === `/${ucode}`, { timeout: 20000 });
+  await u.getByTestId("reel-send").waitFor({ timeout: 20000 });
+  check("after a match, its player is asked for the film: the video or a link", (await u.getByTestId("reel-choose").innerText()) === "Choose the video" && (await u.getByTestId("reel-link").count()) === 1 && (await u.getByTestId("film-card").count()) === 0);
+  await shot(u, "v10-reel-send");
+  await u.getByTestId("reel-file").setInputFiles(filmPath);
+  await u.getByTestId("reel-here").waitFor({ timeout: 60000 });
+  check(
+    "the page sends the film in parts with its ticket, skips the part that is there, and says how many parts and bytes it sent",
+    reelHost.puts.slice().sort().join(",") === "1,2" && reelHost.finish?.parts === 3 && reelHost.finish?.bytes === filmBytes && reelHost.finish?.name === path.basename(filmPath) && /^[A-Za-z0-9]{32}$/.test(reelHost.token ?? "") && (reelHost.ticket ?? "").split(".").length === 2,
+    JSON.stringify({ puts: reelHost.puts, finish: reelHost.finish, token: (reelHost.token ?? "").length }),
+  );
+  // Until the reel reelHost says "joined", another player's page still offers to go on with the upload.
+  await u.reload();
+  check("an upload that is not joined yet can go on from any player's page", (await u.getByTestId("reel-choose").innerText()) === "Choose the same video to go on");
+  const hostSays = (ticket) => fetch(`${BASE}/api/reel/upload`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ticket }) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
+  const refusedTicket = await hostSays(`${reelHost.ticket.slice(0, -3)}AAA`);
+  const firstWord = await hostSays(reelHost.ticket);
+  const secondWord = await hostSays(reelHost.ticket);
+  await u.reload();
+  check(
+    "the reel host's word, with the ticket, says the film is here: once, and never with a ticket that was changed",
+    refusedTicket.status === 401 && firstWord.status === 200 && firstWord.body?.changed === true && secondWord.body?.changed === false && (await u.getByTestId("reel-here").count()) === 1 && (await u.getByTestId("reel-send").count()) === 0,
+    JSON.stringify({ refusedTicket, firstWord, secondWord }),
+  );
+  fs.rmSync(filmPath, { force: true });
+  // The link: a share text from a drive is kept; anything else is refused in words.
+  const linkMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Vic" } } }).then((r) => r.json());
+  const v = await newPage();
+  await v.goto(`${linkMatch.organizer.personalUrl}?next=/${linkMatch.match.code}`);
+  await v.waitForURL((x) => x.pathname === `/${linkMatch.match.code}`, { timeout: 20000 });
+  await v.getByTestId("reel-link").locator("summary").click();
+  await v.getByTestId("reel-link-input").fill("https://example.com/film.mov");
+  await v.getByTestId("reel-link-save").click();
+  await v.getByText("That is not a shared link from iCloud, Google Drive, Dropbox or OneDrive.").waitFor({ timeout: 20000 });
+  await v.getByTestId("reel-link-input").fill("Our match https://www.icloud.com/iclouddrive/0a1B2c3D4e#IMG_0042");
+  await v.getByTestId("reel-link-save").click();
+  await v.getByTestId("reel-here").waitFor({ timeout: 20000 });
+  check("a link to the film on a drive is kept, and the page says the video is here", (await v.getByTestId("reel-send").count()) === 0);
+  // A new page: the other visitor's page was left in Russian by the check of /ru/film.
+  const passerby = await newPage();
+  await passerby.goto(`${BASE}/${ucode}`);
+  await passerby.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
+  check("a visitor is not asked for the film and does not see that one is here", (await passerby.getByTestId("reel-send").count()) === 0 && (await passerby.getByTestId("reel-here").count()) === 0);
 } catch (e) {
   await crashed(browser, results, e);
 } finally {

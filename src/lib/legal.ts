@@ -4,6 +4,7 @@ import { RATE_ROWS_KEEP_DAYS } from "@/lib/domain/ratelimit";
 import { INBOX_DAYS } from "@/lib/domain/noticeKinds";
 import { PARTNER_WINDOW_MS } from "@/lib/domain/refill";
 import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
+import { REEL_KEEP_DAYS, VIDEO_KEEP_DAYS } from "@/lib/domain/matchReel";
 import { LAB_PICTURE_KEEP_DAYS, LAB_PICTURES_MAX, LAB_PICTURES_PER_RUN, LAB_RUNS_KEEP_DAYS } from "@/lib/domain/lab";
 
 /**
@@ -46,5 +47,9 @@ export function legalValues(locale: string) {
     labPictureDays: LAB_PICTURE_KEEP_DAYS,
     labPictures: LAB_PICTURES_PER_RUN,
     labPicturesMax: LAB_PICTURES_MAX,
+    // A filmed match: how long the reel host keeps a player's video and a finished reel (`KEEP_DAYS` in
+    // scripts/highlights/modal/serve.py deletes to the same two figures; tests/match-reel.test.ts holds them equal).
+    videoDays: VIDEO_KEEP_DAYS,
+    reelDays: REEL_KEEP_DAYS,
   };
 }

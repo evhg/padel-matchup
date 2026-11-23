@@ -1218,7 +1218,7 @@
     "ipTitle": "Tu dirección IP",
     "ipBody": "Nunca la escribimos en nuestra base de datos. Para frenar los scripts que saturan la app, guardamos una clave hecha a partir de ella con un secreto (un hash con clave), así que la dirección en sí no se guarda. Esas filas se borran a los {rateDays, plural, one {# día} other {# días}}. Nuestro hosting ve tu dirección para entregar cada página, como cualquier hosting.",
     "helpersTitle": "Quién nos ayuda",
-    "helpersBody": "• Vercel aloja la app en Singapur y cuenta las visitas sin cookies.\n• Supabase guarda la base de datos en Singapur.\n• Resend envía nuestros emails.\n• Telegram, Discord, LINE y WhatsApp (Meta) llevan nuestros mensajes, solo si los usas con nosotros.\n• Telegram también nos trae cada mensaje del formulario de opiniones, con el nombre de quien lo envía.\n• El servicio push de tu navegador (Apple, Google o Mozilla) lleva las notificaciones que activaste.\n• Google, solo si un entrenador conecta un Google Calendar: sus clases, con el nombre del alumno, van allí.\n• Anthropic lee los mensajes del formulario de opiniones y de nuestro servidor de Discord, para ayudarnos a ordenarlos y preparar respuestas. También lee una vez la captura de una reserva que añades en la primera página, para rellenar el formulario del partido. No guardamos ni la imagen ni la respuesta.\n• GitHub guarda nuestra copia de seguridad nocturna y privada de la base de datos.\nTavily busca para nosotros clubes de pádel y conversaciones sobre pádel en la web pública. Nunca recibe tus datos.",
+    "helpersBody": "• Vercel aloja la app en Singapur y cuenta las visitas sin cookies.\n• Supabase guarda la base de datos en Singapur.\n• Resend envía nuestros emails.\n• Telegram, Discord, LINE y WhatsApp (Meta) llevan nuestros mensajes, solo si los usas con nosotros.\n• Telegram también nos trae cada mensaje del formulario de opiniones, con el nombre de quien lo envía.\n• El servicio push de tu navegador (Apple, Google o Mozilla) lleva las notificaciones que activaste.\n• Google, solo si un entrenador conecta un Google Calendar: sus clases, con el nombre del alumno, van allí.\n• Anthropic lee los mensajes del formulario de opiniones y de nuestro servidor de Discord, para ayudarnos a ordenarlos y preparar respuestas. También lee una vez la captura de una reserva que añades en la primera página, para rellenar el formulario del partido. No guardamos ni la imagen ni la respuesta.\n• Modal guarda los vídeos de partidos que envías y los reels, y hace los reels.\n• GitHub guarda nuestra copia de seguridad nocturna y privada de la base de datos.\nTavily busca para nosotros clubes de pádel y conversaciones sobre pádel en la web pública. Nunca recibe tus datos.",
     "keepTitle": "Cuánto tiempo lo guardamos",
     "keepBody": "• Tus datos: mientras uses Kicksmash, hasta que borres tu cuenta.\n• Un nombre sin partidos, sin forma de contacto y sin nada más detrás: una limpieza diaria lo borra a los {disposableDays, plural, one {# día} other {# días}}.\n• Las claves de límite de peticiones hechas con direcciones IP: {rateDays, plural, one {# día} other {# días}}.\n• Un teléfono que reconocemos: un año después de la última vez que lo usaste. «Olvidar este teléfono» en Mis partidos lo borra al instante; si después te apuntas o inicias sesión desde ese teléfono, se guarda de nuevo, salvo que tengas activado «No reconocer mis teléfonos» en esa cuenta. Si alguien en ese teléfono responde «No soy yo» cuando preguntamos, también se borra al instante. Si tocas «Cerrar sesión en este navegador», borramos al instante, de la cuenta de la que sales, la clave que dan los datos de este navegador en ese momento, y solo fuera de Europa: un navegador con una zona horaria europea no envía ningún dato. Una clave que guardamos con otros datos (por ejemplo, otra zona horaria, otros idiomas u otro tamaño de texto) se borra cuando toques «Olvidar este teléfono», o un año después de la última vez que la usaste.\n• Copias de seguridad: cada noche una copia de la base de datos va a un repositorio privado de GitHub, y solo nosotros podemos abrirlo. Cada noche también rehacemos el historial del repositorio, para que guarde aproximadamente {backupDays, plural, one {el último día} other {los últimos # días}}. Las copias más antiguas salen entonces de su historial. GitHub las borra más adelante y no dice cuándo. Hasta entonces, todavía podemos abrirlas nosotros, y nadie más.\n• Tu bandeja: cada aviso {inboxDays, plural, one {# día} other {# días}}.\n• Rally Finder: los números de un uso, {labRunDays, plural, one {# día} other {# días}}; sus imágenes fijas, {labPictureDays, plural, one {# día} other {# días}}, como mucho las {labPicturesMax} más recientes, y nunca en las copias de seguridad.",
     "deleteTitle": "Cuando borras tu cuenta",
@@ -1230,8 +1230,8 @@
     "termsLink": "Condiciones de uso →",
     "shortLink": "La versión corta →",
     "contactLink": "Escríbenos →",
-    "numbersTitle": "Los números de un partido grabado",
-    "numbersBody": "• Si se grabó un partido que jugaste, guardamos los números medidos en el vídeo: por ejemplo, tu golpe más rápido y los puntos que ganaste al saque.\n• Se ven en la página del partido, en Mis estadísticas, en los récords de tu club y en tu página pública si la activaste. Desmarca «Mostrarme en los rankings» en Mis partidos para salir de los récords del club.\n• Tu pulso es un dato de salud. Lo guardamos con los demás números. Desactiva «Guardar mi pulso» en Mis estadísticas y lo borramos al momento.\n• Los números están en el archivo que puedes descargar, y desaparecen cuando borras tu cuenta."
+    "numbersTitle": "Un partido grabado: el vídeo, el reel y los números",
+    "numbersBody": "• Si envías el vídeo de un partido, va directo a nuestro almacén en Modal y se borra a los {videoDays} días. Si pegas un enlace, guardamos el enlace y el vídeo se queda en tu nube.\n• El reel hecho con el vídeo se guarda {reelDays} días y se ve en la página del partido solo para los jugadores de ese partido. Su dirección es larga y aleatoria, y quien tenga la dirección puede ver el reel.\n• Si se grabó un partido que jugaste, guardamos los números medidos en el vídeo: por ejemplo, tu golpe más rápido y los puntos que ganaste al saque.\n• Se ven en la página del partido, en Mis estadísticas, en los récords de tu club y en tu página pública si la activaste. Desmarca «Mostrarme en los rankings» en Mis partidos para salir de los récords del club.\n• Tu pulso es un dato de salud. Lo guardamos con los demás números. Desactiva «Guardar mi pulso» en Mis estadísticas y lo borramos al momento.\n• Los números están en el archivo que puedes descargar, y desaparecen cuando borras tu cuenta."
   },
   "terms": {
     "title": "Condiciones de uso",
@@ -2883,13 +2883,36 @@
     "s4Title": "Pulsa grabar antes del primer saque",
     "s4Body": "Un solo vídeo para todo el partido. No lo pares entre sets.",
     "afterTitle": "Después del partido",
-    "afterBody": "Guarda el vídeo en tu móvil. En la página del partido, pulsa «{feedback}» y di que lo has grabado. Los reels son nuevos: hoy una persona pone en marcha cada uno, y lo reciben los cuatro jugadores.",
+    "afterBody": "Guarda el vídeo en tu móvil. Después del partido, abre la página del partido: elige allí el vídeo o pega un enlace. Los reels son nuevos: hoy una persona pone en marcha cada uno, y lo reciben los cuatro jugadores.",
     "gotIt": "Entendido. Volver al partido"
   },
   "reel": {
     "title": "El reel de este partido",
     "saveTall": "Guardar, para historias",
     "saveWide": "Guardar, horizontal",
-    "kept": "Aquí solo lo ven los jugadores de este partido. Se guarda hasta el {date}."
+    "kept": "Aquí solo lo ven los jugadores de este partido. Se guarda hasta el {date}.",
+    "sendTitle": "¿Lo grabaste? Haz el reel.",
+    "sendBody": "Envía el vídeo del partido. Kicksmash hace un reel de las mejores jugadas con el marcador, y lo reciben los cuatro jugadores.",
+    "startedLine": "La subida del vídeo de este partido empezó y no terminó. Elige el mismo vídeo para continuar.",
+    "failedLine": "El último reel no salió bien. Envía el vídeo otra vez.",
+    "choose": "Elegir el vídeo",
+    "chooseAgain": "Elegir el mismo vídeo y continuar",
+    "progress": "{done} de {total} GB",
+    "minutesLeft": "quedan {min} min",
+    "underMinute": "queda menos de 1 min",
+    "joining": "Uniendo las partes…",
+    "keepOpen": "Deja esta página abierta hasta que la barra se llene. Si se para, abre el partido otra vez y elige el mismo vídeo.",
+    "stopped": "La subida se paró. Revisa la conexión y elige el mismo vídeo para continuar.",
+    "kept7": "El vídeo va directo al almacén de Kicksmash y se borra a los 7 días.",
+    "tooLarge": "Este archivo pesa más de 80 GB.",
+    "uploadOff": "Las subidas están desactivadas aquí. Pega un enlace al vídeo.",
+    "linkSummary": "O pega un enlace al vídeo",
+    "linkOnly": "Pega un enlace al vídeo",
+    "linkHelp": "Un enlace compartido de iCloud, Google Drive, Dropbox o OneDrive. Tu nube sube el vídeo en segundo plano, también con el móvil bloqueado.",
+    "linkLabel": "Enlace al vídeo",
+    "linkSave": "Enviar el enlace",
+    "linkBad": "Eso no es un enlace compartido de iCloud, Google Drive, Dropbox o OneDrive.",
+    "hereTitle": "El vídeo ha llegado",
+    "hereBody": "El reel está en marcha. Los cuatro jugadores lo verán en esta página cuando esté listo."
   }
 }

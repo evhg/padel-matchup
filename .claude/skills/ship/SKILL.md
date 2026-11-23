@@ -823,12 +823,25 @@ Wall clock first, credits second. What actually moved it, measured:
   `git fetch origin main && git log HEAD..origin/main -- drizzle`. When it lists anything, put the
   work on the new main and generate the migration and the reader grants again (both numbers move, and
   the snapshot chain in `drizzle/meta` must follow the new parent), never rename the files by hand.
+- **Weigh the functions before the long gate when a busy page gets a new import.** The gate runs the
+  unit suite (ten minutes), then the build, then `scripts/check-bundle.mjs`: the match page came out
+  25 KB over the 8.0 MB a route may weigh, twelve minutes into the gate. The build for the browser check
+  was already there: `node scripts/check-bundle.mjs` on it answers in a second. And moving one import
+  did nothing, because the weight was not the page's: read the note above `MAX_ROUTE_BYTES` before
+  looking for a culprit in the change.
+- **`node --check e2e/<suite>.mjs` before the build.** A suite is one long module: a new block that
+  declares `sent` when line 300 already has a `sent` is a syntax error, and the whole suite fails in
+  its first second, after a build of 100 seconds. The check answers at once. And a page object a
+  block borrows from an earlier block is in the state that block left it in: the "visitor" page had
+  been sent to `/ru/film`, so "players" was not on it. Open a new page for a new block.
 - **Run the tests that read the source tree before the long gate.** The film card used `text-white` on
   its dark block, and `tests/contrast.test.ts` keeps a list of the files that may: the gate said so after
   ten minutes of the unit suite, and the whole gate ran twice. The tests that read `src` hold the
   project's rules (fixed white, client messages, documents, page names) and answer in 22 seconds:
-  `pnpm exec vitest run $(grep -ln readdirSync tests/*.test.ts)`. Run that line after the typecheck,
-  then start the gate.
+  `pnpm exec vitest run $(grep -lE "readdirSync|readFileSync" tests/*.test.ts)` (51 files, 95 seconds). Run that line
+  after the typecheck, then start the gate. The first version of the line had `readdirSync` alone, and
+  `tests/client-messages.test.ts` walks the tree through its own helper: a new client component with
+  `errors.${errorLine(...)}` failed the gate after ten minutes for the second time in one day.
 - **A browser check waits for the thing it reads, not for a line beside it.** The formats suite
   clicked "Show me in rankings", waited for "You appear in rankings", and read the table. That line
   comes from the button's own state; the table's new row comes with the page refresh, one round trip

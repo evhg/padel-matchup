@@ -107,3 +107,31 @@ export const REFILL_EMAIL_MAX = 10;
  * (`WHATSAPP_TEMPLATES_PER_DAY`, src/lib/whatsapp/templates.ts) stands over this one.
  */
 export const REFILL_WHATSAPP_MAX = 10;
+
+/**
+ * Where a player's match video goes: the address of the reel host's upload function
+ * (`scripts/highlights/modal/serve.py`, `up`), https and no path. Not set: the match page offers the
+ * link only. Read here and nowhere else (`tests/config-one-home.test.ts`).
+ */
+export function reelUploadUrl(): string | null {
+  const raw = (process.env.REEL_UPLOAD_URL ?? "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" && !u.username && !u.search && !u.hash && (u.pathname === "/" || u.pathname === "") ? `https://${u.host}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The Ed25519 pair that signs a level passport (`src/lib/domain/profile.ts`) and the ticket of a match
+ * video's upload (`src/lib/domain/matchReel.ts`, under its own prefix). 64 hex each, or null: a copy with
+ * no keys signs nothing. Read here so that a page which needs only the answer does not carry the
+ * profile code: the match page went 25 KB over the weight a route may have when it imported them from there.
+ */
+export const passportKeys = (): { priv: string; pub: string } | null => {
+  const priv = process.env.PASSPORT_PRIVATE_KEY;
+  const pub = process.env.PASSPORT_PUBLIC_KEY;
+  return priv && pub && /^[0-9a-f]{64}$/i.test(priv) && /^[0-9a-f]{64}$/i.test(pub) ? { priv, pub } : null;
+};

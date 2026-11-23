@@ -62,7 +62,8 @@ export async function removeHighlights(db: Db, eventId: string, playerId: string
   await db.update(events).set({ highlightsUrl: null, highlightsBy: null }).where(eq(events.id, eventId));
 }
 
-async function isSeated(db: Db, eventId: string, playerId: string): Promise<boolean> {
+/** Whether this player holds a place in the match (joined or confirmed). The organiser is asked apart. */
+export async function isSeated(db: Db, eventId: string, playerId: string): Promise<boolean> {
   const [seat] = await db.select({ id: slots.id }).from(slots).where(and(eq(slots.eventId, eventId), eq(slots.playerId, playerId), inArray(slots.status, ["joined", "confirmed"]))).limit(1);
   return Boolean(seat);
 }

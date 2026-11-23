@@ -1061,7 +1061,8 @@ teamB: […], sets: [[a, b], …] }`; a name makes a new record, nothing is anno
 with the same organiser and start writes nothing), `/api/admin/match-reel` (the reel of a filmed match is on the store, show it on the match page:
 `POST { code, host, token }`, `DELETE { code }`; the files are `{host}/r/{token}/tall.mp4` and `wide.mp4` on
 the reel host, the players of the match see the reel for 30 days, and the answer never repeats the
-token), `/api/admin/match-stats` (the numbers of a filmed match:
+token), `/api/reel/upload` is not an operator route: the reel host calls it with the upload's own ticket when a
+player's film is joined, and the owner then hears "A match video is here" on Telegram), `/api/admin/match-stats` (the numbers of a filmed match:
 `POST { code, stats: [{ player, partner?, kind, value, margin? }] }`, the answer says what was saved and
 what was refused and why; a heart rate is refused only for a player who switched off "Keep my heart rate").
 

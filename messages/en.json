@@ -1218,7 +1218,7 @@
     "ipTitle": "Your IP address",
     "ipBody": "We never write it into our database. To slow down scripts that hammer the app, we keep a key made from it with a secret (a keyed hash), so the address itself is not stored. Those rows go after {rateDays, plural, one {# day} other {# days}}. Our host sees your address to deliver each page, as every host does.",
     "helpersTitle": "Who helps us run it",
-    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies. It also reads a booking screenshot that you add on the first page, once, to fill in the match form. We keep neither the picture nor the answer.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
+    "helpersBody": "• Vercel hosts the app in Singapore, and counts page visits without cookies.\n• Supabase keeps the database in Singapore.\n• Resend sends our emails.\n• Telegram, Discord, LINE and WhatsApp (Meta) carry our messages, only if you use them with us.\n• Telegram also brings us each note from the feedback form, with the name on it.\n• Your browser's push service (Apple, Google or Mozilla) carries the notifications you turned on.\n• Google, only if a coach connects a Google Calendar: their lessons, with the student's name, go into it.\n• Anthropic reads the notes from the feedback form and the messages in our own Discord server, to help us sort them and draft replies. It also reads a booking screenshot that you add on the first page, once, to fill in the match form. We keep neither the picture nor the answer.\n• Modal keeps the match videos you send and the reels, and makes the reels.\n• GitHub keeps our private nightly backup of the database.\nTavily searches the public web for padel clubs and padel talk for us. It never gets your data.",
     "keepTitle": "How long we keep it",
     "keepBody": "• Your data: while you use Kicksmash, until you delete your account.\n• A name with no match, no way to reach it and nothing else behind it: a daily clean-up removes it after {disposableDays, plural, one {# day} other {# days}}.\n• The rate-limit keys made from IP addresses: {rateDays, plural, one {# day} other {# days}}.\n• A phone we recognise: one year after you last used it. “Forget this phone” on My matches deletes it at once; a later join or sign-in from that phone keeps it again, unless “Don't recognise my phones” is on for that account. If somebody on that phone answers “Not me” when we ask, it goes at once too. If you tap “Sign out on this browser”, we delete at once, from the account you sign out of, the key that this browser's details make at that moment, outside Europe only: a browser set to a European time zone sends no details. A key that we kept under other details (for example another time zone, other languages or another text size) goes when you tap “Forget this phone”, or one year after you last used it.\n• Backups: every night a copy of the database goes to a private GitHub repository, and only we can open it. Each night we also rebuild the repository's history, so it holds about the last {backupDays, plural, one {# day} other {# days}}. Older copies then leave its history. GitHub deletes them later, and it does not say when. Until then, we can still open them, and nobody else can.\n• Your inbox: each notice for {inboxDays, plural, one {# day} other {# days}}.\n• Rally Finder: the numbers of a run {labRunDays, plural, one {# day} other {# days}}; its still pictures {labPictureDays, plural, one {# day} other {# days}}, the newest {labPicturesMax} at most, and never in the backups.",
     "deleteTitle": "When you delete your account",
@@ -1230,8 +1230,8 @@
     "termsLink": "Terms of use →",
     "shortLink": "The short version →",
     "contactLink": "Write to us →",
-    "numbersTitle": "Numbers from a filmed match",
-    "numbersBody": "• If a match you played was filmed, we keep the numbers measured from the video: for example your fastest shot and the points you won on serve.\n• They show on the match page, on My stats, in the records of your club, and on your public page if you switched it on. Uncheck “Show me in rankings” on My matches to leave the club's records.\n• Your heart rate is health data. We keep it with the other numbers. Switch off “Keep my heart rate” on My stats and we delete it at once.\n• The numbers are in the file you can download, and they go when you delete your account."
+    "numbersTitle": "A filmed match: the video, the reel and the numbers",
+    "numbersBody": "• If you send the video of a match, it goes straight to our store at Modal and is deleted after {videoDays} days. If you paste a link, we keep the link, and the video stays on your drive.\n• The reel made from the video is kept for {reelDays} days and plays on the match page for the players of that match only. Its address is long and random, and whoever has the address can watch the reel.\n• If a match you played was filmed, we keep the numbers measured from the video: for example your fastest shot and the points you won on serve.\n• They show on the match page, on My stats, in the records of your club, and on your public page if you switched it on. Uncheck “Show me in rankings” on My matches to leave the club's records.\n• Your heart rate is health data. We keep it with the other numbers. Switch off “Keep my heart rate” on My stats and we delete it at once.\n• The numbers are in the file you can download, and they go when you delete your account."
   },
   "terms": {
     "title": "Terms of use",
@@ -2883,13 +2883,36 @@
     "s4Title": "Press record before the first serve",
     "s4Body": "One video for the whole match. Do not stop it between sets.",
     "afterTitle": "After the match",
-    "afterBody": "Keep the video on your phone. On the match page, tap “{feedback}” and say that you filmed. Reels are new: today a person starts each one, and all four players get it.",
+    "afterBody": "Keep the video on your phone. After the match, open the match page: choose the video there, or paste a link to it. Reels are new: today a person starts each one, and all four players get it.",
     "gotIt": "Got it. Back to the match"
   },
   "reel": {
     "title": "The reel of this match",
     "saveTall": "Save, for stories",
     "saveWide": "Save, wide",
-    "kept": "Only the players of this match see it here. Kept until {date}."
+    "kept": "Only the players of this match see it here. Kept until {date}.",
+    "sendTitle": "Did you film it? Make the reel.",
+    "sendBody": "Send the video of the match. Kicksmash makes a highlights reel with the score, and all four players get it.",
+    "startedLine": "An upload of this match's video started and did not finish. Choose the same video to go on.",
+    "failedLine": "The last reel did not work. Send the video again.",
+    "choose": "Choose the video",
+    "chooseAgain": "Choose the same video to go on",
+    "progress": "{done} of {total} GB",
+    "minutesLeft": "{min} min left",
+    "underMinute": "less than 1 min left",
+    "joining": "Joining the parts…",
+    "keepOpen": "Keep this page open until the bar is full. If it stops, open the match again and choose the same video.",
+    "stopped": "The upload stopped. Check the connection, then choose the same video to go on.",
+    "kept7": "The video goes straight to the Kicksmash store and is deleted after 7 days.",
+    "tooLarge": "This file is larger than 80 GB.",
+    "uploadOff": "Uploads are off here. Paste a link to the video.",
+    "linkSummary": "Or paste a link to the video",
+    "linkOnly": "Paste a link to the video",
+    "linkHelp": "A shared link from iCloud, Google Drive, Dropbox or OneDrive. Your drive uploads in the background, also when the phone is locked.",
+    "linkLabel": "Link to the video",
+    "linkSave": "Send the link",
+    "linkBad": "That is not a shared link from iCloud, Google Drive, Dropbox or OneDrive.",
+    "hereTitle": "The video is here",
+    "hereBody": "The reel is in work. All four players see it on this page when it is ready."
   }
 }

@@ -1,12 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { metricsDaily } from "@/db/schema";
-import { baseUrl } from "@/lib/config";
+import { metricsDaily, players } from "@/db/schema";
+import { baseUrl, reelUploadUrl } from "@/lib/config";
+import { sendEmail } from "@/lib/email/send";
 import { dayKey, setMetric } from "@/lib/domain/metrics";
 import { ownerTelegramId } from "@/lib/listen/tick";
 import { esc, sendMessage, telegramEnabled } from "@/lib/telegram/api";
 import { AI_FEATURES, fetchCostReport, KEY_REFUSED_LINE } from "./anthropic";
-import { serviceBoard, type ServiceBoard } from "./services";
+import { serviceBoard, STORE_BYTES_KEY, type ServiceBoard } from "./services";
 
 /**
  * Hourly: refresh the billed Anthropic figure when an admin key exists, then tell the
@@ -23,7 +24,41 @@ export async function refreshAnthropicCost(db: Db, now = new Date(), fetchImpl: 
   return true;
 }
 
+/**
+ * Hourly, but one question a day: what does the reel host's store weigh? The host measures it in its own
+ * daily job (`GET /usage`, scripts/highlights/modal/serve.py); the answer is kept on today's row, and
+ * the board reads the latest. No answer changes nothing: the last day's figure stays.
+ */
+export async function refreshStoreBytes(db: Db, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const url = reelUploadUrl();
+  if (!url) return false;
+  const [seen] = await db.select({ value: metricsDaily.value }).from(metricsDaily).where(and(eq(metricsDaily.key, STORE_BYTES_KEY), eq(metricsDaily.day, dayKey(now)))).limit(1);
+  if (seen) return false;
+  try {
+    const res = await fetchImpl(`${url}/usage`, { signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return false;
+    const bytes = Number(((await res.json()) as { bytes?: unknown }).bytes);
+    if (!Number.isFinite(bytes) || bytes < 0) return false;
+    await setMetric(db, STORE_BYTES_KEY, Math.round(bytes), dayKey(now));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Rows whose alert goes to the owner by email too, beside Telegram (the owner, 23 November 2026: the store). */
+const ALSO_BY_EMAIL: ReadonlySet<string> = new Set(["modal_store"]);
+
+/** The owner's own player record is the one with the owner's Telegram id: its email is where the mail goes. */
+async function emailOwner(db: Db, ownerTelegram: number, subject: string, text: string): Promise<boolean> {
+  const [me] = await db.select({ email: players.email }).from(players).where(eq(players.telegramId, ownerTelegram)).limit(1);
+  if (!me?.email) return false;
+  const html = `<p>${text.split("\n").map((l) => l.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join("<br>")}</p><p><a href="${baseUrl()}/admin">Service board</a></p>`;
+  return sendEmail({ to: me.email, subject, html, text: `${text}\n\n${baseUrl()}/admin` });
+}
+
 const whatNext: Record<string, string> = {
+  modal_store: "Past 1 TiB Modal bills $0.09 a month for each GiB over it. Each match video goes after 7 days and each reel after 30, so the store empties by itself; I look at what holds the space.",
   vercel_analytics: "After three days of grace Vercel stops recording page views until the next billing cycle, for every project on the account, and bills nothing; our own counter keeps going and the digest uses it.",
   resend_month: "Past the ceiling Resend refuses to send; the rule is to move up only past fifty emails a day, so I will slow the non-essential mail first.",
   resend_day: "Today's remaining mail waits for tomorrow; reminders go by push and Telegram meanwhile.",
@@ -63,6 +98,7 @@ export async function alertOnServices(db: Db, now = new Date(), board?: ServiceB
     if (res.ok) {
       await setMetric(db, key, 1, dayKey(now));
       sent++;
+      if (ALSO_BY_EMAIL.has(kind)) await emailOwner(db, owner, `Kicksmash: ${row.name} is at ${row.pct?.toFixed(0) ?? "?"}%`, text).catch(() => false);
     }
   }
   return sent;

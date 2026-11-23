@@ -28,7 +28,6 @@ const STEPS = ["s1", "s2", "s3", "s4"] as const;
  */
 export default async function FilmPage({ searchParams }: { searchParams: Promise<{ m?: string | string[] }> }) {
   const t = await getTranslations("film");
-  const tf = await getTranslations("feedback");
   const m = (await searchParams).m;
   const code = typeof m === "string" && isValidShareCode(m) ? m : null;
   const jsonLd = {
@@ -68,7 +67,7 @@ export default async function FilmPage({ searchParams }: { searchParams: Promise
         </section>
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("afterTitle")}</h2>
-          <p className="mt-1 text-sm text-muted">{t("afterBody", { feedback: tf("title") })}</p>
+          <p className="mt-1 text-sm text-muted">{t("afterBody")}</p>
         </section>
         {code && (
           <Link href={`/${code}`} prefetch={false} className="btn-primary w-full" data-testid="film-got-it">

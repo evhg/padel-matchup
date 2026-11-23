@@ -45,6 +45,7 @@ const VARS = [
   ["CRON_SECRET", "recommended", "Protects `/api/cron/*` and the one-off setup routes. Vercel sends it automatically when set."],
   ["RESEND_API_KEY", "no", "Enables every email: calendar invitations, notifications, reminders."],
   ["EMAIL_FROM", "no", "Defaults to `Kicksmash <matches@<your domain>>`; the domain must be verified in Resend."],
+  ["REEL_UPLOAD_URL", "no", "The address of the reel host's upload function (`up` in `scripts/highlights/modal/serve.py`), https and no path. With it and the passport keys, the match page offers \"Choose the video\" after a match; without it, the link only."],
   ["RESEND_WEBHOOK_SECRET", "no", "Verifies Resend's inbound webhook, so a reply to `feedback@` or `claude@` becomes a note."],
   ["OUTREACH_FROM", "no", "The From line on outreach mail. Defaults to `Claude at Kicksmash <claude@<your domain>>`."],
   ["VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT", "no", "Enables push reminders (`npx web-push generate-vapid-keys`)."],
