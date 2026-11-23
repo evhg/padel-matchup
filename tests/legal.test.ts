@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { REEL_KEEP_DAYS, VIDEO_KEEP_DAYS } from "@/lib/domain/matchReel";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
@@ -84,6 +85,17 @@ describe("the privacy page tells the truth about the code", () => {
       const keep = render(l, "privacy.keepBody");
       for (const n of [DISPOSABLE_AFTER_DAYS, RATE_ROWS_KEEP_DAYS, BACKUP_KEEP_DAYS]) expect(keep, `${l}: ${n}`).toMatch(new RegExp(`(^|\\D)${n}\\s`));
       expect(render(l, "privacy.ipBody")).toMatch(new RegExp(`(^|\\D)${RATE_ROWS_KEEP_DAYS}\\s`));
+    }
+  });
+
+  // The owner, 23 November 2026: a player's match video is deleted after 7 days, a reel after 30.
+  it("says how long a match video and a reel are kept, and who keeps them, in every language", () => {
+    for (const l of LOCALES) {
+      const lines = render(l, "privacy.numbersBody").split("\n");
+      expect(lines[0], `${l}: the video's days`).toMatch(new RegExp(`(^|\\D)${VIDEO_KEEP_DAYS}\\s`));
+      expect(lines[0], `${l}: where it goes`).toContain("Modal");
+      expect(lines[1], `${l}: the reel's days`).toMatch(new RegExp(`(^|\\D)${REEL_KEEP_DAYS}\\s`));
+      expect(render(l, "privacy.helpersBody").split("\n").filter((x) => x.includes("Modal")).length, `${l}: Modal among the helpers`).toBe(1);
     }
   });
 

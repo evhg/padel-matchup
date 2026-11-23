@@ -823,6 +823,11 @@ Wall clock first, credits second. What actually moved it, measured:
   `git fetch origin main && git log HEAD..origin/main -- drizzle`. When it lists anything, put the
   work on the new main and generate the migration and the reader grants again (both numbers move, and
   the snapshot chain in `drizzle/meta` must follow the new parent), never rename the files by hand.
+- **`node --check e2e/<suite>.mjs` before the build.** A suite is one long module: a new block that
+  declares `sent` when line 300 already has a `sent` is a syntax error, and the whole suite fails in
+  its first second, after a build of 100 seconds. The check answers at once. And a page object a
+  block borrows from an earlier block is in the state that block left it in: the "visitor" page had
+  been sent to `/ru/film`, so "players" was not on it. Open a new page for a new block.
 - **Run the tests that read the source tree before the long gate.** The film card used `text-white` on
   its dark block, and `tests/contrast.test.ts` keeps a list of the files that may: the gate said so after
   ten minutes of the unit suite, and the whole gate ran twice. The tests that read `src` hold the

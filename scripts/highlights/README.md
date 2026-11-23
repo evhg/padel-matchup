@@ -501,6 +501,17 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   on the match page, not when `render.py` ends. Storage is not the limit: the store costs nothing for the
   first 1 TiB a month and $0.09 a GiB after that (Modal's price page, 23 November 2026), deleted files
   are billed for up to four more days, and a match video is 44 GB.
+- **A film of 44 GB reaches the store in parts, and the two sides share no secret** (`modal/serve.py`, `up`;
+  23 November 2026). Modal gives a web function 150 seconds and 4 GiB for one request, and a browser on
+  another site cannot use the redirect that lifts the 150 seconds. So the page sends parts of 32 MB, three
+  at a time, asks first which parts are there, and `assemble` joins them on another machine. `up` is one
+  machine at most: a machine sees its own writes at once and another machine's only after a reload, so two
+  machines would each hold half of the parts. The ticket is signed by Kicksmash with its Ed25519 key and
+  read here with the public half. Checked on a test deployment with a test key and a real file: 401 for no
+  ticket, another upload's ticket, a ticket past its time and a changed ticket; 409 for a finish with a
+  part missing; 413 past the ticket's size; the joined file equal to the source by its SHA-256. A test
+  deployment has its own name (`REELS_APP`) and is stopped after the test: it carries the daily delete job
+  too.
 - **"No music" is the reel before `music.py`, not a quiet track.** The owner, 23 November 2026: "add the no
   music, I will add my own". A player who puts a song on the reel inside Instagram or TikTok needs the reel
   with its own sound only: the hits, the voices, the crowd. `music.py` is the last step and writes a new

@@ -3,7 +3,7 @@ import type { Db } from "@/db";
 import { metricsDaily } from "@/db/schema";
 import { BACKUP_ROW_CAP } from "@/lib/backup";
 import { marksSince } from "@/lib/domain/emailMarks";
-import { emailEnabled } from "@/lib/config";
+import { emailEnabled, reelUploadUrl } from "@/lib/config";
 import { dayKey } from "@/lib/domain/metrics";
 import { pushEnabled } from "@/lib/push";
 import { searchConsoleEnabled } from "@/lib/search/console";
@@ -48,6 +48,9 @@ export const CEILINGS = {
   resendPerMonth: 3000,
   resendPerDay: 100,
   tavilyCredits: 1000,
+  // Modal's store for match videos and reels: the first 1 TiB of a month costs nothing, then $0.09 a GiB
+  // (modal.com/pricing, read on 23 November 2026). A row past 85% is the owner's alert (the owner, 23 November).
+  modalStoreBytes: 1024 ** 4,
   telegramPerSecond: 30,
   domainWarnDays: 60,
   domainAlertDays: 30,
@@ -76,6 +79,9 @@ export const CEILINGS = {
   pushCallGraceMin: 2,
   syncCronMaxAgeMin: 40,
 } as const;
+
+/** The metric that holds what the reel host's store weighs, in bytes, on the day it was read. */
+export const STORE_BYTES_KEY = "modal_store_bytes";
 
 export const stateForPct = (pct: number | null): ServiceState => (pct === null ? "info" : pct < 60 ? "ok" : pct < 85 ? "warn" : "alert");
 const pctOf = (used: number, limit: number) => Math.min(999, Math.round((used / limit) * 1000) / 10);
@@ -253,6 +259,20 @@ export async function serviceBoard(db: Db, now = new Date()): Promise<ServiceBoa
     ceiling: `$${cap} / month, your cap`,
     ...(keyRefused ? { state: "alert" as const } : {}),
     note: reportedUsd !== null ? "Billed figure from the organisation's cost report, refreshed hourly." : `Estimated from our own token counters at ${listenModel()} list prices${anthropicAdminKey() ? "; the cost report could not be read" : "; add ANTHROPIC_ADMIN_KEY for the billed figure"}.`,
+  });
+  // The reel host weighs its store once a day and the hourly job keeps the answer (`refreshStoreBytes`).
+  const storeAt = await latest(db, STORE_BYTES_KEY);
+  const gib = (b: number) => `${(b / 1024 ** 3).toFixed(b >= 10 * 1024 ** 3 ? 0 : 1)} GiB`;
+  push({
+    key: "modal_store",
+    name: "Modal store",
+    role: "match videos (7 days) and reels (30 days)",
+    used: storeAt ? storeAt.value : null,
+    limit: CEILINGS.modalStoreBytes,
+    usage: storeAt ? `${gib(storeAt.value)} on ${storeAt.day}` : reelUploadUrl() ? "not measured yet" : "off",
+    ceiling: `${gib(CEILINGS.modalStoreBytes)} free each month, then $0.09 a GiB`,
+    note: "A match video is about 44 GB. The reel host deletes a video after 7 days and a reel after 30.",
+    ...(storeAt ? {} : { state: (reelUploadUrl() ? "info" : "off") as ServiceState }),
   });
   const tavilyOn = Boolean(process.env.TAVILY_API_KEY);
   const tavilyMeter = await latest(db, "tavily_plan_used", { since, zero: true });

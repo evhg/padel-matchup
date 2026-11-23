@@ -107,3 +107,19 @@ export const REFILL_EMAIL_MAX = 10;
  * (`WHATSAPP_TEMPLATES_PER_DAY`, src/lib/whatsapp/templates.ts) stands over this one.
  */
 export const REFILL_WHATSAPP_MAX = 10;
+
+/**
+ * Where a player's match video goes: the address of the reel host's upload function
+ * (`scripts/highlights/modal/serve.py`, `up`), https and no path. Not set: the match page offers the
+ * link only. Read here and nowhere else (`tests/config-one-home.test.ts`).
+ */
+export function reelUploadUrl(): string | null {
+  const raw = (process.env.REEL_UPLOAD_URL ?? "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" && !u.username && !u.search && !u.hash && (u.pathname === "/" || u.pathname === "") ? `https://${u.host}` : null;
+  } catch {
+    return null;
+  }
+}

@@ -50,7 +50,9 @@ import { FilmCard } from "@/components/FilmCard";
 import { HighlightsLink } from "@/components/HighlightsLink";
 import { MatchNumbers } from "@/components/MatchNumbers";
 import { MatchReel } from "@/components/MatchReel";
-import { matchReel } from "@/lib/domain/matchReel";
+import { ReelSend } from "@/components/ReelSend";
+import { REEL_SEND_DAYS, reelState } from "@/lib/domain/matchReel";
+import { passportKeys } from "@/lib/domain/profile";
 import { matchNumbers } from "@/lib/domain/matchStats";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, OtherShares } from "@/components/ShareSheet";
@@ -66,7 +68,7 @@ import { stayUpdated } from "@/lib/domain/stayUpdated";
 import { bindDeepLink } from "@/lib/telegram/deepLinks";
 import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
-import { baseUrl, emailEnabled } from "@/lib/config";
+import { baseUrl, emailEnabled, reelUploadUrl } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
 import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
@@ -324,7 +326,7 @@ async function EventPage({ params, searchParams }: Props) {
   const canPlayAgain = viewer.isCreator || isMember;
   // The reel of a filmed match (`match_reels`), for the match's own players and organiser: one read on the
   // match's unique index, only once it has started. A failed read shows no reel, never an error page.
-  const reel = started && !cancelled && ev.type === "match" && canPlayAgain ? await matchReel(db, ev.id, now).catch(() => null) : null;
+  const reel = started && !cancelled && ev.type === "match" && canPlayAgain ? await reelState(db, ev.id, now).catch(() => null) : null;
   // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
   // the wall clock where it is played; and whether its one round already went out (one read, only for
   // somebody who is offered the button on a scored match or a locked americano), and whether this viewer's tap sends it.
@@ -1018,7 +1020,17 @@ async function EventPage({ params, searchParams }: Props) {
             correction={correction}
           />
         )}
-        {reel && <MatchReel reel={reel} keptUntil={formatEventDayLong(reel.keptUntil, ev.tz, locale)} />}
+        {reel?.kind === "ready" && <MatchReel reel={reel.view} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
+        {/* "Did you film it? Make the reel." (the owner's screen 3, and both ways to send the film, 23 November 2026).
+            A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
+            for ever; a film that is here says so until the reel plays. */}
+        {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} />}
+        {reel?.kind === "here" && (
+          <section className="card" data-testid="reel-here">
+            <h2 className="text-lg font-extrabold">{t("reel.hereTitle")}</h2>
+            <p className="mt-1 text-sm text-muted">{t("reel.hereBody")}</p>
+          </section>
+        )}
         {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their
             faces). From the start, as the rule allows (src/lib/domain/highlights.ts), like the court photo. */}
         {started && !cancelled && canPlayAgain && (
@@ -1248,4 +1260,4 @@ async function EventPage({ params, searchParams }: Props) {
   );
 }
 
-export default withClientMessages(["americano", "calendar", "card", "common", "create", "creator", "errors", "event", "feedback", "group", "identity", "level", "levelCheck", "pairs", "passport", "push", "score", "series", "share", "telegram", "venue"], EventPage);
+export default withClientMessages(["americano", "calendar", "card", "common", "create", "creator", "errors", "event", "feedback", "group", "identity", "level", "levelCheck", "pairs", "passport", "push", "reel", "score", "series", "share", "telegram", "venue"], EventPage);

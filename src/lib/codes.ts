@@ -19,6 +19,9 @@ export const newCoachCode = () => gen8();
 /** A coach's manager link, lowercase because it is compared lowercased when claimed — /coach/manage/{code} */
 export const newManagerCode = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 8);
 
+/** The only key to a match's reel and to its upload on the reel host — never in a URL of this app. 32 characters. */
+export const newReelToken = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", 32);
+
 const codeRe = new RegExp(`^[${CODE_ALPHABET}]+$`);
 export const isValidShareCode = (s: string) => s.length === 4 && codeRe.test(s);
 export const isValidInviteCode = (s: string) => s.length === 6 && codeRe.test(s);

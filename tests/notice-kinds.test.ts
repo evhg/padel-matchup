@@ -147,6 +147,7 @@ describe("the kind map covers every sender", () => {
     "src/lib/alerts.ts": "to the owner",
     "src/lib/ops/alerts.ts": "to the owner",
     "src/lib/uptime.ts": "to the owner",
+    "src/lib/reelNotice.ts": "to the owner: a player sent a match video",
     "src/lib/listen/answers.ts": "to the owner",
     "src/lib/listen/tick.ts": "to the owner",
     "src/lib/outreach/desk.ts": "to the owner",

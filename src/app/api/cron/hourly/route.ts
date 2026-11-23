@@ -32,7 +32,7 @@ import { runBackup, type BackupResult } from "@/lib/backup";
 import { pruneErrors } from "@/lib/alerts";
 import { submitIndexNowDaily, type IndexNowResult } from "@/lib/indexnow";
 import { relayUptimeIssues } from "@/lib/uptime";
-import { alertOnServices, refreshAnthropicCost } from "@/lib/ops/alerts";
+import { alertOnServices, refreshAnthropicCost, refreshStoreBytes } from "@/lib/ops/alerts";
 import { askOwnerOutreach } from "@/lib/outreach/desk";
 import { bumpMetric, setMetric, snapshotMetrics } from "@/lib/domain/metrics";
 import { promotedOf, promoteWaitlists } from "@/lib/domain/slots";
@@ -339,6 +339,7 @@ async function handle(req: Request) {
 
   try {
     await refreshAnthropicCost(db, now);
+    await refreshStoreBytes(db, now);
     summary.serviceAlerts = await alertOnServices(db, now);
   } catch (e) {
     summary.errors.push(`services: ${String(e)}`);

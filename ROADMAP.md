@@ -1600,8 +1600,19 @@ Everything in this list is live. The README describes each in detail.
   that answers a phone's requests for parts of the file, under a token that is the only key. Its daily
   job deletes a reel after 30 days and a player's match video after 7. Today the operator writes the
   row (`POST /api/admin/match-reel`). Proven in `tests/match-reel.test.ts` and the browser suite viral.
-  Not built yet: the player sends the video (an upload to the store, or a link), and the engine runs
-  with no person in the loop.
+  Not built yet: the engine runs with no person in the loop.
+- **A player sends the match video** (the owner, 23 November 2026: "allow players to upload to our Modal
+  rented server ... and we delete it after 7 days", and a link as the second way). After a match that is
+  over, and for two weeks, its players see "Did you film it? Make the reel." "Choose the video" sends
+  the film from the phone to the reel host in parts; an upload that stopped goes on where it was, from
+  any of the four phones. "Paste a link" keeps a shared link from iCloud, Google Drive, Dropbox or
+  OneDrive. The owner hears "A match video is here" on Telegram. The privacy page names both, with
+  their days. The store's weight is on the service board against the 1 TiB a month that costs nothing,
+  and at 85% the owner gets Telegram and an email. Proven in `tests/match-reel.test.ts`,
+  `tests/store-alert.test.ts`, `tests/legal.test.ts`, the browser suite viral, and with a real 65 MB
+  file against a test copy of the reel host (the joined file equal to the source, byte for byte). Not
+  built yet: the fast way (the phone finds the moments by sound and sends only the clips, with no
+  score), and the engine with no person in the loop.
 
 ## The finish line
 
