@@ -157,12 +157,24 @@ const suites = readdirSync(path.dirname(new URL(import.meta.url).pathname))
     const m = /^(\d+)\/(\d+)$/.exec(process.env.E2E_SHARD ?? "");
     return !m || i % Number(m[2]) === Number(m[1]) - 1;
   });
+// A suite that hangs holds the whole run and says nothing: on 23 November 2026 telegram.mjs waited on a
+// browser window that never closed, for 28 minutes, with the server healthy and no line printed. The
+// longest suite needs about three minutes, so a suite gets SUITE_LIMIT_MS; past it the suite is stopped,
+// says so, and counts as failed. A hang then costs minutes and names itself.
+const SUITE_LIMIT_MS = Number(process.env.E2E_SUITE_LIMIT_MS) || 8 * 60 * 1000;
 const failed = [];
 for (const f of suites) {
   console.log(`\n=== ${f} ===`);
   const code = await new Promise((resolve) => {
     const p = spawn(process.execPath, [path.join("e2e", f)], { env: { ...env, BASE }, stdio: "inherit" });
-    p.on("exit", (c) => resolve(c ?? 1));
+    const limit = setTimeout(() => {
+      console.log(`✗ ${f} did not end in ${Math.round(SUITE_LIMIT_MS / 60000)} minutes and was stopped: a hang, not a failed check`);
+      p.kill("SIGKILL");
+    }, SUITE_LIMIT_MS);
+    p.on("exit", (c) => {
+      clearTimeout(limit);
+      resolve(c ?? 1);
+    });
   });
   if (code !== 0) failed.push(f);
 }

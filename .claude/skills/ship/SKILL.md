@@ -913,6 +913,12 @@ Wall clock first, credits second. What actually moved it, measured:
   column is qualified, which is why `reminders.ts` works. Alias the inner table and name the outer
   one by hand: `(select count(*) from ${slots} s where s.event_id = ${events}.id)`. `.toSQL()` shows
   what drizzle actually wrote.
+- **A browser suite that hangs prints nothing, so look at the clock of the run.** The gate's browser
+  suites need about ten minutes. On 23 November 2026 they were at 37: `telegram.mjs` waited on a browser
+  window that never closed (`ctx.close()`), with the server healthy. `ps -eo pid,etime,cmd | grep "node
+  e2e/"` names the suite and its age, and the gate's own temp file (`ls -t /tmp/tmp.*`) has its last
+  line. `e2e/run.mjs` now stops a suite after eight minutes (`SUITE_LIMIT_MS`) and says so. Stop a hung
+  suite by its process number; the runner goes on with the next one.
 - **Name a migration when you generate it, and read the file after any move.** A generated
   `0111_burly_paladin.sql` was renamed with `git mv -k … || mv …`. `-k` skips an error in silence and the
   file was untracked, so nothing moved, the `||` never ran, and the lines appended next made a second
