@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, matchReels } from "@/db/schema";
 import { newReelToken } from "@/lib/codes";
@@ -154,6 +154,13 @@ export function videoLinkOf(raw: unknown): string | null {
   return null;
 }
 
+/**
+ * What a player's upload holds: "upload" is the whole film (the full reel: the score, the numbers), and
+ * "clips" is the phone's own cut of the best points by sound (the fast reel: no score, no numbers). The
+ * owner, 23 November 2026: both, the player's choice, and the full reel is the one to prefer.
+ */
+export type SendWay = "upload" | "clips";
+
 /** The organiser or a player with a place, in a match that has started and was not cancelled. */
 async function senderOf(db: Db, eventId: string, playerId: string, now: Date) {
   const [ev] = await db.select({ id: events.id, code: events.code, type: events.type, status: events.status, startsAt: events.startsAt, creatorPlayerId: events.creatorPlayerId }).from(events).where(eq(events.id, eventId)).limit(1);
@@ -171,11 +178,14 @@ async function senderOf(db: Db, eventId: string, playerId: string, now: Date) {
  * "Choose the video": the token of this match's upload. A first call makes the row; a call while an
  * upload is not finished gives the same token, so any of the four players can go on with it.
  */
-export async function askReelUpload(db: Db, input: { eventId: string; playerId: string; now?: Date }): Promise<{ token: string; code: string }> {
+export async function askReelUpload(db: Db, input: { eventId: string; playerId: string; way?: SendWay; now?: Date }): Promise<{ token: string; code: string }> {
   const now = input.now ?? new Date();
+  const source = input.way === "clips" ? "clips" : "upload";
   const { ev, row } = await senderOf(db, input.eventId, input.playerId, now);
-  if (row?.status === "asked" && row.source === "upload") return { token: row.reelToken, code: ev.code };
-  const values = { status: "asked" satisfies ReelStatus, source: "upload", sourceUrl: null, reelToken: newReelToken(), requestedBy: input.playerId, host: null, readyAt: null, note: null };
+  // The same way again goes on with the same upload. The other way starts a new one: the parts of a whole
+  // film and the parts of its clips are not one file.
+  if (row?.status === "asked" && row.source === source) return { token: row.reelToken, code: ev.code };
+  const values = { status: "asked" satisfies ReelStatus, source, sourceUrl: null, reelToken: newReelToken(), requestedBy: input.playerId, host: null, readyAt: null, note: null };
   await db.insert(matchReels).values({ eventId: ev.id, ...values }).onConflictDoUpdate({ target: matchReels.eventId, set: values });
   return { token: values.reelToken, code: ev.code };
 }
@@ -193,18 +203,18 @@ export async function setReelLink(db: Db, input: { eventId: string; playerId: st
 
 /**
  * The reel host says "the film of this upload is joined": the row goes from asked to received. Answers
- * the match's code when this call changed the row, and null when there was nothing to change (a second
+ * the match's code and the way when this call changed the row, and null when there was nothing to change (a second
  * call, or a token nobody asked for), so the caller tells the owner once.
  */
-export async function reelUploadReceived(db: Db, token: string): Promise<string | null> {
+export async function reelUploadReceived(db: Db, token: string): Promise<{ code: string; way: SendWay } | null> {
   const changed = await db
     .update(matchReels)
     .set({ status: "received" satisfies ReelStatus })
-    .where(and(eq(matchReels.reelToken, token), eq(matchReels.status, "asked"), eq(matchReels.source, "upload")))
-    .returning({ eventId: matchReels.eventId });
+    .where(and(eq(matchReels.reelToken, token), eq(matchReels.status, "asked"), inArray(matchReels.source, ["upload", "clips"])))
+    .returning({ eventId: matchReels.eventId, source: matchReels.source });
   if (changed.length === 0) return null;
   const [ev] = await db.select({ code: events.code }).from(events).where(eq(events.id, changed[0].eventId)).limit(1);
-  return ev?.code ?? null;
+  return ev ? { code: ev.code, way: changed[0].source === "clips" ? "clips" : "upload" } : null;
 }
 
 /**

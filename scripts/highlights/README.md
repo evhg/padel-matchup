@@ -512,6 +512,22 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   part missing; 413 past the ticket's size; the joined file equal to the source by its SHA-256. A test
   deployment has its own name (`REELS_APP`) and is stopped after the test: it carries the daily delete job
   too.
+- **An iPhone converts a film before a web page gets it, unless the film comes from Files** (23 November
+  2026, read in WebKit's own change note, not tested on a phone). When a page asks for a file and the player
+  chooses a video from the photo library, WebKit transcodes it to H.264 "for compatibility"; its change of
+  2024 that stopped this for pictures kept it for video. A film of 44 GB does not come out of that in a time
+  a player waits. From the Files app the page gets the file as it is. So the card says on an iPhone: save
+  the video to Files first, then choose it from Files. That copy needs the film's size a second time, which
+  is why a link from the player's drive stays a way of its own. A camera app that records into Files would
+  need no copy; nobody has tried one here.
+- **The fast reel's cut is the lab page's cut** (`public/lab/rf-core.js`, 23 November 2026). The Rally Finder
+  page could already read a film's sound in the browser, find the rallies and copy their samples into a new
+  file with nothing decoded or encoded but the sound. Its sound reader lived in the page's own script; it
+  moved into the core between the two markers, and the page gave the same hits and rallies before and after
+  with each of its three decoders (WebCodecs, ADTS, M4A) on a film of 100 seconds. The match page loads the
+  generated file only when a player chooses the fast reel. The sound alone finds fewer points than the
+  engine (104 of 182 in the match of 18 November), and it cannot give the score: the card says so with
+  crosses, and the full reel stays first.
 - **"No music" is the reel before `music.py`, not a quiet track.** The owner, 23 November 2026: "add the no
   music, I will add my own". A player who puts a song on the reel inside Instagram or TikTok needs the reel
   with its own sound only: the hits, the voices, the crowd. `music.py` is the last step and writes a new

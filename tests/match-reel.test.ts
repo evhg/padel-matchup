@@ -171,7 +171,7 @@ describe("a player sends the match video", () => {
 
     // The reel host's word, once: the film is here.
     expect(await reelUploadReceived(db, "a_token_nobody_asked_for_x")).toBeNull();
-    expect(await reelUploadReceived(db, first.token)).toBe(ev.code);
+    expect(await reelUploadReceived(db, first.token)).toEqual({ code: ev.code, way: "upload" });
     expect(await reelUploadReceived(db, first.token)).toBeNull();
     expect(await reelState(db, ev.id, NOW)).toEqual({ kind: "here", source: "upload" });
     // A film that is here is not written over by a second upload or a link.
@@ -186,6 +186,19 @@ describe("a player sends the match video", () => {
     const later = new Date(NOW.getTime() + 31 * DAY);
     expect(await reelState(db, ev.id, later)).toEqual({ kind: "none", failed: false });
     expect((await askReelUpload(db, { eventId: ev.id, playerId: ana.id, now: later })).token).not.toBe(TOKEN);
+  });
+
+  it("keeps the two ways apart: the clips of a fast reel are another upload than the whole film", async () => {
+    const { ev, ana, bo } = await match("ways");
+    const whole = await askReelUpload(db, { eventId: ev.id, playerId: ana.id, now: NOW });
+    const clips = await askReelUpload(db, { eventId: ev.id, playerId: bo.id, way: "clips", now: NOW });
+    expect(clips.token).not.toBe(whole.token);
+    expect(await row(ev.id)).toMatchObject({ status: "asked", source: "clips", requestedBy: bo.id });
+    // The same way again goes on with the same upload; the first upload's ticket no longer names this match's row.
+    expect((await askReelUpload(db, { eventId: ev.id, playerId: ana.id, way: "clips", now: NOW })).token).toBe(clips.token);
+    expect(await reelUploadReceived(db, whole.token)).toBeNull();
+    expect(await reelUploadReceived(db, clips.token)).toEqual({ code: ev.code, way: "clips" });
+    expect(await reelState(db, ev.id, NOW)).toEqual({ kind: "here", source: "clips" });
   });
 
   it("keeps a link to the film, takes the place of an upload that never finished, and refuses a link that is not one", async () => {

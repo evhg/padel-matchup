@@ -1027,7 +1027,7 @@ async function EventPage({ params, searchParams }: Props) {
         {reel?.kind === "here" && (
           <section className="card" data-testid="reel-here">
             <h2 className="text-lg font-extrabold">{t("reel.hereTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t("reel.hereBody")}</p>
+            <p className="mt-1 text-sm text-muted">{t(reel.source === "clips" ? "reel.hereClipsBody" : "reel.hereBody")}</p>
           </section>
         )}
         {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their
