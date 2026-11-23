@@ -24,6 +24,7 @@ const IGNORED = {
   E2E_ONLY: "run one browser suite",
   E2E_PORT: "the port the browser suites boot on",
   E2E_SHARD: "CI splits the browser suites over two jobs",
+  E2E_SUITE_LIMIT_MS: "how long one browser suite may run before the runner stops it (eight minutes)",
   E2E_VERBOSE: "print the test server's output",
   EMAIL_SINK_FILE: "the browser suites read the mail the app would have sent",
   NODE_OPTIONS: "the browser suites' server loads the fake Playtomic (e2e/fakes/playtomic.mjs) after whatever Node options the machine had",

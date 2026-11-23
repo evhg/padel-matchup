@@ -305,6 +305,17 @@ try {
   await p.reload();
   const again = await sendStats(numbers.slice(2, 3));
   check("switching it off deletes the heart rate and keeps a new one out", (await p.getByTestId("my-bests").locator("[data-stat=heartRateMax]").count()) === 0 && (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 2 && JSON.stringify(again.body?.refused) === JSON.stringify([{ index: 0, why: "heart_off" }]), JSON.stringify(again.body));
+  // A match that was played with no match page (the owner, 23 November 2026): the operator's door writes it
+  // as it was, and its page then shows the four players and the score.
+  const playedBody = { startsAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), tz: "Asia/Bangkok", venue: "Rawai Padel Club", teamA: ["Pia", "Quin"], teamB: ["Rex", "Sol"], sets: [[3, 6], [2, 6]] };
+  const played = await fetch(`${BASE}/api/admin/played-match`, { method: "POST", headers: CRON, body: JSON.stringify(playedBody) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
+  const playedHtml = played.body?.code ? await (await fetch(`${BASE}/${played.body.code}`)).text() : "";
+  check(
+    "the operator's door writes a played match with its four players and its score, and the match page shows it",
+    played.status === 200 && /^.{4}$/.test(played.body?.code ?? "") && played.body?.players?.length === 4 && ["Pia", "Quin", "Rex", "Sol"].every((n) => playedHtml.includes(n)) && playedHtml.includes("Confirmed by organizer"),
+    JSON.stringify(played.body).slice(0, 200),
+  );
+  check("that door is the operator's too", (await fetch(`${BASE}/api/admin/played-match`, { method: "POST", body: "{}" })).status === 401);
   await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);
