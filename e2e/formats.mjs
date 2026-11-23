@@ -171,24 +171,29 @@ try {
   await org.reload();
   check("roster shows the tick next to confirmed levels", (await org.locator("li", { hasText: "King1" }).getByText("✓").count()) === 1 && (await org.locator("li", { hasText: "Kai" }).getByText("✓").count()) === 0);
 
-  // ---- Rankings are opt-in ----
+  // ---- Rankings: every player is in them by default, and one tap takes a player out (the owner, 23 November 2026) ----
   await org.goto(`${BASE}/v/rawai-padel-club/ranking`);
-  check("club ranking exists but nobody opted in yet", (await org.getByRole("heading", { name: "Rawai Padel Club ranking" }).count()) === 1 && (await org.getByText(/nobody has opted in/).count()) > 0);
+  check("the club ranking exists and needs no step to be on it", (await org.getByRole("heading", { name: "Rawai Padel Club ranking" }).count()) === 1 && (await org.getByText(/nobody has opted in/).count()) === 0);
+  await org.goto(`${BASE}/v/club-mex/ranking`);
+  check("the organizer and her players are in her club's ranking by default", (await org.locator("table").getByText("Kira").count()) === 1 && (await org.locator("table").getByText("Mex1").count()) === 1 && (await org.getByText("You appear in rankings").count()) === 1);
   await org.goto(`${BASE}/me`);
   await openSettings(org); // behind "Settings" on My matches (the owner, 9 November 2026)
   const optIn = org.getByLabel(/Show me in rankings/);
-  check("My matches offers the ranking opt-in, off by default", (await optIn.count()) === 1 && !(await optIn.isChecked()));
-  await optIn.check();
+  check("My matches shows the ranking switch, on by default", (await optIn.count()) === 1 && (await optIn.isChecked()));
+  await optIn.uncheck();
   await org.waitForTimeout(800);
   await org.goto(`${BASE}/v/club-mex/ranking`);
-  check("opted-in organizer appears in her club's ranking", (await org.locator("table").getByText("Kira").count()) === 1 && (await org.locator("table").getByText("Mex1").count()) === 0);
+  check("a player who left the rankings is not listed, and the others still are", (await org.locator("table").getByText("Kira").count()) === 0 && (await org.locator("table").getByText("Mex1").count()) === 1);
+  await org.getByRole("button", { name: "Show me in rankings" }).click();
+  await org.getByText("You appear in rankings").waitFor({ timeout: 20000 });
+  check("one tap on the ranking page puts her back", (await org.locator("table").getByText("Kira").count()) === 1 && (await org.getByRole("button", { name: "Remove me from rankings" }).count()) === 1);
   await shot(org, "f5-club-ranking");
   check("venue board links to the ranking", await org.goto(`${BASE}/v/club-mex`).then(async () => (await org.getByRole("link", { name: /Ranking/ }).count()) === 1));
 
   // ---- City pages ----
   await org.goto(`${BASE}/phuket`);
   check("Phuket page lists the Rawai tournament and the club", (await org.getByRole("heading", { name: "Padel in Phuket" }).count()) === 1 && (await org.getByText("Rawai Padel Club").count()) >= 2);
-  check("Phuket ranking says results exist but nobody opted in", (await org.getByText(/nobody has opted in/).count()) > 0);
+  check("the Phuket ranking lists players with no step to get on it", (await org.getByText(/nobody is in the ranking yet/).count()) === 0 && (await org.getByText("You appear in rankings").count()) === 1);
   await shot(org, "f6-phuket");
   await org.goto(`${BASE}/singapore`);
   // Other suites may have listed Singapore matches before this one runs: only the shell is asserted.

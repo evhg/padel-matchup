@@ -115,6 +115,8 @@ export async function anonymizePlayer(
       emailVerifiedAt: null,
       emailNotifications: false,
       shareHeartRate: false,
+      // Rankings are on by default since 23 November 2026, so a deleted account is taken off them here.
+      rankingOptIn: false,
       homescreenAt: null,
       // The objection to the device key goes with the rest: the rows are gone, and no door keeps a key for
       // "Deleted player", who signs in nowhere.

@@ -1231,7 +1231,7 @@
     "shortLink": "La versión corta →",
     "contactLink": "Escríbenos →",
     "numbersTitle": "Los números de un partido grabado",
-    "numbersBody": "• Si se grabó un partido que jugaste, guardamos los números medidos en el vídeo: por ejemplo, tu golpe más rápido y los puntos que ganaste al saque.\n• Se ven en la página del partido, en Mis estadísticas y en tu página pública si la activaste. Los récords de un club te incluyen solo después de «Mostrarme en los rankings».\n• Tu pulso es un dato de salud. Lo guardamos solo después de que actives «Guardar mi pulso» en Mis estadísticas. Si lo desactivas, lo borramos al momento.\n• Los números están en el archivo que puedes descargar, y desaparecen cuando borras tu cuenta."
+    "numbersBody": "• Si se grabó un partido que jugaste, guardamos los números medidos en el vídeo: por ejemplo, tu golpe más rápido y los puntos que ganaste al saque.\n• Se ven en la página del partido, en Mis estadísticas, en los récords de tu club y en tu página pública si la activaste. Desmarca «Mostrarme en los rankings» en Mis partidos para salir de los récords del club.\n• Tu pulso es un dato de salud. Lo guardamos con los demás números. Desactiva «Guardar mi pulso» en Mis estadísticas y lo borramos al momento.\n• Los números están en el archivo que puedes descargar, y desaparecen cuando borras tu cuenta."
   },
   "terms": {
     "title": "Condiciones de uso",
@@ -1550,17 +1550,18 @@
     "title": "Ranking",
     "clubTitle": "Ranking de {venue}",
     "sub": "Últimos 90 días, solo resultados cerrados. 3 puntos por victoria, 1 por empate; los torneos dan 3, 2 y 1 al podio.",
-    "optInOnly": "Solo aparecen los jugadores que lo han activado. Nadie sale sin su permiso.",
+    "optInOnly": "Los jugadores aparecen por su nombre. Un jugador puede salir del ranking en cualquier momento.",
     "empty": "Aún no hay resultados cerrados aquí. Juega, apunta el resultado y que el organizador lo confirme.",
-    "emptyOptIn": "Hay resultados, pero nadie ha activado aún su aparición en el ranking.",
+    "emptyOptIn": "Hay resultados, pero todavía no hay nadie en el ranking.",
     "optInCta": "Mostrarme en los rankings",
     "optedIn": "Apareces en los rankings",
-    "optInHelp": "Los rankings de club y ciudad muestran tu nombre, nivel y resultados de los últimos 90 días. Desactivado por defecto; puedes quitarlo cuando quieras.",
+    "optInHelp": "Los rankings del club y de la ciudad muestran tu nombre, tu nivel y tus resultados de los últimos 90 días. Puedes salir de ellos cuando quieras.",
     "colPts": "Pts",
     "colPlayed": "J",
     "colWins": "G",
     "verifiedLegend": "✓ nivel confirmado por un organizador",
-    "metaDescription": "Ranking de pádel en {name}: jugadores que lo han activado, resultados cerrados de los últimos 90 días."
+    "metaDescription": "Ranking de pádel en {name}: resultados cerrados de los últimos 90 días.",
+    "removeCta": "Quitarme de los rankings"
   },
   "city": {
     "title": "Pádel en {city}",
@@ -1638,7 +1639,7 @@
     "faq3q": "¿Qué es la marca junto a un nivel?",
     "faq3a": "Un organizador que jugó con esa persona confirmó el nivel tras el resultado. Se mantiene mientras el nivel se mueva menos de medio paso. Los rankings pueden fiarse de ella.",
     "faq4q": "¿Mi nivel es público?",
-    "faq4a": "Aparece como una etiqueta pequeña junto a tu nombre en los partidos en los que estás. En los rankings de club y ciudad solo sales si tú lo activas.",
+    "faq4a": "Aparece como una etiqueta pequeña junto a tu nombre en los partidos en los que estás. En los rankings de club y ciudad apareces por tu nombre, y puedes salir de ellos en Mis partidos.",
     "ctaTitle": "Pon el tuyo en diez segundos",
     "ctaHelp": "Sin cuenta. Tu nombre y tu nivel viven detrás de un enlace personal.",
     "metaDescription": "La escala de niveles de pádel explicada: qué significa de 0 a 7, cómo la mueven los resultados, qué es un nivel confirmado y cómo funcionan los rangos en un partido."
@@ -2520,11 +2521,11 @@
     "byMatch": "Partido a partido",
     "profileTitle": "Mejores números",
     "recordsTitle": "Récords del club",
-    "recordsLead": "Los mejores números medidos en este club. Solo aparecen los jugadores que activaron el ranking.",
+    "recordsLead": "Los mejores números medidos en este club.",
     "heartTitle": "Guardar mi pulso",
     "heartOn": "Activado",
     "heartOff": "Desactivado",
-    "heartHelp": "Tu pulso es un dato de salud. Kicksmash lo guarda y lo muestra solo mientras esto esté activado. Al desactivarlo se borra.",
+    "heartHelp": "Tu pulso es un dato de salud. Kicksmash lo guarda y lo muestra mientras esto esté activado. Si lo desactivas, se borra.",
     "back": "Mis partidos",
     "kind": {
       "gamesInRow": "juegos seguidos",

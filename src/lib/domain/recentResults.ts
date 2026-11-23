@@ -14,7 +14,8 @@ import { DELETED_PLAYER_NAME, firstName, matchResult } from "./result";
  * in. The strip asks less and shows less: a score, the first names, the day, and the result card.
  *
  * A name still follows the ranking's consent, and the query decides it, so a name that may not be
- * shown never leaves the database. A player who switched on `ranking_opt_in` shows by first name for
+ * shown never leaves the database. A player in the rankings (`ranking_opt_in`, on by default since
+ * 23 November 2026; "Remove me from rankings" switches it off) shows by first name for
  * a result from the last 90 days (`RANKING_WINDOW_MS`), which is what the switch's help text promises
  * ("results from the last 90 days"); an older result, everybody else, and a deleted account show as
  * "Player". These pages are indexed.

@@ -56,6 +56,7 @@ describe("keeping the numbers of a match", () => {
     const twin = await makePlayer(db, "Ana other");
     const ev = await played([ana, bo, cy, di], "Numbers Club Two");
     await joinEvent(db, { eventId: ev.id, playerId: twin.id }).catch(() => undefined);
+    await setShareHeartRate(db, bo.id, false);
     const res = await recordMatchStats(db, {
       code: ev.code,
       stats: [
@@ -76,7 +77,7 @@ describe("keeping the numbers of a match", () => {
       { index: 2, why: "unknown_player" },
       { index: 3, why: "needs_partner" },
       { index: 4, why: "unknown_player" },
-      { index: 5, why: "needs_yes" },
+      { index: 5, why: "heart_off" },
       { index: 6, why: "not_an_entry" },
     ]);
   });
@@ -106,13 +107,12 @@ describe("keeping the numbers of a match", () => {
   });
 });
 
-describe("the heart rate is the player's own yes", () => {
-  it("is written only after the yes, shown only while it stands, and deleted with the no", async () => {
+describe("the heart rate is kept by default, and the player can switch it off", () => {
+  it("is written and shown for everybody, deleted when the player switches it off, and kept out after that", async () => {
     const [ana, bo, cy, di] = await four("five");
     const ev = await played([ana, bo, cy, di], "Numbers Club Five");
+    expect(ana.shareHeartRate).toBe(true);
     const send = () => recordMatchStats(db, { code: ev.code, stats: [{ player: "Ana", kind: "heartRateMax", value: 157 }, { player: "Ana", kind: "fastestShot", value: 84 }] });
-    expect(await send()).toEqual({ saved: 1, refused: [{ index: 0, why: "needs_yes" }] });
-    await setShareHeartRate(db, ana.id, true);
     expect(await send()).toEqual({ saved: 2, refused: [] });
     expect((await playerNumbers(db, ana.id)).map((r) => r.kind).sort()).toEqual(["fastestShot", "heartRateMax"]);
     expect((await matchNumbers(db, ev.id)).map((r) => r.kind)).toContain("heartRateMax");
@@ -121,20 +121,22 @@ describe("the heart rate is the player's own yes", () => {
     expect((await playerNumbers(db, ana.id)).map((r) => r.kind)).toEqual(["fastestShot"]);
     expect((await db.select().from(matchStats).where(eq(matchStats.playerId, ana.id))).map((r) => r.kind)).toEqual(["fastestShot"]);
     expect((await db.select().from(players).where(eq(players.id, ana.id)))[0].shareHeartRate).toBe(false);
+    expect(await send()).toEqual({ saved: 1, refused: [{ index: 0, why: "heart_off" }] });
+    await setShareHeartRate(db, ana.id, true);
+    expect(await send()).toEqual({ saved: 2, refused: [] });
   });
 });
 
 describe("when a player deletes their account", () => {
   it("removes their numbers, and leaves the partner the pair's number with no name beside it", async () => {
     const [ana, bo, cy, di] = await four("ten");
-    await setShareHeartRate(db, ana.id, true);
     const ev = await played([ana, bo, cy, di], "Numbers Club Ten");
     await recordMatchStats(db, { code: ev.code, stats: [{ player: "Ana", kind: "heartRateMax", value: 157 }, { player: "Ana", partner: "Bo", kind: "gamesInRow", value: 8 }] });
     await anonymizePlayer(db, ana.id);
     expect(await playerNumbers(db, ana.id)).toEqual([]);
     expect((await playerNumbers(db, bo.id)).map((r) => [r.kind, r.partnerName])).toEqual([["gamesInRow", null]]);
     expect((await matchNumbers(db, ev.id)).map((r) => [r.kind, r.name, r.partnerName])).toEqual([["gamesInRow", "Bo", null]]);
-    expect((await db.select().from(players).where(eq(players.id, ana.id)))[0].shareHeartRate).toBe(false);
+    expect((await db.select().from(players).where(eq(players.id, ana.id)))[0]).toMatchObject({ shareHeartRate: false, rankingOptIn: false });
   });
 });
 
@@ -154,9 +156,9 @@ describe("my stats", () => {
 });
 
 describe("the club's records", () => {
-  it("lists only players who said \"Show me in rankings\", the highest first, three of a kind at most", async () => {
+  it("lists every player but one who chose \"Remove me from rankings\", the highest first, three of a kind at most", async () => {
     const [ana, bo, cy, di] = await four("seven");
-    const quiet = await makePlayer(db, "Quinn seven");
+    const quiet = await makePlayer(db, "Quinn seven", { rankingOptIn: false });
     const ev = await played([ana, bo, cy, di], "Records Club");
     const ev2 = await played([ana, bo, cy, quiet], "Records Club", 5 * HOUR);
     await recordMatchStats(db, { code: ev.code, stats: [
@@ -165,22 +167,22 @@ describe("the club's records", () => {
       { player: "Ana", partner: "Bo", kind: "gamesInRow", value: 8 },
     ] });
     await recordMatchStats(db, { code: ev2.code, stats: [{ player: "Quinn", kind: "fastestShot", value: 99 }, { player: "Cy", partner: "Quinn", kind: "gamesInRow", value: 5 }] });
-    expect((await venueRecords(db, ev.venueSlug!)).size).toBe(0);
-
-    for (const p of [ana, bo, cy, di]) await db.update(players).set({ rankingOptIn: true }).where(eq(players.id, p.id));
     const board = await venueRecords(db, ev.venueSlug!);
     expect(board.get("fastestShot")!.map((r) => [r.name, r.value])).toEqual([["Ana", 84], ["Bo", 75], ["Cy", 52]]);
     const rows = board.get("gamesInRow")!;
     expect(rows.map((r) => r.value)).toEqual([8, 5]);
     expect([rows[0].name, rows[0].partnerName].sort()).toEqual(["Ana", "Bo"]);
-    // Quinn did not opt in: the pair's number shows with Cy alone, and Quinn's 99 km/h is on no board.
+    // Quinn left the rankings: the pair's number shows with Cy alone, and Quinn's 99 km/h is on no board.
     expect([rows[1].name, rows[1].partnerName]).toEqual(["Cy", null]);
     expect([...board.keys()]).toEqual(["gamesInRow", "fastestShot"]);
     expect((await venueRecords(db, "no-such-club")).size).toBe(0);
+    // One tap takes a player off the board, and one more puts them back.
+    await db.update(players).set({ rankingOptIn: false }).where(eq(players.id, ana.id));
+    expect((await venueRecords(db, ev.venueSlug!)).get("fastestShot")!.map((r) => r.name)).toEqual(["Bo", "Cy", "Di"]);
   });
 
   it("leaves out a match that was called off", async () => {
-    const f = await four("eight", { rankingOptIn: true });
+    const f = await four("eight");
     const ev = await played(f, "Records Club Off");
     await recordMatchStats(db, { code: ev.code, stats: [{ player: "Ana", kind: "fastestShot", value: 84 }] });
     expect((await venueRecords(db, ev.venueSlug!)).get("fastestShot")).toHaveLength(1);

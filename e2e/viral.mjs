@@ -274,8 +274,8 @@ try {
   ];
   const sent = await sendStats(numbers);
   check(
-    "the operator's door keeps the numbers of a match, and refuses a heart rate with no yes and a number known to worse than 10%",
-    sent.status === 200 && sent.body?.saved === 3 && JSON.stringify(sent.body?.refused) === JSON.stringify([{ index: 2, why: "needs_yes" }, { index: 3, why: "bad_margin" }]),
+    "the operator's door keeps the numbers of a match, the heart rate too, and refuses a number known to worse than 10%",
+    sent.status === 200 && sent.body?.saved === 4 && JSON.stringify(sent.body?.refused) === JSON.stringify([{ index: 3, why: "bad_margin" }]),
     JSON.stringify(sent.body),
   );
   check("the door is the operator's: no token, no write", (await fetch(`${BASE}/api/admin/match-stats`, { method: "POST", body: "{}" })).status === 401);
@@ -283,25 +283,28 @@ try {
   const card = p.getByTestId("match-numbers");
   await card.waitFor({ timeout: 20000 });
   const cardText = (await card.innerText()).replace(/\s+/g, " ");
-  check("the match page shows its numbers: the shot with its unit and \"≈\", the pair's games once, no heart rate", /≈ 84 km\/h/.test(cardText) && /fastest shot/i.test(cardText) && /Ana & Bo|Bo & Ana/.test(cardText) && (await card.locator("[data-stat]").count()) === 2 && !/heart/i.test(cardText), cardText);
+  check("the match page shows its numbers: the shot with its unit and \"≈\", the pair's games once, the heart rate", /≈ 84 km\/h/.test(cardText) && /fastest shot/i.test(cardText) && /Ana & Bo|Bo & Ana/.test(cardText) && /157 bpm/.test(cardText) && (await card.locator("[data-stat]").count()) === 3, cardText);
   await shot(p, "v3-match-numbers");
   await p.goto(`${BASE}/me`);
   await p.getByTestId("my-numbers").waitFor({ timeout: 20000 });
   await p.getByTestId("my-stats-link").click();
   await p.waitForURL((u) => u.pathname === "/me/stats", { timeout: 20000 });
-  check("My matches leads to My stats, with the bests and the match", (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 2 && (await p.getByTestId("my-stats-matches").getByRole("link").getAttribute("href")) === `/${mcode}`);
-  await p.getByTestId("heart-rate-switch").check();
-  await p.getByText(/Keep my heart rate · On/).waitFor({ timeout: 20000 });
-  const again = await sendStats(numbers.slice(2, 3));
-  await p.reload();
-  check("after the player's yes the heart rate is kept and shown", again.body?.saved === 1 && (await p.getByTestId("my-bests").locator("[data-stat=heartRateMax]").count()) === 1, JSON.stringify(again.body));
+  check("My matches leads to My stats, with the bests and the match", (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 3 && (await p.getByTestId("my-stats-matches").getByRole("link").getAttribute("href")) === `/${mcode}`);
+  check("\"Keep my heart rate\" is on by default", await p.getByTestId("heart-rate-switch").isChecked());
   await shot(p, "v3-my-stats");
+  // The club's records: every player is on them by default, like a score on a game's leaderboard.
+  await p.goto(`${BASE}/v/rawai-padel-club/ranking`);
+  const records = p.getByTestId("club-records");
+  await records.waitFor({ timeout: 20000 });
+  const recordsText = (await records.innerText()).replace(/\s+/g, " ");
+  check("the club's page shows the records with their players, with no step to get on it", /84 km\/h/.test(recordsText) && /Ana/.test(recordsText) && /157 bpm/.test(recordsText), recordsText);
+  await shot(p, "v3-club-records");
+  await p.goto(`${BASE}/me/stats`);
   await p.getByTestId("heart-rate-switch").uncheck();
   await p.getByText(/Keep my heart rate · Off/).waitFor({ timeout: 20000 });
   await p.reload();
-  check("the no deletes it", (await p.getByTestId("my-bests").locator("[data-stat=heartRateMax]").count()) === 0 && (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 2);
-  const boardPage = await fetch(`${BASE}/v/rawai-padel-club/ranking`);
-  check("the club's page lists no record of a player who did not say \"Show me in rankings\"", boardPage.status === 200 && !(await boardPage.text()).includes('data-testid="club-records"'));
+  const again = await sendStats(numbers.slice(2, 3));
+  check("switching it off deletes the heart rate and keeps a new one out", (await p.getByTestId("my-bests").locator("[data-stat=heartRateMax]").count()) === 0 && (await p.getByTestId("my-bests").locator("[data-stat]").count()) === 2 && JSON.stringify(again.body?.refused) === JSON.stringify([{ index: 0, why: "heart_off" }]), JSON.stringify(again.body));
   await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);

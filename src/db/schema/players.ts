@@ -56,8 +56,12 @@ export const players = pgTable(
     levelVerifiedLevel: real("level_verified_level"),
     /** Who confirmed: organizer (played with them), coach or club (a level check). */
     levelVerifiedSource: text("level_verified_source"),
-    /** Opted in to the public club and city rankings. Off by default. */
-    rankingOptIn: boolean("ranking_opt_in").notNull().default(false),
+    /**
+     * In the public club and city rankings and on a club's records. On by default since 23 November 2026
+     * (the owner: "like in a computer game: you play and you see your score on the leaderboard"); a
+     * player leaves with "Remove me from rankings" and comes back with "Show me in rankings".
+     */
+    rankingOptIn: boolean("ranking_opt_in").notNull().default(true),
     /**
      * "Don't recognise my phones" (device hints, DECIDING rule 40): the moment the player objected to the
      * device key (PDPA s.32). While it is set, no door keeps a key for the player (`saveDeviceHint` inserts
@@ -81,11 +85,12 @@ export const players = pgTable(
     lineId: text("line_id"),
     lineDisplayName: text("line_display_name"),
     /**
-     * "Keep my heart rate" (the owner, 22 November 2026): the player's yes to health data. Off by default.
-     * While it is off, no heart rate of this player is written (`recordMatchStats`) and none is shown
-     * (`shownStats`); switching it off deletes the rows the player had (`setShareHeartRate`).
+     * "Keep my heart rate" on My stats. On by default since 23 November 2026 (the owner: "by default add
+     * all stats for everyone always", and a player can delete their heart rate there). While it is off, no
+     * heart rate of this player is written (`recordMatchStats`) and none is shown; switching it off
+     * deletes the rows the player had (`setShareHeartRate`).
      */
-    shareHeartRate: boolean("share_heart_rate").notNull().default(false),
+    shareHeartRate: boolean("share_heart_rate").notNull().default(true),
     /** Opt-in public profile at /u/{public_slug}. Off by default; the slug is minted on the first opt-in and kept. */
     publicProfile: boolean("public_profile").notNull().default(false),
     publicSlug: text("public_slug"),

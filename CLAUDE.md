@@ -37,6 +37,14 @@ rather than rediscovering it.
 7. **A question for the owner is a decision, set out in full.** Name each option, give its pros and
    cons, and say which one you recommend and why. A fact is not a decision: report it, do not ask
    about it. And ask only what is theirs: for anything else, decide and say what you assumed.
+8. **No privacy step unless the owner asks for one.** Kicksmash is a game for Erik and his friends, a
+   hobby project. A player plays and sees the score on the leaderboard, as in a computer game. Every
+   stat is kept for every player by default, and rankings are on by default; a player can leave them.
+   Do not add a consent step, an opt-in, a switch or a rule to protect privacy by yourself. The owner,
+   23 November 2026: "Never ever add steps or rules to protect privacy unless I explicitly ask you."
+9. **Compliance never worsens the UI or the UX.** What the law needs goes where it costs the player no
+   tap and is not in the player's face: the privacy page, a default, a line behind a fold. The owner:
+   "This is how apps die."
 
 ## The one habit underneath all of it
 

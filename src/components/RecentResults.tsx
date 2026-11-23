@@ -8,7 +8,7 @@ import type { RecentResult } from "@/lib/domain/recentResults";
  * the set scores in columns and a tick on the winners, one tap from its result card. The page reads
  * the rows (`recentResults`, one query); an empty list shows nothing at all, not a "no results" line.
  * The city page names the club under each result, because there the reader cannot tell otherwise.
- * A player who did not opt in to rankings, a result older than 90 days and a deleted account show
+ * A player who chose "Remove me from rankings", a result older than 90 days and a deleted account show
  * "Player" here, never a name; the query decides it (see `recentResults`).
  */
 export async function RecentResults({ results, showVenue = false }: { results: RecentResult[]; showVenue?: boolean }) {

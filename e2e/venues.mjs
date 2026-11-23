@@ -97,7 +97,6 @@ try {
   await ana.getByRole("button", { name: "Save changes" }).click();
   await ana.getByRole("button", { name: "Save changes" }).waitFor({ state: "detached", timeout: 20000 });
   await ana.goto(`${BASE}/v/lakeside-padel/ranking`);
-  await ana.getByRole("button", { name: "Show me in rankings" }).click();
   await ana.getByText("You appear in rankings").waitFor({ timeout: 20000 });
   await guest.goto(`${BASE}/v/lakeside-padel`);
   const strip = guest.getByTestId("recent-results");
@@ -105,7 +104,12 @@ try {
   await shot(guest, "b3-recent-results");
   const rowText = (await row.innerText().catch(() => "")) || "";
   check("the finished match shows in the club's recent results, with both pairs, the tick and a link to its card", (await strip.getByRole("heading", { name: "Recent results" }).count()) === 1 && (await row.count()) === 1 && (await row.getByText("Won").count()) === 1, (await strip.innerText().catch(() => "no strip")).slice(0, 160));
-  check("only the player who opted in is named; the other three show as Player", /Ana & Player/.test(rowText) && /Player & Player/.test(rowText) && !/\b(Bo|Cy|Di)\b/.test(rowText), rowText.slice(0, 160));
+  check("every player is named by default (the owner, 23 November 2026)", /Ana & (Bo|Cy|Di)/.test(rowText) && !/Player/.test(rowText), rowText.slice(0, 160));
+  await ana.getByRole("button", { name: "Remove me from rankings" }).click();
+  await ana.getByRole("button", { name: "Show me in rankings" }).waitFor({ timeout: 20000 });
+  await guest.reload();
+  const rowAfter = (await guest.getByTestId("recent-results").locator(`a[href='/${rcode}/card']`).innerText().catch(() => "")) || "";
+  check("a player who chose \"Remove me from rankings\" shows as Player, and the other three keep their names", /Player & (Bo|Cy|Di)/.test(rowAfter) && !/\bAna\b/.test(rowAfter), rowAfter.slice(0, 160));
   // The day column held "WED, OCT 9" in 64 px and broke it over two lines on a phone. Every day of a
   // year, in all three languages, must now sit on one line inside it at 390 px.
   const day = await widestDayFits(row.getByTestId("result-day")).catch((e) => ({ ok: false, worst: String(e).slice(0, 80) }));

@@ -31,9 +31,9 @@ let four: Player[];
 beforeAll(async () => {
   ({ db, close } = await createTestDb());
   four = [await makePlayer(db, "Ana Smith"), await makePlayer(db, "Bo"), await makePlayer(db, "Cy"), await makePlayer(db, "Di")];
-  // Ana and Cy switched on "Show me in rankings"; Bo and Di never did (the default).
-  await setRankingOptIn(db, four[0].id, true);
-  await setRankingOptIn(db, four[2].id, true);
+  // Ana and Cy are in the rankings (the default since 23 November 2026); Bo and Di chose "Remove me from rankings".
+  await setRankingOptIn(db, four[1].id, false);
+  await setRankingOptIn(db, four[3].id, false);
 });
 afterAll(async () => close());
 

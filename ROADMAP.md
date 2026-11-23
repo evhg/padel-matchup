@@ -1577,9 +1577,10 @@ Everything in this list is live. The README describes each in detail.
   the numbers that passed its check (the fastest shot, games in a row, points won on serve) through
   `POST /api/admin/match-stats`; `match_stats` keeps one row for a player, a match and a kind. The match
   page shows them, My matches shows a player's bests and leads to `/me/stats`, a public profile shows
-  the bests, and a club's ranking page shows the club's records for players who said "Show me in
-  rankings". A number known to worse than 10% is refused. The heart rate is health data: it is kept
-  only after the player's own "Keep my heart rate", and the no deletes it. Proven in
+  the bests, and a club's ranking page shows the club's records. A number known to worse than 10% is
+  refused. Since 23 November 2026 every number is kept for every player by default, the heart rate
+  too, and every player is in the rankings: "Remove me from rankings" and the switch "Keep my heart
+  rate" on My stats are the ways out, one tap each. Proven in
   `tests/match-stat-kinds.test.ts`, `tests/match-stats.test.ts` and the browser suite viral. Not built
   yet: the reel flow that fills the table with no person in the loop (today the operator sends the
   numbers of a match after the reel's check).

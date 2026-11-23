@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
  * `player` and `partner` are a player's id or the first name of somebody seated in that match. The kinds
  * and what a value may be are in `src/lib/domain/matchStatKinds.ts`. The answer says how many rows
  * were saved and which entries were refused, each with its reason: a number that is known to worse
- * than 10% (`bad_margin`), a heart rate of a player who did not say yes (`needs_yes`), a name that no
+ * than 10% (`bad_margin`), a heart rate of a player who switched off "Keep my heart rate" (`heart_off`), a name that no
  * seat or more than one seat has (`unknown_player`). A number that is sent again replaces the old one.
  */
 export async function POST(req: Request) {
