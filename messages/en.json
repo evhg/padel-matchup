@@ -2885,5 +2885,11 @@
     "afterTitle": "After the match",
     "afterBody": "Keep the video on your phone. On the match page, tap “{feedback}” and say that you filmed. Reels are new: today a person starts each one, and all four players get it.",
     "gotIt": "Got it. Back to the match"
+  },
+  "reel": {
+    "title": "The reel of this match",
+    "saveTall": "Save, for stories",
+    "saveWide": "Save, wide",
+    "kept": "Only the players of this match see it here. Kept until {date}."
   }
 }

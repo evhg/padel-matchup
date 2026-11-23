@@ -2885,5 +2885,11 @@
     "afterTitle": "Después del partido",
     "afterBody": "Guarda el vídeo en tu móvil. En la página del partido, pulsa «{feedback}» y di que lo has grabado. Los reels son nuevos: hoy una persona pone en marcha cada uno, y lo reciben los cuatro jugadores.",
     "gotIt": "Entendido. Volver al partido"
+  },
+  "reel": {
+    "title": "El reel de este partido",
+    "saveTall": "Guardar, para historias",
+    "saveWide": "Guardar, horizontal",
+    "kept": "Aquí solo lo ven los jugadores de este partido. Se guarda hasta el {date}."
   }
 }

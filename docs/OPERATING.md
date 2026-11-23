@@ -1058,7 +1058,10 @@ Telegram), `/api/admin/metrics`, `/api/admin/sql` (the read-only query door, bel
 `/api/admin/cron` (the scheduled jobs, above), `/api/admin/played-match` (a match that was played with no
 match page, written as it was: `POST { startsAt, tz, durationMinutes?, venue?, teamA: [id or name, …],
 teamB: […], sets: [[a, b], …] }`; a name makes a new record, nothing is announced, and a second call
-with the same organiser and start writes nothing), `/api/admin/match-stats` (the numbers of a filmed match:
+with the same organiser and start writes nothing), `/api/admin/match-reel` (the reel of a filmed match is on the store, show it on the match page:
+`POST { code, host, token }`, `DELETE { code }`; the files are `{host}/r/{token}/tall.mp4` and `wide.mp4` on
+the reel host, the players of the match see the reel for 30 days, and the answer never repeats the
+token), `/api/admin/match-stats` (the numbers of a filmed match:
 `POST { code, stats: [{ player, partner?, kind, value, margin? }] }`, the answer says what was saved and
 what was refused and why; a heart rate is refused only for a player who switched off "Keep my heart rate").
 

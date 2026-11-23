@@ -1593,6 +1593,15 @@ Everything in this list is live. The README describes each in detail.
   the feedback line, and a person starts the reel. Proven in `tests/codes.test.ts` (a page name of
   four characters can never be a match code) and the browser suite viral. Not built yet: screens 3 to
   8, where a player chooses the video and the reel comes back with no person in the loop.
+- **The reel plays on the match page** (the owner, 23 November 2026: a player opened the filmed match and
+  found no reel). `match_reels` keeps where a match's reel is; the players and the organiser of the
+  match see the tall reel play in place, with "Save, for stories" and "Save, wide", for 30 days. The
+  files are on the reel host: a Modal web function over the store (`scripts/highlights/modal/serve.py`)
+  that answers a phone's requests for parts of the file, under a token that is the only key. Its daily
+  job deletes a reel after 30 days and a player's match video after 7. Today the operator writes the
+  row (`POST /api/admin/match-reel`). Proven in `tests/match-reel.test.ts` and the browser suite viral.
+  Not built yet: the player sends the video (an upload to the store, or a link), and the engine runs
+  with no person in the loop.
 
 ## The finish line
 
