@@ -832,8 +832,10 @@ Wall clock first, credits second. What actually moved it, measured:
   its dark block, and `tests/contrast.test.ts` keeps a list of the files that may: the gate said so after
   ten minutes of the unit suite, and the whole gate ran twice. The tests that read `src` hold the
   project's rules (fixed white, client messages, documents, page names) and answer in 22 seconds:
-  `pnpm exec vitest run $(grep -ln readdirSync tests/*.test.ts)`. Run that line after the typecheck,
-  then start the gate.
+  `pnpm exec vitest run $(grep -lE "readdirSync|readFileSync" tests/*.test.ts)` (51 files, 95 seconds). Run that line
+  after the typecheck, then start the gate. The first version of the line had `readdirSync` alone, and
+  `tests/client-messages.test.ts` walks the tree through its own helper: a new client component with
+  `errors.${errorLine(...)}` failed the gate after ten minutes for the second time in one day.
 - **A browser check waits for the thing it reads, not for a line beside it.** The formats suite
   clicked "Show me in rankings", waited for "You appear in rankings", and read the table. That line
   comes from the button's own state; the table's new row comes with the page refresh, one round trip
