@@ -11,8 +11,8 @@ import { CEILINGS, STORE_BYTES_KEY, serviceBoard } from "@/lib/ops/services";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 /**
- * The owner, 23 November 2026: "Send Erik an alert when we get close to filling up 1 TB, by email ... and
- * with the Telegram bot". The reel host weighs its store once a day, the hourly job keeps the figure, the
+ * The owner, 23 November 2026: an alert when the store gets close to 1 TB, by email and with the
+ * Telegram bot. The reel host weighs its store once a day, the hourly job keeps the figure, the
  * service board holds it against the 1 TiB a month that costs nothing, and a red row goes out once a month
  * on Telegram and by email to the owner's own record.
  */
