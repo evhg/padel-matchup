@@ -185,7 +185,10 @@ try {
   await org.goto(`${BASE}/v/club-mex/ranking`);
   check("a player who left the rankings is not listed, and the others still are", (await org.locator("table").getByText("Kira").count()) === 0 && (await org.locator("table").getByText("Mex1").count()) === 1);
   await org.getByRole("button", { name: "Show me in rankings" }).click();
-  await org.getByText("You appear in rankings").waitFor({ timeout: 20000 });
+  // The line "You appear in rankings" comes from the button's own state, before the page has its new rows:
+  // wait for the row and for the button to stop saying "Working…" (CI read the table one refresh too early).
+  await org.locator("table").getByText("Kira").waitFor({ timeout: 20000 });
+  await org.getByRole("button", { name: "Remove me from rankings" }).waitFor({ timeout: 20000 });
   check("one tap on the ranking page puts her back", (await org.locator("table").getByText("Kira").count()) === 1 && (await org.getByRole("button", { name: "Remove me from rankings" }).count()) === 1);
   await shot(org, "f5-club-ranking");
   check("venue board links to the ranking", await org.goto(`${BASE}/v/club-mex`).then(async () => (await org.getByRole("link", { name: /Ranking/ }).count()) === 1));
