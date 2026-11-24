@@ -158,7 +158,7 @@ export async function readUploadTicket(ticket: unknown, publicHex: string, now: 
 /**
  * The key the fast reel's job reports with (`scripts/highlights/modal/fastreel.py`): Kicksmash signs it, in the
  * answer to the reel host when the clips are here, for the codes of that upload alone, for three days (a reel can
- * wait for the players' names overnight). `/api/admin/match-reel` takes it for those codes, and only for the progress
+ * wait for the players' names overnight). `/api/reel/report` takes it for those codes, and only for the progress
  * and the finished reel. So no operator secret of Kicksmash lives on the reel host.
  */
 export const REPORT_PREFIX = "kicksmash-reel-report.";

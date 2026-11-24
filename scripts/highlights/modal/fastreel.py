@@ -24,7 +24,7 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
   music: assets/kicksmash-music-<name>.m4a ("bounce": kicksmash-music-warm-bounce.m4a), "none": the match sound only.
   No file: all on, and "bounce".
 
-Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/admin/match-reel, Bearer <the request's "report">):
+Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report, Bearer <the request's "report">):
   clips    the joins and the flash-backs of the phone's cut found, a clean 4K file and a 1080p working copy
   players  people in 3 frames a second, who is who (who.py). Not sure: the job stops here (see "Names")
   follow   the players through each clip (track.py, one machine for each clip); the openings start beside it
@@ -364,9 +364,9 @@ class Report:
 
     def post(self, body):
         if self.req.get('dry'):
-            print('POST /api/admin/match-reel', json.dumps({k: v for k, v in body.items() if k != 'token'} | ({'token': '<new token>'} if 'token' in body else {})), flush=True); return 'dry'
+            print('POST /api/reel/report', json.dumps({k: v for k, v in body.items() if k != 'token'} | ({'token': '<new token>'} if 'token' in body else {})), flush=True); return 'dry'
         import urllib.request
-        req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + '/api/admin/match-reel', data=json.dumps(body).encode(), method='POST',
+        req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + '/api/reel/report', data=json.dumps(body).encode(), method='POST',
                                      headers={'Authorization': f"Bearer {self.req.get('report', '')}", 'Content-Type': 'application/json'})
         try:
             with urllib.request.urlopen(req, timeout=20) as r: return r.status

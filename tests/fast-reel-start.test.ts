@@ -100,9 +100,10 @@ describe("who is who", () => {
   });
 });
 
-describe("the reel route with a report key", () => {
+describe("the fast reel job's door", () => {
   it("takes the progress of the codes the key names, and nothing for another code or the delete", async () => {
-    const { POST, DELETE } = await import("@/app/api/admin/match-reel/route");
+    const { POST } = await import("@/app/api/reel/report/route");
+    const { DELETE } = await import("@/app/api/admin/match-reel/route");
     process.env.PASSPORT_PRIVATE_KEY = KEYS.priv;
     process.env.PASSPORT_PUBLIC_KEY = KEYS.pub;
     // The route reads the app's own database (no DATABASE_URL in the tests: a test database of its own).
