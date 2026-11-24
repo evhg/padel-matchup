@@ -1628,6 +1628,14 @@ Everything in this list is live. The README describes each in detail.
   (`scripts/reader-grants-stub.mjs`, held by `tests/readonly.test.ts`), the heaviest route went from
   8.03 to 7.8 MB, and the limit of a route is 8.0 MB again. Production was not touched: a migration is
   applied by its date, never by its text.
+- **The line-up of a played match, put right** (the owner, 24 November 2026). For a match, never a
+  tournament, until seven days after its end: the organiser and the players add a name or a past
+  player to an open place, change who holds a place, and remove a player or a hold. A person who is
+  signed in and not in the match taps "Add me" on an open place, or "I played instead of Bo". The
+  player who loses the place gets a notice that names who did it. Every change is a line in the
+  match's activity. The score's pairs offer held places, and a saved pair seats them. A change after
+  the organiser's score keeps the pairs and moves the levels again. The rows show the controls once
+  the match is over. Proven in `tests/lineup-fix.test.ts` and the browser suite core. No migration.
 
 ## The finish line
 
