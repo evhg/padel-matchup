@@ -10,7 +10,7 @@ import type { ReelStep } from "@/lib/domain/matchReel";
  * and progress bar instead"): the share done, the minutes left from the maker's own estimate, and what it
  * does now. The page asks again every 30 seconds, so the bar moves and the reel appears when it is ready.
  */
-export function ReelProgress({ pct, readyBy, step }: { pct: number; readyBy: string; step: ReelStep | null }) {
+export function ReelProgress({ pct, readyBy, step, waitingNames = false }: { pct: number; readyBy: string; step: ReelStep | null; /** The maker waits for a player to say who is who. */ waitingNames?: boolean }) {
   const t = useTranslations("reel");
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -30,7 +30,7 @@ export function ReelProgress({ pct, readyBy, step }: { pct: number; readyBy: str
         <div className="h-full rounded-full bg-accent-deep transition-[width] duration-700" style={{ width: `${Math.max(3, pct)}%` }} />
       </div>
       <p className="mt-2 text-sm font-semibold" data-testid="reel-working-left">
-        {minutes > 1 ? t("workingLeft", { min: minutes }) : t("workingAlmost")}
+        {waitingNames ? t("namesWaiting") : minutes > 1 ? t("workingLeft", { min: minutes }) : t("workingAlmost")}
       </p>
       {step && <p className="mt-0.5 text-sm text-muted">{t(`step.${step}`)}</p>}
       <p className="mt-2 text-xs text-faint">{t("workingBody")}</p>

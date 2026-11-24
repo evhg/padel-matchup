@@ -187,9 +187,26 @@ elif seg['kind'] == 'clip':
     says += [dict(x, img=Art(gfx.stat_bubble(x['value'], x.get('unit', ''), x.get('label'), seg['team'][x['who']]))) for x in seg.get('notes', [])]
     smooth = {}
     src = source(t0, t1)
+    # TALL_FOLLOW=1: the window of the vertical reel follows the players instead of standing in the middle. Each frame it
+    # takes the middle of the leftmost and the rightmost player (both fit in 1440 of 1920 columns when they are not
+    # too far apart), held where nobody is followed, smoothed over a second, and kept inside the picture.
+    follow = None
+    if TALL and tr and os.environ.get('TALL_FOLLOW') == '1':
+        nf = int(np.ceil((t1 - t0) * FPS)) + 2; want = []; last = W / 2
+        for q in range(nf):
+            xs = [((b[0] + b[2]) / 2, b[3] - b[1]) for b in track_at(tr, q + off).values()]
+            if xs:
+                lo, hi = min(x for x, _ in xs), max(x for x, _ in xs)
+                # far apart: the nearer (taller) players count more, they are the ones a viewer sees
+                last = (lo + hi) / 2 if hi - lo <= 1240 else sum(x * h for x, h in xs) / sum(h for _, h in xs)
+            want.append(last)
+        k = int(FPS); w = np.convolve(np.pad(np.array(want), k, mode='edge'), np.ones(2 * k + 1) / (2 * k + 1), mode='valid')
+        follow = np.clip(w - 720, 0, W - 1440)
+        print(f'tall window follows the players: VX {follow.min():.0f}-{follow.max():.0f}')
     enc = encoder(out, ['-ss', f'{t0:.3f}', '-t', f'{t1 - t0:.3f}', '-i', video])
     n = 0
     for t, img in pictures(src, t0, t1 - t0):
+        if follow is not None: VX = int(round(follow[min(n, len(follow) - 1)]))
         fr = stage(img.copy()); s = n / FPS
         put(fr, bugimg, *BUG)
         if tr and s < tag_until + 0.5:

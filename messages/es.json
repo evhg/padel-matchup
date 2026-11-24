@@ -3000,6 +3000,20 @@
     "musicNoneSub": "Pongo la mía en Instagram o TikTok",
     "hear": "Escuchar",
     "hearStop": "Parar",
-    "musicHelp": "Toca Escuchar para oír diez segundos. Puedes cambiarla hasta que empiece el vídeo."
+    "musicHelp": "Toca Escuchar para oír diez segundos. Puedes cambiarla hasta que empiece el vídeo.",
+    "namesTitle": "¿Quién es quién?",
+    "namesBody": "La app no está segura de todas las caras. Toca un nombre debajo de cada cara. Toca un nombre para cambiarlo.",
+    "namesNewFace": "Una cara nueva",
+    "namesLoading": "Cargando las caras…",
+    "namesLeft": "{count, plural, one {Nombra # jugador más} other {Nombra # jugadores más}}",
+    "namesGo": "Hacer el vídeo",
+    "namesTwice": "Un nombre está en dos caras. Cambia uno.",
+    "namesFailed": "Los nombres no se enviaron. Inténtalo de nuevo.",
+    "namesNext": "El vídeo sigue cuando estén los nombres. Cualquier jugador del partido puede responder.",
+    "namesSentTitle": "Gracias",
+    "namesSent": "El vídeo sigue ahora. Todos los jugadores reciben un mensaje cuando esté listo.",
+    "namesWaiting": "El vídeo espera a que un jugador del partido diga quién es quién.",
+    "shareTall": "Compartir el vídeo",
+    "shareWide": "Compartir la versión ancha"
   }
 }

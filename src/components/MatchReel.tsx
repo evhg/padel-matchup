@@ -16,8 +16,8 @@ export async function MatchReel({ reel, keptUntil, code }: { reel: ReelView; kep
       <video className="mx-auto mt-3 block aspect-[9/16] max-h-[70vh] max-w-full rounded-2xl bg-night" controls playsInline preload="metadata" src={`${reel.tall}#t=0.1`} data-testid="reel-video" />
       {/* Saved through the phone's share sheet ("Save Video"), never by leaving the page for the reel host. */}
       <div className="mt-3 flex flex-col gap-2">
-        <ReelSave url={reel.tall} name={`kicksmash-${code}-tall.mp4`} primary label={t("saveTall")} />
-        <ReelSave url={reel.wide} name={`kicksmash-${code}-wide.mp4`} primary={false} label={t("saveWide")} />
+        <ReelSave url={reel.tall} name={`kicksmash-${code}-tall.mp4`} primary label={t("saveTall")} shareLabel={t("shareTall")} />
+        <ReelSave url={reel.wide} name={`kicksmash-${code}-wide.mp4`} primary={false} label={t("saveWide")} shareLabel={t("shareWide")} />
       </div>
       <p className="mt-2 text-xs text-faint">{t("kept", { date: keptUntil })}</p>
     </section>

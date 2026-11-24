@@ -3000,6 +3000,20 @@
     "musicNoneSub": "I add my own in Instagram or TikTok",
     "hear": "Hear",
     "hearStop": "Stop",
-    "musicHelp": "Tap Hear for ten seconds of a track. You can change it until the reel starts."
+    "musicHelp": "Tap Hear for ten seconds of a track. You can change it until the reel starts.",
+    "namesTitle": "Who is who?",
+    "namesBody": "The app is not sure of every face. Tap a name under each face. Tap a name to change it.",
+    "namesNewFace": "A new face",
+    "namesLoading": "Getting the faces…",
+    "namesLeft": "{count, plural, one {Name # more player} other {Name # more players}}",
+    "namesGo": "Make the reel",
+    "namesTwice": "One name is on two faces. Change one of them.",
+    "namesFailed": "The names did not go through. Try again.",
+    "namesNext": "The reel goes on when the names are in. Any player of the match can answer.",
+    "namesSentTitle": "Thanks",
+    "namesSent": "The reel goes on now. All players get a message when it is ready.",
+    "namesWaiting": "The reel waits for a player of the match to say who is who.",
+    "shareTall": "Share the reel",
+    "shareWide": "Share the wide version"
   }
 }

@@ -6,6 +6,7 @@ import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { checkSets, MAX_SETS, setsComplete, setsOfSummary, tally, typedSets, type DraftSet } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
+import { NativeShare } from "./ShareSheet";
 import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
 import { SameTimeButton } from "./SameTimeButton";
 
@@ -212,6 +213,9 @@ export function ScorePanel({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={card.image} alt={card.alt} width={1200} height={630} className="block h-auto w-full" />
               </a>
+              {/* The card's own share, where the phone has a share sheet (the owner, 24 November 2026: "why can I not share
+                  the match card? use same icon as iOS"). Telegram, Copy and the rest stay under "Other ways to share". */}
+              <NativeShare url={card.shareUrl} text={card.shareText} image={card.image} className="btn-secondary btn-sm w-full" />
               {card.photo && <PhotoButton code={code} hasPhoto={card.photo.has} canRemove={card.photo.canRemove} />}
             </div>
           )}

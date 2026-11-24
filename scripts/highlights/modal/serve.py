@@ -22,13 +22,18 @@ GET  /u/<token>                   the parts that are here, so an upload that sto
 GET  /usage                       {"bytes", "at"}: what the whole store holds, measured by the daily job. No ticket.
 POST /u/<token>/finish            {"parts": n, "bytes": total, "name": "IMG_1234.MOV", "choices": {...}, "times": {...}}:
                                   every part is here; `assemble` joins them to uploads/<token>/video.<ext> and tells
-                                  Kicksmash. `times` (fast reel only): where each clip sits in the film and when the
-                                  film began, {"clips": [[start, end], ...], "recordedAt": ISO, "recordedFrom":
-                                  "film" | "file"}, kept in meta.json, so a watch's heart rate lines up with the clips.
+                                  Kicksmash. When Kicksmash answers with "fastReel" (the start request of fastreel.py),
+                                  the fast reel starts at once. `times` (fast reel only): where each clip sits in the
+                                  film and when the film began, {"clips": [[start, end], ...], "recordedAt": ISO,
+                                  "recordedFrom": "film" | "file"}, kept in meta.json, so a watch's heart rate lines up
+                                  with the clips.
 POST /u/<token>/choices           {"teams": [a, b], "crowd": bool, "numbers": bool, "music": "bounce"}: what the player
                                   chose for the reel (`src/lib/domain/reelChoices.ts`), at any time the ticket holds,
                                   also after the finish. Kept in uploads/<token>/choices.json; the reel's job reads it.
+POST /u/<token>/names             {"names": {"<track>": "<player id>"}}: the players' answer to reels/<token>/names.json
+                                  (fastreel.py stops there when it is not sure who is who); the fast reel goes on.
 GET  /music/<track>               ten seconds of a reel's track, for the page's "tap to hear". No ticket.
+GET  /r/<token>/names.json        (on `web`) what fastreel.py asks, beside face-<n>.jpg; never cached.
 
 The daily job deletes a reel 30 days after its newest file, and a player's match video 7 days after its newest file.
 It looks in reels/ and uploads/ only, never in a match folder.
@@ -43,7 +48,8 @@ import modal
 
 import os
 
-SETTINGS = {'REELS_APP': os.environ.get('REELS_APP', 'kicksmash-reels'), 'KICKSMASH_URL': os.environ.get('KICKSMASH_URL', 'https://kicksma.sh'), 'TICKET_PUBLIC_KEY': os.environ.get('TICKET_PUBLIC_KEY', '')}
+SETTINGS = {'REELS_APP': os.environ.get('REELS_APP', 'kicksmash-reels'), 'KICKSMASH_URL': os.environ.get('KICKSMASH_URL', 'https://kicksma.sh'), 'TICKET_PUBLIC_KEY': os.environ.get('TICKET_PUBLIC_KEY', ''),
+            'FASTREEL_APP': os.environ.get('FASTREEL_APP', 'kicksmash-fastreel')}
 app = modal.App(SETTINGS['REELS_APP'])
 vol = modal.Volume.from_name('kicksmash-matches')
 settings = modal.Secret.from_dict(SETTINGS)
@@ -75,6 +81,18 @@ def read_ticket(ticket, token, public_hex, now):
         return None
     if not isinstance(t, dict) or t.get('t') != token or not isinstance(t.get('exp'), (int, float)) or t['exp'] <= now: return None
     return {'max': min(int(t.get('max') or UPLOAD_MAX), UPLOAD_MAX)}
+
+
+def names_error(asked, got):
+    """Why an answer to names.json is refused, or None. Each asked track needs a player of the upload; no track that
+    was not shown; no player on two tracks, counting the tracks the machine was sure of. Pure."""
+    ids = {p['id'] for p in asked.get('players', [])}; tracks = {str(t['track']): t for t in asked.get('tracks', [])}
+    ask = {k for k, t in tracks.items() if t.get('ask')}
+    if not got or set(got) - set(tracks): return 'tracks'
+    if ask - set(got): return 'missing'
+    if set(got.values()) - ids: return 'player'
+    final = {k: got.get(k, t.get('guess')) for k, t in tracks.items()}
+    return 'twice' if len(set(final.values())) != len(final) else None
 
 
 def file_ext(name):
@@ -137,7 +155,7 @@ def web():
     from fastapi import FastAPI, Request
     from fastapi.responses import PlainTextResponse, Response, StreamingResponse
     api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    TOKEN, NAME = re.compile(r'[A-Za-z0-9_-]{22,64}'), re.compile(r'[a-z0-9-]{1,24}\.(mp4|jpg)')
+    TOKEN, NAME = re.compile(r'[A-Za-z0-9_-]{22,64}'), re.compile(r'[a-z0-9-]{1,24}\.(mp4|jpg)|names\.json')
 
     def parts(path, first, last):
         with open(path, 'rb') as f:
@@ -161,7 +179,9 @@ def web():
             if not os.path.isfile(path): return Response(status_code=404)
         size = os.path.getsize(path)
         # The reel's two films, and versus.jpg: a frame of the opening, the match card's background without a court photo.
-        head = {'Accept-Ranges': 'bytes', 'Content-Type': 'image/jpeg' if name.endswith('.jpg') else 'video/mp4', 'Cache-Control': 'private, max-age=3600', 'X-Robots-Tag': 'noindex'}
+        kind = 'image/jpeg' if name.endswith('.jpg') else 'application/json' if name.endswith('.json') else 'video/mp4'
+        # names.json changes when the players answer and the reel goes on: it is never kept by a browser
+        head = {'Accept-Ranges': 'bytes', 'Content-Type': kind, 'Cache-Control': 'no-store' if kind == 'application/json' else 'private, max-age=3600', 'X-Robots-Tag': 'noindex'}
         if dl: head['Content-Disposition'] = f'attachment; filename="kicksmash-{name}"'
         # The match page reads the file itself to hand it to the phone's share sheet ("Save Video"), so the
         # answer may be read by a page of another origin. The token in the path is the only key either way.
@@ -266,6 +286,25 @@ def up():
         os.replace(tmp, f'{d}/{index}')
         return {'ok': True, 'bytes': n}
 
+    @api.post('/u/{token}/names')
+    async def names(token: str, request: Request):
+        # The players' answer to reels/<token>/names.json (fastreel.py): {"names": {"<track>": "<player id>"}}. The ticket
+        # is one Kicksmash signs for this upload, as for its parts. Every asked track gets a player of the upload, no
+        # player twice; the fast reel then goes on (`resume` in fastreel.py).
+        if not allowed(request, token): return no
+        try:       # read from the store itself: names.json was written by another machine after this one started
+            data = b''
+            async for chunk in vol.read_file.aio(f'reels/{token}/names.json'): data += chunk
+            asked = json.loads(data)
+        except Exception:
+            return JSONResponse({'error': 'not_asked'}, status_code=404)
+        body = await request.json()
+        got = {str(k): str(v) for k, v in ((body or {}).get('names') or {}).items()} if isinstance(body, dict) else {}
+        err = names_error(asked, got)
+        if err: return JSONResponse({'error': err}, status_code=400)
+        await modal.Function.from_name(os.environ['FASTREEL_APP'], 'resume').spawn.aio(token, got)
+        return {'ok': True}
+
     @api.post('/u/{token}/finish')
     async def finish(token: str, request: Request):
         t = allowed(request, token)
@@ -303,14 +342,21 @@ def assemble(token: str):
     ticket = meta.pop('ticket', None)
     with open(f'{d}/meta.json', 'w') as f: json.dump({**meta, 'joined': True}, f)   # the ticket's work is done: it is not kept
     vol.commit()
-    told = None
+    told, start = None, None
     if ticket:
         req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + '/api/reel/upload', data=json.dumps({'ticket': ticket, 'bytes': meta['bytes']}).encode(), headers={'content-type': 'application/json'}, method='POST')
         try:
-            with urllib.request.urlopen(req, timeout=30) as r: told = r.status
+            with urllib.request.urlopen(req, timeout=30) as r:
+                told = r.status
+                try: start = (json.load(r) or {}).get('fastReel')
+                except ValueError: start = None
         except Exception as e: told = f'failed: {e}'
-    print('joined', meta['bytes'], 'bytes; Kicksmash answered', told)
-    return {'bytes': meta['bytes'], 'told': told}
+    # Kicksmash answers the clips of a fast reel with its start request (fastreel.py: the matches, the players, the
+    # music). The reel is made at once, with no person.
+    if isinstance(start, dict) and start.get('matches'):
+        modal.Function.from_name(os.environ['FASTREEL_APP'], 'make').spawn({**start, 'upload': token, 'dry': False})
+    print('joined', meta['bytes'], 'bytes; Kicksmash answered', told, '; fast reel started' if start else '')
+    return {'bytes': meta['bytes'], 'told': told, 'fast_reel': bool(start)}
 
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=0.25, memory=256, timeout=900, schedule=modal.Cron('17 20 * * *'))

@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { ShareIcon } from "./ShareIcon";
 
 type State = { at: "idle" } | { at: "getting"; pct: number | null } | { at: "ready"; file: File } | { at: "failed" };
 
@@ -15,11 +16,23 @@ type State = { at: "idle" } | { at: "getting"; pct: number | null } | { at: "rea
  *
  * A share needs a fresh tap, and fetching tens of megabytes takes longer than the tap stays fresh, so
  * when the sheet will not open after the fetch, the button says "Save video" and the next tap opens it.
+ *
+ * Where the phone can share a video, the button says so, with the iPhone's share mark (the owner, 24 November
+ * 2026: "why can I not share the reel? ... use same icon as iOS"): the sheet saves, posts and sends alike.
  */
-export function ReelSave({ url, name, primary, label }: { url: string; name: string; primary: boolean; label: string }) {
+export function ReelSave({ url, name, primary, label, shareLabel }: { url: string; name: string; primary: boolean; label: string; /** The words where the phone shares a video file. */ shareLabel: string }) {
   const t = useTranslations("reel");
   const [state, setState] = useState<State>({ at: "idle" });
+  const [sheet, setSheet] = useState(false);
   const busy = useRef(false);
+  useEffect(() => {
+    const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+    try {
+      setSheet(Boolean(typeof nav.share === "function" && nav.canShare?.({ files: [new File([""], "reel.mp4", { type: "video/mp4" })] })));
+    } catch {
+      setSheet(false);
+    }
+  }, []);
 
   const hand = async (file: File): Promise<boolean> => {
     const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
@@ -75,9 +88,11 @@ export function ReelSave({ url, name, primary, label }: { url: string; name: str
     }
   };
 
-  const text = state.at === "getting" ? (state.pct === null ? t("saveGetting") : t("saveGettingPct", { pct: state.pct })) : state.at === "ready" ? t("saveNow") : state.at === "failed" ? t("saveAgain") : label;
+  const idle = state.at === "idle";
+  const text = state.at === "getting" ? (state.pct === null ? t("saveGetting") : t("saveGettingPct", { pct: state.pct })) : state.at === "ready" ? t("saveNow") : state.at === "failed" ? t("saveAgain") : sheet ? shareLabel : label;
   return (
-    <button type="button" className={`${primary ? "btn-secondary" : "btn-ghost"} btn-sm w-full`} onClick={tap} disabled={state.at === "getting"} aria-live="polite" data-testid={primary ? "reel-save-tall" : "reel-save-wide"}>
+    <button type="button" className={`${primary ? "btn-secondary" : "btn-ghost"} btn-sm inline-flex w-full items-center justify-center gap-1.5`} onClick={tap} disabled={state.at === "getting"} aria-live="polite" data-testid={primary ? "reel-save-tall" : "reel-save-wide"}>
+      {sheet && (idle || state.at === "ready") && <ShareIcon />}
       {text}
     </button>
   );

@@ -22,8 +22,9 @@ C = dict(
     FAR_H0=75, FAR_H1=150,   # a standing player's height in pixels at the far glass, and at the net
 )
 _f = os.path.join(os.environ.get('HL_HOME') or '.', 'match', 'court.json')
+TILES = None                 # the detector's tiles for this camera place ("TILES" in court.json: [[x, y, w, h], ...])
 if os.path.exists(_f):
-    C.update({k: v for k, v in json.load(open(_f)).items() if k in C})
+    _j = json.load(open(_f)); C.update({k: v for k, v in _j.items() if k in C}); TILES = [tuple(t) for t in _j['TILES']] if _j.get('TILES') else None
 NET_FOOT_Y, FAR_TOP_Y, FAR_L0, FAR_R0 = C['NET_FOOT_Y'], C['FAR_TOP_Y'], C['FAR_L0'], C['FAR_R0']
 POST_L, POST_R, SIDE_SLOPE, WALL_OUT_Y, FAR_H0, FAR_H1 = C['POST_L'], C['POST_R'], C['SIDE_SLOPE'], C['WALL_OUT_Y'], C['FAR_H0'], C['FAR_H1']
 

@@ -1,11 +1,11 @@
 """People in one frame: detect, keep those on the court, read the pose and the clothing colours, name them."""
 import os, json, subprocess, numpy as np, cv2
 from det import Yolox, detect
-from court import zone
+from court import zone, TILES as _CT
 from rtmlib import RTMPose
 
 S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # models/, fonts/ and match/ live here
-TILES = [(480, 240, 640, 400), (800, 240, 640, 400), (0, 220, 640, 640), (1280, 220, 640, 640)]
+TILES = _CT or [(480, 240, 640, 400), (800, 240, 640, 400), (0, 220, 640, 640), (1280, 220, 640, 640)]
 POSE = f'{S}/models/rtmpose-m/20230831/rtmpose_onnx/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504/end2end.onnx'
 
 def med_lab(lab, poly):

@@ -73,17 +73,24 @@ export async function matchReel(db: Db, eventId: string, now = new Date()): Prom
 export const REEL_STEPS = ["clips", "players", "follow", "replays", "opening", "music", "finish"] as const;
 export type ReelStep = (typeof REEL_STEPS)[number];
 const stepOf = (v: unknown): ReelStep | null => ((REEL_STEPS as readonly string[]).includes(String(v)) ? (String(v) as ReelStep) : null);
-export type ReelProgress = { pct: number; readyBy: Date; step: ReelStep | null };
+/**
+ * `names`: the maker waits for the players to say who is who (`scripts/highlights/modal/fastreel.py`, "Names"). The
+ * question is `{host}/r/{upload}/names.json` with a face picture for each player it saw, and the answer goes to the
+ * reel host with a ticket of that upload (`namesTicketAction`).
+ */
+export type ReelProgress = { pct: number; readyBy: Date; step: ReelStep | null; names: { host: string; upload: string } | null };
 export type ReelState = { kind: "none"; failed: boolean } | { kind: "sending" } | { kind: "here"; source: string | null } | { kind: "working"; progress: ReelProgress } | { kind: "ready"; view: ReelView };
 
 /** The progress the reel's maker last reported (`setReelProgress`), from the row's note; null when there is none. */
 export function progressOf(note: string | null | undefined): ReelProgress | null {
   try {
-    const j = JSON.parse(note ?? "") as { pct?: unknown; readyBy?: unknown; step?: unknown };
+    const j = JSON.parse(note ?? "") as { pct?: unknown; readyBy?: unknown; step?: unknown; waiting?: unknown; host?: unknown; upload?: unknown };
     const pct = Number(j.pct);
     const readyBy = new Date(String(j.readyBy));
     if (!Number.isFinite(pct) || Number.isNaN(readyBy.getTime())) return null;
-    return { pct: Math.max(0, Math.min(100, Math.round(pct))), readyBy, step: stepOf(j.step) };
+    const host = reelHostOf(j.host);
+    const names = j.waiting === "names" && host && isReelToken(j.upload) ? { host, upload: j.upload } : null;
+    return { pct: Math.max(0, Math.min(100, Math.round(pct))), readyBy, step: stepOf(j.step), names };
   } catch {
     return null;
   }
@@ -148,6 +155,37 @@ export async function readUploadTicket(ticket: unknown, publicHex: string, now: 
   }
 }
 
+/**
+ * The key the fast reel's job reports with (`scripts/highlights/modal/fastreel.py`): Kicksmash signs it, in the
+ * answer to the reel host when the clips are here, for the codes of that upload alone, for three days (a reel can
+ * wait for the players' names overnight). `/api/reel/report` takes it for those codes, and only for the progress
+ * and the finished reel. So no operator secret of Kicksmash lives on the reel host.
+ */
+export const REPORT_PREFIX = "kicksmash-reel-report.";
+export const REPORT_TTL_MS = 72 * 3600 * 1000;
+const CODE = /^[A-Za-z0-9]{4}$/;
+
+export async function signReelReport(codes: readonly string[], keys: { priv: string; pub: string }, now: Date): Promise<string> {
+  const body = toBase64Url(enc.encode(JSON.stringify({ c: codes.filter((c) => CODE.test(c)), exp: Math.floor((now.getTime() + REPORT_TTL_MS) / 1000), p: "reel-report" })));
+  const sig = new Uint8Array(await globalThis.crypto.subtle.sign({ name: "Ed25519" }, await edKey(keys.pub, keys.priv, "sign"), enc.encode(REPORT_PREFIX + body)));
+  return `${body}.${toBase64Url(sig)}`;
+}
+
+/** The match codes a report key is for, or null: a key that is not ours, was changed, or is past its time. */
+export async function readReelReport(key: unknown, publicHex: string, now: Date): Promise<string[] | null> {
+  if (typeof key !== "string" || key.length > 2000) return null;
+  const [body, sig, more] = key.split(".");
+  if (!body || !sig || more !== undefined) return null;
+  try {
+    if (!(await globalThis.crypto.subtle.verify({ name: "Ed25519" }, await edKey(publicHex, null, "verify"), fromBase64Url(sig), enc.encode(REPORT_PREFIX + body)))) return null;
+    const t = JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as { c?: unknown; exp?: unknown; p?: unknown };
+    if (t.p !== "reel-report" || typeof t.exp !== "number" || t.exp * 1000 <= now.getTime() || !Array.isArray(t.c)) return null;
+    return t.c.filter((c): c is string => typeof c === "string" && CODE.test(c));
+  } catch {
+    return null;
+  }
+}
+
 /** Where a shared link to a film may be: the drives a phone puts a large video on. */
 const LINK_HOSTS = ["icloud.com", "drive.google.com", "docs.google.com", "photos.app.goo.gl", "photos.google.com", "dropbox.com", "1drv.ms", "onedrive.live.com"];
 
@@ -193,6 +231,20 @@ async function senderOf(db: Db, eventId: string, playerId: string, now: Date) {
   // A video that is here, and a reel that plays, are not written over by a second player.
   if (row && (row.status === "received" || row.status === "working" || reelView(row, now))) throw new DomainError("locked");
   return { ev, row };
+}
+
+/**
+ * "Who is who?": the upload whose names the reel's maker waits for, for a player of the match or its organiser. The
+ * upload comes from the row's own note, never from the browser, so a ticket is only ever for the question this
+ * match is asked. Null when the maker waits for nothing.
+ */
+export async function namesUpload(db: Db, input: { eventId: string; playerId: string }): Promise<{ upload: string; code: string } | null> {
+  const [ev] = await db.select({ id: events.id, code: events.code, creatorPlayerId: events.creatorPlayerId }).from(events).where(eq(events.id, input.eventId)).limit(1);
+  if (!ev) throw new DomainError("not_found");
+  if (ev.creatorPlayerId !== input.playerId && !(await isSeated(db, ev.id, input.playerId))) throw new DomainError("forbidden");
+  const [row] = await db.select({ status: matchReels.status, note: matchReels.note }).from(matchReels).where(eq(matchReels.eventId, ev.id)).limit(1);
+  const names = row?.status === "working" ? progressOf(row.note)?.names : null;
+  return names ? { upload: names.upload, code: ev.code } : null;
 }
 
 /**
@@ -276,16 +328,26 @@ export async function removeMatchReel(db: Db, code: string): Promise<boolean> {
  * to "working", and a reel that was shown goes off the page until the maker sends the new one. The engine
  * (or the session that runs it) calls this through `/api/admin/match-reel`; this announces nothing.
  */
-export async function setReelProgress(db: Db, input: { code: string; pct: unknown; minutesLeft: unknown; step?: unknown; now?: Date }): Promise<{ eventId: string }> {
+export async function setReelProgress(
+  db: Db,
+  input: { code: string; pct: unknown; minutesLeft: unknown; step?: unknown; /** "names": the maker waits for who is who. */ waiting?: unknown; host?: unknown; upload?: unknown; now?: Date },
+): Promise<{ eventId: string }> {
   const now = input.now ?? new Date();
   const pct = Number(input.pct);
   const minutes = Number(input.minutesLeft);
   if (!Number.isFinite(pct) || pct < 0 || pct > 100 || !Number.isFinite(minutes) || minutes < 0 || minutes > 24 * 60) throw new DomainError("invalid", "progress");
-  const [ev] = await db.select({ id: events.id }).from(events).where(and(eq(events.code, input.code), ne(events.status, "cancelled"))).limit(1);
+  const [ev] = await db.select({ id: events.id, startsAt: events.startsAt }).from(events).where(and(eq(events.code, input.code), ne(events.status, "cancelled"))).limit(1);
   if (!ev) throw new DomainError("not_found");
-  const note = JSON.stringify({ pct: Math.round(pct), readyBy: new Date(now.getTime() + minutes * 60_000).toISOString(), step: stepOf(input.step) });
+  const host = reelHostOf(input.host);
+  const waiting = input.waiting === "names" && host && isReelToken(input.upload) ? { waiting: "names", host, upload: input.upload } : {};
+  const note = JSON.stringify({ pct: Math.round(pct), readyBy: new Date(now.getTime() + minutes * 60_000).toISOString(), step: stepOf(input.step), ...waiting });
   const done = await db.update(matchReels).set({ status: "working" satisfies ReelStatus, note }).where(eq(matchReels.eventId, ev.id)).returning({ id: matchReels.id });
-  if (done.length === 0) throw new DomainError("not_found", "no_reel");
+  if (done.length > 0) return { eventId: ev.id };
+  // A second match in the same clips (the third set as a match of its own, 24 November 2026) has no row of its own
+  // until its reel is ready: the first progress gives it one, so its page shows the bar too. A match that has not
+  // started gets none: a reel cannot be of it.
+  if (ev.startsAt.getTime() > now.getTime()) throw new DomainError("not_found", "no_reel");
+  await db.insert(matchReels).values({ eventId: ev.id, status: "working", source: "clips", reelToken: newReelToken(), note }).onConflictDoUpdate({ target: matchReels.eventId, set: { status: "working", note } });
   return { eventId: ev.id };
 }
 

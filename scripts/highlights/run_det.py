@@ -6,13 +6,14 @@ Each line: {"f": "000123.jpg", "d": [[x0,y0,x1,y1,score], ...]}
 import sys, os, json, time, cv2
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from det import Yolox, detect
+from court import TILES as _CT
 
 S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # models/, fonts/ and match/ live here
 frames_dir, out = sys.argv[1], sys.argv[2]
 model = sys.argv[3] if len(sys.argv) > 3 else 'yolox_s'
 stride = int(sys.argv[4]) if len(sys.argv) > 4 else 1
 # Native-resolution tiles for a 1920x1080 picture: the far half of the court twice, and both sides.
-TILES = [(480, 240, 640, 400), (800, 240, 640, 400), (0, 220, 640, 640), (1280, 220, 640, 640)]
+TILES = _CT or [(480, 240, 640, 400), (800, 240, 640, 400), (0, 220, 640, 640), (1280, 220, 640, 640)]
 m = Yolox(f'{S}/models/{model}.onnx')
 done = set()
 if os.path.exists(out):

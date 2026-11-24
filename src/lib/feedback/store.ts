@@ -17,7 +17,8 @@ import { feedbackStrings } from "./strings";
  * person what happened on the channel they used. At most three messages per
  * note, so nobody is ever pestered.
  */
-export const FEEDBACK_LIMITS = { textMax: 2000, messageMax: 1500, messagesPerItem: 3, perPersonPerDay: 10 } as const;
+/** perPersonPerDay: the Telegram and Discord notes of one person in a day; 50 since the owner, 24 November 2026. */
+export const FEEDBACK_LIMITS = { textMax: 2000, messageMax: 1500, messagesPerItem: 3, perPersonPerDay: 50 } as const;
 /** The most a screenshot may weigh as base64: the phone sends a JPEG of 1280 px at most, about 300 KB. */
 export const FEEDBACK_SCREENSHOT_MAX = 600_000;
 const SCREENSHOT_URL = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;

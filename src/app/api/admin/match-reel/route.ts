@@ -1,12 +1,10 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { DomainError } from "@/lib/domain/errors";
-import { removeMatchReel, setMatchReel, setReelProgress } from "@/lib/domain/matchReel";
-import { notifyReelReady } from "@/lib/notify";
-import { events } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { removeMatchReel } from "@/lib/domain/matchReel";
+import { postMatchReel } from "@/lib/api/matchReelPost";
 
 export const dynamic = "force-dynamic";
 
@@ -18,38 +16,20 @@ export const dynamic = "force-dynamic";
  *          step is one of clips, players, follow, replays, opening, music, finish (REEL_STEPS).
  *          The reel's maker reports its progress: the page shows a bar and the minutes left, and a reel
  *          that was shown goes off the page until the next POST with host and token (`setReelProgress`).
+ *          While a fast reel's job waits for who is who, progress also carries "waiting": "names", "host" and
+ *          "upload", and the page asks the players.
  *   DELETE /api/admin/match-reel   { "code": "AB12" }
  *
- * The files are `{host}/r/{token}/tall.mp4` and `wide.mp4` (`scripts/highlights/modal/serve.py`). The
- * players of the match see the reel for 30 days. A second POST replaces the first. The first reel a
- * match ever shows goes to every player of the match, once (`notifyReelReady`, after the answer); a new
- * cut of it is not announced. The answer never repeats the token.
+ * The fast reel's job posts the same to `/api/reel/report` with its report key instead (`postMatchReel` is the
+ * one handler of both). The files are `{host}/r/{token}/tall.mp4` and `wide.mp4` (`scripts/highlights/modal/serve.py`).
+ * The players of the match see the reel for 30 days. A second POST replaces the first. The first reel a match ever
+ * shows goes to every player of the match, once (`notifyReelReady`, after the answer); a new cut of it is not
+ * announced. The answer never repeats the token.
  */
 export async function POST(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const code = typeof body?.code === "string" ? body.code : "";
-  try {
-    if (body?.progress && typeof body.progress === "object") {
-      const p = body.progress as Record<string, unknown>;
-      await setReelProgress(await getDb(), { code, pct: p.pct, minutesLeft: p.minutesLeft, step: p.step });
-      revalidatePath(`/${code}`);
-      return NextResponse.json({ ok: true, working: true });
-    }
-    const db = await getDb();
-    const res = await setMatchReel(db, { code, host: body?.host, token: body?.token });
-    revalidatePath(`/${code}`);
-    if (res.first)
-      after(async () => {
-        const [ev] = await db.select().from(events).where(eq(events.id, res.eventId)).limit(1);
-        if (ev) await notifyReelReady(db, ev).catch((e) => console.error("reel ready notice", e));
-      });
-    return NextResponse.json({ ok: true, replaced: res.replaced, told: res.first });
-  } catch (e) {
-    if (e instanceof DomainError && e.code === "not_found") return NextResponse.json({ error: "not_found", hint: "No match has this code, or it was cancelled." }, { status: 404 });
-    if (e instanceof DomainError) return NextResponse.json({ error: e.code, detail: e.message, hint: "code (a match that has started), host (https, no path), token (22 to 64 of A-Z a-z 0-9 _ -)" }, { status: 400 });
-    throw e;
-  }
+  return postMatchReel(body);
 }
 
 export async function DELETE(req: Request) {
