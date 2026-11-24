@@ -1,7 +1,7 @@
 """The fast reel, with no person: a player's clips in, a reel of the eighth reel's kind out, on the match page.
 
 deploy: modal deploy fastreel.py           (the reel host `serve.py` starts it; see "Start" below)
-test:   FASTREEL_SECRET= modal run fastreel.py --request req.json --dry      (writes under the request's "out" folder,
+test:   modal run fastreel.py --request req.json --dry      (writes under the request's "out" folder,
         prints each progress line instead of posting it, and posts nothing to Kicksmash)
 
 Start. `assemble` in serve.py joins a player's upload and tells Kicksmash (POST /api/reel/upload). When Kicksmash's
@@ -24,7 +24,7 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
   music: assets/kicksmash-music-<name>.m4a ("bounce": kicksmash-music-warm-bounce.m4a), "none": the match sound only.
   No file: all on, and "bounce".
 
-Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/admin/match-reel, Bearer CRON_SECRET):
+Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/admin/match-reel, Bearer <the request's "report">):
   clips    the joins and the flash-backs of the phone's cut found, a clean 4K file and a 1080p working copy
   players  people in 3 frames a second, who is who (who.py). Not sure: the job stops here (see "Names")
   follow   the players through each clip (track.py, one machine for each clip); the openings start beside it
@@ -45,9 +45,10 @@ names.json: {"v": 1, "state": "names", "upload": "<token>", "players": [{"id", "
              "tracks": [{"track": 0, "face": "face-0.jpg", "guess": "<player id>", "confidence": 0.55, "ask": true}],
              "answer": {"method": "POST", "path": "/u/<token>/names", "body": {"names": {"<track>": "<player id>"}}}}
 
-Secrets: `settings` (from_dict, as serve.py) holds KICKSMASH_URL and REELS_HOST. The posts need CRON_SECRET: the
-Modal secret named by FASTREEL_SECRET (default "kicksmash-cron", one key: CRON_SECRET). serve.py's own secret has
-no CRON_SECRET: it tells Kicksmash with the player's ticket instead.
+Secrets: none. `settings` (from_dict, as serve.py) holds KICKSMASH_URL and REELS_HOST. The posts carry the start
+request's "report": a key Kicksmash signs for the codes of this upload alone, for three days (`signReelReport` in
+src/lib/domain/matchReel.ts). It can report progress and the finished reel of those matches, and nothing else, so no
+operator secret of Kicksmash lives on Modal.
 
 Machines: processors only (no step was faster for a graphics card, measured 24 November 2026). Each function has its
 own processors, memory and time limit; see the decorators.
@@ -58,12 +59,11 @@ HERE = os.path.dirname(os.path.abspath(__file__)); HL = os.path.dirname(HERE)
 SETTINGS = {'KICKSMASH_URL': os.environ.get('KICKSMASH_URL', 'https://kicksma.sh'),
             'REELS_HOST': os.environ.get('REELS_HOST', 'https://evhg--kicksmash-reels-web.us-east.modal.run')}
 APP = os.environ.get('FASTREEL_APP', 'kicksmash-fastreel')
-OPERATOR = os.environ.get('FASTREEL_SECRET', 'kicksmash-cron')       # empty: no secret (a dry run only)
 app = modal.App(APP)
 vol = modal.Volume.from_name('kicksmash-matches')
 # Always two secrets, so a machine of the job sees the same list as the side that started it (Modal matches them by
 # place): the operator's, or an empty one for a dry run.
-SECRETS = [modal.Secret.from_dict(SETTINGS), modal.Secret.from_name(OPERATOR) if OPERATOR else modal.Secret.from_dict({})]
+SECRETS = [modal.Secret.from_dict(SETTINGS)]
 
 PY = ['numpy==2.4.6', 'onnxruntime==1.32.0', 'scikit-learn==1.9.1', 'opencv-python-headless==5.0.0.93', 'rtmlib==0.0.16', 'scipy==1.17.1',
       'pillow==13.0.0', 'tqdm==4.70.1', 'soundfile==0.14.0', 'rembg==2.0.87', 'kokoro-onnx==0.6.1']
@@ -367,7 +367,7 @@ class Report:
             print('POST /api/admin/match-reel', json.dumps({k: v for k, v in body.items() if k != 'token'} | ({'token': '<new token>'} if 'token' in body else {})), flush=True); return 'dry'
         import urllib.request
         req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + '/api/admin/match-reel', data=json.dumps(body).encode(), method='POST',
-                                     headers={'Authorization': f"Bearer {os.environ['CRON_SECRET']}", 'Content-Type': 'application/json'})
+                                     headers={'Authorization': f"Bearer {self.req.get('report', '')}", 'Content-Type': 'application/json'})
         try:
             with urllib.request.urlopen(req, timeout=20) as r: return r.status
         except Exception as e:      # a progress line that does not arrive stops nothing
@@ -378,7 +378,8 @@ class Report:
         left = 0 if waiting or pct >= 100 else max(1, round(max(self.total - spent, spent * (100 - pct) / max(pct, 1))))
         for m in self.req['matches']:
             progress = {'pct': pct, 'minutesLeft': left, 'step': step}
-            if waiting: progress['waiting'] = waiting
+            # the page reads names.json and the faces from the reel host while the job waits
+            if waiting: progress['waiting'] = waiting; progress['host'] = os.environ['REELS_HOST']
             self.post({'code': m['code'], 'progress': progress})
         print(f'STEP {step} {pct}% after {spent:.1f} min', flush=True)
 
@@ -492,6 +493,6 @@ def resume(upload: str, names: dict):
 def main(request: str, dry: bool = False):
     req = json.load(open(request))
     if dry: req['dry'] = True
-    if not req.get('dry') and not OPERATOR: raise SystemExit('a run that posts needs FASTREEL_SECRET')
+    if not req.get('dry') and not req.get('report'): raise SystemExit('a run that posts needs the request\'s "report" key')
     a = time.time(); res = make.remote(req)
     print(json.dumps(res, indent=1)); print(f'WALL {round(time.time() - a)} s')
