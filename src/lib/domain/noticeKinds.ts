@@ -73,6 +73,7 @@ export const SENDERS = {
   result: "results", // sendWaResults
   moment: "results", // notifyMilestones
   podium: "results", // tellPodium
+  reelReady: "results", // notifyReelReady: the reel of a filmed match is on its page, once (the owner, 24 November 2026)
   levelConfirmed: "results", // notifyLevelCheckDecided, yes
   levelDeclined: "results", // notifyLevelCheckDecided, no
   // Your crew.

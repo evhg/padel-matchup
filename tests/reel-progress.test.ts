@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, matchReels } from "@/db/schema";
+import { events, matchReels, notices } from "@/db/schema";
 import { progressOf, reelState, reelStateOf, reelStillAt, reelStillDataUrl, setMatchReel, setReelProgress } from "@/lib/domain/matchReel";
 import { recordPlayedMatch } from "@/lib/domain/playedMatch";
 import { cardVersion } from "@/lib/resultCard";
 import { getEventByCode } from "@/lib/domain/queries";
+import { notifyReelReady } from "@/lib/notify";
 import { createTestDb, makePlayer } from "./helpers/db";
 
 let db: Db;
@@ -79,5 +80,21 @@ describe("the card without a court photo", () => {
     expect(got).toBe(`data:image/jpeg;base64,${jpeg.toString("base64")}`);
     const none = await reelStillDataUrl(db, ev.id, NOW, (async () => new Response("no", { status: 404 })) as unknown as typeof fetch);
     expect(none).toBeNull();
+  });
+});
+
+describe("the players hear of the reel", () => {
+  it("once, all four, in the inbox; a new cut of the reel is not news", async () => {
+    const ev = await playedMatch("four");
+    const first = await setMatchReel(db, { code: ev.code, host: HOST, token: TOKEN, now: NOW });
+    expect(first.first).toBe(true);
+    expect(await notifyReelReady(db, ev)).toBe(4);
+    const told = await db.select().from(notices).where(eq(notices.eventId, ev.id));
+    expect(told.map((n) => n.key)).toEqual(Array(4).fill("noticeItem.reelReady"));
+    expect(new Set(told.map((n) => n.playerId)).size).toBe(4);
+
+    await setReelProgress(db, { code: ev.code, pct: 10, minutesLeft: 30, step: "clips", now: NOW });
+    expect((await setMatchReel(db, { code: ev.code, host: HOST, token: "t".repeat(32), now: NOW })).first).toBe(false);
+    expect((await setMatchReel(db, { code: ev.code, host: HOST, token: TOKEN, now: NOW })).first).toBe(false);
   });
 });

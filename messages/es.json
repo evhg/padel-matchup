@@ -852,7 +852,8 @@
     "bookIntroLink": "Kicksmash encontró el enlace de tu reserva, pero no el club, el día ni la hora. Complétalos en el formulario.",
     "playAgainIn": "Me apunto",
     "playAgainLine": "{spots}. Un toque abre la página del partido en el paso para unirte.",
-    "playAgainHeldLine": "Un toque abre la página del partido en el paso para unirte."
+    "playAgainHeldLine": "Un toque abre la página del partido en el paso para unirte.",
+    "watchReel": "Ver el vídeo"
   },
   "errors": {
     "not_found": "No lo hemos encontrado.",
@@ -1224,7 +1225,8 @@
     "requestWaitlisted": "El organizador dijo que sí. El partido está lleno, así que estás en la lista de espera: {day} {time}, {venue}",
     "passkeySaved": "{what, select, unknown {Un teléfono ya te recuerda.} other {Un teléfono ya te recuerda: {name}.}} ¿No fuiste tú? Quítalo en Mis partidos.",
     "removedBy": "{name} te quitó del partido del {day} a las {time}",
-    "replacedBy": "{name} ocupó tu plaza en el partido del {day} a las {time}"
+    "replacedBy": "{name} ocupó tu plaza en el partido del {day} a las {time}",
+    "reelReady": "El vídeo de tu partido del {day} a las {time} está listo"
   },
   "privacy": {
     "title": "Privacidad",
