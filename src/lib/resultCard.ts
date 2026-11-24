@@ -21,7 +21,8 @@ export const resultVersion = (detail: { scores: unknown; event: { status: string
  * The result's version plus the photo's, when there is one, and a mark when the organiser switched
  * banter off: the picture then drops its line, so it must not be served from a cache that has it.
  */
-export const cardVersion = (detail: Versioned, photo: { createdAt: Date } | null) => `${resultVersion(detail)}${photo ? `-p${photo.createdAt.getTime().toString(36)}` : ""}${detail.creator?.banter === false ? "-q" : ""}`;
+export const cardVersion = (detail: Versioned, photo: { createdAt: Date } | null, stillAt: Date | null = null) =>
+  `${resultVersion(detail)}${photo ? `-p${photo.createdAt.getTime().toString(36)}` : stillAt ? `-s${stillAt.getTime().toString(36)}` : ""}${detail.creator?.banter === false ? "-q" : ""}`;
 
 export const cardImagePath = (code: string, version: string) => `/${code}/card/opengraph-image?v=${version}`;
 

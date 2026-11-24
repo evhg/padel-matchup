@@ -10,6 +10,7 @@ kept in that match's row in Kicksmash and shown only to the players of the match
 `web`, for everybody who has the address of a reel:
 GET /r/<token>/<name>.mp4         plays. A phone asks for parts of the file (Range), so each answer is one part.
 GET /r/<token>/<name>.mp4?dl=1    saves: the same file with "Content-Disposition: attachment".
+GET /r/<token>/versus.jpg         a frame of the reel's opening: the match card's background when there is no court photo.
 GET /                             says "ok", for a check that the host is up.
 
 `up`, for a player with a ticket (the owner, 23 November 2026: "allow players to upload to our Modal rented server ...
@@ -96,7 +97,7 @@ def web():
     from fastapi import FastAPI, Request
     from fastapi.responses import PlainTextResponse, Response, StreamingResponse
     api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    TOKEN, NAME = re.compile(r'[A-Za-z0-9_-]{22,64}'), re.compile(r'[a-z0-9-]{1,24}\.mp4')
+    TOKEN, NAME = re.compile(r'[A-Za-z0-9_-]{22,64}'), re.compile(r'[a-z0-9-]{1,24}\.(mp4|jpg)')
 
     def parts(path, first, last):
         with open(path, 'rb') as f:
@@ -119,7 +120,8 @@ def web():
             except Exception: pass
             if not os.path.isfile(path): return Response(status_code=404)
         size = os.path.getsize(path)
-        head = {'Accept-Ranges': 'bytes', 'Content-Type': 'video/mp4', 'Cache-Control': 'private, max-age=3600', 'X-Robots-Tag': 'noindex'}
+        # The reel's two films, and versus.jpg: a frame of the opening, the match card's background without a court photo.
+        head = {'Accept-Ranges': 'bytes', 'Content-Type': 'image/jpeg' if name.endswith('.jpg') else 'video/mp4', 'Cache-Control': 'private, max-age=3600', 'X-Robots-Tag': 'noindex'}
         if dl: head['Content-Disposition'] = f'attachment; filename="kicksmash-{name}"'
         r = byte_range(request.headers.get('range'), size)
         if r == 'bad': return Response(status_code=416, headers={'Content-Range': f'bytes */{size}'})

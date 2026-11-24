@@ -46,12 +46,13 @@ import { LevelChip } from "@/components/LevelSelect";
 import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
+import { ReelProgress } from "@/components/ReelProgress";
 import { FilmCard } from "@/components/FilmCard";
 import { HighlightsLink } from "@/components/HighlightsLink";
 import { MatchNumbers } from "@/components/MatchNumbers";
 import { MatchReel } from "@/components/MatchReel";
 import { ReelSend } from "@/components/ReelSend";
-import { REEL_SEND_DAYS, reelState } from "@/lib/domain/matchReel";
+import { REEL_SEND_DAYS, reelState, reelStillAt } from "@/lib/domain/matchReel";
 import { matchNumbers } from "@/lib/domain/matchStats";
 import { SeriesDoor } from "@/components/SeriesBits";
 import { CopyButton, OtherShares } from "@/components/ShareSheet";
@@ -306,7 +307,7 @@ async function EventPage({ params, searchParams }: Props) {
   const resultCard = result
     ? {
         href: `/${code}/card`,
-        image: cardImagePath(code, cardVersion(detail, resultPhoto)),
+        image: cardImagePath(code, cardVersion(detail, resultPhoto, resultPhoto ? null : await reelStillAt(db, ev.id, now).catch(() => null))),
         alt: result.line,
         shareUrl: resultCardUrl,
         shareText: t("shareText.result", { line: result.line, day, url: resultCardUrl }),
@@ -1051,6 +1052,7 @@ async function EventPage({ params, searchParams }: Props) {
             A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
             for ever; a film that is here says so until the reel plays. */}
         {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} />}
+        {reel?.kind === "working" && <ReelProgress pct={reel.progress.pct} readyBy={reel.progress.readyBy.toISOString()} step={reel.progress.step} />}
         {reel?.kind === "here" && (
           <section className="card" data-testid="reel-here">
             <h2 className="text-lg font-extrabold">{t("reel.hereTitle")}</h2>
