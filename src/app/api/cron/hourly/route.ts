@@ -13,6 +13,7 @@ import {
 import { emitMatchEvent, processWebhookRetries } from "@/lib/api/webhooks";
 import { listenTick, type ListenSummary } from "@/lib/listen/tick";
 import { sweepProposals } from "@/lib/feedback/propose";
+import { wakeForOpenNotes } from "@/lib/feedback/desk";
 import { researchTick, type ResearchSummary } from "@/lib/research/desk";
 import { autoCreateClubEvents } from "@/lib/domain/clubWeek";
 import { refreshAllAvailability } from "@/lib/booking/availability";
@@ -71,7 +72,7 @@ async function handle(req: Request) {
   }
   const db = await getDb();
   const now = new Date();
-  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, weeklyTimes: null as null | { posted: number; none: number; booked: number; cut: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, hintsPruned: 0, noticeSummaries: 0, noticesPruned: 0, errors: [] as string[] };
+  const summary = { proposals: 0, transitionedToPast: 0, promotions: 0, inviteReminders: 0, scoreReminders: 0, scoreRemindersDeferred: 0, groupMatches: 0, clubMatches: 0, refills: 0, wantsAnswered: 0, wantsPruned: 0, coachWantsPruned: 0, webhookRetries: 0, listen: null as null | ListenSummary, research: null as null | ResearchSummary, clubs: null as null | { refreshed: number; errors: number }, courtOffers: 0, weeklyTimes: null as null | { posted: number; none: number; booked: number; cut: number }, backup: null as null | BackupResult, indexnow: null as null | IndexNowResult, uptimeRelayed: 0, outreachAsks: 0, errorsPruned: 0, lessonsDone: 0, calendars: 0, lowPackages: 0, wraps: 0, seriesEditions: 0, serviceAlerts: 0, disposed: 0, rateRowsPruned: 0, hintsPruned: 0, noticeSummaries: 0, noticesPruned: 0, noteDesk: null as null | string, errors: [] as string[] };
 
   try {
     summary.transitionedToPast = await transitionPastEvents(db, now);
@@ -358,6 +359,7 @@ async function handle(req: Request) {
   try {
     // The safety net for the proposals: a real note the owner never heard about (a failed send, a cut-off background task) goes out now.
     summary.proposals = await sweepProposals(db, now);
+    summary.noteDesk = await wakeForOpenNotes(db, fetch, now);
   } catch (e) {
     // Past the run's report, so it is reported on its own. Until 24 September 2026 a failed sweep
     // reached the response and never the error store.

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { DomainError } from "@/lib/domain/errors";
-import { fillPlayedMatch, recordPlayedMatch } from "@/lib/domain/playedMatch";
+import { fillPlayedMatch, recordPlayedMatch, renameUnclaimed } from "@/lib/domain/playedMatch";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,9 @@ export const dynamic = "force-dynamic";
  *
  * A match that has its page but no score: send its `code` with `teamA`, `teamB` and `sets` (no start,
  * zone or venue). The four take the places they have, the places held for them, or open places, and the
- * organiser, who must be one of the four by id, confirms the score (`fillPlayedMatch`).
+ * organiser, who must be one of the four by id, confirms the score (`fillPlayedMatch`). With
+ * `"replace": true` the score and the pairs of a match whose four are seated are saved again.
+ * `"rename": { "<player id>": "Name" }` first renames records nobody has signed in to (`renameUnclaimed`).
  */
 export async function POST(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -35,9 +37,14 @@ export async function POST(req: Request) {
   const sets = Array.isArray(body?.sets) ? body.sets.map((s) => (Array.isArray(s) ? { sideA: Number(s[0]), sideB: Number(s[1]) } : { sideA: Number.NaN, sideB: Number.NaN })) : [];
   try {
     if (typeof body?.code === "string") {
-      const filled = await fillPlayedMatch(await getDb(), { code: body.code, teamA: strings(body?.teamA), teamB: strings(body?.teamB), sets });
+      const db = await getDb();
+      const rename = body?.rename && typeof body.rename === "object" ? Object.entries(body.rename as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === "string") : [];
+      const renamed = [];
+      for (const [id, name] of rename) renamed.push(await renameUnclaimed(db, id, name));
+      const filled = await fillPlayedMatch(db, { code: body.code, teamA: strings(body?.teamA), teamB: strings(body?.teamB), sets, replace: body?.replace === true });
+      if (renamed.length) revalidatePath("/", "layout");
       if (!filled.existed) revalidatePath("/", "layout");
-      return NextResponse.json({ ok: true, ...filled });
+      return NextResponse.json({ ok: true, ...filled, renamed });
     }
     const res = await recordPlayedMatch(await getDb(), {
       startsAt,

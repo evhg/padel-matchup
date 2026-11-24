@@ -83,11 +83,24 @@ export function fallbackAck(note: Pick<Note, "text" | "name" | "locale" | "canRe
 
 export const notFeedbackLine = (locale: string | null) => POOL[feedbackLocale(locale)].notFeedback;
 
+/**
+ * How the app is used today, in the words a player meets on the page, so a how-to question gets its
+ * answer at once (the owner, 24 November 2026: a player asked "which video format?" and was told "I'll
+ * let you know if anything gets built"). Every line here must be true of the app as it ships: change it
+ * in the same pull request as the screen it describes.
+ */
+export const HELP_FACTS = `How things work today:
+- The reel: after a match, any player opens the match page and sends the match video under "Make the reel". Full reel: the whole video goes up; it gives the best moments, the score in the corner and the player numbers on My stats. Fast reel: the phone finds the moments by sound and only the clips go up; no score and no numbers. Keep the video exactly as the phone recorded it: every format works, the iPhone .mov too; never convert or export it. On an iPhone tap "Choose File" (the Files app), not "Photo Library": the library converts the whole video first, which is very slow for a match. A shared link from iCloud, Google Drive, Dropbox or OneDrive also works: the drive uploads the whole video first, which can take an hour for a match, and Photos shows no time meanwhile. All players of the match see the reel on the match page; it is kept 30 days.
+- The score: after the start, any player of the match enters it under "Score" on the match page; every box needs a number. The organiser's save confirms it, and the players can still correct a confirmed score for 24 hours.
+- Notes: "Tell us what should change" at the bottom of every page, or a message to the Kicksmash Telegram bot.`;
+
 const SYSTEM = `You write the instant reply to a note someone just sent to Kicksmash (https://kicksma.sh), an open-source padel match-up app, on behalf of Claude, the assistant that builds and runs it. A human owner is not in this loop. ${PRODUCT_FACTS}
 First decide what the note is:
 - "feedback": an idea, a bug, a wish, a complaint about how something works, a question about a feature. Anything a maker could act on.
 - "not_feedback": an insult, a joke with nothing to act on, a greeting, a test message, spam, or words without a request.
-Then write the reply, in the language named as locale (en, ru or es), plain text, one to two sentences, under 220 characters, no emoji, no links except kicksma.sh pages, no markdown.
+${HELP_FACTS}
+Then write the reply, in the language named as locale (en, ru or es), plain text, one to two sentences, under 220 characters, no emoji, no links except kicksma.sh pages, no markdown. Write as a friendly person who runs the app: warm, direct, plain words, no stock phrases ("fair point", "noted", "appreciated", "word for word").
+When the note asks how to do something and the facts above answer it, the reply IS the answer: up to three short sentences, under 400 characters, with the exact button or menu names from the facts. No thanks line, and no "I'll let you know if anything gets built". Never guess beyond the facts: when they do not answer the question, say plainly that you do not know that yet and that the note is read.
 For feedback: thank the person by their first name when one is given, reflect the specific thing they asked in a few of your own words so they know it was read, and say you will let them know if anything from it gets built. When the note says "reply channel: none", nothing can ever be sent to this person: say instead that anything built from it shows up in Kicksmash. When the source is web and the reply channel is telegram or email, never say "here": the page is not where they hear it; say you will let them know there. Never promise an answer, a day or a date. Vary structure and wording; never a template. No promises about what will be built.
 For not_feedback: no thanks and no lecture; one calm, friendly sentence saying you can only act on what should change in the product, and inviting that in a sentence.
 You may be told the last reply this person was sent. Never reuse its wording or its shape: if it opened with thanks and closed with "I'll let you know", this one does neither. A person who has already been told you read every note does not need telling again.
@@ -100,7 +113,7 @@ const tidy = (s: string) =>
     .replace(/\s+/g, " ")
     .replace(/https?:\/\/(?!kicksma\.sh)[^\s)]+/gi, "")
     .trim()
-    .slice(0, 300);
+    .slice(0, 450);
 
 export function parseAck(text: string): { kind: Ack["kind"]; reply: string } | null {
   const m = text.match(/\{[\s\S]*\}/);
@@ -129,7 +142,7 @@ export async function composeAck(db: Db, note: Note, fetchImpl: typeof fetch = f
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: anthropicHeaders(process.env.ANTHROPIC_API_KEY!),
-      body: JSON.stringify({ model: listenModel(), max_tokens: 220, system: SYSTEM, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: listenModel(), max_tokens: 350, system: SYSTEM, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(12_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; error?: { message?: string } } | null;

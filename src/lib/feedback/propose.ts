@@ -1,3 +1,4 @@
+import { wakeNoteDesk } from "./desk";
 import { and, eq, gt, isNull, like, lt, notLike, or, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { feedback, type Feedback } from "@/db/schema";
@@ -108,6 +109,8 @@ export async function proposeToOwner(db: Db, id: string, fetchImpl: typeof fetch
   const [note] = await db.select().from(feedback).where(eq(feedback.id, id)).limit(1);
   if (!note) return "skipped:not_found";
   if (note.status !== "acknowledged") return "skipped:not_feedback";
+  // The note desk (`desk.ts`) wakes on every real note, before the proposal and whatever it decides.
+  if (!note.assessment?.startsWith("propos")) await wakeNoteDesk(db, `a new note (${note.source})`, fetchImpl, now).catch(() => undefined);
   if (note.assessment?.startsWith("propos")) return "skipped:already";
   const owner = ownerTelegramId();
   if (!owner || !telegramEnabled()) return "skipped:no_owner";

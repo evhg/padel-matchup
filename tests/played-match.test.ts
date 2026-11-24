@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots } from "@/db/schema";
 import { recordMatchStats, matchNumbers } from "@/lib/domain/matchStats";
-import { fillPlayedMatch, recordPlayedMatch } from "@/lib/domain/playedMatch";
+import { fillPlayedMatch, recordPlayedMatch, renameUnclaimed } from "@/lib/domain/playedMatch";
 import { createEvent } from "@/lib/domain/events";
 import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
@@ -115,5 +115,23 @@ describe("a match with its page but no score", () => {
     await expect(fillPlayedMatch(db, { code: ev.code, teamA: ["A two", "B two"], teamB: ["C two", held.id], sets, now: NOW })).rejects.toMatchObject({ code: "invalid", message: "organiser" });
     await expect(fillPlayedMatch(db, { code: "nope", teamA: ["A two", "B two"], teamB: [org.id, held.id], sets, now: NOW })).rejects.toMatchObject({ code: "not_found" });
     expect(await rows()).toEqual(start);
+  });
+
+  it("saves the score and the pairs again with replace, and renames only a record nobody signed in to", async () => {
+    const { org, held, ev } = await setUp("three");
+    const first = await fillPlayedMatch(db, { code: ev.code, teamA: ["Named three", "Fourth three"], teamB: [org.id, held.id], sets: [{ sideA: 6, sideB: 3 }, { sideA: 6, sideB: 2 }, { sideA: 5, sideB: 4 }], now: NOW });
+    const [named, fourth] = first.players;
+    // The third set had other pairs: it leaves this match, and the score is saved again with two sets.
+    const again = await fillPlayedMatch(db, { code: ev.code, teamA: [named.id, fourth.id], teamB: [org.id, held.id], sets: [{ sideA: 6, sideB: 3 }, { sideA: 6, sideB: 2 }], replace: true, now: NOW });
+    expect(again.existed).toBe(false);
+    expect(again.players.every((p) => !p.created)).toBe(true);
+    const sets = await db.select().from(scores).where(eq(scores.eventId, ev.id)).orderBy(asc(scores.setNumber));
+    expect(sets.map((s) => [s.sideA, s.sideB])).toEqual([[6, 3], [6, 2]]);
+    // Replace never seats anybody new, and never drops a seated player.
+    await expect(fillPlayedMatch(db, { code: ev.code, teamA: [named.id, "Stranger three"], teamB: [org.id, held.id], sets, replace: true, now: NOW })).rejects.toMatchObject({ code: "invalid", message: "lineup" });
+
+    expect(await renameUnclaimed(db, fourth.id, "Fifth three")).toEqual({ id: fourth.id, name: "Fifth three" });
+    await db.update(players).set({ email: "held-three@example.com" }).where(eq(players.id, held.id));
+    await expect(renameUnclaimed(db, held.id, "Other")).rejects.toMatchObject({ code: "invalid", message: "claimed" });
   });
 });
