@@ -1023,6 +1023,9 @@ async function EventPage({ params, searchParams }: Props) {
           </a>
         )}
 
+        {/* The reel leads once it is ready: after a filmed match it is what everybody opens the page for (a player,
+            24 November 2026: "the reel once ready should probably move up"). */}
+        {reel?.kind === "ready" && <MatchReel reel={reel.view} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
         {showScore && (
           <ScorePanel
             code={code}
@@ -1044,7 +1047,6 @@ async function EventPage({ params, searchParams }: Props) {
             correction={correction}
           />
         )}
-        {reel?.kind === "ready" && <MatchReel reel={reel.view} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
         {/* "Did you film it? Make the reel." (the owner's screen 3, and both ways to send the film, 23 November 2026).
             A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
             for ever; a film that is here says so until the reel plays. */}
@@ -1057,13 +1059,19 @@ async function EventPage({ params, searchParams }: Props) {
         )}
         {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their
             faces). From the start, as the rule allows (src/lib/domain/highlights.ts), like the court photo. */}
-        {started && !cancelled && canPlayAgain && (
+        {/* A YouTube link is asked for only where the reel host is off: with it, the reel lives on our own store (a
+            player, 24 November 2026: "remove the asking for a youtube link since we'll host on Modal"). A link
+            somebody already added still shows. */}
+        {started && !cancelled && canPlayAgain && (ev.highlightsUrl || !reelUploadUrl()) && (
           <div className="px-1">
             <HighlightsLink code={code} url={ev.highlightsUrl ?? null} canRemove={Boolean(me && ev.highlightsUrl && (ev.highlightsBy === me.id || ev.creatorPlayerId === me.id))} />
           </div>
         )}
         <MatchNumbers rows={numbers} />
-        {over && otherShares}
+        {/* After the match the bar's "Share the result" is the share for a player and the organiser; a second share
+            block under it was "out of place and confusing" (a player, 24 November 2026). A visitor, whom the bar
+            does not serve, keeps it. */}
+        {over && !sharesInBar && otherShares}
         {seriesRow && (
           <p className="px-1 text-sm text-muted" data-testid="series-line">
             <Link href={`/s/${seriesRow.slug}`} prefetch={false} className="link font-semibold">

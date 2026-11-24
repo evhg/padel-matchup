@@ -255,14 +255,12 @@ try {
   await shot(p, "v3-card-photo");
   // "Play again" all the way through: another day picked in the control, the next game made on it.
   await p.goto(`${BASE}/${mcode}`);
-  // "Watch highlights" (the owner, 10 November 2026): YouTube's share text, pasted, becomes one link.
-  await p.getByTestId("highlights-add").locator("summary").click();
-  await p.getByTestId("highlights-input").fill("Our match https://youtu.be/dQw4w9WgXcQ?si=x1");
-  await p.getByTestId("highlights-save").click();
-  await p.getByTestId("highlights-watch").waitFor({ timeout: 20000 });
+  // "Watch highlights" asked for a YouTube link (the owner, 10 November 2026). With the reel host on, the reel lives on
+  // our own store, so the page no longer asks (a player, 24 November 2026). This match is still on (two hours booked),
+  // so its share fold stays: after the end, the fold shows to a visitor only (checked on PAST above).
   check(
-    "a pasted YouTube share text becomes Watch highlights, and the person who added it can take it down",
-    (await p.getByTestId("highlights-watch").getAttribute("href")) === "https://www.youtube.com/watch?v=dQw4w9WgXcQ" && (await p.getByTestId("highlights-remove").count()) === 1,
+    "with the reel host on, a match that has started asks for no YouTube link",
+    (await p.getByTestId("highlights-add").count()) === 0,
   );
   // The numbers of a filmed match (the owner, 22 November 2026): the reel engine sends them through the
   // operator's door, and the match page, My matches and "My stats" show them. A heart rate waits for the
@@ -464,7 +462,7 @@ try {
   await stranger.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
   check("a visitor who is not in the match is not asked to film it", (await stranger.getByTestId("film-card").count()) === 0);
   await p.goto(`${BASE}/${mcode}`);
-  check("a match that has started no longer asks", (await p.getByTestId("film-card").count()) === 0 && (await p.getByTestId("highlights-watch").count()) + (await p.getByTestId("highlights-add").count()) === 1);
+  check("a match that has started no longer asks to film it, nor for a YouTube link while the reel host is on", (await p.getByTestId("film-card").count()) === 0 && (await p.getByTestId("highlights-add").count()) === 0);
   await f.getByTestId("film-how").click();
   await f.waitForURL((u) => u.pathname === "/film" && u.searchParams.get("m") === fcode, { timeout: 20000 });
   await f.getByRole("heading", { name: "Four things, then play" }).waitFor({ timeout: 20000 });
