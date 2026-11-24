@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { feedback, players, type Feedback } from "@/db/schema";
+import { feedback, feedbackScreenshots, players, type Feedback } from "@/db/schema";
 import { isCoachActor } from "@/lib/domain/coaching";
 import { bumpMetric } from "@/lib/domain/metrics";
 import { dc } from "@/lib/discord/api";
@@ -18,6 +18,34 @@ import { feedbackStrings } from "./strings";
  * note, so nobody is ever pestered.
  */
 export const FEEDBACK_LIMITS = { textMax: 2000, messageMax: 1500, messagesPerItem: 3, perPersonPerDay: 10 } as const;
+/** The most a screenshot may weigh as base64: the phone sends a JPEG of 1280 px at most, about 300 KB. */
+export const FEEDBACK_SCREENSHOT_MAX = 600_000;
+const SCREENSHOT_URL = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
+
+/** A screenshot as the form sends it (a data URL), checked: a picture type, base64, and not too large. Null when it is not one. */
+export function cleanScreenshot(raw: unknown): { mime: string; dataBase64: string } | null {
+  if (typeof raw !== "string" || raw.length > FEEDBACK_SCREENSHOT_MAX + 40) return null;
+  const m = SCREENSHOT_URL.exec(raw);
+  if (!m || m[2].length > FEEDBACK_SCREENSHOT_MAX || m[2].length < 100) return null;
+  return { mime: m[1], dataBase64: m[2] };
+}
+
+export async function saveScreenshot(db: Db, feedbackId: string, shot: { mime: string; dataBase64: string }): Promise<void> {
+  await db.insert(feedbackScreenshots).values({ feedbackId, mime: shot.mime, dataBase64: shot.dataBase64 }).onConflictDoNothing();
+}
+
+export async function screenshotOf(db: Db, feedbackId: string): Promise<{ mime: string; bytes: Buffer } | null> {
+  const [row] = await db.select().from(feedbackScreenshots).where(eq(feedbackScreenshots.feedbackId, feedbackId)).limit(1);
+  return row ? { mime: row.mime, bytes: Buffer.from(row.dataBase64, "base64") } : null;
+}
+
+/** Which of these notes have a screenshot: one indexed read for a whole list. */
+export async function withScreenshots(db: Db, ids: readonly string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.select({ id: feedbackScreenshots.feedbackId }).from(feedbackScreenshots).where(inArray(feedbackScreenshots.feedbackId, [...ids]));
+  return new Set(rows.map((r) => r.id));
+}
+
 export const FEEDBACK_STATUSES = ["new", "acknowledged", "asked", "planned", "shipped", "declined"] as const;
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 

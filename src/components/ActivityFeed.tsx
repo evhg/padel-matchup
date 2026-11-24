@@ -23,8 +23,17 @@ export async function ActivityFeed({ items, viewerId }: { items: ActivityWithAct
       }
       case "invited":
         return you ? t("activity.addedByYou", { name: target }) : t("activity.addedBy", { name: target, actor });
-      case "removed":
+      // The line-up of a played match put right (src/lib/domain/lineupFix.ts): "Cy took Bo's place", "Ana changed Bo to Cy".
+      case "removed": {
+        const to = typeof a.meta?.to === "string" ? a.meta.to : null;
+        if (a.meta?.replace) return you ? t("activity.replacedByYou", { name: target }) : t("activity.replacedBy", { name: target, actor });
+        if (to) return you ? t("activity.changedByYou", { name: target, to }) : t("activity.changedBy", { name: target, to, actor });
         return you ? t("activity.removedByYou", { name: target }) : t("activity.removedBy", { name: target, actor });
+      }
+      // A held place the score's pairs named (src/lib/domain/heldPlay.ts): "Ana put Cy in the pairs".
+      case "confirmed":
+        if (a.meta?.played) return you ? t("activity.playedByYou", { name: target }) : t("activity.playedBy", { name: target, actor });
+        return you ? t("activity.you.confirmed") : t("activity.confirmed", { name: actor });
       case "declined":
         return t("activity.declined", { name: target || actor });
       case "approved":

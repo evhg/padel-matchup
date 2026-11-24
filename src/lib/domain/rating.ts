@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, scores, slots, type LevelLogEntry } from "@/db/schema";
+import { events, players, scores, slots, type Event, type LevelLogEntry } from "@/db/schema";
 import { clampLevel, LEVEL_LOG_CAP, matchDeltas, normalizeLevel, pairTournamentDeltas, tournamentDeltas, VERIFIED_TOLERANCE } from "./levels";
 import { tally } from "./scores";
 import { lockEvent } from "./slots";
@@ -27,26 +27,33 @@ export type LevelChange = { playerId: string; from: number; to: number };
  * 06:14 and ignored the web entry at 06:16. Only the match's own players are read (bounded, rule 12).
  */
 export async function settleEventLevels(db: Db, eventId: string, now = new Date()): Promise<{ applied: boolean; changes: LevelChange[] }> {
-  await db.transaction(async (tx) => {
-    const ev = await lockEvent(tx, eventId);
-    if (ev.type !== "match" || !ev.levelsAppliedAt) return;
-    const seated = await tx
-      .select({ id: players.id, level: players.level, log: players.levelLog })
-      .from(slots)
-      .innerJoin(players, eq(players.id, slots.playerId))
-      .where(eq(slots.eventId, ev.id));
-    for (const p of seated) {
-      const mine = (p.log ?? []).filter((e) => e.code === ev.code && e.type === "match");
-      if (!mine.length || p.level == null) continue;
-      const moved = mine.reduce((sum, e) => sum + (e.to - e.from), 0);
-      await tx
-        .update(players)
-        .set({ level: clampLevel(p.level - moved), levelLog: (p.log ?? []).filter((e) => !(e.code === ev.code && e.type === "match")) })
-        .where(eq(players.id, p.id));
-    }
-    await tx.update(events).set({ levelsAppliedAt: null }).where(eq(events.id, ev.id));
-  });
+  await db.transaction(async (tx) => revertEventLevels(tx, await lockEvent(tx, eventId)));
   return applyEventLevels(db, eventId, now);
+}
+
+/**
+ * Takes back what this match moved, from the level log of every record with a row in it, and marks the
+ * levels as not applied. A change of the line-up after the score (`lineupFix.ts`) calls it before a
+ * player goes, so the player who goes gets back what this match moved; `applyEventLevels` then moves the
+ * new line-up. The lock is the caller's.
+ */
+export async function revertEventLevels(tx: Db, ev: Event): Promise<void> {
+  if (ev.type !== "match" || !ev.levelsAppliedAt) return;
+  const seated = await tx
+    .select({ id: players.id, level: players.level, log: players.levelLog })
+    .from(slots)
+    .innerJoin(players, eq(players.id, slots.playerId))
+    .where(eq(slots.eventId, ev.id));
+  for (const p of seated) {
+    const mine = (p.log ?? []).filter((e) => e.code === ev.code && e.type === "match");
+    if (!mine.length || p.level == null) continue;
+    const moved = mine.reduce((sum, e) => sum + (e.to - e.from), 0);
+    await tx
+      .update(players)
+      .set({ level: clampLevel(p.level - moved), levelLog: (p.log ?? []).filter((e) => !(e.code === ev.code && e.type === "match")) })
+      .where(eq(players.id, p.id));
+  }
+  await tx.update(events).set({ levelsAppliedAt: null }).where(eq(events.id, ev.id));
 }
 
 /**

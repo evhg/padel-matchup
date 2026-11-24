@@ -836,6 +836,25 @@ export async function notifyRemoved(db: Db, ev: Event, removedPlayerId: string |
   await sendEmail({ to: p.email, subject: c.t(opts.absent ? "email.cancelled.absentSubject" : "email.cancelled.subject", c.vars), html, text, ics: { method: "CANCEL", content: icsFor(ev, c, { name: p.displayName, email: p.email }, "CANCEL") } });
 }
 
+/**
+ * The line-up of a played match put right (`lineupFix.ts`, the owner's decision of 24 November 2026: "The
+ * player removed from a game will simply get a notification which says who removed him or her"). The
+ * player who lost a place they had taken hears who did it, once, on the first channel they gave
+ * (`tell()`: Telegram, else email, else push), with one button to the public match page. The inbox keeps
+ * it, and the kind switch and quiet hours hold (`removedBy`, `replacedBy`: match changes). No calendar
+ * file goes with it: the match is under way or over.
+ */
+export async function notifyRemovedBy(db: Db, ev: Event, out: { playerId: string; how: "removed" | "replaced" }, actorName: string): Promise<void> {
+  const player = await getPlayer(db, out.playerId);
+  if (!player) return;
+  const sender = out.how === "replaced" ? "replacedBy" : "removedBy";
+  const params: NoticeParams = { ...matchParams(ev), name: actorName };
+  const { t, locale } = await translatorFor(player.locale);
+  const text = t(`noticeItem.${sender}`, noticeVars(params, locale, t("event.venueTbd")));
+  const open = t("email.openMatch");
+  await tell(db, player, text, { inline_keyboard: [[{ text: open, url: eventUrl(baseUrl(), ev.code) }]] }, { notice: { sender, eventId: ev.id, params, startsAt: ev.startsAt, tz: ev.tz }, label: open }).catch(() => undefined);
+}
+
 /** Immediate invite to a reserved spot when the organizer entered an email. */
 export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !slot.invitedEmail || !slot.inviteCode) return false;

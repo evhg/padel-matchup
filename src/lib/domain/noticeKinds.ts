@@ -38,6 +38,9 @@ export const SENDERS = {
   lineupOpen: "changes", // notifyLineupChange
   movedUp: "changes", // notifyPromotion: off the waiting list
   removed: "changes", // notifyRemoved: the organiser took them out, or the night went on without them
+  // The line-up of a played match put right (the owner, 24 November 2026): the player who lost the place hears who did it.
+  removedBy: "changes", // notifyRemovedBy: somebody took them out of the line-up, or changed their place to another person
+  replacedBy: "changes", // notifyRemovedBy: somebody took their place for themselves ("I played instead")
   // A phone now signs the player in (a passkey saved, DECIDING rule 39): not a match's change, but the kind
   // that is on by default, and the settings line `notices.line_changes` names the new phone. A session chose
   // it on 28 October 2026. It keeps this one gate, so "Match changes" switches it off on the own channel and

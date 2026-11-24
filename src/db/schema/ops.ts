@@ -209,6 +209,21 @@ export const feedback = pgTable(
 
 export type Feedback = typeof feedback.$inferSelect;
 
+/**
+ * A screenshot with a note (the owner, 24 November 2026, on a player's note "I cant send you a screenshot
+ * to help give feedback. Add this"). In a table of its own, as a match photo is, so that no list of notes
+ * (the operator's list, /built) carries the pictures. The phone makes it small before it sends it: a JPEG
+ * of 1280 px at most on the long side, about 300 KB (`FEEDBACK_SCREENSHOT_MAX` in src/lib/feedback/store.ts).
+ */
+export const feedbackScreenshots = pgTable("feedback_screenshots", {
+  feedbackId: uuid("feedback_id")
+    .primaryKey()
+    .references(() => feedback.id, { onDelete: "cascade" }),
+  mime: text("mime").notNull(),
+  dataBase64: text("data_base64").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // ---------------------------------------------------------------------------
 // Coaching: a coach's book. Lessons, students, packages with expiry, blocks,
 // waitlists and managers. Round nine. No money moves here: the coach's own

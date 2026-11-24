@@ -91,11 +91,24 @@ try {
   // The note keeps the screen the player was on. A link inside the app loads no new document, so the browser's
   // referrer still names the page the visit began on: the door sends the screen itself, and the row proves it.
   await fd.locator("#feedback-text").fill("e2e: the list of clubs should show the price of a court");
+  // A screenshot goes with the note: the phone makes it a small JPEG first, and the form shows it.
+  await fd.getByTestId("feedback-shot-file").setInputFiles(new URL("../public/built/score-every-box.png", import.meta.url).pathname);
+  await fd.getByTestId("feedback-shot").waitFor({ timeout: 20000 });
+  check("a screenshot added to a note shows as a small picture with Remove", (await fd.getByTestId("feedback-shot").locator("img").count()) === 1 && (await fd.getByTestId("feedback-shot").getByRole("button", { name: "Remove" }).count()) === 1);
   await fd.getByRole("button", { name: "Send", exact: true }).click();
   await fd.getByText(/Got it, thank you|That one I cannot act on/).waitFor({ timeout: 30000 });
   const keptQ = "select context from feedback where text like 'e2e: the list of clubs%' order by created_at desc limit 1";
   const kept = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(keptQ)}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
   check("a note from the footer's door keeps the screen it came from", kept.rows?.[0]?.context === "/clubs", JSON.stringify(kept).slice(0, 200));
+  const listed = await fetch(`${BASE}/api/admin/feedback?status=new,acknowledged,declined`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+  const shotPath = (listed.feedback ?? []).find((f) => f.text?.startsWith("e2e: the list of clubs"))?.screenshot ?? "";
+  const shotRes = shotPath ? await fetch(`${BASE}${shotPath}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }) : null;
+  const shotBytes = shotRes ? Buffer.from(await shotRes.arrayBuffer()) : Buffer.alloc(0);
+  check(
+    "the note keeps its screenshot: the operator's list points to it, and it comes back as a JPEG under the size limit",
+    shotRes?.status === 200 && shotRes.headers.get("content-type") === "image/jpeg" && shotBytes[0] === 0xff && shotBytes[1] === 0xd8 && shotBytes.length < 450_000,
+    JSON.stringify({ shotPath, status: shotRes?.status, type: shotRes?.headers.get("content-type"), bytes: shotBytes.length }),
+  );
   // The thank-you for a note that became a change can carry a picture of the change (the owner, 19 November 2026).
   // The desk refuses a picture that is not on the site, because the link goes into a message to a person. With
   // one that is there, the page of what players built shows it, and it loads: public/built/ is served beside
@@ -1196,6 +1209,48 @@ try {
   await c.reload();
   check("Eli auto-promoted after Dana left", (await c.getByText("You're in").count()) > 0);
   await shot(c, "14-promoted");
+
+  // ---- The line-up of a played match put right (the owner's decision of 24 November 2026) ----
+  // A match that ended an hour and a half ago, made too late for its organiser to be seated: Dana adds
+  // herself and a name, Jordi (not in it) played instead of that name, and the activity says who did each.
+  {
+    await a.goto(BASE + "/new");
+    const played = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const pp = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(played);
+    const pg = (t) => pp.find((p) => p.type === t).value;
+    await a.locator("input[type=date]").fill(`${pg("year")}-${pg("month")}-${pg("day")}`);
+    await a.locator("input[type=time]").fill(`${pg("hour")}:${pg("minute")}`);
+    await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+    await a.getByRole("button", { name: "Create & get the link" }).click();
+    await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+    const fixCode = a.url().split("/").slice(-2)[0];
+    await a.goto(`${BASE}/${fixCode}`);
+    const counts = async (p) => ({ help: await p.getByTestId("fix-help").count(), add: await p.getByTestId("fix-add").count(), take: await p.getByTestId("fix-take").count(), change: await p.getByTestId("fix-change").count(), replace: await p.getByTestId("fix-replace").count() });
+    const before = await counts(a);
+    check("a match that is over offers its organiser the line-up: Add me and Add a name on each open place, and the days it stays open", JSON.stringify(before) === JSON.stringify({ help: 1, add: 4, take: 4, change: 0, replace: 0 }) && (await a.getByText("Tap to reserve for someone").count()) === 0, JSON.stringify(before));
+    await a.getByTestId("fix-take").first().click();
+    await a.locator("main li", { hasText: "Dana" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+    await a.getByTestId("fix-add").first().click();
+    await a.getByTestId("fix-name").fill("Cyrus");
+    await a.getByTestId("fix-save").click();
+    // The activity's lines are list items too: the row is the one with Change on it.
+    const cyrusRow = a.locator("main li", { hasText: "Cyrus" }).filter({ has: a.getByTestId("fix-change") });
+    const cyrusShown = await cyrusRow.waitFor({ timeout: 20000 }).then(() => true, () => false);
+    await shot(a, "14b-lineup-fix-organiser");
+    check("the name is in the match at once, with Change on its row, and no Add me for a seated organiser", cyrusShown && (await a.getByTestId("fix-take").count()) === 0 && (await a.getByText("You added Cyrus").count()) > 0);
+    await b.goto(`${BASE}/${fixCode}`);
+    const stranger = await counts(b);
+    check("Jordi, signed in and not in it, may add himself or say he played instead, and changes nobody else", JSON.stringify(stranger) === JSON.stringify({ help: 1, add: 0, take: 2, change: 0, replace: 2 }), JSON.stringify(stranger));
+    await shot(b, "14c-lineup-fix-stranger");
+    // The confirm ("You played instead of Cyrus?") is accepted by the page's dialog handler.
+    await b.locator("main li", { hasText: "Cyrus" }).getByTestId("fix-replace").click();
+    await b.locator("main li", { hasText: "Jordi" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+    const fixed = await b.request.get(`${BASE}/api/v1/matches/${fixCode}`).then((r) => r.json());
+    const lineup = (fixed.players ?? []).map((p) => `${p.name}:${p.status}`).sort();
+    check("Jordi played instead of Cyrus: Cyrus is out, Jordi and Dana are confirmed", JSON.stringify(lineup) === JSON.stringify(["Dana:confirmed", "Jordi:confirmed"]), JSON.stringify(lineup));
+    await a.reload();
+    check("the organiser reads who did it: \"Jordi took Cyrus's place\"", (await a.getByText("Jordi took Cyrus's place").count()) > 0);
+  }
 
   // ---- Cancel created event ----
   await a.goto(`${BASE}/${code}`);
