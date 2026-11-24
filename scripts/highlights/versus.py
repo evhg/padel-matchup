@@ -26,6 +26,8 @@ names = [MT['names'][str(i)] for i in range(4)]; team = [MT['team'][str(i)] for 
 A = sorted([k for k in range(4) if team[k] == 0], key=lambda k: names[k]); B = sorted([k for k in range(4) if team[k] == 1], key=lambda k: names[k])
 import teams; teams.fill(MT)
 title_a = ('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a']; title_b = ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']
+# "title_a" and "title_b" in match.json: the whole title of a team as the players say it ("The girls"), with no "Team"
+title_a, title_b = MT.get('title_a') or title_a, MT.get('title_b') or title_b
 # The scale. Every position and size in this file is a design number: it belongs to the 1920x1080 picture (the vertical
 # reel: 1080x1920). SCALE=K makes the output K times as large. Only this block knows K: px() (a design number -> pixels
 # of the output), dw() and dh() (the design size of a picture that is drawn K times as large), sheet() and ital() (a
@@ -234,6 +236,8 @@ for b in np.arange(0.30, T_GO - 0.1, 60 / 140):                      # a quiet p
 # the announcer
 lines = [(0.72, f"{' and '.join(names[k] for k in A) if not MT.get('team_a') else 'Team ' + MT['team_a']}!"), (T_VS - 0.02, 'Versus!'),
          (3.12, f"{' and '.join(names[k] for k in B) if not MT.get('team_b') else 'Team ' + MT['team_b']}!"), (T_GO - 0.02, 'Game on!')]
+if MT.get('title_a'): lines[0] = (0.72, MT['title_a'].replace('&', 'and') + '!')
+if MT.get('title_b'): lines[2] = (3.12, MT['title_b'].replace('&', 'and') + '!')
 # The voice. First choice: Kokoro (Apache 2.0, commercial use permitted), voice VOICE_NAME. Second: the piper test voice
 # (its data is for non-commercial use). Neither there, or VOICE=0: the opening has no speech.
 def speak_kokoro(text, td):

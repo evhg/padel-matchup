@@ -57,14 +57,23 @@ S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath
 os.makedirs(work, exist_ok=True); os.environ['COUNTER'] = '0'
 TALL = os.environ.get('TALL') == '1'
 gfx.reel_scale()
-TEAMS = [('Team ' + MT['team_a']) if MT.get('team_a') else MT['pair_a'], ('Team ' + MT['team_b']) if MT.get('team_b') else MT['pair_b']]
+def titles(mt): return [mt.get('title_a') or (('Team ' + mt['team_a']) if mt.get('team_a') else mt['pair_a']), mt.get('title_b') or (('Team ' + mt['team_b']) if mt.get('team_b') else mt['pair_b'])]
+TEAMS = titles(MT)
+# A point can name its own match file ("match": "match-2.json"): one video with two matches in it, where the pairs,
+# the team names and the score of the foot change. The ids of the players stay the same in both files.
+MTS = {}
+def match_of(c):
+    if not c.get('match'): return MT, TEAMS
+    if c['match'] not in MTS: m = teams.fill(json.load(open(c['match']))); MTS[c['match']] = (m, titles(m))
+    return MTS[c['match']]
 LEAD, HOLD = 1.5, 2.6                              # before the serve hit; after the moment the ball is dead
 ZMAX = 2.0                                         # a window is never narrower than half the picture
 segs = []
 
 
-def add(seg, name):
-    seg['venue'] = MT.get('venue') or ''; seg['foot'] = [TEAMS[0], TEAMS[1], MT['score']]
+def add(seg, name, mt=None):
+    mt, tt = mt or (MT, TEAMS)
+    seg['venue'] = mt.get('venue') or ''; seg['foot'] = [tt[0], tt[1], mt['score']]
     p = f'{work}/{len(segs):02d}-{name}.json'
     # a segment file is written again only when it changed: the renderer makes a segment again when its file is newer
     new = json.dumps(seg, indent=1)
@@ -106,6 +115,7 @@ if vs and os.path.exists(vs + '-wide.mp4') and os.path.exists(vs + '-tall.mp4'):
 for i, c in enumerate(P['points']):
     if c.get('file'):
         add({'kind': 'file', 'path': c['file'], 'path_tall': c.get('file_tall') or c['file']}, f'part{i}'); continue
+    mt, TEAMS_ = match_of(c); team = [mt['team'][str(k)] for k in range(4)]; M_ = (mt, TEAMS_)
     trf = c['track']; t0 = round(c['start_t'] if c.get('start_t') else c['serve_t'] - LEAD, 2); dead = c.get('dead_t') or c['last_t'] + 1.0
     t1 = max(c.get('end') or 0, dead + HOLD)
     if c.get('next_serve_t'): t1 = min(t1, c['next_serve_t'] - 1.0)
@@ -116,15 +126,15 @@ for i, c in enumerate(P['points']):
     if BADGE_LEFT: seg['score_box'] = True        # render.py keeps a number over a head out of that corner
     if P.get('meter'):
         seg['meter'] = {'label': P['meter']['label'], 'points': [q for q in P['meter']['series'] if t0 - 90 <= q[0] <= t1 + 90]}
-    if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS[c['won']], 'at': dead, 'what': c.get('won_what')}
+    if c.get('won') in (0, 1): seg['won'] = {'team': c['won'], 'name': TEAMS_[c['won']], 'at': dead, 'what': c.get('won_what')}
     if c.get('says'): seg['says'] = c['says']
     if c.get('notes'): seg['notes'] = c['notes']
     seg['dead'] = dead
-    add(seg, f'point{i}')
+    add(seg, f'point{i}', M_)
     r = c.get('react')
     if r:   # the player who reacts, close and slow, with the name and no "Replay" badge: it is the same moment, seen closer
         add({'kind': 'replay', 't0': round(r['t0'], 2), 't1': round(r['t1'], 2), 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']],
-             'focus_team': team[r['who']], 'zoom': r.get('zoom') or zoom_for(trf, r['who'], r['t0'], r['t1']), 'title': r.get('title') or names[r['who']], 'sub': None, 'badge': None}, f'react{i}')
+             'focus_team': team[r['who']], 'zoom': r.get('zoom') or zoom_for(trf, r['who'], r['t0'], r['t1']), 'title': r.get('title') or names[r['who']], 'sub': None, 'badge': None}, f'react{i}', M_)
     r = c.get('replay')
     if r:
         a, b = round(r['t'] - r.get('before', 1.7), 2), round(r['t'] + r.get('after', 1.0), 2)
@@ -133,7 +143,7 @@ for i, c in enumerate(P['points']):
         else:
             a = round(max(a, first), 2)
             add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']], 'focus_team': team[r['who']],
-                 'zoom': r.get('zoom') or zoom_for(trf, r['who'], a, b), 'title': r.get('title') or names[r['who']], 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}')
+                 'zoom': r.get('zoom') or zoom_for(trf, r['who'], a, b), 'title': r.get('title') or names[r['who']], 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}', M_)
 
 def picture(path, img):
     """Write a card's picture only when it is not the same as the file: a part is built again when its picture is newer."""

@@ -37,6 +37,7 @@ def embed(img, boxes):
     return np.concatenate([o[:, 0], o[:, 1:].mean(1)], 1)
 
 def proba(col, ok, emb, zn):
+    if zn not in K['models']: return None          # no classifier for this end (who.py: the far pair is not split): no vote
     c = col.copy(); c[3:6] *= ok[1]; c[6:9] *= ok[2]
     x = np.concatenate([c * 4.0, ok[1:3], K['pca'].transform(emb[None])[0] * 0.6])[None]
     sc, clf = K['models'][zn]
@@ -177,6 +178,8 @@ for ti, tr in enumerate(tracklets):
     zn = max(set(tr['zn']), key=tr['zn'].count)
     if sure:
         allowed = pairs[npair] if zn == 'near' else pairs[1 - npair]
+        # who.py says when it could not tell the far partners apart ("far_named": false): no far name, not a guess
+        if zn == 'far' and M.get('far_named') is False: allowed = ()
         for k in range(4):
             if k not in allowed: score[ti, k] = -1e9
 span = [(tr['s'][0][0], tr['s'][-1][0]) for tr in tracklets]

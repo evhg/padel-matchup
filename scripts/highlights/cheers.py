@@ -72,6 +72,7 @@ for i, c in enumerate(P):
     if n <= 0: continue
     # down by 12 dB while a voice is heard, with a slope of 100 ms so the step is not heard
     g = np.repeat(np.where(voice[start:start + n // FR + 1], 10 ** (-12 / 20), 1.0), FR)[:n]
+    g = np.pad(g, (0, n - len(g)), mode='edge')      # a cheer that runs to the end of the reel: the voice list ends a frame early
     g = np.convolve(g, np.ones(SR // 10) / (SR // 10), 'same'); g[:SR // 50] *= np.linspace(0, 1, SR // 50)
     x[s0:s0 + n] += (ch[:n] * g)[:, None]
     report.append((i, c['cheer'], round(last, 2), round(start / 20, 2), round(start / 20 - last, 2), round(n / SR, 1), int(voice[start:start + n // FR].sum()) * 50))
