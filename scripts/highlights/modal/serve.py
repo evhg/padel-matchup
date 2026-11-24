@@ -123,6 +123,10 @@ def web():
         # The reel's two films, and versus.jpg: a frame of the opening, the match card's background without a court photo.
         head = {'Accept-Ranges': 'bytes', 'Content-Type': 'image/jpeg' if name.endswith('.jpg') else 'video/mp4', 'Cache-Control': 'private, max-age=3600', 'X-Robots-Tag': 'noindex'}
         if dl: head['Content-Disposition'] = f'attachment; filename="kicksmash-{name}"'
+        # The match page reads the file itself to hand it to the phone's share sheet ("Save Video"), so the
+        # answer may be read by a page of another origin. The token in the path is the only key either way.
+        head['Access-Control-Allow-Origin'] = '*'
+        head['Access-Control-Expose-Headers'] = 'Content-Length, Content-Range'
         r = byte_range(request.headers.get('range'), size)
         if r == 'bad': return Response(status_code=416, headers={'Content-Range': f'bytes */{size}'})
         first, last = r or (0, size - 1); status = 206 if r else 200

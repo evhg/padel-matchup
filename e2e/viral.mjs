@@ -318,7 +318,7 @@ try {
   );
   check("that door is the operator's too", (await fetch(`${BASE}/api/admin/played-match`, { method: "POST", body: "{}" })).status === 401);
   // The reel of a filmed match (the owner, 23 November 2026): the operator says where it is, and the players
-  // of the match see it play on the match page with its two save links. A visitor does not see it.
+  // of the match see it play on the match page with its two save buttons. A visitor does not see it.
   const reelToken = "e2e_reel_token_of_22_chars";
   const reelSet = await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken }) }).then(async (x) => ({ status: x.status, body: await x.json().catch(() => null) }));
   await p.goto(`${BASE}/${mcode}`);
@@ -329,12 +329,24 @@ try {
     reelSet.status === 200 &&
       !JSON.stringify(reelSet.body).includes(reelToken) &&
       (await p.getByTestId("reel-video").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4#t=0.1` &&
-      (await p.getByTestId("reel-save-tall").getAttribute("href")) === `https://reels.example.test/r/${reelToken}/tall.mp4?dl=1` &&
-      (await p.getByTestId("reel-save-wide").getAttribute("href")) === `https://reels.example.test/r/${reelToken}/wide.mp4?dl=1` &&
+      (await p.getByTestId("reel-save-tall").count()) === 1 &&
+      (await p.getByTestId("reel-save-wide").count()) === 1 &&
       Boolean(reelBox) && reelBox.x >= 0 && reelBox.x + reelBox.width <= 390,
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
+  // Saving stays on the match page (the owner, 24 November 2026: a link opened the reel host's own page on an
+  // iPhone, "clunky and buggy"). The button gets the file itself and hands it to the phone's share sheet; a
+  // browser that cannot share a file, as here, saves it as a download named after the match.
+  await p.route(`https://reels.example.test/r/${reelToken}/tall.mp4`, (route) => route.fulfill({ status: 200, headers: { "content-type": "video/mp4", "access-control-allow-origin": "*" }, body: Buffer.from("not really a film, but bytes to save") }));
+  const urlBefore = p.url();
+  const [saved] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), p.getByTestId("reel-save-tall").click()]);
+  check(
+    "Save, for stories keeps the player on the match page and saves the file named after the match",
+    saved.suggestedFilename() === `kicksmash-${mcode}-tall.mp4` && p.url() === urlBefore,
+    JSON.stringify({ name: saved.suggestedFilename(), url: p.url() }),
+  );
+  await p.unroute(`https://reels.example.test/r/${reelToken}/tall.mp4`);
   const reelVisitor = await newPage();
   await reelVisitor.goto(`${BASE}/${mcode}`);
   await reelVisitor.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });

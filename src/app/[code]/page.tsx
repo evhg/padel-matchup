@@ -1026,7 +1026,7 @@ async function EventPage({ params, searchParams }: Props) {
 
         {/* The reel leads once it is ready: after a filmed match it is what everybody opens the page for (a player,
             24 November 2026: "the reel once ready should probably move up"). */}
-        {reel?.kind === "ready" && <MatchReel reel={reel.view} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
+        {reel?.kind === "ready" && <MatchReel reel={reel.view} code={code} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
         {showScore && (
           <ScorePanel
             code={code}
