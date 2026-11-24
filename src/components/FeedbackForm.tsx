@@ -1,8 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { sendFeedbackAction } from "@/actions/feedback";
+
+/**
+ * A picture the phone makes small before it goes: a JPEG of 1280 px at most on its long side, at a
+ * quality that keeps it under the server's limit (`FEEDBACK_SCREENSHOT_MAX`). Null when the browser
+ * cannot read the file as a picture.
+ */
+async function shrink(file: File): Promise<string | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const q of [0.8, 0.65, 0.5, 0.35]) {
+      const url = canvas.toDataURL("image/jpeg", q);
+      if (url.length < 590_000) return url;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /** One textarea, one optional email, one button. The thank-you says the note was read; a channel is named only when one exists, and nothing is promised. */
 export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none" }) {
@@ -11,6 +34,10 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
   const [contact, setContact] = useState("");
   const [state, setState] = useState<{ kind: "idle" } | { kind: "sent"; channel: string; reply: string; feedback: boolean } | { kind: "error"; msg: string }>({ kind: "idle" });
   const [pending, start] = useTransition();
+  // A screenshot with the note (a player, 24 November 2026: "I cant send you a screenshot to help give feedback").
+  const [shot, setShot] = useState<string | null>(null);
+  const [shotBad, setShotBad] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   if (state.kind === "sent") {
     return (
       <section className="card">
@@ -36,7 +63,7 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
       // On the page of its own, the form names the screen the person came from: the footer sends it as `from`, and a visit that began elsewhere on the site has it as the referrer.
       const from = here === "/feedback" ? new URLSearchParams(location.search).get("from") : null;
       const context = from?.startsWith("/") ? from : here === "/feedback" && typeof document !== "undefined" && document.referrer ? new URL(document.referrer).pathname : here || "/feedback";
-      const r = await sendFeedbackAction(text, contact, context);
+      const r = await sendFeedbackAction(text, contact, context, shot);
       if (r.ok) {
         setState({ kind: "sent", channel: r.data.channel, reply: r.data.reply, feedback: r.data.kind === "feedback" });
         if (r.data.kind !== "feedback") setText("");
@@ -62,6 +89,37 @@ export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none"
           <p className="mt-1 text-xs text-faint">{t("contactHelp")}</p>
         </>
       )}
+      <input
+        ref={picker}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="feedback-shot-file"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          const url = await shrink(f);
+          setShotBad(!url);
+          setShot(url);
+        }}
+      />
+      {shot ? (
+        <div className="mt-3 flex items-center gap-3 border-t border-line pt-3" data-testid="feedback-shot">
+          {/* eslint-disable-next-line @next/next/no-img-element -- a local data URL, never a remote picture */}
+          <img src={shot} alt={t("shotAlt")} className="h-16 w-auto rounded-lg" />
+          <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => setShot(null)}>
+            {t("shotRemove")}
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="btn-secondary btn-sm mt-3" disabled={pending} onClick={() => picker.current?.click()} data-testid="feedback-shot-add">
+          {t("shotAdd")}
+        </button>
+      )}
+      {shotBad && <p className="mt-1 text-xs text-danger">{t("shotBad")}</p>}
       <div className="mt-4 flex items-center gap-3">
         <button type="button" className="btn-primary" disabled={pending} onClick={submit}>
           {t("send")}

@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { after } from "next/server";
 import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
-import { FeedbackError, createFeedback, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore, webReplyRoute } from "@/lib/feedback/store";
+import { FeedbackError, cleanScreenshot, createFeedback, saveScreenshot, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore, webReplyRoute } from "@/lib/feedback/store";
 import { screenOf } from "@/lib/feedback/screen";
 import { subscriptionsFor } from "@/lib/domain/push";
 import { pushEnabled } from "@/lib/push";
@@ -16,7 +16,7 @@ import { ActionFailure, assertRate, clientKey, runA, type ActionResult } from ".
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 /** The web form: stored and thanked; the person hears back where a reply can reach them if something gets built. */
-export async function sendFeedbackAction(text: string, contact: string, context: string): Promise<ActionResult<{ id: string; channel: "telegram" | "email" | "none"; kind: "feedback" | "not_feedback"; reply: string }>> {
+export async function sendFeedbackAction(text: string, contact: string, context: string, screenshot?: string | null): Promise<ActionResult<{ id: string; channel: "telegram" | "email" | "none"; kind: "feedback" | "not_feedback"; reply: string }>> {
   return runA(async () => {
     const db = await getDb();
     const clean = text.trim();
@@ -40,6 +40,9 @@ export async function sendFeedbackAction(text: string, contact: string, context:
       if (e instanceof FeedbackError) throw new ActionFailure("generic");
       throw e;
     });
+    // A screenshot that is not a small picture is dropped, not refused: the words still arrive.
+    const shot = cleanScreenshot(screenshot);
+    if (shot) await saveScreenshot(db, row.id, shot);
     // The way back the daily answer takes (`deliverToPerson`): a phone with notifications on is read only when nothing else reaches the player (one bounded read).
     const hasPush = Boolean(player && !player.telegramId && !email && !player.email && pushEnabled() && (await subscriptionsFor(db, [player.id])).length > 0);
     const { replyVia, canReply } = webReplyRoute(player ? { telegramId: player.telegramId, email: player.email } : null, email, hasPush);

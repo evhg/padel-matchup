@@ -1913,7 +1913,11 @@
     "builtSeeAll": "Ver qué cambiaron",
     "builtSince": "En la app desde el {date}",
     "builtFrom": "Idea de {name}",
-    "notSent": "Tu nota no se envió. Inténtalo de nuevo."
+    "notSent": "Tu nota no se envió. Inténtalo de nuevo.",
+    "shotAdd": "Añadir una captura",
+    "shotRemove": "Quitar",
+    "shotAlt": "Tu captura",
+    "shotBad": "Este archivo no es una imagen que el móvil pueda leer."
   },
   "coach": {
     "invite": {

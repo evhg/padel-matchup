@@ -1913,7 +1913,11 @@
     "builtSeeAll": "See what they changed",
     "builtSince": "In the app since {date}",
     "builtFrom": "{name}'s idea",
-    "notSent": "Your note did not go through. Try again."
+    "notSent": "Your note did not go through. Try again.",
+    "shotAdd": "Add a screenshot",
+    "shotRemove": "Remove",
+    "shotAlt": "Your screenshot",
+    "shotBad": "This file is not a picture that the phone can read."
   },
   "coach": {
     "invite": {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { baseUrl } from "@/lib/config";
-import { cleanPublicImage, decideFeedback, FEEDBACK_LIMITS, FEEDBACK_STATUSES, listFeedback, setBuiltLine, type Decision } from "@/lib/feedback/store";
+import { cleanPublicImage, decideFeedback, FEEDBACK_LIMITS, FEEDBACK_STATUSES, listFeedback, setBuiltLine, withScreenshots, type Decision } from "@/lib/feedback/store";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +24,11 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const status = new URL(req.url).searchParams.get("status");
-  const rows = await listFeedback(await getDb(), status ? status.split(",").map((s) => s.trim()).filter(Boolean) : ["new", "acknowledged", "asked", "planned"], 200);
-  return NextResponse.json({ ok: true, count: rows.length, criteria: "https://github.com/evhg/padel-matchup/blob/main/docs/DECIDING.md", limits: FEEDBACK_LIMITS, feedback: rows });
+  const db = await getDb();
+  const rows = await listFeedback(db, status ? status.split(",").map((s) => s.trim()).filter(Boolean) : ["new", "acknowledged", "asked", "planned"], 200);
+  // A screenshot is fetched on its own: GET /api/admin/feedback/screenshot?id=<note id>.
+  const shots = await withScreenshots(db, rows.map((r) => r.id));
+  return NextResponse.json({ ok: true, count: rows.length, criteria: "https://github.com/evhg/padel-matchup/blob/main/docs/DECIDING.md", limits: FEEDBACK_LIMITS, feedback: rows.map((r) => ({ ...r, screenshot: shots.has(r.id) ? `/api/admin/feedback/screenshot?id=${r.id}` : null })) });
 }
 
 export async function POST(req: Request) {

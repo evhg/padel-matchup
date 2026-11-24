@@ -91,11 +91,24 @@ try {
   // The note keeps the screen the player was on. A link inside the app loads no new document, so the browser's
   // referrer still names the page the visit began on: the door sends the screen itself, and the row proves it.
   await fd.locator("#feedback-text").fill("e2e: the list of clubs should show the price of a court");
+  // A screenshot goes with the note: the phone makes it a small JPEG first, and the form shows it.
+  await fd.getByTestId("feedback-shot-file").setInputFiles(new URL("../public/built/score-every-box.png", import.meta.url).pathname);
+  await fd.getByTestId("feedback-shot").waitFor({ timeout: 20000 });
+  check("a screenshot added to a note shows as a small picture with Remove", (await fd.getByTestId("feedback-shot").locator("img").count()) === 1 && (await fd.getByTestId("feedback-shot").getByRole("button", { name: "Remove" }).count()) === 1);
   await fd.getByRole("button", { name: "Send", exact: true }).click();
   await fd.getByText(/Got it, thank you|That one I cannot act on/).waitFor({ timeout: 30000 });
   const keptQ = "select context from feedback where text like 'e2e: the list of clubs%' order by created_at desc limit 1";
   const kept = await fetch(`${BASE}/api/admin/sql?q=${encodeURIComponent(keptQ)}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
   check("a note from the footer's door keeps the screen it came from", kept.rows?.[0]?.context === "/clubs", JSON.stringify(kept).slice(0, 200));
+  const listed = await fetch(`${BASE}/api/admin/feedback?status=new,acknowledged,declined`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }).then((x) => x.json());
+  const shotPath = (listed.feedback ?? []).find((f) => f.text?.startsWith("e2e: the list of clubs"))?.screenshot ?? "";
+  const shotRes = shotPath ? await fetch(`${BASE}${shotPath}`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET || "e2e-cron-secret"}` } }) : null;
+  const shotBytes = shotRes ? Buffer.from(await shotRes.arrayBuffer()) : Buffer.alloc(0);
+  check(
+    "the note keeps its screenshot: the operator's list points to it, and it comes back as a JPEG under the size limit",
+    shotRes?.status === 200 && shotRes.headers.get("content-type") === "image/jpeg" && shotBytes[0] === 0xff && shotBytes[1] === 0xd8 && shotBytes.length < 450_000,
+    JSON.stringify({ shotPath, status: shotRes?.status, type: shotRes?.headers.get("content-type"), bytes: shotBytes.length }),
+  );
   // The thank-you for a note that became a change can carry a picture of the change (the owner, 19 November 2026).
   // The desk refuses a picture that is not on the site, because the link goes into a message to a person. With
   // one that is there, the page of what players built shows it, and it loads: public/built/ is served beside
