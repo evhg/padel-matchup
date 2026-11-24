@@ -17,7 +17,7 @@ type ReadState = { env: Envelope; read: Record<string, number>; path: string; fo
 type Core = {
   walkTop(file: Blob): Promise<Box[]>;
   readRange(file: Blob, start: number, end: number): Promise<Uint8Array>;
-  parseMoov(bytes: Uint8Array): { tracks: Track[]; durationSec: number };
+  parseMoov(bytes: Uint8Array): { tracks: Track[]; durationSec: number; createdSec?: number };
   trackKind(t: Track): "aac" | "pcm" | null;
   Envelope: new (sampleRate: number, seconds: number) => Envelope;
   readAac(file: Blob, t: Track, sampleRate: number, progress: (seconds: number) => void, c: ReadState): Promise<void>;
@@ -28,7 +28,7 @@ type Core = {
   groupRallies(hits: unknown, prep: unknown, env: Envelope, params: Record<string, number>): unknown[];
   planCut(rallies: unknown[], isMarked: () => boolean, target: number, opts: { hits: unknown; duration: number; most: number }): Stretch[];
   planReel(kind: string, o: { rallies: unknown[]; hits: unknown; env: Envelope; prep: unknown; duration: number; isMarked: () => boolean }): Stretch[];
-  buildCut(file: Blob, movie: unknown, segs: Stretch[], ftyp: Uint8Array | null): Promise<{ blob: Blob; videoSec: number; segments: unknown[] }>;
+  buildCut(file: Blob, movie: unknown, segs: Stretch[], ftyp: Uint8Array | null): Promise<{ blob: Blob; videoSec: number; segments: { startSec: number; endSec: number }[] }>;
 };
 
 /** Why the phone could not make the cut: the page says each in words and offers the full reel. */
@@ -65,9 +65,24 @@ function loadCore(): Promise<Core> {
  * reaction after them, joined where they overlap (`pickStretches`). `onProgress` gets the seconds of
  * sound that are read and the seconds there are.
  */
-export async function fastCut(file: File, onProgress: (done: number, total: number) => void, signal: AbortSignal): Promise<{ blob: Blob; clips: number; seconds: number }> {
+/** Where each clip of the cut sits in the film, and when the film began: a reel lines a watch's heart rate up with them. */
+export type FilmTimes = { clips: [number, number][]; recordedAt: string | null; recordedFrom: "film" | "file" };
+
+/**
+ * When the film began. The film's own clock first (its `mvhd` box), when it is a date after 2020 and not
+ * in the future; else the file's last change less the film's length, which on a phone is about when the
+ * recording stopped. Null when neither is a date. Pure.
+ */
+export function filmStart(createdSec: number | undefined, lastModified: number, durationSec: number, now = Date.now()): { at: string | null; from: "film" | "file" } {
+  const sane = (ms: number) => Number.isFinite(ms) && ms > Date.UTC(2020, 0, 1) && ms < now + 86_400_000;
+  if (createdSec && sane(createdSec * 1000)) return { at: new Date(createdSec * 1000).toISOString(), from: "film" };
+  const guess = lastModified - durationSec * 1000;
+  return { at: sane(guess) ? new Date(guess).toISOString() : null, from: "file" };
+}
+
+export async function fastCut(file: File, onProgress: (done: number, total: number) => void, signal: AbortSignal): Promise<{ blob: Blob; clips: number; seconds: number; times: FilmTimes }> {
   const RF = await loadCore();
-  let movie: { tracks: Track[]; durationSec: number };
+  let movie: { tracks: Track[]; durationSec: number; createdSec?: number };
   let ftyp: Uint8Array | null = null;
   try {
     const boxes = await RF.walkTop(file);
@@ -99,11 +114,13 @@ export async function fastCut(file: File, onProgress: (done: number, total: numb
   const o = { rallies, hits, env, prep, duration: seconds, isMarked: () => false };
   const stretches = pickStretches([RF.planCut(rallies, () => false, 150, { hits, duration: seconds, most: 8 }), RF.planReel("celebrations", o)].map((list) => list.map((s) => ({ start: s.start, end: s.end }))));
   if (stretches.length === 0) throw new FastError("no_rallies");
-  let cut: { blob: Blob; videoSec: number; segments: unknown[] };
+  let cut: { blob: Blob; videoSec: number; segments: { startSec: number; endSec: number }[] };
   try {
     cut = await RF.buildCut(file, movie, stretches, ftyp);
   } catch {
     throw new FastError("unreadable");
   }
-  return { blob: cut.blob, clips: cut.segments.length, seconds: Math.round(cut.videoSec) };
+  const began = filmStart(movie.createdSec, file.lastModified, movie.durationSec || seconds);
+  const times: FilmTimes = { clips: cut.segments.map((x) => [x.startSec, x.endSec]), recordedAt: began.at, recordedFrom: began.from };
+  return { blob: cut.blob, clips: cut.segments.length, seconds: Math.round(cut.videoSec), times };
 }

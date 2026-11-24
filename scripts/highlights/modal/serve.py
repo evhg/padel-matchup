@@ -20,8 +20,11 @@ PUT  /u/<token>/<n>               one part of the file, n from 0. A request may 
                                   (Modal's limits), so the page sends parts of 32 MB and sends a failed part again.
 GET  /u/<token>                   the parts that are here, so an upload that stopped goes on where it was.
 GET  /usage                       {"bytes", "at"}: what the whole store holds, measured by the daily job. No ticket.
-POST /u/<token>/finish            {"parts": n, "bytes": total, "name": "IMG_1234.MOV", "choices": {...}}: every part is
-                                  here; `assemble` joins them to uploads/<token>/video.<ext> and tells Kicksmash.
+POST /u/<token>/finish            {"parts": n, "bytes": total, "name": "IMG_1234.MOV", "choices": {...}, "times": {...}}:
+                                  every part is here; `assemble` joins them to uploads/<token>/video.<ext> and tells
+                                  Kicksmash. `times` (fast reel only): where each clip sits in the film and when the
+                                  film began, {"clips": [[start, end], ...], "recordedAt": ISO, "recordedFrom":
+                                  "film" | "file"}, kept in meta.json, so a watch's heart rate lines up with the clips.
 POST /u/<token>/choices           {"teams": [a, b], "crowd": bool, "numbers": bool, "music": "bounce"}: what the player
                                   chose for the reel (`src/lib/domain/reelChoices.ts`), at any time the ticket holds,
                                   also after the finish. Kept in uploads/<token>/choices.json; the reel's job reads it.
@@ -99,6 +102,19 @@ def clean_choices(raw):
     return {'teams': [team(t[0] if len(t) > 0 else None), team(t[1] if len(t) > 1 else None)],
             'crowd': o.get('crowd') is not False, 'numbers': o.get('numbers') is not False,
             'music': o.get('music') if o.get('music') in MUSIC else 'bounce'}
+
+
+def clean_times(raw):
+    """The fast reel's clip times in the film and the film's start, each one checked, or None. Pure."""
+    import re
+    if not isinstance(raw, dict): return None
+    clips = []
+    for c in (raw.get('clips') if isinstance(raw.get('clips'), list) else [])[:400]:
+        if isinstance(c, list) and len(c) == 2 and all(isinstance(x, (int, float)) for x in c) and 0 <= c[0] < c[1] <= 86400:
+            clips.append([round(float(c[0]), 3), round(float(c[1]), 3)])
+    at = raw.get('recordedAt')
+    at = at if isinstance(at, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z', at) else None
+    return {'clips': clips, 'recordedAt': at, 'recordedFrom': 'film' if raw.get('recordedFrom') == 'film' else 'file'}
 
 
 def byte_range(header, size):
@@ -262,6 +278,7 @@ def up():
             return JSONResponse({'error': 'incomplete', 'missing': missing[:50], 'bytes': sum(here.get(i, 0) for i in range(n))}, status_code=409)
         meta = {'parts': n, 'bytes': total, 'ext': file_ext(str(body.get('name', ''))), 'ticket': t['ticket'], 'finished': time.time()}
         if 'choices' in body: keep_choices(token, body['choices'])
+        if clean_times(body.get('times')): meta['times'] = clean_times(body.get('times'))
         with open(f'/vol/uploads/{token}/meta.json', 'w') as f: json.dump(meta, f)
         await vol.commit.aio()      # the worker is another machine: it sees what is committed
         await assemble.spawn.aio(token)

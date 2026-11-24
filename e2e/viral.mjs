@@ -626,6 +626,12 @@ try {
     musicRows === 5 && choicesFit && fastHost.finish?.choices?.music === "dnb" && fastHost.finish?.choices?.teams?.[0] === "Smash Bros" && fastHost.finish?.choices?.crowd === false && fastHost.finish?.choices?.numbers === true,
     JSON.stringify(fastHost.finish?.choices ?? null),
   );
+  const times = fastHost.finish?.times;
+  check(
+    "the clips go up with where each one sits in the film and when the film began, for a watch's heart rate",
+    Array.isArray(times?.clips) && times.clips.length >= 1 && times.clips.every(([a, b]) => a >= 0 && b > a) && typeof times.recordedAt === "string" && ["film", "file"].includes(times.recordedFrom),
+    JSON.stringify(times ?? null),
+  );
   const cutIsFilm = fastHost.body ? fastHost.body.subarray(4, 8).toString("latin1") === "ftyp" && fastHost.body.length === fastHost.finish?.bytes : true;
   check(
     "Make a fast reel: the phone finds the rallies by sound, cuts them out of the film, and sends only the cut",
