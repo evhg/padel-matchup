@@ -39,8 +39,9 @@ export function ReelChoicesCard({ value, onChange, musicBase }: { value: ReelCho
 
   const row = "flex min-h-11 items-center justify-between gap-3 py-2";
   const toggle = (on: boolean, label: string, flip: () => void, id: string) => (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={flip} data-testid={id} className={`relative h-8 w-13 shrink-0 rounded-full transition-colors ${on ? "bg-ok" : "bg-fill"}`}>
-      <span className={`absolute top-0.5 h-7 w-7 rounded-full bg-white shadow transition-[left] ${on ? "left-[1.375rem]" : "left-0.5"}`} />
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={flip} data-testid={id} className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${on ? "bg-ink" : "bg-line-strong"}`}>
+      {/* The app's switch (`EmailField`): the knob off is `knob-off`, 3:1 on its track in both themes. */}
+      <span className={`inline-block h-5 w-5 rounded-full shadow transition ${on ? "translate-x-6 bg-on-ink" : "translate-x-1 bg-knob-off"}`} />
     </button>
   );
 
@@ -99,7 +100,7 @@ export function ReelChoicesCard({ value, onChange, musicBase }: { value: ReelCho
         {tracks.map((m) => (
           <div key={m.id} className={row}>
             <button type="button" role="radio" aria-checked={value.music === m.id} className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onChange({ ...value, music: m.id })} data-testid={`reel-music-${m.id}`}>
-              <span aria-hidden="true" className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-extrabold ${value.music === m.id ? "bg-court text-white" : "border border-line-strong"}`}>
+              <span aria-hidden="true" className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-extrabold ${value.music === m.id ? "bg-ink text-on-ink" : "border border-line-strong"}`}>
                 {value.music === m.id ? "✓" : ""}
               </span>
               <span className="min-w-0">
