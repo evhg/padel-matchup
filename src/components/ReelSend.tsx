@@ -22,7 +22,7 @@ const gb = (bytes: number) => (bytes / 1e9).toFixed(bytes < 1e10 ? 2 : 1);
 type Way = "upload" | "clips";
 type Phase =
   | { at: "idle" }
-  | { at: "reading"; done: number; total: number }
+  | { at: "reading"; done: number; total: number; secondsLeft: number | null }
   | { at: "cutting" }
   | { at: "sending"; done: number; total: number; secondsLeft: number | null }
   | { at: "joining" }
@@ -131,8 +131,19 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
       let body: Blob = file;
       let name = file.name;
       if (way === "clips") {
-        setPhase({ at: "reading", done: 0, total: 0 });
-        const cut = await fastCut(file, (done, total) => setPhase({ at: "reading", done, total }), ctl.signal);
+        setPhase({ at: "reading", done: 0, total: 0, secondsLeft: null });
+        // Time left from the speed so far (Erik, 24 November 2026: "there was no time estimate", and he
+        // stopped a 90-minute film at 5% not knowing whether it would take ten minutes or an hour).
+        const began = Date.now();
+        const cut = await fastCut(
+          file,
+          (done, total) => {
+            const elapsed = (Date.now() - began) / 1000;
+            const rate = elapsed > 5 && done > 0 ? done / elapsed : 0;
+            setPhase({ at: "reading", done, total, secondsLeft: rate > 0 ? Math.round((total - done) / rate) : null });
+          },
+          ctl.signal,
+        );
         setPhase({ at: "cutting" });
         body = cut.blob;
         name = `${file.name.replace(/\.[^.]*$/, "")}-clips.mp4`;
@@ -190,15 +201,16 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
   const busy = phase.at === "reading" || phase.at === "cutting" || phase.at === "sending" || phase.at === "joining";
   const pct =
     phase.at === "sending" && phase.total > 0 ? Math.floor((phase.done / phase.total) * 100) : phase.at === "reading" && phase.total > 0 ? Math.floor((phase.done / phase.total) * 100) : phase.at === "joining" || phase.at === "cutting" ? 100 : 0;
+  const left = (secondsLeft: number | null) => (secondsLeft === null ? ` · ${t("measuring")}` : ` · ${secondsLeft < 60 ? t("underMinute") : t("minutesLeft", { min: Math.ceil(secondsLeft / 60) })}`);
   const line =
     phase.at === "reading"
-      ? t("reading", { done: Math.floor(phase.done / 60), total: Math.ceil(phase.total / 60) })
+      ? `${t("reading", { done: Math.floor(phase.done / 60), total: Math.ceil(phase.total / 60) })}${left(phase.secondsLeft)}`
       : phase.at === "cutting"
         ? t("cutting")
         : phase.at === "joining"
           ? t("joining")
           : phase.at === "sending"
-            ? `${t("progress", { done: gb(phase.done), total: gb(phase.total) })}${phase.secondsLeft === null ? "" : ` · ${phase.secondsLeft < 60 ? t("underMinute") : t("minutesLeft", { min: Math.ceil(phase.secondsLeft / 60) })}`}`
+            ? `${t("progress", { done: gb(phase.done), total: gb(phase.total) })}${left(phase.secondsLeft)}`
             : "";
   const mark = (has: boolean, text: string) => (
     <li className={`flex items-start gap-2 ${has ? "" : "text-muted"}`}>

@@ -2908,7 +2908,7 @@
     "uploadOff": "Las subidas están desactivadas aquí. Pega un enlace al vídeo.",
     "linkSummary": "O pega un enlace al vídeo",
     "linkOnly": "Pega un enlace al vídeo",
-    "linkHelp": "Un enlace compartido de iCloud, Google Drive, Dropbox o OneDrive. Tu nube sube el vídeo en segundo plano, también con el móvil bloqueado.",
+    "linkHelp": "Un enlace compartido de iCloud, Google Drive, Dropbox o OneDrive. Tu nube sube antes todo el vídeo, y para un partido puede tardar una hora. Fotos no muestra el tiempo, así que cierra esta página y pega el enlace cuando esté listo. Sube también con el móvil bloqueado.",
     "linkLabel": "Enlace al vídeo",
     "linkSave": "Enviar el enlace",
     "linkBad": "Eso no es un enlace compartido de iCloud, Google Drive, Dropbox o OneDrive.",
@@ -2939,6 +2939,7 @@
     "fastNoSound": "Este vídeo no tiene un sonido que el móvil pueda leer. Usa el reel completo.",
     "fastBad": "Tu móvil no puede leer este vídeo. Usa el reel completo.",
     "hereClipsBody": "Los clips han llegado y el reel rápido está en marcha. Los cuatro jugadores lo verán en esta página cuando esté listo.",
-    "iphoneHint": "iPhone: primero guarda el vídeo en Archivos (en Fotos: Compartir y «Guardar en Archivos») y elígelo aquí desde Archivos. Desde la fototeca, el iPhone convierte antes el vídeo, y eso tarda muchísimo."
+    "iphoneHint": "iPhone: en el menú, toca «Seleccionar archivo», no «Fototeca». Desde la fototeca, el iPhone convierte antes todo el vídeo, y para un partido eso tarda muchísimo. ¿Aún no está en Archivos? En Fotos: Compartir y «Guardar en Archivos».",
+    "measuring": "midiendo el tiempo restante…"
   }
 }
