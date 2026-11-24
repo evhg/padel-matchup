@@ -20,8 +20,12 @@ PUT  /u/<token>/<n>               one part of the file, n from 0. A request may 
                                   (Modal's limits), so the page sends parts of 32 MB and sends a failed part again.
 GET  /u/<token>                   the parts that are here, so an upload that stopped goes on where it was.
 GET  /usage                       {"bytes", "at"}: what the whole store holds, measured by the daily job. No ticket.
-POST /u/<token>/finish            {"parts": n, "bytes": total, "name": "IMG_1234.MOV"}: every part is here; `assemble`
-                                  joins them to uploads/<token>/video.<ext> and tells Kicksmash.
+POST /u/<token>/finish            {"parts": n, "bytes": total, "name": "IMG_1234.MOV", "choices": {...}}: every part is
+                                  here; `assemble` joins them to uploads/<token>/video.<ext> and tells Kicksmash.
+POST /u/<token>/choices           {"teams": [a, b], "crowd": bool, "numbers": bool, "music": "bounce"}: what the player
+                                  chose for the reel (`src/lib/domain/reelChoices.ts`), at any time the ticket holds,
+                                  also after the finish. Kept in uploads/<token>/choices.json; the reel's job reads it.
+GET  /music/<track>               ten seconds of a reel's track, for the page's "tap to hear". No ticket.
 
 The daily job deletes a reel 30 days after its newest file, and a player's match video 7 days after its newest file.
 It looks in reels/ and uploads/ only, never in a match folder.
@@ -75,6 +79,26 @@ def file_ext(name):
     import re
     m = re.search(r'\.([A-Za-z0-9]{2,4})$', name or '')
     return m.group(1).lower() if m and m.group(1).lower() in ('mov', 'mp4', 'm4v', 'mkv') else 'mov'
+
+
+MUSIC = ('bounce', 'dnb', 'bigscreen', 'sunrise', 'none')
+TEAM_MAX = 32
+
+
+def clean_choices(raw):
+    """The player's choices for the reel, each one cleaned, or its default: every option on, Bounce. The same rules
+    as `cleanChoices` in src/lib/domain/reelChoices.ts; a team name that is not one is None, and the job then
+    writes the pair's names. Pure."""
+    import re
+    o = raw if isinstance(raw, dict) else {}
+    t = o.get('teams') if isinstance(o.get('teams'), list) else []
+
+    def team(x):
+        v = re.sub(r'\s+', ' ', re.sub(r'[\x00-\x1f\x7f]+', ' ', x)).strip()[:TEAM_MAX] if isinstance(x, str) else ''
+        return v or None
+    return {'teams': [team(t[0] if len(t) > 0 else None), team(t[1] if len(t) > 1 else None)],
+            'crowd': o.get('crowd') is not False, 'numbers': o.get('numbers') is not False,
+            'music': o.get('music') if o.get('music') in MUSIC else 'bounce'}
 
 
 def byte_range(header, size):
@@ -181,6 +205,25 @@ def up():
             with open('/vol/usage.json') as f: return json.load(f)
         except (OSError, ValueError): return JSONResponse({'error': 'not measured yet'}, status_code=404)
 
+    def keep_choices(token, raw):
+        d = f'/vol/uploads/{token}'; os.makedirs(d, exist_ok=True)
+        with open(f'{d}/choices.json.tmp', 'w') as f: json.dump({**clean_choices(raw), 'at': time.time()}, f)
+        os.replace(f'{d}/choices.json.tmp', f'{d}/choices.json')
+
+    @api.get('/music/{track}')
+    def music(track: str):
+        from fastapi.responses import FileResponse, Response as Plain
+        path = f'/vol/assets/preview-{track}.m4a'
+        if track not in MUSIC or track == 'none' or not os.path.isfile(path): return Plain(status_code=404)
+        return FileResponse(path, media_type='audio/mp4', headers={'Cache-Control': 'public, max-age=86400'})
+
+    @api.post('/u/{token}/choices')
+    async def choices(token: str, request: Request):
+        if not allowed(request, token): return no
+        keep_choices(token, await request.json())
+        await vol.commit.aio()
+        return {'ok': True}
+
     @api.get('/u/{token}')
     def state(token: str, request: Request):
         if not allowed(request, token): return no
@@ -218,6 +261,7 @@ def up():
         if n <= 0 or missing or sum(here[i] for i in range(n)) != total:
             return JSONResponse({'error': 'incomplete', 'missing': missing[:50], 'bytes': sum(here.get(i, 0) for i in range(n))}, status_code=409)
         meta = {'parts': n, 'bytes': total, 'ext': file_ext(str(body.get('name', ''))), 'ticket': t['ticket'], 'finished': time.time()}
+        if 'choices' in body: keep_choices(token, body['choices'])
         with open(f'/vol/uploads/{token}/meta.json', 'w') as f: json.dump(meta, f)
         await vol.commit.aio()      # the worker is another machine: it sees what is committed
         await assemble.spawn.aio(token)

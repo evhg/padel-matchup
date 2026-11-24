@@ -565,7 +565,7 @@ try {
   const fastMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Wim" } } }).then((r) => r.json());
   const wcode = fastMatch.match?.code;
   const w = await newPage();
-  const fastHost = { puts: [], finish: null, ticket: null, body: null };
+  const fastHost = { puts: [], finish: null, ticket: null, body: null, hold: null };
   await w.route("https://reels.example.test/**", async (route) => {
     const req = route.request();
     const m = new URL(req.url()).pathname.match(/^\/u\/([^/]+)(?:\/(.+))?$/);
@@ -576,6 +576,7 @@ try {
     if (req.method() === "PUT") {
       fastHost.puts.push(Number(m[2]));
       fastHost.body = req.postDataBuffer();
+      if (fastHost.hold) await fastHost.hold;
       return route.fulfill({ headers: corsOpen, json: { ok: true } });
     }
     fastHost.finish = req.postDataJSON();
@@ -606,8 +607,25 @@ try {
   check("a file the phone cannot read is said in words, and nothing goes up", (await w.getByTestId("reel-error").innerText()) === "Your phone cannot read this video. Use the full reel." && fastHost.puts.length === 0 && (await fastWay.count()) === 1);
   const fixture = path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures", "film-aac.mp4");
   const fixtureBytes = fs.statSync(fixture).size;
+  // The upload is held on its way, so the player makes the reel theirs while it goes (the agreed screens 4 and 6).
+  let release = () => {};
+  fastHost.hold = new Promise((r) => (release = r));
   await w.getByTestId("reel-fast-file").setInputFiles(fixture);
+  await w.getByTestId("reel-choices").waitFor({ timeout: 60000 });
+  const musicRows = await w.getByTestId("reel-music").getByRole("radio").count();
+  await w.getByTestId("reel-music-dnb").click();
+  await w.getByTestId("reel-teams-change").click();
+  await w.getByTestId("reel-team-0").fill("Smash Bros");
+  await w.getByTestId("reel-crowd").click();
+  const choicesFit = await w.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  await shot(w, "v11b-reel-choices");
+  release();
   await w.getByTestId("reel-here").waitFor({ timeout: 90000 });
+  check(
+    "while the clips go up, the player names the teams, switches the crowd off and picks the music, and the choices go with the clips",
+    musicRows === 5 && choicesFit && fastHost.finish?.choices?.music === "dnb" && fastHost.finish?.choices?.teams?.[0] === "Smash Bros" && fastHost.finish?.choices?.crowd === false && fastHost.finish?.choices?.numbers === true,
+    JSON.stringify(fastHost.finish?.choices ?? null),
+  );
   const cutIsFilm = fastHost.body ? fastHost.body.subarray(4, 8).toString("latin1") === "ftyp" && fastHost.body.length === fastHost.finish?.bytes : true;
   check(
     "Make a fast reel: the phone finds the rallies by sound, cuts them out of the film, and sends only the cut",

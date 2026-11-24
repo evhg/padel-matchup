@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { askReelUploadAction, setReelLinkAction } from "@/actions/reel";
 import { errorLine } from "@/lib/errorLine";
 import { FastError, fastCut } from "./reelFast";
+import { ReelChoicesCard } from "./ReelChoices";
+import type { ReelChoices } from "@/lib/domain/reelChoices";
 
 /** One part of the film. The reel host takes 64 MB a part and 150 seconds a request; 32 MB is 26 s on a line of 10 Mbit/s. */
 const PART = 32 * 1024 * 1024;
@@ -41,7 +43,21 @@ type Phase =
  * an upload that stopped goes on where it was when the player chooses the same file again, on this phone
  * or another. The screen is kept on while the page works, where the browser can do that.
  */
-export function ReelSend({ code, started, canUpload, failed }: { code: string; /** Somebody began an upload that is not finished. */ started: boolean; canUpload: boolean; failed: boolean }) {
+export function ReelSend({
+  code,
+  started,
+  canUpload,
+  failed,
+  teams,
+  musicBase,
+}: {
+  code: string;
+  /** Somebody began an upload that is not finished. */ started: boolean;
+  canUpload: boolean;
+  failed: boolean;
+  /** The two pairs as the page names them: the reel's team names until the player changes them. */ teams: [string, string];
+  /** The reel host, for ten seconds of each track. */ musicBase: string | null;
+}) {
   const t = useTranslations("reel");
   const tr = useTranslations();
   const router = useRouter();
@@ -53,6 +69,21 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
   const fast = useRef<HTMLInputElement>(null);
   const stop = useRef<AbortController | null>(null);
   useEffect(() => () => stop.current?.abort(), []);
+  // What the player makes of the reel while the phone works (`ReelChoicesCard`). They go with the finish; a
+  // change after it goes to the reel host by itself, while the ticket holds.
+  const [choices, setChoices] = useState<ReelChoices>({ teams, crowd: true, numbers: true, music: "bounce" });
+  const sendTo = useRef<{ base: string; auth: Record<string, string> } | null>(null);
+  const finished = useRef(false);
+  const later = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const choose = (next: ReelChoices) => {
+    setChoices(next);
+    if (!finished.current || !sendTo.current) return;
+    const to = sendTo.current;
+    if (later.current) clearTimeout(later.current);
+    later.current = setTimeout(() => void fetch(`${to.base}/choices`, { method: "POST", headers: { ...to.auth, "Content-Type": "application/json" }, body: JSON.stringify(next) }).catch(() => undefined), 800);
+  };
+  const latest = useRef(choices);
+  latest.current = choices;
   // An iPhone converts a film that is chosen from the photo library before the page gets it (WebKit keeps that
   // for video), and a film of 44 GB never comes out of that. From the Files app the page gets the file as it is.
   const [iphone, setIphone] = useState(false);
@@ -69,6 +100,7 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
     const { url, token, ticket } = asked.data;
     const base = `${url}/u/${token}`;
     const auth = { Authorization: `Bearer ${ticket}` };
+    sendTo.current = { base, auth };
     const count = Math.ceil(body.size / PART);
     const sizeOf = (i: number) => Math.min(PART, body.size - i * PART);
     const there = (await fetch(base, { headers: auth, signal: ctl.signal }).then((r) => (r.ok ? r.json() : { parts: {} }))) as { parts?: Record<string, number>; done?: boolean };
@@ -109,8 +141,9 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
     };
     if (!there.done) await Promise.all(Array.from({ length: Math.min(LANES, todo.length || 1) }, lane));
     setPhase({ at: "joining" });
-    const fin = await fetch(`${base}/finish`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ parts: count, bytes: body.size, name }), signal: ctl.signal });
+    const fin = await fetch(`${base}/finish`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ parts: count, bytes: body.size, name, choices: latest.current }), signal: ctl.signal });
     if (!fin.ok) throw new Error(`finish ${fin.status}`);
+    finished.current = true;
     return "sent";
   };
 
@@ -237,6 +270,7 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
           <p className="mt-1 text-xs text-faint">{t("keepOpen")}</p>
         </div>
       )}
+      {busy && <ReelChoicesCard value={choices} onChange={choose} musicBase={musicBase} />}
       {phase.at === "stopped" && <p className="mt-2 text-sm font-semibold text-danger">{t("stopped")}</p>}
       {error && (
         <p className="mt-2 text-sm font-semibold text-danger" data-testid="reel-error">
