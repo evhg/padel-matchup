@@ -379,7 +379,7 @@ class Report:
         for m in self.req['matches']:
             progress = {'pct': pct, 'minutesLeft': left, 'step': step}
             # the page reads names.json and the faces from the reel host while the job waits
-            if waiting: progress['waiting'] = waiting; progress['host'] = os.environ['REELS_HOST']
+            if waiting: progress.update(waiting=waiting, host=os.environ['REELS_HOST'], upload=self.req['upload'])
             self.post({'code': m['code'], 'progress': progress})
         print(f'STEP {step} {pct}% after {spent:.1f} min', flush=True)
 

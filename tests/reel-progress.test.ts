@@ -30,7 +30,7 @@ async function playedMatch(tag: string) {
 
 describe("a reel in the making", () => {
   it("reads only a sane progress from the note", () => {
-    expect(progressOf(JSON.stringify({ pct: 140, readyBy: "2026-11-24T11:20:00Z", step: "follow" }))).toEqual({ pct: 100, readyBy: new Date("2026-11-24T11:20:00Z"), step: "follow" });
+    expect(progressOf(JSON.stringify({ pct: 140, readyBy: "2026-11-24T11:20:00Z", step: "follow" }))).toEqual({ pct: 100, readyBy: new Date("2026-11-24T11:20:00Z"), step: "follow", names: null });
     expect(progressOf(JSON.stringify({ pct: 40, readyBy: "2026-11-24T11:20:00Z", step: "<b>made up</b>" }))?.step).toBeNull();
     expect(progressOf("not json")).toBeNull();
     expect(progressOf(null)).toBeNull();
@@ -43,7 +43,7 @@ describe("a reel in the making", () => {
 
     await setReelProgress(db, { code: ev.code, pct: 35, minutesLeft: 20, step: "follow", now: NOW });
     const working = await reelState(db, ev.id, NOW);
-    expect(working).toEqual({ kind: "working", progress: { pct: 35, readyBy: new Date(NOW.getTime() + 20 * 60_000), step: "follow" } });
+    expect(working).toEqual({ kind: "working", progress: { pct: 35, readyBy: new Date(NOW.getTime() + 20 * 60_000), step: "follow", names: null } });
     // A working row with no progress in its note is not a bar: the page says plainly that a person makes it.
     expect(reelStateOf({ status: "working", host: null, reelToken: TOKEN, readyAt: null, source: "clips", note: null }, NOW)).toEqual({ kind: "here", source: "clips" });
 
@@ -51,9 +51,14 @@ describe("a reel in the making", () => {
     expect((await reelState(db, ev.id, NOW)).kind).toBe("ready");
   });
 
-  it("refuses a progress that is not one, and a match with no reel", async () => {
+  it("refuses a progress that is not one, and a match that has not started", async () => {
     const ev = await playedMatch("two");
-    await expect(setReelProgress(db, { code: ev.code, pct: 20, minutesLeft: 5, now: NOW })).rejects.toMatchObject({ code: "not_found" });
+    // A match played but with no row yet (the second match of the same clips) gets one: its page shows the bar too.
+    await setReelProgress(db, { code: ev.code, pct: 20, minutesLeft: 5, now: NOW });
+    expect((await reelState(db, ev.id, NOW)).kind).toBe("working");
+    await expect(setReelProgress(db, { code: ev.code, pct: 20, minutesLeft: 5, now: new Date("2026-11-24T01:00:00Z") })).resolves.toBeTruthy();
+    await db.delete(matchReels).where(eq(matchReels.eventId, ev.id));
+    await expect(setReelProgress(db, { code: ev.code, pct: 20, minutesLeft: 5, now: new Date("2026-11-24T01:00:00Z") })).rejects.toMatchObject({ code: "not_found" });
     await db.insert(matchReels).values({ eventId: ev.id, status: "received", reelToken: TOKEN, source: "clips" });
     await expect(setReelProgress(db, { code: ev.code, pct: "x", minutesLeft: 5, now: NOW })).rejects.toMatchObject({ code: "invalid" });
     await expect(setReelProgress(db, { code: ev.code, pct: 20, minutesLeft: -1, now: NOW })).rejects.toMatchObject({ code: "invalid" });

@@ -47,6 +47,7 @@ import { OpenSpot } from "@/components/OpenSpot";
 import { PushToggle } from "@/components/PushToggle";
 import { ScorePanel } from "@/components/ScorePanel";
 import { ReelProgress } from "@/components/ReelProgress";
+import { ReelNames } from "@/components/ReelNames";
 import { FilmCard } from "@/components/FilmCard";
 import { HighlightsLink } from "@/components/HighlightsLink";
 import { MatchNumbers } from "@/components/MatchNumbers";
@@ -1059,7 +1060,12 @@ async function EventPage({ params, searchParams }: Props) {
             A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
             for ever; a film that is here says so until the reel plays. */}
         {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} />}
-        {reel?.kind === "working" && <ReelProgress pct={reel.progress.pct} readyBy={reel.progress.readyBy.toISOString()} step={reel.progress.step} />}
+        {/* The fast reel's job waits for who is who: a player of the match answers; anybody else sees that it waits. */}
+        {reel?.kind === "working" && reel.progress.names && me && (viewer.isCreator || isSeated(detail, me.id)) ? (
+          <ReelNames code={code} host={reel.progress.names.host} upload={reel.progress.names.upload} />
+        ) : (
+          reel?.kind === "working" && <ReelProgress pct={reel.progress.pct} readyBy={reel.progress.readyBy.toISOString()} step={reel.progress.step} waitingNames={Boolean(reel.progress.names)} />
+        )}
         {reel?.kind === "here" && (
           <section className="card" data-testid="reel-here">
             <h2 className="text-lg font-extrabold">{t("reel.hereTitle")}</h2>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { later } from "@/lib/alerts";
 import { passportKeys, reelUploadUrl } from "@/lib/config";
-import { askReelUpload, setReelLink, signUploadTicket, type SendWay } from "@/lib/domain/matchReel";
+import { askReelUpload, namesUpload, setReelLink, signUploadTicket, type SendWay } from "@/lib/domain/matchReel";
 import { tellOwnerVideoHere } from "@/lib/reelNotice";
 import { getSessionPlayer } from "@/lib/session";
 import { ActionFailure, loadEvent, runA, type ActionResult } from "./shared";
@@ -37,5 +37,24 @@ export async function setReelLinkAction(code: string, text: string): Promise<Act
     await later(() => tellOwnerVideoHere(detail.event.code, "link"));
     revalidatePath(`/${code}`);
     return null;
+  });
+}
+
+/**
+ * "Who is who?": the ticket that lets this browser send the players' names to the reel host, for the question the
+ * fast reel's job asks of this match (`namesUpload`). The answer goes from the phone to the reel host, and the job
+ * goes on from there.
+ */
+export async function namesTicketAction(code: string): Promise<ActionResult<{ url: string; upload: string; ticket: string }>> {
+  return runA(async () => {
+    const url = reelUploadUrl();
+    const keys = passportKeys();
+    if (!url || !keys) throw new ActionFailure("generic", "upload_off");
+    const { db, detail } = await loadEvent(code);
+    const me = await getSessionPlayer(db);
+    if (!me) throw new ActionFailure("no_identity");
+    const asked = await namesUpload(db, { eventId: detail.event.id, playerId: me.id });
+    if (!asked) throw new ActionFailure("generic", "not_asked");
+    return { url, upload: asked.upload, ticket: await signUploadTicket(asked.upload, keys, new Date()) };
   });
 }

@@ -641,6 +641,36 @@ try {
   const clipsWord = await hostSays(fastHost.ticket);
   await w.reload();
   check("the reel host's word marks the clips as here, and the page says plainly who makes the fast reel and that it can take hours", clipsWord.body?.changed === true && (await w.getByTestId("reel-here").innerText()).includes("a person makes the fast reel from them"));
+  // A match with no two pairs of two gets no start for the automatic job: a person makes its reel.
+  check("clips of a match with no two pairs start no automatic job", clipsWord.body?.fastReel === undefined, JSON.stringify(clipsWord.body));
+  // "Who is who?" (the agreed screen 5): the job is not sure of one face and waits. The page shows the faces from the
+  // reel host, a known name quiet, the new face with a dashed button for each player, and sends the answer there.
+  const upload = "e2e_upload_token_of_22chars";
+  const asked = { v: 1, state: "names", upload, players: [{ id: "p-ana", name: "Ana" }, { id: "p-bo", name: "Bo" }], tracks: [{ track: 0, face: "face-0.jpg", guess: "p-ana", confidence: 0.9, ask: false }, { track: 1, face: "face-1.jpg", guess: null, confidence: 0.2, ask: true }] };
+  const answered = { body: null, ticket: null };
+  const dot = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  await w.route(`https://reels.example.test/r/${upload}/**`, (route) => (route.request().url().endsWith("names.json") ? route.fulfill({ headers: corsOpen, json: asked }) : route.fulfill({ headers: corsOpen, contentType: "image/png", body: dot })));
+  await w.route(`https://reels.example.test/u/${upload}/names`, async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: corsOpen });
+    answered.body = route.request().postDataJSON();
+    answered.ticket = (route.request().headers().authorization ?? "").replace(/^Bearer /, "");
+    return route.fulfill({ headers: corsOpen, json: { ok: true } });
+  });
+  const waits = await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: wcode, progress: { pct: 30, minutesLeft: 0, step: "players", waiting: "names", host: "https://reels.example.test", upload } }) });
+  await w.reload();
+  await w.getByTestId("reel-names").getByRole("img").first().waitFor({ timeout: 20000 });
+  const go = w.getByTestId("reel-names-go");
+  const before = { label: await go.innerText(), off: await go.isDisabled(), known: await w.getByTestId("reel-face-0-name").innerText() };
+  await w.getByTestId("reel-face-1-pick-Bo").click();
+  const namesFit = await w.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  await shot(w, "v11c-reel-names");
+  await go.click();
+  await w.getByTestId("reel-names-sent").waitFor({ timeout: 20000 });
+  check(
+    "who is who: the known face is named, the new face is named with one tap, and the answer goes to the reel host with a ticket",
+    waits.status === 200 && before.label === "Name 1 more player" && before.off && before.known === "Ana" && namesFit && JSON.stringify(answered.body) === JSON.stringify({ names: { 0: "p-ana", 1: "p-bo" } }) && (answered.ticket ?? "").split(".").length === 2,
+    JSON.stringify({ status: waits.status, before, answered: answered.body }),
+  );
   // An iPhone converts a film from the photo library before the page gets it: the card says how to avoid that.
   const iosMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Xan" } } }).then((r) => r.json());
   const iosCtx = await browser.newContext({ ...iphone, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });

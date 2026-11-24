@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { DomainError } from "@/lib/domain/errors";
-import { removeMatchReel, setMatchReel, setReelProgress } from "@/lib/domain/matchReel";
+import { readReelReport, removeMatchReel, setMatchReel, setReelProgress } from "@/lib/domain/matchReel";
+import { passportKeys } from "@/lib/config";
 import { notifyReelReady } from "@/lib/notify";
 import { events } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -20,19 +21,36 @@ export const dynamic = "force-dynamic";
  *          that was shown goes off the page until the next POST with host and token (`setReelProgress`).
  *   DELETE /api/admin/match-reel   { "code": "AB12" }
  *
+ * Two keys open it: the operator's (Bearer CRON_SECRET), and the report key of a fast reel's job (`signReelReport`),
+ * for the codes it was signed for alone, and for POST alone. While the job waits for who is who, progress also
+ * carries "waiting": "names", "host" and "upload", and the page asks the players.
+ *
  * The files are `{host}/r/{token}/tall.mp4` and `wide.mp4` (`scripts/highlights/modal/serve.py`). The
  * players of the match see the reel for 30 days. A second POST replaces the first. The first reel a
  * match ever shows goes to every player of the match, once (`notifyReelReady`, after the answer); a new
  * cut of it is not announced. The answer never repeats the token.
  */
+/**
+ * The report key of a fast reel's job opens this route for the codes it names, and nothing else. A key that is a
+ * report key is judged by that alone, so it is never sent on to the operator check (which asks Vercel).
+ */
+async function reportSays(req: Request, code: string): Promise<"yes" | "no" | "not_a_report"> {
+  const keys = passportKeys();
+  const key = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  const codes = keys && key.includes(".") ? await readReelReport(key, keys.pub, new Date()) : null;
+  if (!codes) return "not_a_report";
+  return code && codes.includes(code) ? "yes" : "no";
+}
+
 export async function POST(req: Request) {
-  if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const code = typeof body?.code === "string" ? body.code : "";
+  const report = await reportSays(req, code);
+  if (report === "no" || (report === "not_a_report" && !(await operatorAuthorized(req)))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     if (body?.progress && typeof body.progress === "object") {
       const p = body.progress as Record<string, unknown>;
-      await setReelProgress(await getDb(), { code, pct: p.pct, minutesLeft: p.minutesLeft, step: p.step });
+      await setReelProgress(await getDb(), { code, pct: p.pct, minutesLeft: p.minutesLeft, step: p.step, waiting: p.waiting, host: p.host, upload: p.upload });
       revalidatePath(`/${code}`);
       return NextResponse.json({ ok: true, working: true });
     }
