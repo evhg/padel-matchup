@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { DomainError } from "@/lib/domain/errors";
 import { removeMatchReel, setMatchReel, setReelProgress } from "@/lib/domain/matchReel";
+import { notifyReelReady } from "@/lib/notify";
+import { events } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +21,9 @@ export const dynamic = "force-dynamic";
  *   DELETE /api/admin/match-reel   { "code": "AB12" }
  *
  * The files are `{host}/r/{token}/tall.mp4` and `wide.mp4` (`scripts/highlights/modal/serve.py`). The
- * players of the match see the reel for 30 days. A second POST replaces the first. Nothing is announced
- * to anybody. The answer never repeats the token.
+ * players of the match see the reel for 30 days. A second POST replaces the first. The first reel a
+ * match ever shows goes to every player of the match, once (`notifyReelReady`, after the answer); a new
+ * cut of it is not announced. The answer never repeats the token.
  */
 export async function POST(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -32,9 +36,15 @@ export async function POST(req: Request) {
       revalidatePath(`/${code}`);
       return NextResponse.json({ ok: true, working: true });
     }
-    const res = await setMatchReel(await getDb(), { code, host: body?.host, token: body?.token });
+    const db = await getDb();
+    const res = await setMatchReel(db, { code, host: body?.host, token: body?.token });
     revalidatePath(`/${code}`);
-    return NextResponse.json({ ok: true, replaced: res.replaced });
+    if (res.first)
+      after(async () => {
+        const [ev] = await db.select().from(events).where(eq(events.id, res.eventId)).limit(1);
+        if (ev) await notifyReelReady(db, ev).catch((e) => console.error("reel ready notice", e));
+      });
+    return NextResponse.json({ ok: true, replaced: res.replaced, told: res.first });
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") return NextResponse.json({ error: "not_found", hint: "No match has this code, or it was cancelled." }, { status: 404 });
     if (e instanceof DomainError) return NextResponse.json({ error: e.code, detail: e.message, hint: "code (a match that has started), host (https, no path), token (22 to 64 of A-Z a-z 0-9 _ -)" }, { status: 400 });

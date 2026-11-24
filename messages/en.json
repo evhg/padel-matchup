@@ -852,7 +852,8 @@
     "bookIntroLink": "Kicksmash found the link of your booking, but not the club, the day or the time. Fill them in on the form.",
     "playAgainIn": "I'm in",
     "playAgainLine": "{spots}. One tap opens the match page at the join step.",
-    "playAgainHeldLine": "One tap opens the match page at the join step."
+    "playAgainHeldLine": "One tap opens the match page at the join step.",
+    "watchReel": "Watch the reel"
   },
   "errors": {
     "not_found": "We couldn't find that.",
@@ -1224,7 +1225,8 @@
     "requestWaitlisted": "The organiser said yes. The match is full, so you are on the waiting list: {day} {time}, {venue}",
     "passkeySaved": "{what, select, unknown {A phone now signs you in.} other {A phone now signs you in: {name}.}} Not you? Remove it on My matches.",
     "removedBy": "{name} took you out of the match on {day} at {time}",
-    "replacedBy": "{name} took your place in the match on {day} at {time}"
+    "replacedBy": "{name} took your place in the match on {day} at {time}",
+    "reelReady": "The reel of your match on {day} at {time} is ready"
   },
   "privacy": {
     "title": "Privacy",
@@ -2974,6 +2976,30 @@
     "saveGetting": "Getting the video…",
     "saveGettingPct": "Getting the video… {pct}%",
     "saveNow": "Save video",
-    "saveAgain": "That did not work. Tap to try again"
+    "saveAgain": "That did not work. Tap to try again",
+    "mineTitle": "While you wait: make it yours",
+    "teamsLabel": "Team names",
+    "teamsChange": "Change",
+    "teamsDone": "Done",
+    "teamOne": "First team",
+    "teamTwo": "Second team",
+    "crowdLabel": "Crowd cheers and jeers",
+    "crowdSub": "After a big point and in a slow replay",
+    "numbersLabel": "Card of match numbers",
+    "numbersSub": "Six numbers at the end",
+    "musicTitle": "Choose the music",
+    "musicBounce": "Bounce",
+    "musicBounceSub": "Bass and claps",
+    "musicDnb": "Drum and bass",
+    "musicDnbSub": "Fast, 170 beats",
+    "musicBigscreen": "Big screen",
+    "musicBigscreenSub": "Orchestra and drums",
+    "musicSunrise": "Sunrise",
+    "musicSunriseSub": "Choir and hand drums",
+    "musicNone": "No music",
+    "musicNoneSub": "I add my own in Instagram or TikTok",
+    "hear": "Hear",
+    "hearStop": "Stop",
+    "musicHelp": "Tap Hear for ten seconds of a track. You can change it until the reel starts."
   }
 }

@@ -52,6 +52,7 @@ import { HighlightsLink } from "@/components/HighlightsLink";
 import { MatchNumbers } from "@/components/MatchNumbers";
 import { MatchReel } from "@/components/MatchReel";
 import { ReelSend } from "@/components/ReelSend";
+import { pairName } from "@/lib/domain/reelChoices";
 import { REEL_SEND_DAYS, reelState, reelStillAt } from "@/lib/domain/matchReel";
 import { matchNumbers } from "@/lib/domain/matchStats";
 import { SeriesDoor } from "@/components/SeriesBits";
@@ -124,6 +125,12 @@ type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: s
  * `readAt` is taken before the read, whichever of the two starts it: the page's `now`, so the notices
  * it marks read are only the ones made before it read the match (`markMatchNoticesRead`).
  */
+/** The two pairs of a played match by first names, "Ana & Bo": the reel's team names until a player changes them. */
+const reelTeams = (roster: readonly SlotWithPlayer[], one: string, two: string): [string, string] => {
+  const side = (team: "a" | "b") => roster.filter((s) => s.team === team && isOccupied(s)).map((s) => firstName(s.player?.displayName ?? s.invitedName ?? ""));
+  return [pairName(side("a"), one), pairName(side("b"), two)];
+};
+
 const eventOnce = cache(async (db: Db, code: string) => {
   const readAt = new Date();
   return { readAt, detail: await getEventByCode(db, code) };
@@ -1051,7 +1058,7 @@ async function EventPage({ params, searchParams }: Props) {
         {/* "Did you film it? Make the reel." (the owner's screen 3, and both ways to send the film, 23 November 2026).
             A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
             for ever; a film that is here says so until the reel plays. */}
-        {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} />}
+        {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} />}
         {reel?.kind === "working" && <ReelProgress pct={reel.progress.pct} readyBy={reel.progress.readyBy.toISOString()} step={reel.progress.step} />}
         {reel?.kind === "here" && (
           <section className="card" data-testid="reel-here">

@@ -243,7 +243,7 @@ export async function reelUploadReceived(db: Db, token: string): Promise<{ code:
  * row of the match is replaced. Refuses a match that has not started, a host that is not an https
  * address and a token of the wrong shape, each before any write.
  */
-export async function setMatchReel(db: Db, input: { code: string; host: unknown; token: unknown; now?: Date }): Promise<{ eventId: string; replaced: boolean }> {
+export async function setMatchReel(db: Db, input: { code: string; host: unknown; token: unknown; now?: Date }): Promise<{ eventId: string; replaced: boolean; first: boolean }> {
   const now = input.now ?? new Date();
   const host = reelHostOf(input.host);
   if (!host) throw new DomainError("invalid", "host");
@@ -251,13 +251,15 @@ export async function setMatchReel(db: Db, input: { code: string; host: unknown;
   const [ev] = await db.select({ id: events.id, startsAt: events.startsAt, status: events.status }).from(events).where(eq(events.code, input.code)).limit(1);
   if (!ev || ev.status === "cancelled") throw new DomainError("not_found");
   if (ev.startsAt.getTime() > now.getTime()) throw new DomainError("not_started");
-  const [old] = await db.select({ id: matchReels.id }).from(matchReels).where(eq(matchReels.eventId, ev.id)).limit(1);
+  const [old] = await db.select({ id: matchReels.id, readyAt: matchReels.readyAt }).from(matchReels).where(eq(matchReels.eventId, ev.id)).limit(1);
   const values = { status: "ready" satisfies ReelStatus, host, reelToken: input.token, readyAt: now, note: null };
   await db
     .insert(matchReels)
     .values({ eventId: ev.id, source: "operator", ...values })
     .onConflictDoUpdate({ target: matchReels.eventId, set: values });
-  return { eventId: ev.id, replaced: Boolean(old) };
+  // `first`: the match never had a reel on its page. A new cut after a progress report keeps `readyAt`
+  // of the last one, so the players hear of the reel once, not once for each cut (`notifyReelReady`).
+  return { eventId: ev.id, replaced: Boolean(old), first: !old?.readyAt };
 }
 
 /** The operator takes a reel off the match page. The files stay on the store until their days end. */
@@ -272,7 +274,7 @@ export async function removeMatchReel(db: Db, code: string): Promise<boolean> {
  * The reel's maker reports where it is (the owner, 24 November 2026: "Show the minutes remaining estimate
  * and progress bar instead"): a share done, the minutes it still needs, and what it does now. The row goes
  * to "working", and a reel that was shown goes off the page until the maker sends the new one. The engine
- * (or the session that runs it) calls this through `/api/admin/match-reel`; nothing is announced.
+ * (or the session that runs it) calls this through `/api/admin/match-reel`; this announces nothing.
  */
 export async function setReelProgress(db: Db, input: { code: string; pct: unknown; minutesLeft: unknown; step?: unknown; now?: Date }): Promise<{ eventId: string }> {
   const now = input.now ?? new Date();

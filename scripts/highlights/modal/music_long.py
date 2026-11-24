@@ -10,9 +10,10 @@ def make(jobs: list, seconds: float = 235.0, bpm: int = 100):
     import torch, io, soundfile as sf, traceback
     from diffusers import AceStepPipeline
     pipe = AceStepPipeline.from_pretrained('ACE-Step/acestep-v15-xl-turbo-diffusers', torch_dtype=torch.bfloat16).to('cuda'); pipe.vae.enable_tiling(); outs = []
-    for name, prompt, lyrics, seed in jobs:
+    for job in jobs:
+        name, prompt, lyrics, seed = job[:4]; tempo = job[4] if len(job) > 4 else bpm   # a job may name its own tempo
         try:
-            a = pipe(prompt=prompt, lyrics=lyrics, audio_duration=seconds, bpm=bpm, timesignature='4', generator=torch.Generator(device='cuda').manual_seed(seed)).audios[0]
+            a = pipe(prompt=prompt, lyrics=lyrics, audio_duration=seconds, bpm=tempo, timesignature='4', generator=torch.Generator(device='cuda').manual_seed(seed)).audios[0]
             b = io.BytesIO(); sf.write(b, a.T.cpu().float().numpy(), pipe.sample_rate, format='FLAC', subtype='PCM_24'); outs.append((name, b.getvalue(), pipe.sample_rate))
         except Exception: outs.append((name, traceback.format_exc()[-900:].encode(), 0))
     return outs

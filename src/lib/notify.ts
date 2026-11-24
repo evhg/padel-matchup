@@ -855,6 +855,30 @@ export async function notifyRemovedBy(db: Db, ev: Event, out: { playerId: string
   await tell(db, player, text, { inline_keyboard: [[{ text: open, url: eventUrl(baseUrl(), ev.code) }]] }, { notice: { sender, eventId: ev.id, params, startsAt: ev.startsAt, tz: ev.tz }, label: open }).catch(() => undefined);
 }
 
+/**
+ * The reel of a filmed match is on its page for the first time (`setMatchReel`): every player seated in
+ * the match hears it once, on the first channel they gave (`tell()`: Telegram, else email, else push),
+ * with one button to the match page, where the reel plays and saves. The inbox keeps it, and the kind
+ * switch ("Scores and results") and quiet hours hold. Four players at most, so one send each, side by
+ * side. A new cut of the same reel is not news: the caller tells only on the first ready.
+ */
+export async function notifyReelReady(db: Db, ev: Event): Promise<number> {
+  const detail = await getEventDetail(db, ev);
+  const ids = [...new Set(detail.roster.filter((s) => isOccupied(s) && s.playerId).map((s) => s.playerId as string))];
+  const params: NoticeParams = matchParams(ev);
+  const sent = await Promise.allSettled(
+    ids.map(async (id) => {
+      const player = await getPlayer(db, id);
+      if (!player) return;
+      const { t, locale } = await translatorFor(player.locale);
+      const text = t("noticeItem.reelReady", noticeVars(params, locale, t("event.venueTbd")));
+      const open = t("email.watchReel");
+      await tell(db, player, text, { inline_keyboard: [[{ text: open, url: eventUrl(baseUrl(), ev.code) }]] }, { notice: { sender: "reelReady", eventId: ev.id, params, startsAt: ev.startsAt, tz: ev.tz }, label: open });
+    }),
+  );
+  return sent.filter((r) => r.status === "fulfilled").length;
+}
+
 /** Immediate invite to a reserved spot when the organizer entered an email. */
 export async function sendInviteEmail(db: Db, ev: Event, slot: Slot, creator: Player): Promise<boolean> {
   if (!emailEnabled() || !slot.invitedEmail || !slot.inviteCode) return false;
