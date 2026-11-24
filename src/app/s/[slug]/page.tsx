@@ -79,7 +79,7 @@ async function SeriesPage({ params }: Props) {
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <section className="card">
-          <span className="chip-muted">🏆 {t("series.eyebrow")}</span>
+          <span className="chip-muted">{t("series.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{s.name}</h1>
           <p className="mt-1 font-semibold">
             {rhythm}
@@ -95,7 +95,7 @@ async function SeriesPage({ params }: Props) {
           </div>
           {s.venueMapUrl && (
             <a href={s.venueMapUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm mt-3">
-              📍 {t("event.openMap")}
+              {t("event.openMap")}
             </a>
           )}
           {mine && <SeriesPauseButton slug={s.slug} active={s.active} />}

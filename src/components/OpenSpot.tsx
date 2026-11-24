@@ -486,7 +486,7 @@ export function OpenSpot({
         {/* Done sends the invitation at once to a typed address (`reserveAction`, `sendInviteEmail`): said before the tap. */}
         {mode === "reserve" && !many && emailEnabled && email.trim() && (
           <p className="text-xs font-semibold text-muted" data-testid="reserve-emails-now">
-            ✉️ {t("creator.reserveEmailsNow")}
+            {t("creator.reserveEmailsNow")}
           </p>
         )}
         {contactHint && !many && (

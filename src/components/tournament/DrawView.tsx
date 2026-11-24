@@ -143,7 +143,7 @@ export async function DrawView({ view, slug, myMatchIds = [], organizer = false,
       {rounds(view.consolation, t("tournament.phaseConsolation"), "consolation-draw")}
       {view.champion && (
         <p className="mt-4 font-bold" data-testid="champion">
-          🏆 {t("tournament.champion")}: {view.champion.name}
+          {t("tournament.champion")}: {view.champion.name}
         </p>
       )}
       {view.consolationWinner && (

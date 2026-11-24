@@ -55,7 +55,7 @@ export function LevelAfterJoin({ playerId }: { playerId: string }) {
   };
 
   return (
-    <div className="mt-3 rounded-2xl border border-line px-4 py-3" data-testid="level-after-join">
+    <div className="mt-4 border-t border-line pt-3" data-testid="level-after-join">
       <div className="font-bold">{t("level.joinedTitle")}</div>
       <p className="mt-0.5 text-sm text-muted">{t("level.joinedHelp")}</p>
       {/* The buttons wrap rather than share three equal columns: "Продвинутый" needs 127 px with its

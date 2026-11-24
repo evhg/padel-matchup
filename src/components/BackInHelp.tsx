@@ -39,7 +39,7 @@ export function BackInHelp({ doors, bare = false }: { doors: BackInDoors; bare?:
       </div>
     );
   return (
-    <div ref={box} data-testid="back-in-open" className={bare ? "mt-2" : "mt-3 rounded-2xl border border-line bg-card px-3 py-3"}>
+    <div ref={box} data-testid="back-in-open" className={bare ? "mt-2" : "mt-3 rounded-2xl bg-card px-3 py-3"}>
       {!bare && <p className="text-sm font-bold">{t("identity.usedBefore")}</p>}
       <div className={bare ? "" : "mt-2"}>
         <PasskeySignIn />

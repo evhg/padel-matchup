@@ -29,7 +29,7 @@ export function PassportCard({ publicOn, slug, base, byName = null }: { publicOn
     <section className="card">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-lg font-extrabold">🪪 {t("passport.title")}</h2>
+          <h2 className="text-lg font-extrabold">{t("passport.title")}</h2>
           <p className="mt-1 text-xs text-muted">{t("passport.sub")}</p>
         </div>
       </div>
@@ -49,7 +49,7 @@ export function PassportCard({ publicOn, slug, base, byName = null }: { publicOn
           </a>
           <CopyButton value={url} label={t("common.copy")} copiedLabel={t("common.copied")} className="btn-ghost btn-sm" />
           <a href={`${url}/passport`} className="btn-ghost btn-sm" title={t("passport.signedHelp")}>
-            🔏 {t("passport.signed")}
+            {t("passport.signed")}
           </a>
         </div>
       )}

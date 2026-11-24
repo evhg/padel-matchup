@@ -151,7 +151,7 @@ async function SharePage({ params }: Props) {
               </div>
             </div>
             <div>
-              <h2 className="font-extrabold">📸 {t("share.story")}</h2>
+              <h2 className="font-extrabold">{t("share.story")}</h2>
               <p className="mt-0.5 text-sm text-muted">{t("share.storyHint", { link: `${shortHost()}/${code}` })}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <a href={`/${code}/story`} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">

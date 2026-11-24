@@ -135,7 +135,7 @@ async function CoachPublicPage({ params, searchParams }: Props) {
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
         {coach.isPublic && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />}
         <section className="card">
-          <span className="chip-muted">🎾 {t("page.coach")}</span>
+          <span className="chip-muted">{t("page.coach")}</span>
           {founding && <span className="chip-muted ml-2">🏅 {foundingCity ? t("page.founding", { city: foundingCity }) : t("page.foundingPlain")}</span>}
           {/* A player arriving from a forwarded link had no way to tell this was really their coach. */}
           <div className="mt-3 flex items-center gap-3">

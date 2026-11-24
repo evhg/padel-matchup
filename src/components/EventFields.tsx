@@ -526,13 +526,13 @@ export function EventFields({
       </div>
       {(lacks.date || lacks.time) && (
         <div className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-missing-when">
-          {lacks.date && <p id="paste-no-date">✏️ {t("create.pasteNoDay")}</p>}
-          {lacks.time && <p id="paste-no-time">✏️ {t("create.pasteNoTime")}</p>}
+          {lacks.date && <p id="paste-no-date">{t("create.pasteNoDay")}</p>}
+          {lacks.time && <p id="paste-no-time">{t("create.pasteNoTime")}</p>}
         </div>
       )}
       {doubt.date && (
         <p id="paste-check-day" className="-mt-3 text-sm font-semibold text-warn" data-testid="paste-check-day">
-          ✏️ {t("create.pasteCheckDay")}
+          {t("create.pasteCheckDay")}
         </p>
       )}
       {compact ? (
@@ -592,12 +592,12 @@ export function EventFields({
         <VenueCombobox venues={venues} value={values.venueName} mapUrl={values.venueMapUrl} onChange={(v) => onChange({ venueName: v.name, venueMapUrl: v.mapUrl })} enterKeyHint={enterNext ? "next" : undefined} mapField={!compact} />
         {lacks.venue && (
           <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-missing-club">
-            ✏️ {t("create.pasteNoClub")}
+            {t("create.pasteNoClub")}
           </p>
         )}
         {doubt.venue && (
           <p className="mt-1.5 text-sm font-semibold text-warn" data-testid="paste-check-club">
-            ✏️ {t("create.pasteCheckClub")}
+            {t("create.pasteCheckClub")}
           </p>
         )}
       </div>
@@ -605,7 +605,7 @@ export function EventFields({
       {!compact && courtEl}
       {courtTotal && (
         <p className="-mt-2 text-sm text-muted" data-testid="paste-total">
-          💸 {t("create.pasteTotal", { total: courtTotal })}
+          {t("create.pasteTotal", { total: courtTotal })}
         </p>
       )}
 
@@ -761,7 +761,7 @@ export function EventFields({
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-bg px-4 py-3">
           <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={values.publicListing} onChange={(e) => onChange({ publicListing: e.target.checked })} />
           <span className="min-w-0">
-            <span className="block font-bold">📍 {t("venue.listToggle")}</span>
+            <span className="block font-bold">{t("venue.listToggle")}</span>
             <span className="block text-xs text-muted">{t("venue.listHelp")}</span>
           </span>
         </label>

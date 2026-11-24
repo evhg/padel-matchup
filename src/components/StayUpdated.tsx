@@ -107,7 +107,7 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
     // all, because it gets neither (DECIDING rule 34).
     const mail = said === "invite" && sentTo ? (
       <>
-        <div className="mt-1 text-muted">📅 {t("calendar.sentTo", { email: sentTo })}</div>
+        <div className="mt-1 text-muted">{t("calendar.sentTo", { email: sentTo })}</div>
         {member && (
           <div className="mt-1 text-muted">
             {resent ? (
@@ -135,10 +135,10 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
         )}
       </>
     ) : said === "link" ? (
-      <div className="mt-1 text-muted">✉️ {t(request ? "calendar.linkSentRequest" : "calendar.linkSent")}</div>
+      <div className="mt-1 text-muted">{t(request ? "calendar.linkSentRequest" : "calendar.linkSent")}</div>
     ) : null;
     return (
-      <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl bg-bg px-4 py-3 text-sm" data-testid="stay-updated">
+      <div ref={box} className="mt-4 scroll-mt-4 border-t border-line pt-3 text-sm" data-testid="stay-updated">
         <div className="font-semibold text-ok">{line}</div>
         {sentTo ? mail : feed && <CalendarSubscribe webcal={feed.webcal} google={feed.google} chat={withEmail.includes("telegram")} />}
       </div>
@@ -151,8 +151,8 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
   // Email alone needs no choosing: the form is the card.
   const showForm = emailChoice && (emailOpen || chats.length === 0);
   return (
-    <div ref={box} className="mt-4 scroll-mt-4 rounded-2xl border border-court/30 bg-court-soft/40 p-4" data-testid="stay-updated">
-      <div className="font-bold">🔔 {t("calendar.stayTitle")}</div>
+    <div ref={box} className="mt-4 scroll-mt-4 border-t border-line pt-4" data-testid="stay-updated">
+      <div className="font-bold">{t("calendar.stayTitle")}</div>
       <p className="mt-0.5 text-sm text-muted">{t(request ? "calendar.stayHelpRequest" : "calendar.stayHelp")}</p>
       {chats.length > 0 && (
         <div className={`mt-3 grid gap-2 ${chats.length + (emailChoice ? 1 : 0) === 3 ? "grid-cols-3" : "grid-cols-2"}`}>

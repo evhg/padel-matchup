@@ -171,7 +171,7 @@ export function ScorePanel({
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-lg font-extrabold">{scores.length ? t("score.result") : t("score.title")}</h2>
         {locked && scores.length > 0 && !correction && <span className="chip-open">✓ {t("score.confirmedByOrganizer")}</span>}
-        {locked && scores.length > 0 && correction && <span className="chip-open">✎ {t("score.correctedBy", { name: correction.by })}</span>}
+        {locked && scores.length > 0 && correction && <span className="chip-open">{t("score.correctedBy", { name: correction.by })}</span>}
       </div>
 
       {scores.length > 0 && !editing && (
@@ -224,7 +224,7 @@ export function ScorePanel({
         </div>
       )}
 
-      {!editing && prompt && scores.length === 0 && <p className="mt-2 font-bold" data-testid="score-prompt">🏆 {prompt}</p>}
+      {!editing && prompt && scores.length === 0 && <p className="mt-2 font-bold" data-testid="score-prompt">{prompt}</p>}
       {!editing && canEdit && (
         <button type="button" className={`${scores.length ? "btn-ghost btn-sm" : "btn-primary w-full"} mt-4`} onClick={() => setEditing(true)}>
           {scores.length ? t("score.edit") : t("score.enter")}
@@ -261,7 +261,7 @@ export function ScorePanel({
               {balanced && !balancedChosen && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-bg px-3 py-2 text-sm">
                   <span>
-                    <span className="font-bold">⚖️ {t("level.balancedTitle")}:</span> {t("level.balancedTeams", { a1: nameOf(balanced.a[0]), a2: nameOf(balanced.a[1]), b1: nameOf(balanced.b[0]), b2: nameOf(balanced.b[1]) })}{" "}
+                    <span className="font-bold">{t("level.balancedTitle")}:</span> {t("level.balancedTeams", { a1: nameOf(balanced.a[0]), a2: nameOf(balanced.a[1]), b1: nameOf(balanced.b[0]), b2: nameOf(balanced.b[1]) })}{" "}
                     <span className="text-faint">({t("level.balancedDiff", { diff: formatLevel(balanced.diff) })})</span>
                   </span>
                   <button type="button" className="btn-ghost btn-xs" onClick={() => setTeamA([...balanced.a])}>

@@ -112,7 +112,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
           {rest.map((s) => (
             // The id is what the name on the coach's book links to; :target lights the row up on arrival.
             // The dimming sits on the text, not the row: a dimmed row made "Resume bookings" look disabled.
-            <li key={s.playerId} id={`s-${s.playerId}`} className="scroll-mt-24 rounded-2xl border border-line bg-card px-4 py-3 target:ring-2 target:ring-accent" data-testid="student-row">
+            <li key={s.playerId} id={`s-${s.playerId}`} className="scroll-mt-24 rounded-2xl bg-card px-4 py-3 target:ring-2 target:ring-accent" data-testid="student-row">
               <div className="flex items-start justify-between gap-3">
                 <div className={`min-w-0 ${s.status === "paused" || s.status === "left" || s.status === "blocked" ? "opacity-60" : ""}`}>
                   <div className="truncate font-bold">
@@ -216,7 +216,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                 )}
                 {s.pkg && (
                   <button type="button" className="btn-ghost btn-xs" disabled={pending} onClick={() => { const n = askAmount(s.name, s.pkg!.amount); if (n !== null) act(() => setPackageAmountAction(s.pkg!.id, n)); }} data-testid="edit-package-amount">
-                    ✎ {t("home.editAmount")}
+                    {t("home.editAmount")}
                   </button>
                 )}
                 <button type="button" className="btn-ghost btn-xs" onClick={() => setPackageFor(packageFor === s.playerId ? null : s.playerId)}>
@@ -224,7 +224,7 @@ export function CoachStudents({ coachName, handle, students, promptpayId, qrUrl,
                 </button>
               </div>
               {qrFor && s.pkg && qrFor.id === s.pkg.id && (
-                <div className="mt-3 rounded-2xl border border-line bg-bg p-3 animate-pop">
+                <div className="mt-3 rounded-2xl bg-bg p-3 animate-pop">
                   <div className="text-sm font-bold">
                     {t("students.scanToPay", { name: coachName })}
                     {qrFor.amount ? ` · ${qrFor.amount} ${qrFor.currency}` : ""}
@@ -324,7 +324,7 @@ function PackageForm({ studentPlayerId, currency, onDone }: { studentPlayerId: s
   const [paid, setPaid] = useState(false);
   return (
     <form
-      className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-line bg-bg p-3 animate-pop"
+      className="mt-3 grid grid-cols-2 gap-3 rounded-2xl bg-bg p-3 animate-pop"
       onSubmit={(e) => {
         e.preventDefault();
         start(async () => {

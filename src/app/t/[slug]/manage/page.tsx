@@ -60,7 +60,7 @@ async function ManageTournamentPage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏆 {t("tournament.manage")}</span>
+          <span className="chip-muted">{t("tournament.manage")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{c.name}</h1>
           <Link href={`/t/${c.slug}`} prefetch={false} className="btn-ghost btn-sm mt-3">
             {t("tournament.open")}

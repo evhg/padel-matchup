@@ -13,7 +13,7 @@ export function CalendarSubscribe({ webcal, google, chat }: { webcal: string; go
     <div className="mt-2" data-testid="calendar-subscribe">
       <div className="flex flex-wrap gap-2">
         <a href={webcal} className="btn-secondary btn-sm whitespace-normal text-left leading-snug">
-          📅 {t("subscribe")}
+          {t("subscribe")}
         </a>
         <a href={google} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm whitespace-normal text-left leading-snug">
           {t("subscribeGoogle")}

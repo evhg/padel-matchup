@@ -17,7 +17,7 @@ export async function CoachCard({ db, coach }: { db: Db; coach: Coach }) {
   return (
     <section className="card flex items-center justify-between gap-3" data-testid="coach-card">
       <div className="min-w-0">
-        <div className="text-lg font-extrabold">🎾 {t("me.assistant")}</div>
+        <div className="text-lg font-extrabold">{t("me.assistant")}</div>
         <div className="text-sm text-muted">{t("me.assistantToday", { count: today })}</div>
         {gaps.length > 0 && (
           <div className="mt-1 text-sm font-bold text-warn" data-testid="coach-card-gaps">

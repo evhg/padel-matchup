@@ -130,7 +130,7 @@ async function InvitePage({ params, searchParams }: Props) {
             {venue}
             {ev.venueMapUrl && (
               <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm link">
-                📍 {t("event.openMap")}
+                {t("event.openMap")}
               </a>
             )}
           </div>

@@ -21,7 +21,7 @@ export function FeedbackInline({ signedInVia, variant, help, shipped }: { signed
     return (
       <p className="text-center">
         <button type="button" className="text-sm font-bold text-muted underline decoration-dotted underline-offset-4 hover:text-ink" onClick={() => setOpen(true)}>
-          💬 {t("title")}
+          {t("title")}
         </button>
         <span className="mt-1 block text-xs text-faint">{help ?? t("lineHelp")}</span>
       </p>
@@ -31,7 +31,7 @@ export function FeedbackInline({ signedInVia, variant, help, shipped }: { signed
   // the card says that first, and then proves it with the number of ideas that are already in.
   return (
     <section className="card">
-      <h2 className="text-lg font-extrabold">💬 {t("builtTitle")}</h2>
+      <h2 className="text-lg font-extrabold">{t("builtTitle")}</h2>
       <p className="mt-1 text-sm text-muted">{t("builtBody")}</p>
       {shipped !== undefined && (
         <p className="mt-1 text-sm font-bold text-court" data-testid="feedback-shipped">

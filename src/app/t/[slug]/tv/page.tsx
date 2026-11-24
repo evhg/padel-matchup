@@ -52,7 +52,7 @@ export default async function TvPage({ params }: Props) {
       {board.finished ? (
         // The weekend is over: the champions in the biggest type on the screen, not four free courts.
         <section className="card mt-8" data-testid="tv-over">
-          <h2 className="text-3xl font-extrabold">🏆 {t("tournament.champion")}</h2>
+          <h2 className="text-3xl font-extrabold">{t("tournament.champion")}</h2>
           <ul className="mt-3 flex flex-col gap-2 text-3xl" data-testid="tv-champions">
             {board.champions.map((ch) => (
               <li key={ch.categoryName}>
@@ -138,7 +138,7 @@ export default async function TvPage({ params }: Props) {
           )}
           {!board.finished && board.champions.length > 0 && (
             <div className="mt-4" data-testid="tv-champions">
-              <h2 className="text-lg font-extrabold">🏆 {t("tournament.champion")}</h2>
+              <h2 className="text-lg font-extrabold">{t("tournament.champion")}</h2>
               <ul className="mt-1 text-lg">
                 {board.champions.map((ch) => (
                   <li key={ch.categoryName}>

@@ -65,13 +65,13 @@ export function CalendarEmail({
       return (
         <div className={`rounded-2xl bg-bg px-4 py-3 text-sm ${className}`} data-testid="calendar-email">
           <div className="font-semibold text-ok">{t("calendar.reached", { places: t("calendar.viaEmail") })}</div>
-          {said === "link" && <div className="mt-1 text-muted">✉️ {t("calendar.linkSent")}</div>}
+          {said === "link" && <div className="mt-1 text-muted">{t("calendar.linkSent")}</div>}
         </div>
       );
     }
     return (
       <div className={`rounded-2xl bg-bg px-4 py-3 text-sm ${className}`} data-testid="calendar-email">
-        <div className="font-semibold text-ok">📅 {t("calendar.sentTo", { email: sentTo })}</div>
+        <div className="font-semibold text-ok">{t("calendar.sentTo", { email: sentTo })}</div>
         {member && (
           <div className="mt-1 text-muted">
             {resent ? (
@@ -104,7 +104,7 @@ export function CalendarEmail({
   if (codeTo)
     return (
       <div className={`rounded-2xl border border-court/30 bg-court-soft/40 p-4 ${className}`} data-testid="calendar-email">
-        <div className="mb-2 font-bold">🔔 {t("calendar.stayTitle")}</div>
+        <div className="mb-2 font-bold">{t("calendar.stayTitle")}</div>
         <EmailCodeStep
           email={codeTo}
           verifyLabel={t("identity.confirmCode")}

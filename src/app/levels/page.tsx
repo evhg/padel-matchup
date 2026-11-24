@@ -39,7 +39,7 @@ export default async function LevelsPage() {
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         <section className="card">
-          <span className="chip-muted">🎚️ {t("levels.eyebrow")}</span>
+          <span className="chip-muted">{t("levels.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("levels.title")}</h1>
           <p className="mt-2 text-sm text-muted">{t("levels.sub")}</p>
         </section>

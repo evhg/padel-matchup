@@ -29,7 +29,7 @@ export default async function SeriesRankingPage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏆 {t("tournament.ranking")}</span>
+          <span className="chip-muted">{t("tournament.ranking")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("tournament.rankingTitle", { tag: raw })}</h1>
           <p className="mt-2 text-sm text-muted">{t("tournament.rankingSub")}</p>
         </section>

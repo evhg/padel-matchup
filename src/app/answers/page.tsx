@@ -30,7 +30,7 @@ export default async function AnswersIndex() {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">💬 {t("answers.eyebrow")}</span>
+          <span className="chip-muted">{t("answers.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("answers.title")}</h1>
           <p className="mt-2 text-sm text-muted">{t("answers.sub")}</p>
         </section>

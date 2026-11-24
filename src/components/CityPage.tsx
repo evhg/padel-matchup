@@ -51,7 +51,7 @@ export async function CityPage({ city }: { city: City }) {
                 const forChip = tagChip(t, ev);
                 return (
                   <li key={ev.id}>
-                    <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-4 rounded-2xl border border-line px-4 py-3 hover:border-ink/30">
+                    <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-4 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60">
                       <div className="w-16 shrink-0 text-center">
                         <div className="text-xs font-bold uppercase text-muted">{formatEventDay(ev.startsAt, ev.tz, locale)}</div>
                         <div className="text-lg font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
@@ -80,7 +80,7 @@ export async function CityPage({ city }: { city: City }) {
             <ul className="mt-3 flex flex-col gap-2">
               {opens.map(({ series: s, next }) => (
                 <li key={s.id}>
-                  <Link href={`/s/${s.slug}`} prefetch={false} className="flex items-center gap-4 rounded-2xl border border-line px-4 py-3 hover:border-ink/30">
+                  <Link href={`/s/${s.slug}`} prefetch={false} className="flex items-center gap-4 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60">
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-bold">{s.name}</div>
                       <div className="truncate text-sm text-muted">
@@ -125,7 +125,7 @@ export async function CityPage({ city }: { city: City }) {
           )}
           {clubs.length === 0 && otherClubs.length === 0 && <p className="mt-2 text-sm text-muted">{t("club.noClubs")}</p>}
           <div className="mt-4 rounded-2xl bg-bg px-4 py-3">
-            <div className="text-sm font-bold">🌱 {t("club.founding")}</div>
+            <div className="text-sm font-bold">{t("club.founding")}</div>
             <p className="mt-1 text-xs text-muted">{t("club.foundingBody")}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Link href="/clubs/claim" prefetch={false} className="btn-secondary btn-sm">
@@ -139,7 +139,7 @@ export async function CityPage({ city }: { city: City }) {
         <RecentResults results={results} showVenue />
 
         <section className="card">
-          <h2 className="text-lg font-extrabold">🏆 {t("city.ranking", { city: city.name })}</h2>
+          <h2 className="text-lg font-extrabold">{t("city.ranking", { city: city.name })}</h2>
           <p className="mt-1 text-sm text-muted">{t("ranking.sub")}</p>
           <RankingTable rows={ranking.rows.slice(0, 25)} events={ranking.events} highlightId={me?.id ?? null} />
           {me ? <RankingOptIn optedIn={me.rankingOptIn} /> : <p className="mt-3 text-xs text-faint">{t("ranking.optInOnly")}</p>}

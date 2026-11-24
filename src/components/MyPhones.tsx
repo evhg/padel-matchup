@@ -52,7 +52,7 @@ export function MyPhones({ rows, canSave }: { rows: PhoneRow[]; canSave: boolean
         {rows.map((r) => {
           const label = r.label ?? t("identity.phoneUnknown");
           return (
-            <li key={r.handle} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3" data-testid="my-phone">
+            <li key={r.handle} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3" data-testid="my-phone">
               <div className="min-w-0">
                 <div className="truncate font-bold">{label}</div>
                 <div className="text-xs text-muted">{[t("identity.phoneSaved", { date: r.saved }), r.used ? t("identity.phoneUsed", { date: r.used }) : null].filter(Boolean).join(" · ")}</div>

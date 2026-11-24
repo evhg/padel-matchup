@@ -57,7 +57,7 @@ export default async function AboutPage() {
           <p className="mt-2 text-sm text-ink-soft">{t("about.botPaste")}</p>
         </section>
         <section className="card">
-          <h2 className="font-extrabold">💬 {t("feedback.title")}</h2>
+          <h2 className="font-extrabold">{t("feedback.title")}</h2>
           <p className="mt-1 text-sm text-ink-soft">{t("feedback.sub")}</p>
           <Link href="/feedback" prefetch={false} className="btn-secondary mt-3 self-start">
             {t("feedback.footerLink")} →

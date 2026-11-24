@@ -6,4 +6,4 @@ import type { Viewport } from "next";
  * browser's own bar must stay light with it, so these pages set one light theme-color, the light
  * page ground, in place of the root layout's pair. `tests/contrast.test.ts` holds every such page to it.
  */
-export const KEEP_LIGHT_VIEWPORT: Viewport = { themeColor: "#f4f3ee" };
+export const KEEP_LIGHT_VIEWPORT: Viewport = { themeColor: "#f2f2f7" };

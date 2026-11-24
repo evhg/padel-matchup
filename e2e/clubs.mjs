@@ -534,7 +534,7 @@ try {
   // More options stands open here for the two names the booking carried (a closed one is checked below, on a paste with no names).
   check(
     "the court's total is one line under the court, and More options' summary names no cost per player",
-    totalSays.line === "💸 The booking says 1,600 THB for the court. Add the cost per player under More options." && !totalSays.summary.includes("per player"),
+    totalSays.line === "The booking says 1,600 THB for the court. Add the cost per player under More options." && !totalSays.summary.includes("per player"),
     JSON.stringify(totalSays),
   );
   await shot(page, "clubs-paste-total");

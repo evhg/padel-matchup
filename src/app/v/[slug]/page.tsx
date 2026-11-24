@@ -94,7 +94,7 @@ async function VenueBoardPage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">📍 {t("venue.board")}</span>
+          <span className="chip-muted">{t("venue.board")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("venue.boardTitle", { venue: shown?.name ?? board.name })}</h1>
           <p className="mt-1 text-muted">{shown?.about ?? t("venue.boardSub")}</p>
           {shown && (
@@ -116,12 +116,12 @@ async function VenueBoardPage({ params }: Props) {
             {shown && <BookingButton club={shown} />}
             {shown?.website && (
               <a href={shown.website} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
-                🌐 {t("club.website")}
+                {t("club.website")}
               </a>
             )}
             {mapUrl && (
               <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
-                📍 {t("event.openMap")}
+                {t("event.openMap")}
               </a>
             )}
           </div>
@@ -272,10 +272,10 @@ async function VenueBoardPage({ params }: Props) {
         <RecentResults results={results} />
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <Link href={`/v/${slug}/ranking`} prefetch={false} className="link">
-            🏆 {t("ranking.title")}
+            {t("ranking.title")}
           </Link>
           <Link href={`/v/${slug}/poster`} prefetch={false} className="link">
-            🖨 {t("venue.poster")}
+            {t("venue.poster")}
           </Link>
           {/* An empty board already offers "Organize one here", to the same address: one door, not two. */}
           {(later.length > 0 || week) && (
@@ -291,7 +291,7 @@ async function VenueBoardPage({ params }: Props) {
             <ul className="mt-3 flex flex-col gap-2">
               {coachesHere.map((c) => (
                 <li key={c.id}>
-                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
+                  <Link href={`/c/${c.handle}`} prefetch={false} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60">
                     <span className="font-bold">{c.displayName}</span>
                     <span className="text-xs text-muted">{t("coach.page.lesson", { minutes: c.lessonMinutes })} ›</span>
                   </Link>

@@ -79,7 +79,7 @@ export function PasteBooking({ max, shot, mail = null }: { max: number; /** No d
   return (
     <>
       <button type="button" className="link text-sm font-semibold" aria-expanded={open} aria-controls={box} onClick={() => setOpen((o) => !o)} data-testid="paste-door">
-        📋 {t("pasteDoor")}
+        {t("pasteDoor")}
       </button>
       {open && (
         <div id={box} className="card basis-full animate-pop" data-testid="paste-sheet">
@@ -132,7 +132,7 @@ export function PasteBooking({ max, shot, mail = null }: { max: number; /** No d
                 data-testid="paste-shot-file"
               />
               <button type="button" className="btn-ghost mt-2 w-full" disabled={pending} onClick={() => picker.current?.click()} data-testid="paste-shot">
-                📷 {t("pasteShot")}
+                {t("pasteShot")}
               </button>
               <p className="mt-1 text-center text-xs text-muted">{t("pasteShotNote")}</p>
             </>

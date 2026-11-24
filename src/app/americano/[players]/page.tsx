@@ -59,7 +59,7 @@ async function AmericanoStaticPage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🔁 {t("americano.gen.title")}</span>
+          <span className="chip-muted">{t("americano.gen.title")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("americano.static.title", { players: n })}</h1>
           <p className="mt-2 text-sm text-muted">{t("americano.static.sub", { players: n, courts, rounds: total })}</p>
           <div className="mt-3 flex flex-wrap gap-2">

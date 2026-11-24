@@ -9,14 +9,17 @@
    These are the light values. Tailwind writes each one as a variable on :root and every utility
    reads the variable, so the dark set only has to give the same names new values. */
 @theme {
-  --color-bg: #f4f3ee;
+  /* The iPhone's own greys (docs/DESIGN.md, the owner's standard of 24 November 2026): the grouped page
+     ground, white cards on it, hairlines in systemGray5 and systemGray4, and a grey fill for a quiet button. */
+  --color-bg: #f2f2f7;
   --color-card: #ffffff;
-  --color-ink: #14161a;
-  --color-ink-soft: #2a2f36;
-  --color-muted: #545c67;
-  --color-faint: #676e7a;
-  --color-line: #e4e2da;
-  --color-line-strong: #cfcdc3;
+  --color-ink: #1c1c1e;
+  --color-ink-soft: #3a3a3c;
+  --color-muted: #5c5c62;
+  --color-faint: #6c6c71;
+  --color-line: #e5e5ea;
+  --color-line-strong: #d1d1d6;
+  --color-fill: #e8e8ed;
   --color-accent: #c8f135;
   --color-accent-deep: #b3dc23;
   --color-accent-soft: #eefbc4;
@@ -24,9 +27,9 @@
   --color-court-soft: #e8eefc;
   --color-danger: #d02828;
   --color-danger-soft: #fdecec;
-  --color-ok: #15803d;
+  --color-ok: #137a3a;
   --color-ok-soft: #e6f6ec;
-  --color-warn: #b45309;
+  --color-warn: #a84e08;
   --color-warn-soft: #fef3c7;
   /* The knob of a switch that is off, on its line-strong track. Light: white, as it always was. Dark:
      the knob was on-ink, navy on a slate track at 1.98:1, under the 3:1 a control's parts need. */
@@ -39,10 +42,18 @@
   --color-night: #14161a;
   /* The smallest text: chips and the footnotes beside them. A size in rem grows with "Bigger text";
      the px sizes this replaced (text-[11px]) stayed where they were while everything round them grew. */
-  --text-2xs: 0.6875rem;
-  --text-2xs--line-height: calc(1 / 0.6875);
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: calc(1 / 0.75);
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, system-ui, sans-serif;
-  --shadow-card: 0 1px 2px rgb(20 22 26 / 0.04), 0 10px 30px -14px rgb(20 22 26 / 0.16);
+  /* A card has no shadow (docs/DESIGN.md: a surface is set apart by its colour, not by a shadow). This one is
+     for what lifts above the page: the picked segment, a sheet, the share bar. */
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+  /* The weights of the iPhone (docs/DESIGN.md): titles bold, headlines and buttons semibold, labels medium.
+     The app's classes were a step heavier everywhere, so the names keep their places and the weights move
+     down one step: font-extrabold is 700, font-bold 600, font-semibold 500. */
+  --font-weight-extrabold: 700;
+  --font-weight-bold: 600;
+  --font-weight-semibold: 500;
   --shadow-bar: 0 -8px 30px -12px rgb(20 22 26 / 0.25);
 }
 
@@ -54,14 +65,15 @@
 @media screen and (prefers-color-scheme: dark) {
   :root:not(:has([data-keep-light])) {
     color-scheme: dark;
-    --color-bg: #0f1520;
-    --color-card: #18202d;
-    --color-ink: #eef1f5;
-    --color-ink-soft: #d3d9e1;
-    --color-muted: #a9b2bf;
-    --color-faint: #8f99a7;
-    --color-line: #29323f;
-    --color-line-strong: #3d4859;
+    --color-bg: #000000;
+    --color-card: #1c1c1e;
+    --color-ink: #f5f5f7;
+    --color-ink-soft: #d1d1d6;
+    --color-muted: #aeaeb2;
+    --color-faint: #98989e;
+    --color-line: #38383a;
+    --color-line-strong: #48484a;
+    --color-fill: #2c2c2e;
     --color-accent: #c8f135;
     --color-accent-deep: #b3dc23;
     --color-accent-soft: #263218;
@@ -73,9 +85,9 @@
     --color-ok-soft: #163024;
     --color-warn: #e9b672;
     --color-warn-soft: #3a2d16;
-    --color-on-ink: #0f1520;
+    --color-on-ink: #1c1c1e;
     --color-knob-off: #d3d9e1;
-    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 30px -14px rgb(0 0 0 / 0.6);
+    --shadow-card: 0 1px 3px rgb(0 0 0 / 0.5);
     --shadow-bar: 0 -8px 30px -12px rgb(0 0 0 / 0.7);
   }
 }
@@ -124,27 +136,32 @@
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-2xl font-bold text-base leading-none select-none transition-[transform,background-color,opacity] active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none min-h-14 px-5 touch-manipulation whitespace-nowrap;
+  @apply inline-flex items-center justify-center gap-2 rounded-[14px] font-bold text-[1.0625rem] leading-none select-none transition-[transform,background-color,opacity] active:opacity-70 disabled:opacity-50 disabled:pointer-events-none min-h-14 px-5 touch-manipulation whitespace-nowrap;
 }
 @utility input {
-  @apply w-full rounded-2xl border border-line-strong bg-card px-4 min-h-14 text-base text-ink placeholder:text-faint focus:outline-none focus:ring-4 focus:ring-accent/60 focus:border-ink;
+  @apply w-full rounded-xl border border-transparent bg-fill px-4 min-h-[50px] text-[1.0625rem] text-ink placeholder:text-faint focus:outline-none focus:bg-card focus:ring-2 focus:ring-court/50 focus:border-ink;
 }
+/* A chip says a state in sentence case, as the iPhone does: "Open", never "OPEN". */
 @utility chip {
-  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-extrabold uppercase tracking-wider leading-none;
+  @apply inline-flex items-center gap-1 rounded-full px-2 py-1 text-2xs font-semibold leading-none;
 }
 
 @layer components {
+  /* A card is a white group on the grey page, as in the iPhone's Settings: no border, no shadow. Inside it,
+     parts are set apart by a hairline (`divide-y divide-line`), never by a second box (docs/DESIGN.md). */
   .card {
-    @apply bg-card rounded-3xl border border-line shadow-card p-5;
+    @apply bg-card rounded-[20px] p-5;
   }
   .btn-primary {
     @apply btn bg-accent text-night hover:bg-accent-deep;
   }
+  /* The iPhone's grey button: the second action of a card. One lime button (.btn-primary) on a screen at most. */
   .btn-secondary {
-    @apply btn bg-ink text-on-ink hover:bg-ink-soft;
+    @apply btn bg-fill text-ink hover:bg-line-strong;
   }
+  /* The iPhone's plain button: words in the tint colour, no fill until it is pressed. */
   .btn-ghost {
-    @apply btn bg-card border border-line-strong text-ink hover:bg-bg;
+    @apply btn bg-transparent text-court hover:bg-fill;
   }
   .btn-danger {
     @apply btn bg-danger-soft text-danger hover:brightness-95;
@@ -155,7 +172,7 @@
     @apply btn;
   }
   .btn-sm {
-    @apply min-h-11 px-4 text-sm rounded-xl;
+    @apply min-h-11 px-4 text-[0.9375rem] rounded-xl;
   }
   .btn-xs {
     @apply min-h-9 px-3 text-xs rounded-lg;
@@ -164,7 +181,7 @@
     @apply input py-3 min-h-24 resize-y;
   }
   .label {
-    @apply block text-sm font-semibold text-muted mb-1.5;
+    @apply block text-sm font-semibold text-muted mb-1.5 px-1;
   }
   .chip-open {
     @apply chip bg-accent-soft text-ok;
@@ -176,19 +193,20 @@
     @apply chip bg-court-soft text-court;
   }
   .chip-muted {
-    @apply chip bg-bg text-muted;
+    @apply chip bg-fill text-muted;
   }
   .chip-danger {
     @apply chip bg-danger-soft text-danger;
   }
   .link {
-    @apply text-court font-semibold underline-offset-4 hover:underline;
+    @apply text-court underline-offset-4 hover:underline;
   }
+  /* The iPhone's segmented control: a grey track, the picked part white and lifted. */
   .segment {
-    @apply grid grid-flow-col auto-cols-fr rounded-2xl bg-bg p-1 border border-line;
+    @apply grid grid-flow-col auto-cols-fr rounded-xl bg-fill p-0.5;
   }
   .segment > button {
-    @apply rounded-xl min-h-12 font-bold text-sm text-muted transition;
+    @apply rounded-[10px] min-h-11 font-semibold text-sm text-ink transition;
   }
   .segment > button[aria-pressed="true"] {
     @apply bg-card text-ink shadow-card;

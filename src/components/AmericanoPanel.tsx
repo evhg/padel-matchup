@@ -267,7 +267,7 @@ export function AmericanoPanel({
             <h3 className="text-sm font-extrabold uppercase tracking-wider text-muted">{locked ? t("americano.finalStandings") : t("americano.standings")}</h3>
             {cardHref && rounds.some((r) => r.matches.some((m) => m.sideA != null)) && (
               <a href={cardHref} className="btn-ghost btn-xs">
-                📸 {t("card.share")}
+                {t("card.share")}
               </a>
             )}
           </div>
@@ -307,7 +307,7 @@ export function AmericanoPanel({
 
       <div className="mt-4 flex flex-col gap-4">
         {[...rounds].reverse().map((r) => (
-          <div key={r.id} className="rounded-2xl border border-line p-3">
+          <div key={r.id} className="rounded-2xl bg-card p-3">
             <div className="flex items-center justify-between">
               <div className="font-extrabold">{t("americano.round", { n: r.roundNumber })}</div>
               {isCreator && !locked && !cancelled && r.id === last?.id && (
@@ -335,7 +335,7 @@ export function AmericanoPanel({
       </div>
 
       {roster && (
-        <div className="mt-4 rounded-2xl border border-line p-3" data-testid="check-in">
+        <div className="mt-4 rounded-2xl bg-card p-3" data-testid="check-in">
           <h3 className="font-extrabold">{t("americano.whoIsHere")}</h3>
           <p className="mt-0.5 text-xs text-muted">{t("americano.whoIsHereHelp")}</p>
           <div className="mt-2 flex flex-col" role="group" aria-label={t("americano.whoIsHere")}>
@@ -439,7 +439,7 @@ export function AmericanoPanel({
                     if (confirm(t("americano.finalizeConfirm"))) run(() => setTournamentLockAction(code, true));
                   }}
                 >
-                  🏆 {t("americano.finalize")}
+                  {t("americano.finalize")}
                 </button>
               )}
             </>

@@ -62,7 +62,7 @@ export function PersonalLinkCard({ url, email, emailEnabled }: { url: string; em
 
   return (
     <section className="card">
-      <h2 className="font-extrabold">🔑 {t("identity.personalLinkTitle")}</h2>
+      <h2 className="font-extrabold">{t("identity.personalLinkTitle")}</h2>
       <p className="mt-0.5 text-sm text-muted">{t("identity.personalLinkHelp")}</p>
       <div className="mt-2 flex items-center gap-2">
         <a href={url} className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 font-mono text-xs">
@@ -73,7 +73,7 @@ export function PersonalLinkCard({ url, email, emailEnabled }: { url: string; em
       <div className="mt-2 flex flex-wrap gap-2">
         {emailEnabled && (
           <button type="button" className="btn-secondary btn-sm" disabled={pending} onClick={emailMe}>
-            ✉️ {t("identity.emailMeLink")}
+            {t("identity.emailMeLink")}
           </button>
         )}
         {canShare && (

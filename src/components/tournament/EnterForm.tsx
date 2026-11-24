@@ -25,7 +25,7 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full, a
 
   if (done) {
     return (
-      <div className="mt-3 rounded-2xl border border-line p-3" data-testid="entered">
+      <div className="mt-3 rounded-2xl bg-card p-3" data-testid="entered">
         <p className="font-bold text-ok">{done.status === "waiting" ? t("tournament.enteredWaiting", { category: done.category, n: done.position }) : t("tournament.entered", { category: done.category })}</p>
         {done.claimLink && (
           <div className="mt-2">
@@ -59,7 +59,7 @@ export function EnterForm({ slug, categoryId, categoryName, hasIdentity, full, a
   }
   return (
     <form
-      className="mt-3 flex flex-col gap-3 rounded-2xl border border-line p-3"
+      className="mt-3 flex flex-col gap-3 rounded-2xl bg-card p-3"
       onSubmit={(e) => {
         e.preventDefault();
         own.stop();

@@ -119,7 +119,7 @@ export function RememberPhone({ offer, where = "match" }: { offer: boolean; wher
   };
 
   return (
-    <section className={`${gap}rounded-2xl border border-line px-4 py-3`} data-testid="remember-phone">
+    <section className={`${gap}rounded-2xl bg-card px-4 py-3`} data-testid="remember-phone">
       <h2 className="text-sm font-extrabold">{t("identity.rememberTitle")}</h2>
       <p className="mt-0.5 text-sm text-muted">{t("identity.rememberHelp")}</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">

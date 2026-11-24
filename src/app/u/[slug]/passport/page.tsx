@@ -49,7 +49,7 @@ async function PassportDocumentPage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🔏 {t("passport.signed")}</span>
+          <span className="chip-muted">{t("passport.signed")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{doc.name}</h1>
           <p className="mt-2 text-sm text-muted">{t("passport.docIntro", { issuer: base.replace(/^https?:\/\//, "") })}</p>
           <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">

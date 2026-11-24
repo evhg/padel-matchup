@@ -44,7 +44,7 @@ async function VenueRankingPage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏆 {t("ranking.title")}</span>
+          <span className="chip-muted">{t("ranking.title")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("ranking.clubTitle", { venue: venue.name })}</h1>
           <p className="mt-2 text-sm text-muted">{t("ranking.sub")}</p>
           <RankingTable rows={ranking.rows} events={ranking.events} highlightId={me?.id ?? null} />
@@ -59,7 +59,7 @@ async function VenueRankingPage({ params }: Props) {
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <Link href={`/v/${slug}`} prefetch={false} className="link">
-            📍 {t("venue.board")}
+            {t("venue.board")}
           </Link>
           <Link href={`/?venue=${encodeURIComponent(venue.name)}`} prefetch={false} className="link">
             + {t("common.newMatch")}

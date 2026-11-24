@@ -34,7 +34,7 @@ export function EventRow({ ev, t, locale }: { ev: EventRowData; t: T; locale: st
   const range = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
   const where = [ev.venueName, ev.organiser ? t("city.playBy", { name: ev.organiser }) : null].filter(Boolean).join(" · ");
   return (
-    <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30" data-testid="event-row">
+    <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60" data-testid="event-row">
       {/* The weekday stays (it is how a player picks a game this week), so the column is wide enough
           for it: up to 83 px in bold capitals at 12 px ("DOM, 13 SEPT"), 93 px with Bigger text. */}
       <div className="w-[5.5rem] shrink-0 text-center">
@@ -54,7 +54,7 @@ export function EventRow({ ev, t, locale }: { ev: EventRowData; t: T; locale: st
           {range && <span className="chip-muted">🎚️ {range}</span>}
           {ev.cost && (
             <span className="chip-muted min-w-0 max-w-full">
-              <span className="truncate">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>
+              <span className="truncate">{t("event.costPerPlayer", { cost: ev.cost })}</span>
             </span>
           )}
         </div>

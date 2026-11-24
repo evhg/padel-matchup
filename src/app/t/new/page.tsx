@@ -24,7 +24,7 @@ async function NewTournamentPage() {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏆 {t("tournament.eyebrow")}</span>
+          <span className="chip-muted">{t("tournament.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("tournament.newTitle")}</h1>
           <p className="mt-2 text-sm text-muted">{t("tournament.newSub")}</p>
         </section>

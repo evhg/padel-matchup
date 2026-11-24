@@ -40,14 +40,14 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
 
   if (booked) {
     return (
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-ok-soft px-4 py-2.5" data-testid="court-booked">
-        <span className="text-sm font-bold text-ok">{booked.name ? t("courtBookedBy", { name: booked.name }) : t("courtBooked")}</span>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3" data-testid="court-booked">
+        <span className="text-[0.9375rem] font-bold text-ok">{booked.name ? t("courtBookedBy", { name: booked.name }) : t("courtBooked")}</span>
         {/* An action that says what it does, never a second status beside the first: "Not booked" beside
             "Court booked ✓" read as two states (the owner, 12 October 2026). Any player may still undo it.
             Its name starts with the words it shows, so "tap Undo" finds it by voice (WCAG 2.5.3), and in
             Russian it takes the mark off ("Снять отметку"): "Отменить" read as cancelling the booking. */}
         {canMark && (
-          <button type="button" className="min-h-9 shrink-0 px-1 text-sm font-semibold text-muted underline underline-offset-2" disabled={pending} onClick={() => mark(false)} aria-label={t("courtBookedUndoName")} title={t("courtBookedUndoName")} data-testid="court-booked-undo">
+          <button type="button" className="min-h-11 shrink-0 px-1 text-[0.9375rem] text-court" disabled={pending} onClick={() => mark(false)} aria-label={t("courtBookedUndoName")} title={t("courtBookedUndoName")} data-testid="court-booked-undo">
             {t("courtBookedUndoMark")}
           </button>
         )}
@@ -57,15 +57,18 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
   }
   if (!canMark) return null;
   return (
-    <div className="mt-3 rounded-2xl border border-line px-4 py-3" data-testid="court-booking">
+    // One row of the hero, under a hairline, as a row of the iPhone's Settings: what to do on the left, the
+    // action on the right. It was a box with a border inside the card, with a bordered button and a footnote
+    // beside it, and the owner, 24 November 2026: "'I've booked it' looks like it has no design thought at all".
+    <div className="mt-4 border-t border-line pt-3" data-testid="court-booking">
       {book && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <a href={book.url} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm" data-testid="book-court">
-            🎟 {book.checkout ? t("bookAndPayOn", { platform: book.checkout }) : t("bookCourt")}
-          </a>
-          <span className="text-sm font-semibold tabular-nums text-muted" data-testid="book-slot">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <span className="text-[0.9375rem] tabular-nums text-muted" data-testid="book-slot">
             {slotLine}
           </span>
+          <a href={book.url} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm" data-testid="book-court">
+            {book.checkout ? t("bookAndPayOn", { platform: book.checkout }) : t("bookCourt")}
+          </a>
           {book.checkout && (
             <span className="basis-full text-xs text-muted" data-testid="book-checkout-hint">
               {t("checkoutSignIn", { platform: book.checkout })}
@@ -73,13 +76,13 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
           )}
         </div>
       )}
-      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${book ? "mt-2" : ""}`}>
-        <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={() => mark(true)} data-testid="court-booked-mark">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 text-[0.9375rem] text-muted">{t("bookYourself")}</span>
+        <button type="button" className="btn-secondary btn-sm shrink-0" disabled={pending} onClick={() => mark(true)} data-testid="court-booked-mark">
           {t("bookedIt")}
         </button>
-        <span className="text-xs text-muted">{t("bookYourself")}</span>
-        {said}
       </div>
+      {said}
     </div>
   );
 }
