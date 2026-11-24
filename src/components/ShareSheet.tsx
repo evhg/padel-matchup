@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState, type ReactNode } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { ShareIcon } from "./ShareIcon";
 import { copiedValue, nativeShareData, tagForWhatsapp, tagMatchUrl, telegramShareFor, whatsappShareUrl } from "@/lib/share";
 
 /** WhatsApp's and Telegram's own colours, white words on both themes: one place each (`tests/contrast.test.ts` counts them). */
@@ -147,7 +148,8 @@ export function NativeShare({ url, text, image, className = "btn-ghost btn-sm" }
   }, []);
   if (!canShare) return null;
   return (
-    <button type="button" className={className} onClick={() => shareNatively(url, text, image)} data-testid="native-share">
+    <button type="button" className={`${className} inline-flex items-center justify-center gap-1.5`} onClick={() => shareNatively(url, text, image)} data-testid="native-share">
+      <ShareIcon />
       {image ? t("share.nativeShareImage") : t("share.nativeShare")}
     </button>
   );

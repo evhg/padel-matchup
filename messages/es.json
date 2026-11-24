@@ -3012,6 +3012,8 @@
     "namesNext": "El vídeo sigue cuando estén los nombres. Cualquier jugador del partido puede responder.",
     "namesSentTitle": "Gracias",
     "namesSent": "El vídeo sigue ahora. Todos los jugadores reciben un mensaje cuando esté listo.",
-    "namesWaiting": "El vídeo espera a que un jugador del partido diga quién es quién."
+    "namesWaiting": "El vídeo espera a que un jugador del partido diga quién es quién.",
+    "shareTall": "Compartir el vídeo",
+    "shareWide": "Compartir la versión ancha"
   }
 }

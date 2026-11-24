@@ -69,11 +69,13 @@ The desk also wakes when a player's video or fast-reel clips arrive ("make its r
 while a reel row is still `received`. The page tells the players a person makes the reel and that it can
 take a few hours, so make it now:
 
-- **Fast reel (clips):** `scripts/highlights/fast_reel.py`. The upload folder is the newest finished
-  `uploads/<dir>/meta.json` on the volume `kicksmash-matches`; the codes are the match and any other match
-  played in the same booking. Write the opening card from the match's real names and score (through
-  `/api/admin/sql`). Look at a sheet of frames before you publish. Then tell the players on their notes,
-  if they wrote one.
+- **Fast reel (clips):** the job makes it with no person (`scripts/highlights/modal/fastreel.py`). The reel
+  host starts it when Kicksmash answers the clips with a start request (`/api/reel/upload`, `fastReelStart`), and
+  the job reports to `/api/reel/report`. The desk wakes for clips only when the job did not start (no two pairs
+  of two) or stopped: the row stays `received`. The usual cause is a camera place with no court lines
+  (`courts/<venue slug>.json` on the volume): draw them once (`court.py`, README "court lines"), then start the
+  job again with the request in `work/fastreel/<upload>/request.json`. Look at a sheet of frames before you call
+  a reel done. Then tell the players on their notes, if they wrote one.
 - **Full reel (the whole video):** the engine in `scripts/highlights/README.md`, until the automatic job
   exists.
 

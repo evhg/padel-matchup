@@ -3012,6 +3012,8 @@
     "namesNext": "The reel goes on when the names are in. Any player of the match can answer.",
     "namesSentTitle": "Thanks",
     "namesSent": "The reel goes on now. All players get a message when it is ready.",
-    "namesWaiting": "The reel waits for a player of the match to say who is who."
+    "namesWaiting": "The reel waits for a player of the match to say who is who.",
+    "shareTall": "Share the reel",
+    "shareWide": "Share the wide version"
   }
 }
