@@ -40,3 +40,4 @@ packages/*/src
 packages/*/dist
 packages/*/LICENSE
 .drift-check/
+.claude/worktrees/

@@ -1,11 +1,11 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, players, scores, slots } from "@/db/schema";
+import { events, passkeys, players, scores, slots } from "@/db/schema";
 import { normalName } from "./dupes";
 import { DomainError } from "./errors";
 import { createEvent } from "./events";
 import { parseMatchLength } from "./matchLength";
-import { createPlayer } from "./players";
+import { createPlayer, normalizeName } from "./players";
 import { settleEventLevels } from "./rating";
 import { saveMatchScore, validateSets, type SetScore } from "./scores";
 import { confirmLocked, joinEvent, lockEvent } from "./slots";
@@ -88,6 +88,8 @@ export type FillPlayedInput = {
   teamA: string[];
   teamB: string[];
   sets: { sideA: number; sideB: number }[];
+  /** The score and the pairs are wrong, not missing: save them again as the organiser's. The four must already be seated. */
+  replace?: boolean;
   now?: Date;
 };
 
@@ -114,7 +116,7 @@ export async function fillPlayedMatch(db: Db, input: FillPlayedInput): Promise<P
   if (ev0.type !== "match" || ev0.status === "cancelled") throw new DomainError("invalid", "not_a_match");
   if (ev0.startsAt.getTime() + ev0.durationMinutes * 60_000 > now.getTime()) throw new DomainError("invalid", "not_played");
   const [scored] = await db.select({ id: scores.id }).from(scores).where(eq(scores.eventId, ev0.id)).limit(1);
-  if (scored) return { code: ev0.code, existed: true, players: [] };
+  if (scored && !input.replace) return { code: ev0.code, existed: true, players: [] };
   const ids = named.filter((w) => UUID.test(w));
   const known = ids.length ? await db.select().from(players).where(inArray(players.id, ids)) : [];
   if (known.length !== ids.length) throw new DomainError("not_found");
@@ -142,7 +144,7 @@ export async function fillPlayedMatch(db: Db, input: FillPlayedInput): Promise<P
       seat =
         (record ? seats.find((s) => free(s) && s.status === "invited" && s.playerId === record.id) : seats.find((s) => free(s) && s.status === "invited" && !s.playerId && normalName(s.invitedName) === normalName(w))) ??
         seats.find((s) => free(s) && (s.status === "empty" || s.status === "declined") && !seated(s));
-      if (!seat) throw new DomainError("invalid", "no_place");
+      if (!seat || input.replace) throw new DomainError("invalid", input.replace ? "not_seated" : "no_place");
       used.add(seat.id);
       const row = record ?? (await createPlayer(tx, { displayName: w, locale: "en" }));
       await confirmLocked(tx, ev, seat, { playerId: row.id, now: before });
@@ -154,4 +156,20 @@ export async function fillPlayedMatch(db: Db, input: FillPlayedInput): Promise<P
   await db.update(events).set({ status: "past" }).where(eq(events.id, ev0.id));
   await settleEventLevels(db, ev0.id, now).catch(() => undefined);
   return { code: ev0.code, existed: false, players: four };
+}
+
+/**
+ * A record's name, from the operator's side, for a record nobody has signed in to: no email, phone,
+ * Telegram, Discord, LINE or passkey. That is a record the operator's door made from a name (the owner,
+ * 24 November 2026: a name heard wrong made a record with the wrong name). A record somebody uses
+ * is theirs to name on My matches, so it is refused.
+ */
+export async function renameUnclaimed(db: Db, id: string, name: string): Promise<{ id: string; name: string }> {
+  if (!UUID.test(id) || name.trim().length < 2) throw new DomainError("invalid", "rename");
+  const [p] = await db.select().from(players).where(eq(players.id, id)).limit(1);
+  if (!p) throw new DomainError("not_found");
+  const [key] = await db.select({ n: sql<number>`count(*)::int` }).from(passkeys).where(eq(passkeys.playerId, id));
+  if (p.email || p.phone || p.telegramId || p.discordId || p.lineId || (key?.n ?? 0) > 0) throw new DomainError("invalid", "claimed");
+  const [row] = await db.update(players).set({ displayName: normalizeName(name) }).where(eq(players.id, id)).returning();
+  return { id: row.id, name: row.displayName };
 }
