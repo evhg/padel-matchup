@@ -100,10 +100,10 @@ export const LIMITS = {
   bookMailAnswersPerAddressPerDay: 3,
   /**
    * Notes from one network in a day. It was 5, and four friends who test the app on one club network share an
-   * address: the second friend met "That is plenty for today". One person still stops at ten
-   * (`FEEDBACK_LIMITS.perPersonPerDay`), and each note costs one short model call, so 20 stays cheap.
+   * address: the second friend met "That is plenty for today". It was 20 until the owner met the same line on
+   * 24 November 2026 ("max it to 50 a day"). Each note costs one short model call, so 50 stays cheap.
    */
-  feedbackPerIpPerDay: 20,
+  feedbackPerIpPerDay: 50,
   // Public API and MCP: open without a key, roomier with one.
   apiKeysPerIpPerDay: 10,
   apiWritesPerIpPerDay: 12,
