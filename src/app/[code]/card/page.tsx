@@ -14,6 +14,7 @@ import { countAfter } from "@/lib/countLater";
 import { streakLine, winStreakFor } from "@/lib/domain/banter";
 import { praiseLine } from "@/lib/domain/praise";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
+import { reelStillAt } from "@/lib/domain/matchReel";
 import { taggedUrl } from "@/lib/source";
 import { getSessionPlayer } from "@/lib/session";
 import { isOccupied, isSeated } from "@/lib/domain/events";
@@ -34,7 +35,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `${t("card.title")} · ${calendarTitle(detail.event, t(detail.event.type === "match" ? "event.match" : "event.tournament"))}`;
   // The picture's URL carries the score's version, so an edited score is never served from a cache of the old one.
   const photo = await getEventPhotoMeta(db, detail.event.id).catch(() => null);
-  const image = { url: `${baseUrl()}${cardImagePath(code, cardVersion(detail, photo))}`, width: 1200, height: 630 };
+  const still = photo ? null : await reelStillAt(db, detail.event.id).catch(() => null);
+  const image = { url: `${baseUrl()}${cardImagePath(code, cardVersion(detail, photo, still))}`, width: 1200, height: 630 };
   return { title, robots: { index: false, follow: true }, openGraph: { title, type: "website", url: `${baseUrl()}/${code}/card`, images: [image] }, twitter: { card: "summary_large_image", title, images: [image.url] } };
 }
 
@@ -81,7 +83,7 @@ async function CardPage({ params }: Props) {
   const shareUrl = taggedUrl(url, "card");
   const day = formatEventDay(ev.startsAt, ev.tz, locale);
   const text = t("shareText.result", { line, day, url: shareUrl });
-  const image = cardImagePath(code, cardVersion(detail, photo));
+  const image = cardImagePath(code, cardVersion(detail, photo, photo ? null : await reelStillAt(db, detail.event.id).catch(() => null)));
   return (
     <>
       <Header minimal />

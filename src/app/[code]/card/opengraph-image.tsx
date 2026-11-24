@@ -11,6 +11,7 @@ import { formatEventDay } from "@/lib/dates";
 import { plainLine, streakLine, winStreakFor } from "@/lib/domain/banter";
 import { isOccupied } from "@/lib/domain/events";
 import { getEventPhoto, photoDataUrl } from "@/lib/domain/photos";
+import { reelStillDataUrl } from "@/lib/domain/matchReel";
 import { getEventByCode } from "@/lib/domain/queries";
 import { matchResult } from "@/lib/domain/result";
 import { getTournamentState } from "@/lib/domain/tournament";
@@ -59,7 +60,10 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
   }
   const { event: ev, roster } = detail;
   const photo = await getEventPhoto(db, ev.id).catch(() => null);
-  const onPhoto = Boolean(photo);
+  // No court photo: a frame of the reel's versus opening, when the reel has one.
+  const still = photo ? null : await reelStillDataUrl(db, ev.id).catch(() => null);
+  const background = photo ? photoDataUrl(photo) : still;
+  const onPhoto = Boolean(background);
   const ink = onPhoto ? "#FFFFFF" : INK;
   const muted = onPhoto ? "rgba(255,255,255,0.78)" : MUTED;
   const locale = toLocale(detail.creator.locale) ?? "en";
@@ -176,10 +180,10 @@ export default async function CardImage({ params }: { params: Promise<{ code: st
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", background: BG, fontFamily: "Inter", color: ink, position: "relative" }}>
-        {photo && (
+        {background && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photoDataUrl(photo)} alt="" width={1200} height={630} style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, objectFit: "cover" }} />
+            <img src={background} alt="" width={1200} height={630} style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, objectFit: "cover" }} />
             <div style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, background: "linear-gradient(180deg, rgba(10,12,16,0.35) 0%, rgba(10,12,16,0.62) 60%, rgba(10,12,16,0.82) 100%)", display: "flex" }} />
           </>
         )}

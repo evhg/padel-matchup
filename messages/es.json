@@ -2965,6 +2965,11 @@
     "fastBad": "Tu móvil no puede leer este vídeo. Usa el reel completo.",
     "hereClipsBody": "Los clips han llegado. Por ahora una persona hace el reel rápido a partir de ellos, y eso puede tardar unas horas. Los cuatro jugadores lo verán en esta página cuando esté listo.",
     "iphoneHint": "iPhone: en el menú, toca «Seleccionar archivo», no «Fototeca». Desde la fototeca, el iPhone convierte antes todo el vídeo, y para un partido eso tarda muchísimo. ¿Aún no está en Archivos? En Fotos: Compartir y «Guardar en Archivos».",
-    "measuring": "midiendo el tiempo restante…"
+    "measuring": "midiendo el tiempo restante…",
+    "workingTitle": "Tu reel se está haciendo",
+    "workingLeft": "Quedan unos {min} min",
+    "workingAlmost": "Casi listo",
+    "workingBody": "Los cuatro jugadores lo verán en esta página cuando esté listo.",
+    "step": { "clips": "Limpiando los clips", "players": "Buscando a los cuatro jugadores", "follow": "Siguiendo a los jugadores", "replays": "Haciendo las repeticiones lentas", "opening": "Haciendo la presentación", "music": "Añadiendo la música", "finish": "Terminando los archivos" }
   }
 }

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, matchReels } from "@/db/schema";
 import { newReelToken } from "@/lib/codes";
@@ -69,21 +69,42 @@ export async function matchReel(db: Db, eventId: string, now = new Date()): Prom
  *   "here"     the video is here (an upload that finished, or a link) and the reel is in work
  *   "ready"    the reel plays
  */
-export type ReelState = { kind: "none"; failed: boolean } | { kind: "sending" } | { kind: "here"; source: string | null } | { kind: "ready"; view: ReelView };
+/** What the maker does now, as a key the page translates (`reel.step.<key>`). */
+export const REEL_STEPS = ["clips", "players", "follow", "replays", "opening", "music", "finish"] as const;
+export type ReelStep = (typeof REEL_STEPS)[number];
+const stepOf = (v: unknown): ReelStep | null => ((REEL_STEPS as readonly string[]).includes(String(v)) ? (String(v) as ReelStep) : null);
+export type ReelProgress = { pct: number; readyBy: Date; step: ReelStep | null };
+export type ReelState = { kind: "none"; failed: boolean } | { kind: "sending" } | { kind: "here"; source: string | null } | { kind: "working"; progress: ReelProgress } | { kind: "ready"; view: ReelView };
+
+/** The progress the reel's maker last reported (`setReelProgress`), from the row's note; null when there is none. */
+export function progressOf(note: string | null | undefined): ReelProgress | null {
+  try {
+    const j = JSON.parse(note ?? "") as { pct?: unknown; readyBy?: unknown; step?: unknown };
+    const pct = Number(j.pct);
+    const readyBy = new Date(String(j.readyBy));
+    if (!Number.isFinite(pct) || Number.isNaN(readyBy.getTime())) return null;
+    return { pct: Math.max(0, Math.min(100, Math.round(pct))), readyBy, step: stepOf(j.step) };
+  } catch {
+    return null;
+  }
+}
 
 /** Pure: a row, or no row, as what the page shows. */
-export function reelStateOf(row: { status: string; host: string | null; reelToken: string; readyAt: Date | null; source: string | null } | null | undefined, now: Date): ReelState {
+export function reelStateOf(row: { status: string; host: string | null; reelToken: string; readyAt: Date | null; source: string | null; note?: string | null } | null | undefined, now: Date): ReelState {
   if (!row) return { kind: "none", failed: false };
   const view = reelView(row, now);
   if (view) return { kind: "ready", view };
   if (row.status === "asked") return { kind: "sending" };
+  // The maker reports its progress: a bar and the minutes left, never "in work" with nothing behind it.
+  const progress = row.status === "working" ? progressOf(row.note) : null;
+  if (progress) return { kind: "working", progress };
   if (row.status === "received" || row.status === "working") return { kind: "here", source: row.source };
   return { kind: "none", failed: row.status === "failed" };
 }
 
 /** One read on the match's own unique index. */
 export async function reelState(db: Db, eventId: string, now = new Date()): Promise<ReelState> {
-  const [row] = await db.select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt, source: matchReels.source }).from(matchReels).where(eq(matchReels.eventId, eventId)).limit(1);
+  const [row] = await db.select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt, source: matchReels.source, note: matchReels.note }).from(matchReels).where(eq(matchReels.eventId, eventId)).limit(1);
   return reelStateOf(row, now);
 }
 
@@ -245,4 +266,48 @@ export async function removeMatchReel(db: Db, code: string): Promise<boolean> {
   if (!ev) throw new DomainError("not_found");
   const gone = await db.delete(matchReels).where(eq(matchReels.eventId, ev.id)).returning({ id: matchReels.id });
   return gone.length > 0;
+}
+
+/**
+ * The reel's maker reports where it is (the owner, 24 November 2026: "Show the minutes remaining estimate
+ * and progress bar instead"): a share done, the minutes it still needs, and what it does now. The row goes
+ * to "working", and a reel that was shown goes off the page until the maker sends the new one. The engine
+ * (or the session that runs it) calls this through `/api/admin/match-reel`; nothing is announced.
+ */
+export async function setReelProgress(db: Db, input: { code: string; pct: unknown; minutesLeft: unknown; step?: unknown; now?: Date }): Promise<{ eventId: string }> {
+  const now = input.now ?? new Date();
+  const pct = Number(input.pct);
+  const minutes = Number(input.minutesLeft);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100 || !Number.isFinite(minutes) || minutes < 0 || minutes > 24 * 60) throw new DomainError("invalid", "progress");
+  const [ev] = await db.select({ id: events.id }).from(events).where(and(eq(events.code, input.code), ne(events.status, "cancelled"))).limit(1);
+  if (!ev) throw new DomainError("not_found");
+  const note = JSON.stringify({ pct: Math.round(pct), readyBy: new Date(now.getTime() + minutes * 60_000).toISOString(), step: stepOf(input.step) });
+  const done = await db.update(matchReels).set({ status: "working" satisfies ReelStatus, note }).where(eq(matchReels.eventId, ev.id)).returning({ id: matchReels.id });
+  if (done.length === 0) throw new DomainError("not_found", "no_reel");
+  return { eventId: ev.id };
+}
+
+/**
+ * The card's background when nobody added a court photo (the owner, 24 November 2026: "if there is no court
+ * photo, use a frame from the team vs team announcement as a placeholder for the match card background"):
+ * the frame the reel's maker saves beside the reel as `versus.jpg`. `stillAt` is when the reel became ready,
+ * for the card's version; `stillDataUrl` reads the picture, and answers null when the reel has none.
+ */
+export async function reelStillAt(db: Db, eventId: string, now = new Date()): Promise<Date | null> {
+  const view = await matchReel(db, eventId, now);
+  return view ? new Date(view.keptUntil.getTime() - REEL_KEEP_DAYS * 86_400_000) : null;
+}
+
+export async function reelStillDataUrl(db: Db, eventId: string, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<string | null> {
+  const view = await matchReel(db, eventId, now);
+  if (!view) return null;
+  try {
+    const res = await fetchImpl(view.wide.replace(/\/wide\.mp4$/, "/versus.jpg"), { signal: AbortSignal.timeout(5000) });
+    const type = res.headers.get("content-type") ?? "";
+    if (!res.ok || !type.startsWith("image/")) return null;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    return bytes.length > 0 && bytes.length < 2_000_000 ? `data:${type.split(";")[0]};base64,${bytes.toString("base64")}` : null;
+  } catch {
+    return null;
+  }
 }
