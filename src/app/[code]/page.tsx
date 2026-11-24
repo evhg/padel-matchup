@@ -110,6 +110,9 @@ import { heldOffers } from "@/lib/domain/heldByName";
 import { heldMessageOf, heldRowOffers, type HeldRowOffer } from "@/lib/domain/heldRow";
 import { withClientMessages } from "@/i18n/withClientMessages";
 import { scorePlayers, seatOfPlayer } from "@/lib/seatProps";
+import { fixOpen, fixRights, fixUntil } from "@/lib/domain/fixWindow";
+import { playsHeld } from "@/lib/domain/heldPlay";
+import { FixOpenPlace, FixPlace } from "@/components/LineupFix";
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ s?: string; join?: string; manage?: string }> };
 
@@ -467,6 +470,20 @@ async function EventPage({ params, searchParams }: Props) {
   // (the owner, 12 October 2026): names, days and clubs only, the records here left out. One array for
   // every open spot and the paste box, so the page carries it once.
   const pastAsk = pastViews(pastPlayers, idsHere);
+  // The line-up of a played match put right (the owner's decision of 24 November 2026, src/lib/domain/fixWindow.ts):
+  // to seven days after the end, the organiser and the players change who played, and anybody signed in
+  // without a seat takes an open place or a player's place. No read. While the match is on, the rows keep
+  // their own controls (the organiser's held places and their links, Join), so the window's controls show
+  // once it is over; the server takes them from the start, and the score's pairs name held places from the
+  // start too. The "Played with you" names under "Who played?" are the editor's own past players, as the
+  // server finds them again (`fixPutAction`): three bounded reads, only for an editor in the window, and
+  // none for a session by name that proved nothing, whose picks the server drops.
+  const fixWindowOpen = fixOpen(ev, now);
+  const fix = fixRights(ev, now, { signedIn: Boolean(me), organiser: viewer.isCreator, seated: isMember });
+  const fixing = over && (fix.edit || fix.take || fix.replace);
+  const fixPast = fixing && fix.edit && me && !(await nameOnly(me)) ? await pastPlayerRows(db, me.id, now) : [];
+  const fixPlayed = pickable(fixPast, { ids: idsHere, names: namesHere });
+  const fixEnds = fixUntil(ev);
   const playedKeys = new Set(playedWithYou.map((n) => n.trim().toLowerCase()));
   // The same person twice would be two chips of one name: a past player's chip stands for them.
   const rolodex = rolodexAll.filter((r) => !(r.playerId && inEventIds.has(r.playerId)) && !inEventNames.has(r.name.trim().toLowerCase()) && !playedKeys.has(r.name.trim().toLowerCase()));
@@ -667,6 +684,8 @@ async function EventPage({ params, searchParams }: Props) {
     const inviteHref = s.inviteCode ? inviteUrl(base, code, s.inviteCode) : undefined;
     const stale = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
+    // A place of the line-up, in the window the line-up can be put right in (`fixRights`).
+    const fixRow = fixing && !isWaitlist;
     return (
       // A row of the list, as in the iPhone's Contacts: a hairline between rows (the list's `divide-y`), no box.
       // An open place and a held one were dashed boxes inside the card; the words and the grey avatar say it now.
@@ -718,7 +737,8 @@ async function EventPage({ params, searchParams }: Props) {
               <OpenSpot
                 key={`${s.id}-${s.status}`}
                 code={code}
-                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" && !fixedPairs ? "join" : "none"}
+                // In the window the place's own control is at the end of the row (`FixOpenPlace`).
+                mode={cancelled || over || (fixRow && (fix.edit || fix.take)) ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" && !fixedPairs ? "join" : "none"}
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
                 slotId={s.id}
                 hasIdentity={Boolean(me)}
@@ -746,8 +766,10 @@ async function EventPage({ params, searchParams }: Props) {
           )}
           {/* Keyed by its kind: after a proof the row offers `mine`, and the doors panel and its answer go. */}
           {!occupiedSlot && heldRows.get(s.id) && <HeldRowButton key={heldRows.get(s.id)!.kind} code={code} offer={heldRows.get(s.id)!} doors={backIn} />}
+          {fixRow && tappable && <FixOpenPlace code={code} slotId={s.id} rights={fix} played={fixPlayed} />}
+          {fixRow && !tappable && <FixPlace code={code} slotId={s.id} name={name} rights={fix} tells={occupiedSlot && !isMe} played={fixPlayed} />}
         </div>
-        {viewer.isCreator && !cancelled && !over && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
+        {viewer.isCreator && !cancelled && !over && !fixRow && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
           <SlotActions
             code={code}
             slotId={s.id}
@@ -1005,7 +1027,8 @@ async function EventPage({ params, searchParams }: Props) {
           <ScorePanel
             code={code}
             scores={detail.scores.map((s) => ({ setNumber: s.setNumber, sideA: s.sideA, sideB: s.sideB }))}
-            players={scorePlayers(participants)}
+            // While the line-up can be put right, the pairs may name a held place too: saving them seats it (`playHeldLocked`).
+            players={scorePlayers(fixWindowOpen ? roster.filter((s) => isOccupied(s) || playsHeld(s, ev.capacity)) : participants)}
             canEdit={perm.allowed}
             reason={perm.allowed ? null : perm.reason}
             locked={ev.scoreLockedByCreator}
@@ -1102,6 +1125,11 @@ async function EventPage({ params, searchParams }: Props) {
               </span>
             )}
           </div>
+          {fixing && (
+            <p className="mt-1 text-xs text-faint" data-testid="fix-help">
+              {t("event.fixHelp", { when: `${formatEventDay(fixEnds, ev.tz, locale)} ${formatEventTime(fixEnds, ev.tz, locale)}` })}
+            </p>
+          )}
           <ul className="mt-1 flex flex-col divide-y divide-line">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {/* Pending approvals first, then the one message for the held places (the owner's decision A of 6 November 2026). */}
           {pendingRequests.length > 0 && (

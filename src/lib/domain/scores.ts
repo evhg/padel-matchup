@@ -2,6 +2,8 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db";
 import { activity, events, scores, slots, type Event, type Score } from "@/db/schema";
 import { DomainError } from "./errors";
+import { fixOpen } from "./fixWindow";
+import { playHeldLocked } from "./heldPlay";
 import { lockEvent } from "./slots";
 
 export type SetScore = { setNumber: number; sideA: number; sideB: number };
@@ -209,6 +211,14 @@ export async function saveMatchScore(
     sets: SetScore[];
     /** Optional: player ids on team A (others on the roster become team B). */
     teamA?: string[];
+    /**
+     * Optional, instead of `teamA`: the two seats of team A by seat id, as the match page sends them. While
+     * the line-up can be put right (`fixOpen`), a held place the pairs name plays: every held place becomes
+     * a seat with its record first (`playHeldLocked`), in this transaction, and the pairs follow the seats.
+     */
+    teamASeats?: string[];
+    /** The language of a record made for a held name (`playHeldLocked`). */
+    locale?: string;
     now?: Date;
   },
 ): Promise<{ event: Event; scores: Score[] }> {
@@ -217,10 +227,12 @@ export async function saveMatchScore(
   return db.transaction(async (tx) => {
     const ev = await lockEvent(tx, input.eventId);
     if (ev.type !== "match") throw new DomainError("invalid", "not_a_match");
-    const roster = await tx
-      .select({ id: slots.id, playerId: slots.playerId })
-      .from(slots)
-      .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["joined", "confirmed"])));
+    const readRoster = () =>
+      tx
+        .select({ id: slots.id, playerId: slots.playerId })
+        .from(slots)
+        .where(and(eq(slots.eventId, ev.id), sql`${slots.position} <= ${ev.capacity}`, inArray(slots.status, ["joined", "confirmed"])));
+    let roster = await readRoster();
     const participantIds = roster.map((r) => r.playerId).filter((x): x is string => Boolean(x));
     const saves = ev.scoreLockedByCreator && !input.isCreator
       ? await tx.select({ verb: activity.verb, meta: activity.meta, createdAt: activity.createdAt }).from(activity).where(and(eq(activity.eventId, ev.id), eq(activity.verb, "score_entered"))).orderBy(desc(activity.createdAt)).limit(20)
@@ -238,7 +250,17 @@ export async function saveMatchScore(
       .values(sets.map((s) => ({ eventId: ev.id, setNumber: s.setNumber, sideA: s.sideA, sideB: s.sideB, enteredByPlayerId: input.playerId, updatedAt: now })))
       .returning();
 
-    if (input.teamA) {
+    const seatsA = input.teamASeats?.length === 2 ? new Set(input.teamASeats) : null;
+    if (seatsA && fixOpen(ev, now) && (await playHeldLocked(tx, ev, input.playerId, now, input.locale)).length > 0) roster = await readRoster();
+    if (seatsA && [...seatsA].every((id) => roster.some((r) => r.id === id))) {
+      for (const r of roster) {
+        if (!r.playerId) continue;
+        await tx
+          .update(slots)
+          .set({ team: seatsA.has(r.id) ? "a" : "b" })
+          .where(eq(slots.id, r.id));
+      }
+    } else if (input.teamA) {
       const teamA = new Set(input.teamA);
       for (const r of roster) {
         if (!r.playerId) continue;

@@ -453,7 +453,19 @@
     "organiserOnly": "Only the organiser changes that. You can change the day, the time, the length, the place, the court and the note.",
     "shareInvite": "Invite on WhatsApp",
     "shareResult": "Share the result",
-    "heldStranger": "Is a place held for you? Tap your name above."
+    "heldStranger": "Is a place held for you? Tap your name above.",
+    "fixHelp": "Someone else played? You can change the line-up until {when}.",
+    "fixAdd": "Add a name",
+    "fixChange": "Change",
+    "fixWho": "Who played?",
+    "fixItWasMe": "It was me",
+    "fixRemove": "Remove {name}",
+    "fixRemoveConfirm": "Remove {name} from the match? {name} gets a message that you did it.",
+    "fixRemoveHeld": "Remove {name} from the match?",
+    "fixTake": "Add me",
+    "fixReplace": "I played instead of {name}",
+    "fixReplaceConfirm": "You played instead of {name}? {name} gets a message that you took the place.",
+    "fixReplaceHeld": "You played instead of {name}?"
   },
   "creator": {
     "tools": "Organizer tools",
@@ -696,7 +708,13 @@
     "approvedByYou": "You approved {name}",
     "rejectedBy": "{name}'s request was declined by {actor}",
     "rejectedByYou": "You declined {name}'s request",
-    "scoreChanged": "{name} changed the score from {from} to {to}"
+    "scoreChanged": "{name} changed the score from {from} to {to}",
+    "changedBy": "{actor} changed {name} to {to}",
+    "changedByYou": "You changed {name} to {to}",
+    "replacedBy": "{actor} took {name}'s place",
+    "replacedByYou": "You took {name}'s place",
+    "playedBy": "{actor} put {name} in the pairs",
+    "playedByYou": "You put {name} in the pairs"
   },
   "email": {
     "telegramLine": "Get this on Telegram: one tap, and your matches, reminders and results come to the chat.",
@@ -1204,7 +1222,9 @@
     "wantersTold": "Players who asked for a coach in {title} just heard about you: {count}",
     "playAgain": "{name} made the next game: {day} {time} at {venue}. {what, select, held {A place is held for you. Are you in?} other {Are you in?}}",
     "requestWaitlisted": "The organiser said yes. The match is full, so you are on the waiting list: {day} {time}, {venue}",
-    "passkeySaved": "{what, select, unknown {A phone now signs you in.} other {A phone now signs you in: {name}.}} Not you? Remove it on My matches."
+    "passkeySaved": "{what, select, unknown {A phone now signs you in.} other {A phone now signs you in: {name}.}} Not you? Remove it on My matches.",
+    "removedBy": "{name} took you out of the match on {day} at {time}",
+    "replacedBy": "{name} took your place in the match on {day} at {time}"
   },
   "privacy": {
     "title": "Privacy",

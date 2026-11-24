@@ -453,7 +453,19 @@
     "organiserOnly": "Eso solo lo cambia el organizador. Puedes cambiar el día, la hora, la duración, el lugar, la pista y la nota.",
     "shareInvite": "Invitar por WhatsApp",
     "shareResult": "Compartir el resultado",
-    "heldStranger": "¿Te guardan una plaza? Toca tu nombre arriba."
+    "heldStranger": "¿Te guardan una plaza? Toca tu nombre arriba.",
+    "fixHelp": "¿Jugó otra persona? Puedes cambiar los jugadores hasta {when}.",
+    "fixAdd": "Añadir un nombre",
+    "fixChange": "Cambiar",
+    "fixWho": "¿Quién jugó?",
+    "fixItWasMe": "Fui yo",
+    "fixRemove": "Quitar a {name}",
+    "fixRemoveConfirm": "¿Quitar a {name} del partido? {name} recibirá un mensaje de que fuiste tú.",
+    "fixRemoveHeld": "¿Quitar a {name} del partido?",
+    "fixTake": "Añadirme",
+    "fixReplace": "Jugué yo en lugar de {name}",
+    "fixReplaceConfirm": "¿Jugaste tú en lugar de {name}? {name} recibirá un mensaje de que ocupaste su plaza.",
+    "fixReplaceHeld": "¿Jugaste tú en lugar de {name}?"
   },
   "creator": {
     "tools": "Herramientas de organizador",
@@ -696,7 +708,13 @@
     "approvedByYou": "Aprobaste a {name}",
     "rejectedBy": "{actor} rechazó la solicitud de {name}",
     "rejectedByYou": "Rechazaste la solicitud de {name}",
-    "scoreChanged": "{name} cambió el resultado de {from} a {to}"
+    "scoreChanged": "{name} cambió el resultado de {from} a {to}",
+    "changedBy": "{actor} cambió a {name} por {to}",
+    "changedByYou": "Cambiaste a {name} por {to}",
+    "replacedBy": "{actor} ocupó la plaza de {name}",
+    "replacedByYou": "Ocupaste la plaza de {name}",
+    "playedBy": "{actor} puso a {name} en las parejas",
+    "playedByYou": "Pusiste a {name} en las parejas"
   },
   "email": {
     "telegramLine": "Recíbelo en Telegram: un toque, y tus partidos, recordatorios y resultados llegan al chat.",
@@ -1204,7 +1222,9 @@
     "wantersTold": "Los jugadores que pidieron entrenador en {title} acaban de saber de ti: {count}",
     "playAgain": "{name} creó el próximo partido: {day} {time} en {venue}. {what, select, held {Tienes una plaza reservada. ¿Te apuntas?} other {¿Te apuntas?}}",
     "requestWaitlisted": "El organizador dijo que sí. El partido está lleno, así que estás en la lista de espera: {day} {time}, {venue}",
-    "passkeySaved": "{what, select, unknown {Un teléfono ya te recuerda.} other {Un teléfono ya te recuerda: {name}.}} ¿No fuiste tú? Quítalo en Mis partidos."
+    "passkeySaved": "{what, select, unknown {Un teléfono ya te recuerda.} other {Un teléfono ya te recuerda: {name}.}} ¿No fuiste tú? Quítalo en Mis partidos.",
+    "removedBy": "{name} te quitó del partido del {day} a las {time}",
+    "replacedBy": "{name} ocupó tu plaza en el partido del {day} a las {time}"
   },
   "privacy": {
     "title": "Privacidad",

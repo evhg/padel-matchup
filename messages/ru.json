@@ -453,7 +453,19 @@
     "organiserOnly": "Это меняет только организатор. Вы можете изменить день, время, длительность, место, корт и заметку.",
     "shareInvite": "Позвать в WhatsApp",
     "shareResult": "Поделиться результатом",
-    "heldStranger": "Место держат для вас? Нажмите на своё имя выше."
+    "heldStranger": "Место держат для вас? Нажмите на своё имя выше.",
+    "fixHelp": "Играл кто-то другой? Состав можно изменить до {when}.",
+    "fixAdd": "Добавить имя",
+    "fixChange": "Изменить",
+    "fixWho": "Кто играл?",
+    "fixItWasMe": "Это был(а) я",
+    "fixRemove": "Убрать игрока {name}",
+    "fixRemoveConfirm": "Убрать игрока {name} из матча? {name} получит сообщение, что это сделали вы.",
+    "fixRemoveHeld": "Убрать игрока {name} из матча?",
+    "fixTake": "Добавить меня",
+    "fixReplace": "Я играл(а) вместо игрока {name}",
+    "fixReplaceConfirm": "Вы играли вместо игрока {name}? {name} получит сообщение, что вы заняли это место.",
+    "fixReplaceHeld": "Вы играли вместо игрока {name}?"
   },
   "creator": {
     "tools": "Инструменты организатора",
@@ -696,7 +708,13 @@
     "approvedByYou": "Вы одобрили: {name}",
     "rejectedBy": "Запрос {name} отклонил(а) {actor}",
     "rejectedByYou": "Вы отклонили запрос: {name}",
-    "scoreChanged": "{name} изменил(а) счёт с {from} на {to}"
+    "scoreChanged": "{name} изменил(а) счёт с {from} на {to}",
+    "changedBy": "{actor} заменил(а) игрока {name} на {to}",
+    "changedByYou": "Вы заменили игрока {name} на {to}",
+    "replacedBy": "{actor} занял(а) место игрока {name}",
+    "replacedByYou": "Вы заняли место игрока {name}",
+    "playedBy": "{actor} поставил(а) игрока {name} в пару",
+    "playedByYou": "Вы поставили игрока {name} в пару"
   },
   "email": {
     "telegramLine": "Получать это в Telegram: одно нажатие, и матчи, напоминания и результаты приходят в чат.",
@@ -1204,7 +1222,9 @@
     "wantersTold": "Игроки, которые просили тренера ({title}), узнали о вас: {count}",
     "playAgain": "Следующая игра от {name}: {day} {time}, {venue}. {what, select, held {Место для вас придержано. Играете?} other {Играете?}}",
     "requestWaitlisted": "Организатор согласился. Матч заполнен, поэтому вы в листе ожидания: {day} {time}, {venue}",
-    "passkeySaved": "{what, select, unknown {Теперь вас помнит новый телефон.} other {Теперь вас помнит новый телефон: {name}.}} Это были не вы? Удалите его в «Моих матчах»."
+    "passkeySaved": "{what, select, unknown {Теперь вас помнит новый телефон.} other {Теперь вас помнит новый телефон: {name}.}} Это были не вы? Удалите его в «Моих матчах».",
+    "removedBy": "{name} убрал(а) вас из матча {day} в {time}",
+    "replacedBy": "{name} занял(а) ваше место в матче {day} в {time}"
   },
   "privacy": {
     "title": "Конфиденциальность",

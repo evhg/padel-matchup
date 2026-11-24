@@ -1210,6 +1210,48 @@ try {
   check("Eli auto-promoted after Dana left", (await c.getByText("You're in").count()) > 0);
   await shot(c, "14-promoted");
 
+  // ---- The line-up of a played match put right (the owner's decision of 24 November 2026) ----
+  // A match that ended an hour and a half ago, made too late for its organiser to be seated: Dana adds
+  // herself and a name, Jordi (not in it) played instead of that name, and the activity says who did each.
+  {
+    await a.goto(BASE + "/new");
+    const played = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const pp = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(played);
+    const pg = (t) => pp.find((p) => p.type === t).value;
+    await a.locator("input[type=date]").fill(`${pg("year")}-${pg("month")}-${pg("day")}`);
+    await a.locator("input[type=time]").fill(`${pg("hour")}:${pg("minute")}`);
+    await a.getByPlaceholder("Court TBD · or pick a club").fill("Club Padel Test");
+    await a.getByRole("button", { name: "Create & get the link" }).click();
+    await a.waitForURL(/\/[^/]{4}\/share$/, { timeout: 30000 });
+    const fixCode = a.url().split("/").slice(-2)[0];
+    await a.goto(`${BASE}/${fixCode}`);
+    const counts = async (p) => ({ help: await p.getByTestId("fix-help").count(), add: await p.getByTestId("fix-add").count(), take: await p.getByTestId("fix-take").count(), change: await p.getByTestId("fix-change").count(), replace: await p.getByTestId("fix-replace").count() });
+    const before = await counts(a);
+    check("a match that is over offers its organiser the line-up: Add me and Add a name on each open place, and the days it stays open", JSON.stringify(before) === JSON.stringify({ help: 1, add: 4, take: 4, change: 0, replace: 0 }) && (await a.getByText("Tap to reserve for someone").count()) === 0, JSON.stringify(before));
+    await a.getByTestId("fix-take").first().click();
+    await a.locator("main li", { hasText: "Dana" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+    await a.getByTestId("fix-add").first().click();
+    await a.getByTestId("fix-name").fill("Cyrus");
+    await a.getByTestId("fix-save").click();
+    // The activity's lines are list items too: the row is the one with Change on it.
+    const cyrusRow = a.locator("main li", { hasText: "Cyrus" }).filter({ has: a.getByTestId("fix-change") });
+    const cyrusShown = await cyrusRow.waitFor({ timeout: 20000 }).then(() => true, () => false);
+    await shot(a, "14b-lineup-fix-organiser");
+    check("the name is in the match at once, with Change on its row, and no Add me for a seated organiser", cyrusShown && (await a.getByTestId("fix-take").count()) === 0 && (await a.getByText("You added Cyrus").count()) > 0);
+    await b.goto(`${BASE}/${fixCode}`);
+    const stranger = await counts(b);
+    check("Jordi, signed in and not in it, may add himself or say he played instead, and changes nobody else", JSON.stringify(stranger) === JSON.stringify({ help: 1, add: 0, take: 2, change: 0, replace: 2 }), JSON.stringify(stranger));
+    await shot(b, "14c-lineup-fix-stranger");
+    // The confirm ("You played instead of Cyrus?") is accepted by the page's dialog handler.
+    await b.locator("main li", { hasText: "Cyrus" }).getByTestId("fix-replace").click();
+    await b.locator("main li", { hasText: "Jordi" }).getByText("you", { exact: true }).waitFor({ timeout: 20000 });
+    const fixed = await b.request.get(`${BASE}/api/v1/matches/${fixCode}`).then((r) => r.json());
+    const lineup = (fixed.players ?? []).map((p) => `${p.name}:${p.status}`).sort();
+    check("Jordi played instead of Cyrus: Cyrus is out, Jordi and Dana are confirmed", JSON.stringify(lineup) === JSON.stringify(["Dana:confirmed", "Jordi:confirmed"]), JSON.stringify(lineup));
+    await a.reload();
+    check("the organiser reads who did it: \"Jordi took Cyrus's place\"", (await a.getByText("Jordi took Cyrus's place").count()) > 0);
+  }
+
   // ---- Cancel created event ----
   await a.goto(`${BASE}/${code}`);
   await a.getByRole("button", { name: "Cancel match" }).click();
