@@ -38,7 +38,7 @@ export async function SameNameCard({ db, player }: { db: Db; player: Player }) {
           const blocked = claimBlock(r);
           const claimable = blocked === null;
           return (
-            <li key={r.id} className="rounded-2xl border border-line p-3" data-testid={`same-name-${r.id}`}>
+            <li key={r.id} className="rounded-2xl bg-card p-3" data-testid={`same-name-${r.id}`}>
               <div className="font-bold">{t("sameCount", { count: r.matches })}</div>
               <ul className="mt-1 flex flex-col gap-0.5 text-sm text-muted">
                 {(matches.get(r.id) ?? []).map((m) => (

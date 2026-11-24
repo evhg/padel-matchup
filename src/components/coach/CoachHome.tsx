@@ -138,7 +138,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
     // first line, and on a phone the buttons drop underneath rather than crushing the name to nothing.
     // A cancelled or missed lesson is dimmed by its text, never by the row: a dimmed row made the one
     // button it still carries ("They came after all") look disabled.
-    <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-card px-4 py-3" data-status={l.status}>
+    <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-card px-4 py-3" data-status={l.status}>
       <div className={`w-14 shrink-0 text-xl font-extrabold leading-none tabular-nums ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>{l.time}</div>
       <div className={`min-w-0 flex-1 basis-40 ${l.status !== "booked" && l.status !== "done" ? "opacity-60" : ""}`}>
         {/* The name opens this student on the students screen: their package, what they owe, their
@@ -242,7 +242,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
       )}
       {welcome && (
         <section className="card animate-pop" data-testid="coach-welcome">
-          <h1 className="text-2xl font-extrabold tracking-tight">🎾 {t("done.title")}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">{t("done.title")}</h1>
           <p className="mt-3 text-sm font-bold">{t("done.link")}</p>
           <p className="mt-1 break-all font-mono text-sm">{url}</p>
           {/* The bare link is the one for Instagram; the students they already have take the invite link, which seats them without asking (the owner's decision). */}
@@ -264,7 +264,7 @@ export function CoachHome({ handle, url, inviteUrl, studentUrl, today, welcome, 
           <div className="text-sm font-extrabold">{t("home.requests")}</div>
           <ul className="mt-2 flex flex-col gap-2">
             {requests.map((r) => (
-              <li key={r.id} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-2">
+              <li key={r.id} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-2">
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-bold">{r.name} · {r.label}</div>
                   {r.note && <div className="truncate text-xs text-muted">“{r.note}”</div>}
@@ -435,7 +435,7 @@ function BookForm({ students, slots, slotsSecond, days, dayLabels, lengths, onDo
   const chip = (active: boolean) => `rounded-full border px-3 py-1.5 text-sm font-bold transition ${active ? "border-ink bg-ink text-on-ink" : "border-line bg-card text-ink hover:border-ink/40"}`;
 
   return (
-    <form onSubmit={submit} className="mt-4 flex flex-col gap-4 rounded-2xl border border-line bg-bg p-4 animate-pop">
+    <form onSubmit={submit} className="mt-4 flex flex-col gap-4 rounded-2xl bg-bg p-4 animate-pop">
       <div>
         <label className="text-sm font-bold" htmlFor="book-student">
           {t("book.student")}

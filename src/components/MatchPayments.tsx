@@ -31,7 +31,7 @@ export function MatchPayments({ code, cost, rows, isOrganiser, mySlotId }: { cod
   return (
     <section className="card flex flex-col gap-3" data-testid="payments">
       <div>
-        <h2 className="text-lg font-extrabold">💸 {t("paidTitle")}</h2>
+        <h2 className="text-lg font-extrabold">{t("paidTitle")}</h2>
         <p className="mt-0.5 text-xs text-muted">{owing === 0 ? t("paidAll") : t("paidOwing", { n: owing, cost })}</p>
       </div>
       <ul className="flex flex-col gap-1.5">

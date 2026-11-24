@@ -187,7 +187,7 @@ export function OtherShares({ url, text, story = null, whatsapp = false, image, 
         <QrFold url={url} label={t("share.qrHint")} />
         {story && (
           <div>
-            <div className="text-sm font-bold">📸 {t("share.story")}</div>
+            <div className="text-sm font-bold">{t("share.story")}</div>
             <div className="mt-2 flex flex-wrap gap-2">
               <a href={story} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
                 {t("share.storyOpen")}

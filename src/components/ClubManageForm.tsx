@@ -126,7 +126,7 @@ export function ClubManageForm({ token, initial }: { token: string; initial: Clu
         <textarea className="input mt-1 min-h-20" value={v.about} maxLength={400} onChange={(e) => set({ about: e.target.value })} />
       </label>
 
-      <div className="rounded-2xl border border-line" id="feed">
+      <div className="rounded-2xl bg-card" id="feed">
         <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setFeedOpen((o) => !o)} aria-expanded={feedOpen}>
           <span className="text-sm font-bold">{t("club.feed")}</span>
           <span className="text-faint">{feedOpen ? "−" : "+"}</span>

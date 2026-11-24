@@ -36,8 +36,8 @@ export async function GET() {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f4f3ee",
-    theme_color: "#f4f3ee",
+    background_color: "#f2f2f7",
+    theme_color: "#f2f2f7",
     // Lets Android Chrome answer navigator.getInstalledRelatedApps() for this very PWA.
     related_applications: [{ platform: "webapp", url: `${baseUrl()}/manifest.webmanifest` }],
     icons: [

@@ -67,7 +67,7 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏟 {t("club.eyebrow")}</span>
+          <span className="chip-muted">{t("club.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("club.title")}</h1>
           <p className="mt-2 text-sm text-muted">{t("club.sub")}</p>
           <Link href="/clubs/claim" prefetch={false} className="btn-primary mt-4 w-full">
@@ -98,7 +98,7 @@ export default async function ClubsPage({ searchParams }: { searchParams: Promis
         )}
 
         <section className="card">
-          <h2 className="text-lg font-extrabold">🌱 {t("club.founding")}</h2>
+          <h2 className="text-lg font-extrabold">{t("club.founding")}</h2>
           <p className="mt-2 text-sm text-muted">{t("club.foundingBody")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {hereEmpty && herePlace && (

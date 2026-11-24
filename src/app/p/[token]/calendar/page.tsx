@@ -31,7 +31,7 @@ export default async function CalendarFeedPage({ params }: { params: Promise<{ t
       <Header minimal />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
         <section className="card" data-testid="calendar-feed-page">
-          <h1 className="text-xl font-extrabold">📅 {t("feedTitle")}</h1>
+          <h1 className="text-xl font-extrabold">{t("feedTitle")}</h1>
           {player ? (
             <>
               <p className="mt-1 text-sm text-muted">{t("feedLead")}</p>

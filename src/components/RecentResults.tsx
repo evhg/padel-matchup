@@ -20,7 +20,7 @@ export async function RecentResults({ results, showVenue = false }: { results: R
       <ul className="mt-3 flex flex-col gap-2">
         {results.map((r) => (
           <li key={r.code}>
-            <Link href={`/${r.code}/card`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line px-4 py-3 hover:border-ink/30">
+            <Link href={`/${r.code}/card`} prefetch={false} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60">
               {/* Day and month only: with the weekday it ran to two lines at 390 px (83 px in a 64 px column). */}
               <div className="w-16 shrink-0 whitespace-nowrap text-xs font-bold uppercase text-muted" data-testid="result-day">
                 {formatDayMonth(r.startsAt, r.tz, locale)}

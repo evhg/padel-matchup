@@ -51,7 +51,7 @@ export default async function PublicProfilePage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🪪 {t("passport.title")}</span>
+          <span className="chip-muted">{t("passport.title")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{p.displayName}</h1>
           <div className="mt-3 flex items-end gap-3">
             <div className="text-5xl font-extrabold tabular-nums leading-none">{p.level != null ? formatLevel(p.level) : "—"}</div>
@@ -102,7 +102,7 @@ export default async function PublicProfilePage({ params }: Props) {
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <Link href={`/u/${slug}/passport`} prefetch={false} className="link">
-            🔏 {t("passport.signed")}
+            {t("passport.signed")}
           </Link>
           <Link href="/developers#passport" prefetch={false} className="link">
             {t("passport.verify")} →

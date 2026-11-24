@@ -73,7 +73,7 @@ export function CoachNotify({
       </div>
 
       {botUsername && (
-        <div className="rounded-xl border border-line p-3">
+        <div className="rounded-xl bg-card p-3">
           <div className="text-sm font-bold">{t("setup.notifyTelegram")}</div>
           <p className="mt-1 text-sm text-muted">{t("setup.notifyHelp")}</p>
           <a href={botUrl ?? `https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="btn-primary mt-3 w-full" data-testid="open-bot">
@@ -83,13 +83,13 @@ export function CoachNotify({
       )}
 
       {emailEnabled && (
-        <div className="rounded-xl border border-line p-3" data-testid="notify-email">
+        <div className="rounded-xl bg-card p-3" data-testid="notify-email">
           <EmailField initial={email} mode="me" code="" title={t("setup.notifyEmailTitle")} help={t("setup.notifyEmailHelp")} emailEnabled savedText={t("setup.emailSaved")} showNotify={false} />
         </div>
       )}
 
       {vapidPublicKey && (
-        <div className="rounded-xl border border-line p-3">
+        <div className="rounded-xl bg-card p-3">
           {/* "This phone" read wrong on a desk, and the switch spoke of match reminders. A browser is a browser. */}
           <div className="text-sm font-bold">{t("setup.notifyPushTitle")}</div>
           <div className="mt-2">

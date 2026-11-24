@@ -19,7 +19,7 @@ export function LevelImport({ onPick }: { onPick: (level: number) => void }) {
       </button>
     );
   return (
-    <div className="rounded-2xl border border-line px-3 py-3">
+    <div className="rounded-2xl bg-card px-3 py-3">
       <div className="text-sm font-bold">{t("passport.importTitle")}</div>
       <p className="mt-1 text-xs text-muted">{t("passport.importHelp")}</p>
       <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">

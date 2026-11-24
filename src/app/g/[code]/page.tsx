@@ -101,7 +101,7 @@ async function GroupPage({ params }: Props) {
     const forChip = tagChip(t, ev);
     return (
       <li key={ev.id}>
-        <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3 hover:border-ink/30">
+        <Link href={`/${ev.code}`} prefetch={false} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60">
           <div className="w-14 shrink-0 text-center">
             <div className="text-xs font-bold uppercase text-faint">{formatEventDay(ev.startsAt, ev.tz, locale).split(" ")[0]}</div>
             <div className="text-xl font-extrabold leading-none tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</div>
@@ -124,7 +124,7 @@ async function GroupPage({ params }: Props) {
                 )}
                 {ev.cost && (
                   <span className="chip-muted min-w-0 max-w-full">
-                    <span className="truncate">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>
+                    <span className="truncate">{t("event.costPerPlayer", { cost: ev.cost })}</span>
                   </span>
                 )}
               </div>
@@ -142,15 +142,15 @@ async function GroupPage({ params }: Props) {
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="chip-muted">👥 {t("group.title")}</span>
-            <span className="text-xs font-bold uppercase tracking-wider text-faint">{t(group.type === "match" ? "event.match" : "event.tournament")}</span>
+            <span className="chip-muted">{t("group.title")}</span>
+            <span className="text-xs font-semibold text-faint">{t(group.type === "match" ? "event.match" : "event.tournament")}</span>
             {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
           </div>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{group.name}</h1>
           <div className="mt-3 rounded-2xl bg-bg px-4 py-3 text-sm">
             <div className={`font-bold ${group.venueName ? "" : "text-muted"}`}>{venue}</div>
             <div className="text-muted">
-              🔁 {repeats}
+              {repeats}
               {group.recurDow != null ? ` · ${t("group.autoHelp", { n: group.recurLeadDays })}` : ""}
             </div>
           </div>

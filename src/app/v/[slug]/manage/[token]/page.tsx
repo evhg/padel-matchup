@@ -55,11 +55,11 @@ async function ClubManagePage({ params }: Props) {
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏟 {t("club.eyebrow")}</span>
+          <span className="chip-muted">{t("club.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("club.manageTitle", { club: club.name })}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className={`chip-muted ${status === "live" ? "text-ok" : status === "rejected" ? "text-warn" : ""}`}>{status === "live" ? `✓ ${t("club.statusLive")}` : status === "rejected" ? t("club.statusRejected") : `⏳ ${t("club.statusPending")}`}</span>
-            {club.founding && <span className="chip-muted">🌱 {t("club.foundingBadge")}</span>}
+            {club.founding && <span className="chip-muted">{t("club.foundingBadge")}</span>}
             <Link href={`/v/${club.slug}`} prefetch={false} className="link text-sm">
               {t("club.openPage")} →
             </Link>
@@ -72,7 +72,7 @@ async function ClubManagePage({ params }: Props) {
               <p className="text-sm text-muted">{t("club.statusRejectedHelp")}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link href="/feedback?s=clubclaim" prefetch={false} className="btn-secondary btn-sm">
-                  💬 {t("feedback.title")}
+                  {t("feedback.title")}
                 </Link>
                 <Link href="/me" prefetch={false} className="btn-ghost btn-sm">
                   {t("common.myMatches")}
@@ -116,7 +116,7 @@ async function ClubManagePage({ params }: Props) {
                 const level = rangeChip(t, { min: ev.levelMin, max: ev.levelMax });
                 const forChip = tagChip(t, ev);
                 return (
-                  <li key={ev.id} className="rounded-2xl border border-line bg-card px-4 py-3">
+                  <li key={ev.id} className="rounded-2xl bg-card px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-extrabold tabular-nums">{formatEventTime(ev.startsAt, ev.tz, locale)}</span>
                       <Link href={`/${ev.code}`} prefetch={false} className="min-w-0 truncate font-bold hover:underline">
@@ -168,7 +168,7 @@ async function ClubManagePage({ params }: Props) {
           ) : (
             <ul className="mt-3 flex flex-col gap-2">
               {coaching.map((c) => (
-                <li key={c.coachId} className="flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3">
+                <li key={c.coachId} className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <Link href={`/c/${c.handle}`} prefetch={false} className="truncate font-bold hover:underline">
                       {c.displayName}

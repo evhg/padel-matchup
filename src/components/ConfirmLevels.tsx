@@ -45,7 +45,7 @@ export function ConfirmLevels({ code, players }: { code: string; players: Candid
           <p className="text-sm text-muted">{t("level.confirmHelp")}</p>
           <ul className="mt-3 flex flex-col gap-2">
             {players.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-3 py-2">
+              <li key={p.id} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-3 py-2">
                 <span className="min-w-0 truncate font-semibold">
                   {p.name} <span className="ml-1 text-sm text-muted tabular-nums">{formatLevel(p.level)}</span>
                 </span>

@@ -28,7 +28,7 @@ async function ClaimClubPage({ searchParams }: { searchParams: Promise<{ name?: 
       <Header />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2 pb-12">
         <section className="card">
-          <span className="chip-muted">🏟 {t("club.eyebrow")}</span>
+          <span className="chip-muted">{t("club.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("club.claimTitle")}</h1>
           <p className="mt-2 text-sm text-muted">{t("club.claimSub")}</p>
           <p className="mt-2 text-sm text-muted">{t("club.foundingBody")}</p>

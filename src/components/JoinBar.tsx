@@ -313,7 +313,7 @@ export function JoinBar({
           {state === "requested" && (
             <>
               <div className="min-w-0 flex-1">
-                <div className="text-base font-extrabold">✋ {t("level.requestSent")}</div>
+                <div className="text-base font-extrabold">{t("level.requestSent")}</div>
                 <div className="text-xs text-muted">{t("level.requestSentHelp", { name: organizerName })}</div>
                 {fixedPairs && <div className="text-xs text-muted">{t("pairs.requestPartner")}</div>}
                 {unverified &&

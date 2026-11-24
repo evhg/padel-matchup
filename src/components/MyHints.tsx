@@ -65,7 +65,7 @@ export function MyHints({ rows, off = false, locked = false, doors = "other", en
             {rows.map((r) => {
               const label = labelOf(r.label);
               return (
-                <li key={r.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3" data-testid="my-hint">
+                <li key={r.id} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3" data-testid="my-hint">
                   <div className="min-w-0">
                     <div className="truncate font-bold">{label}</div>
                     <div className="text-xs text-muted">{t("identity.hintSeen", { first: r.first, last: r.last })}</div>

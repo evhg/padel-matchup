@@ -285,7 +285,7 @@ export function CreateEventForm({
   return (
     <form onSubmit={submit} onKeyDown={enterMovesOn} className="flex flex-col gap-5">
       {!hasIdentity && (
-        <div className="card bg-accent-soft border-accent">
+        <div className="card">
           <label className="label text-ink">{t("identity.whatsYourName")}</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} onFocus={own.onFocus} placeholder={t("identity.namePlaceholder")} autoComplete={own.autoComplete} enterKeyHint="next" maxLength={40} data-testid="create-own-name" />
           {own.note}
@@ -313,14 +313,14 @@ export function CreateEventForm({
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-ok-soft px-4 py-3">
                   <input type="checkbox" className="mt-1 h-5 w-5 accent-ink" checked={bookedByMe} onChange={(e) => setBookedByMe(e.target.checked)} data-testid="booked-by-me" />
                   <span className="min-w-0">
-                    <span className="block font-bold">🎟 {t("create.bookedByMe")}</span>
+                    <span className="block font-bold">{t("create.bookedByMe")}</span>
                     <span className="block text-xs text-muted">{t("create.bookedByMeHelp")}</span>
                   </span>
                 </label>
               )}
               {invite && (
                 <div className="-mt-2 px-1 text-xs text-muted" data-testid="paste-invite">
-                  <p>🔗 {t("create.inviteShown", { platform: invite.platform })}</p>
+                  <p>{t("create.inviteShown", { platform: invite.platform })}</p>
                   <p className="mt-1 flex items-start gap-3">
                     <span className="min-w-0 flex-1 break-all font-semibold text-ink" data-testid="paste-invite-link">
                       {invite.url.replace(/^https:\/\//, "")}

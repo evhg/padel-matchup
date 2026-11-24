@@ -160,7 +160,7 @@ export function CoachSetup({ initialClubs = "", clubOptions = [], botUsername = 
   return (
     <section className="card flex flex-col gap-5" data-testid={`setup-${step}`}>
       <div>
-        <span className="chip-muted">🎾 {t("eyebrow")}</span>
+        <span className="chip-muted">{t("eyebrow")}</span>
         <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{t("setup.title")}</h1>
         <p className="mt-1 text-xs font-bold uppercase tracking-wider text-faint">{t("setup.step", { n: index + 1, total })}</p>
       </div>

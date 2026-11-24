@@ -143,7 +143,7 @@ async function MePage({ searchParams }: Props) {
               {myClubs.map((c) => {
                 const status = clubStatus(c);
                 return (
-                  <li key={c.slug} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3">
+                  <li key={c.slug} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3">
                     <div className="min-w-0">
                       <div className="truncate font-bold">{c.name}</div>
                       <div className="text-xs text-muted">{status === "live" ? `✓ ${t("club.statusLive")}` : status === "rejected" ? t("club.statusRejected") : `⏳ ${t("club.statusPending")}`}</div>

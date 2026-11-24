@@ -96,11 +96,11 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false, card =
 
   if (status === "hidden") return null;
   const wrap = (node: ReactNode) => (card ? <section className="card">{node}</section> : node);
-  if (status === "denied") return wrap(<p className="text-sm text-muted">🔕 {t("push.denied")}</p>);
+  if (status === "denied") return wrap(<p className="text-sm text-muted">{t("push.denied")}</p>);
   if (status === "on") {
     return wrap(
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-semibold text-ok">🔔 {labels?.on ?? t("push.on")}</span>
+        <span className="font-semibold text-ok">✓ {labels?.on ?? t("push.on")}</span>
         <button type="button" className="shrink-0 text-xs link text-muted" onClick={disable}>
           {t("push.off")}
         </button>
@@ -110,7 +110,7 @@ export function PushToggle({ vapidPublicKey, subscribed, compact = false, card =
   return wrap(
     <div>
       <button type="button" className={`btn-secondary ${compact ? "btn-sm" : "w-full"}`} disabled={status === "working"} onClick={enable}>
-        {status === "working" ? t("common.working") : `🔔 ${labels?.enable ?? t("push.enable")}`}
+        {status === "working" ? t("common.working") : (labels?.enable ?? t("push.enable"))}
       </button>
       {!compact && <p className="mt-1 text-xs text-faint">{t("push.enableHelp")}</p>}
       {error && <p className="mt-1 text-sm font-semibold text-danger">{error}</p>}

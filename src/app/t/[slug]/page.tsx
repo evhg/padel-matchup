@@ -94,7 +94,7 @@ async function TournamentPage({ params, searchParams }: Props) {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(jsonLd) }} />
         {live && <AutoRefresh seconds={60} />}
         <section className="card">
-          <span className="chip-muted">🏆 {t("tournament.eyebrow")}</span>
+          <span className="chip-muted">{t("tournament.eyebrow")}</span>
           <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight">{c.name}</h1>
           <p className="mt-1 font-semibold">
             {days}
@@ -119,7 +119,7 @@ async function TournamentPage({ params, searchParams }: Props) {
             )}
             {play.length > 0 && (
               <Link href={`/t/${c.slug}/tv`} prefetch={false} className="btn-ghost btn-sm" data-testid="tv-link">
-                📺 {t("tournament.tvOpen")}
+                {t("tournament.tvOpen")}
               </Link>
             )}
             {play.length > 0 && (
@@ -151,7 +151,7 @@ async function TournamentPage({ params, searchParams }: Props) {
 
         {champions.length > 0 && (
           <section className="card" data-testid="champions">
-            <h2 className="text-lg font-extrabold">🏆 {t("tournament.champion")}</h2>
+            <h2 className="text-lg font-extrabold">{t("tournament.champion")}</h2>
             <ul className="mt-2 flex flex-col gap-1">
               {champions.map((ch) => (
                 <li key={ch.category}>

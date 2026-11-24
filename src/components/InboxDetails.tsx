@@ -51,7 +51,7 @@ export function InboxDetails({ title, newLabel, unreadLabel, help, items }: { ti
             </>
           );
           return (
-            <li key={n.id} className="rounded-xl border border-line px-3 py-2" data-unread={fresh ? "1" : undefined}>
+            <li key={n.id} className="rounded-xl bg-card px-3 py-2" data-unread={fresh ? "1" : undefined}>
               {n.href ? (
                 <Link href={n.href} prefetch={false} className="block">
                   {body}

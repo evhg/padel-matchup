@@ -133,7 +133,7 @@ export function ClubWeekEditor({ token, slots, leadDays }: { token: string; slot
           {slots.map((s) => {
             const level = rangeChip(t, { min: s.levelMin, max: s.levelMax });
             return (
-              <li key={s.id} className="rounded-2xl border border-line bg-card px-4 py-2" data-testid="club-slot">
+              <li key={s.id} className="rounded-2xl bg-card px-4 py-2" data-testid="club-slot">
                 <div className="flex items-center gap-3">
                   {/* A paused slot dims its words, never its buttons: Resume and the chips must not look disabled. */}
                   <div className={`w-16 shrink-0 ${s.active ? "" : "opacity-60"}`}>

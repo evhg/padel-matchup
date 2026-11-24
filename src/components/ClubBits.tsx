@@ -28,7 +28,7 @@ export async function ClubBadges({ club }: { club: Pick<Club, "founding" | "cour
     <div className="flex flex-wrap gap-2">
       {/* Only a club that runs its page here (`isClubLive`). Until 11 October 2026 every listed club wore it, beside the line that says the club does not manage the page. */}
       {isClubLive(club) && <span className="chip-muted">✓ {t("club.managedBy")}</span>}
-      {club.founding && <span className="chip-muted">🌱 {t("club.foundingBadge")}</span>}
+      {club.founding && <span className="chip-muted">{t("club.foundingBadge")}</span>}
       {club.courts ? <span className="chip-muted">{[t("club.courtsCount", { count: club.courts }), ...split].join(" · ")}</span> : null}
     </div>
   );
@@ -88,13 +88,13 @@ export async function ClubRow({ club, now = new Date() }: { club: Club; now?: Da
   const t = await getTranslations();
   const hours = freeCourtHours(club, now);
   return (
-    <li className="flex items-center gap-3 rounded-2xl border border-line px-4 py-3">
+    <li className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3">
       <div className="min-w-0 flex-1">
         <Link href={`/v/${club.slug}`} prefetch={false} className="block truncate font-bold hover:underline">
           {club.name}
         </Link>
         <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
-          {club.founding && <span>🌱 {t("club.foundingBadge")}</span>}
+          {club.founding && <span>{t("club.foundingBadge")}</span>}
           {/* A club nobody has claimed is shown, and says so. The reader is told who stands behind it. */}
           {!isClubLive(club) && <span className="text-faint">{t("club.notClaimed")}</span>}
           {club.province && !club.city && <span>📍 {club.province}</span>}

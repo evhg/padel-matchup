@@ -134,7 +134,7 @@ export function AmericanoGenerator({ initial }: { initial?: GenSetup | null }) {
                 {t("americano.gen.shuffle")}
               </button>
               <button type="button" className="btn-ghost" onClick={() => window.print()}>
-                🖨 {t("americano.gen.print")}
+                {t("americano.gen.print")}
               </button>
             </>
           )}

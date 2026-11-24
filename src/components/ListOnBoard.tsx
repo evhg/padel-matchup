@@ -23,7 +23,7 @@ export function ListOnBoard({ code, venue }: { code: string; venue: string }) {
     });
   return (
     <button type="button" className="chip-muted hover:bg-line disabled:opacity-60" onClick={list} disabled={pending} aria-busy={pending} data-testid="list-on-board">
-      📍 {failed ? t("common.somethingWrong") : t("venue.listNow", { venue })}
+      {failed ? t("common.somethingWrong") : t("venue.listNow", { venue })}
     </button>
   );
 }

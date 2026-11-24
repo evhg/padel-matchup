@@ -53,7 +53,7 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
         {coach.founding && foundingCity && <span className="chip-muted">🏅 {tCoach("page.founding", { city: foundingCity })}</span>}
         {/* Only the open door. It used to read `open_booking` alone, so a coach who answers every
             newcomer themselves wore "Book without asking" (25 September 2026). */}
-        {coach.door === "open" && <span className="chip-open">⚡ {t("cardOpenBooking")}</span>}
+        {coach.door === "open" && <span className="chip-open">{t("cardOpenBooking")}</span>}
       </div>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="flex min-w-0 items-center gap-2 text-xl font-extrabold tracking-tight">
@@ -83,7 +83,7 @@ export async function CoachListCard({ coach, locale, foundingCity }: { coach: Co
       </p>
       {levels && (
         <p className="text-sm text-muted" data-testid="card-levels">
-          🎚️ {t("cardLevels", { levels: coach.levels.min != null && coach.levels.max != null ? `${formatLevel(coach.levels.min)}–${formatLevel(coach.levels.max)}` : coach.levels.min != null ? `${formatLevel(coach.levels.min)}+` : `≤ ${formatLevel(coach.levels.max!)}` })}
+          {t("cardLevels", { levels: coach.levels.min != null && coach.levels.max != null ? `${formatLevel(coach.levels.min)}–${formatLevel(coach.levels.max)}` : coach.levels.min != null ? `${formatLevel(coach.levels.min)}+` : `≤ ${formatLevel(coach.levels.max!)}` })}
         </p>
       )}
       {/* Only a coach a stranger can book gets a free hour named here. The card used to promise an

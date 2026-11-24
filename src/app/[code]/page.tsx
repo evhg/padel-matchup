@@ -602,7 +602,7 @@ async function EventPage({ params, searchParams }: Props) {
       : null;
   // "Other ways to share", where the page has something to share: before the match, and after it once a result exists.
   const otherShares = oneShareText ? <OtherShares url={oneShareUrl} text={oneShareText} whatsapp={!sharesInBar} story={moment === "result" ? null : `/${code}/story`} image={moment === "result" && resultCard ? resultCard.image : undefined} extra={waJoin && moment !== "result" ? (
-    <div className="rounded-2xl border border-line px-4 py-3">
+    <div className="rounded-2xl bg-card px-4 py-3">
       <div className="text-sm font-bold">{t("wa.handoff")}</div>
       <p className="mt-1 text-xs text-muted">{t("wa.handoffHelp")}</p>
       <div className="mt-2 truncate text-xs text-faint">{waJoin}</div>
@@ -668,11 +668,13 @@ async function EventPage({ params, searchParams }: Props) {
     const stale = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
     return (
-      <li key={s.id} className={`rounded-2xl border px-4 py-3 ${occupiedSlot ? "border-line bg-card" : s.status === "invited" ? "border-dashed border-warn/50 bg-warn-soft/40" : "border-dashed border-line-strong bg-bg/60"}`}>
+      // A row of the list, as in the iPhone's Contacts: a hairline between rows (the list's `divide-y`), no box.
+      // An open place and a held one were dashed boxes inside the card; the words and the grey avatar say it now.
+      <li key={s.id} className="py-3">
         {/* Wraps, so a held row's doors panel (`basis-full`) drops under the name and its button. */}
         <div className="flex flex-wrap items-center gap-3">
           {!tappable && (
-            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-extrabold ${occupiedSlot ? "bg-ink text-on-ink" : "bg-line text-muted"}`}>
+            <span className={`inline-grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold ${occupiedSlot ? "bg-fill text-ink" : "border border-dashed border-line-strong text-muted"}`}>
               {occupiedSlot ? name.slice(0, 1).toUpperCase() : isWaitlist ? index + 1 : "·"}
             </span>
           )}
@@ -789,9 +791,9 @@ async function EventPage({ params, searchParams }: Props) {
     // Only where the server lets this viewer in (`partnerAdmission`): a ranged night holds a newcomer to its range.
     const canBePartner = u.kind === "single" && u.seat.status !== "invited" && !isWaitlist && beforeRound1 && u.seat.playerId !== me?.id && !myPartner && (mySingleOnList || (!isMember && spotsLeft > 0)) && partnerAdmits;
     return (
-      <li key={seatsOf[0].id} className={`rounded-2xl border px-4 py-3 ${u.kind === "pair" ? "border-line bg-card" : "border-dashed border-warn/50 bg-warn-soft/40"}`} data-testid={u.kind === "pair" ? "pair-row" : "single-row"}>
+      <li key={seatsOf[0].id} className="py-3" data-testid={u.kind === "pair" ? "pair-row" : "single-row"}>
         <div className="flex items-center gap-3">
-          <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-sm font-extrabold text-on-ink">{seatsOf.map((s) => personName(s).slice(0, 1).toUpperCase()).join("")}</span>
+          <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-fill text-sm font-bold text-ink">{seatsOf.map((s) => personName(s).slice(0, 1).toUpperCase()).join("")}</span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {u.kind === "pair" ? (
@@ -863,7 +865,7 @@ async function EventPage({ params, searchParams }: Props) {
         <section className={`card overflow-hidden ${cancelled ? "opacity-80" : ""}`}>
           <div className="flex flex-wrap items-center gap-2">
             <span className={statusChip.cls}>{statusChip.label}</span>
-            <span className="text-xs font-bold uppercase tracking-wider text-faint">{typeLabel}</span>
+            <span className="text-xs font-semibold text-faint">{typeLabel}</span>
             {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
             {levelChip && ev.levelVerifiedOnly && <span className="chip-muted">✓ {t("levelCheck.chip")}</span>}
             {forChip && (
@@ -873,21 +875,21 @@ async function EventPage({ params, searchParams }: Props) {
             )}
             {group && (
               <Link href={`/g/${group.code}`} prefetch={false} className="chip-muted hover:bg-line">
-                👥 {t("group.partOf", { name: group.name })}
+                {t("group.partOf", { name: group.name })}
               </Link>
             )}
             {ev.publicListing && ev.venueSlug && ev.venueName && (
               <Link href={`/v/${ev.venueSlug}`} prefetch={false} className="chip-muted hover:bg-line">
-                📍 {t("venue.listed", { venue: ev.venueName })}
+                {t("venue.listed", { venue: ev.venueName })}
               </Link>
             )}
             {/* The organiser's one tap onto the venue's board; the switch that takes it off again stays in More options. */}
             {viewer.isCreator && !ev.publicListing && ev.venueSlug && ev.venueName && !cancelled && !over && <ListOnBoard code={code} venue={ev.venueName} />}
           </div>
-          <h1 className="mt-3 text-2xl font-extrabold leading-tight tracking-tight">{title}</h1>
+          <h1 className="mt-3 text-[1.75rem] font-extrabold leading-tight tracking-tight">{title}</h1>
           {night && (
             <div className="mt-2 flex flex-wrap gap-1.5" data-testid="night-chips">
-              <span className="chip-muted">👥 {t("americano.chipPlayers", { count: occupied, capacity: ev.capacity })}</span>
+              <span className="chip-muted">{t("americano.chipPlayers", { count: occupied, capacity: ev.capacity })}</span>
               {formatName && <span className="chip-muted">{formatName}</span>}
               {fixedPairs && <span className="chip-muted">{t("pairs.fixed")}</span>}
               {ev.gamesTo ? <span className="chip-muted">{t("americano.chipGames", { n: ev.gamesTo })}</span> : ev.pointsPerMatch ? <span className="chip-muted">{t("americano.chipPoints", { n: ev.pointsPerMatch })}</span> : null}
@@ -910,7 +912,7 @@ async function EventPage({ params, searchParams }: Props) {
               </div>
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-bg px-4 py-3">
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">
             <div className="min-w-0">
               {/* Two lines before it is cut: the court is the end of the line, and one line cut "WAREHAUS.club · Co…" at 390 px. */}
               <div className={`line-clamp-2 break-words text-base font-bold ${ev.venueName ? "" : "text-muted"}`} data-testid="venue-line">
@@ -920,13 +922,13 @@ async function EventPage({ params, searchParams }: Props) {
             </div>
             <div className="flex shrink-0 gap-1.5">
               {ev.bookingUrl && !invite && (
-                <a href={ev.bookingUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
-                  🎟 {detectPlatform(ev.bookingUrl) ? t("club.bookOn", { platform: detectPlatform(ev.bookingUrl)!.name }) : t("event.openBooking")}
+                <a href={ev.bookingUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm px-2">
+                  {detectPlatform(ev.bookingUrl) ? t("club.bookOn", { platform: detectPlatform(ev.bookingUrl)!.name }) : t("event.openBooking")}
                 </a>
               )}
               {ev.venueMapUrl && (
-                <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
-                  📍 {t("event.openMap")}
+                <a href={ev.venueMapUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm px-2">
+                  {t("event.openMap")}
                 </a>
               )}
             </div>
@@ -936,13 +938,13 @@ async function EventPage({ params, searchParams }: Props) {
           {invite && !cancelled && !over && (
             <p className="mt-3 text-sm">
               <a href={invite.url} target="_blank" rel="noopener noreferrer" className="link font-semibold" data-testid="join-booking">
-                🤝 {t("event.joinBooking", { platform: invite.platform.name })}
+                {t("event.joinBooking", { platform: invite.platform.name })}
               </a>
             </p>
           )}
           {ev.cost && (
             <p className="mt-3 text-sm">
-              <span className="font-bold">💸 {t("event.costPerPlayer", { cost: ev.cost })}</span>
+              <span className="font-bold">{t("event.costPerPlayer", { cost: ev.cost })}</span>
               {ev.payNote && <span className="text-muted"> · {ev.payNote}</span>}
             </p>
           )}
@@ -956,13 +958,13 @@ async function EventPage({ params, searchParams }: Props) {
             </p>
           )}
           {cancelled && (
-            <div className="mt-4 rounded-2xl bg-danger-soft p-4">
+            <div className="mt-4 border-t border-line pt-3">
               <div className="font-extrabold text-danger">{t("event.cancelled")}</div>
               <div className="text-sm text-danger">{t("event.cancelledHelp")}</div>
             </div>
           )}
           {!cancelled && over && detail.scores.length === 0 && ev.type === "match" && (
-            <div className="mt-4 rounded-2xl bg-bg p-4">
+            <div className="mt-4 border-t border-line pt-3">
               <div className="font-extrabold">{t("event.past")}</div>
               <div className="text-sm text-muted">{t("event.pastNoScore")}</div>
             </div>
@@ -994,7 +996,7 @@ async function EventPage({ params, searchParams }: Props) {
 
         {creatorBanner && isTournament && (
           <a href="#score" className="flex items-center justify-between rounded-2xl border border-accent bg-accent-soft px-4 py-3 font-bold">
-            <span>🏆 {isTournament && waitingRound ? t("creator.scoreReminderTournament", { n: waitingRound }) : t("creator.scoreReminderBanner")}</span>
+            <span>{isTournament && waitingRound ? t("creator.scoreReminderTournament", { n: waitingRound }) : t("creator.scoreReminderBanner")}</span>
             <span>→</span>
           </a>
         )}
@@ -1100,7 +1102,7 @@ async function EventPage({ params, searchParams }: Props) {
               </span>
             )}
           </div>
-          <ul className="mt-3 flex flex-col gap-2">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
+          <ul className="mt-1 flex flex-col divide-y divide-line">{fixedPairs ? [...rosterUnits.map((u) => unitRow(u)), ...roster.filter((s) => s.status === "empty" || s.status === "declined").map((s, i) => slotRow(s, i))] : roster.map((s, i) => slotRow(s, i))}</ul>
           {/* Pending approvals first, then the one message for the held places (the owner's decision A of 6 November 2026). */}
           {pendingRequests.length > 0 && (
             <JoinRequests code={code} waitlist={ev.whenFull === "waitlist"} items={pendingRequests.map((r) => ({ id: r.id, name: r.player?.displayName ?? "?", level: r.level ?? r.player?.level ?? null, ago: relativeTime(r.createdAt, locale, now, ev.tz) }))} />
@@ -1125,7 +1127,7 @@ async function EventPage({ params, searchParams }: Props) {
           {waitlist.length > 0 && (
             <>
               <h3 className="mt-5 text-sm font-extrabold uppercase tracking-wider text-muted">{t("event.waitlist")}</h3>
-              <ul className="mt-2 flex flex-col gap-2">{fixedPairs ? seatUnits(waitlist).map((u) => unitRow(u, true)) : waitlist.map((s, i) => slotRow(s, i, true))}</ul>
+              <ul className="mt-1 flex flex-col divide-y divide-line">{fixedPairs ? seatUnits(waitlist).map((u) => unitRow(u, true)) : waitlist.map((s, i) => slotRow(s, i, true))}</ul>
             </>
           )}
           {/* A held player on a full match reads the way in that is theirs, the button on their row, not "Ask the organizer". */}

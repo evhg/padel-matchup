@@ -98,7 +98,7 @@ export async function MyMatches({ player, first = null }: { player: Player; firs
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="truncate font-bold">🎾 {t("coach.me.lesson", { name: l.coach.displayName })}</span>
+              <span className="truncate font-bold">{t("coach.me.lesson", { name: l.coach.displayName })}</span>
             </div>
             <div className="truncate text-sm text-muted">
               {formatEventDay(l.startsAt, l.coach.tz, locale)}

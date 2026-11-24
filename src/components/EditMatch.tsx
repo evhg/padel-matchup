@@ -73,7 +73,7 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false, 
   return (
     <div className="flex flex-wrap gap-2">
       <button type="button" className="btn-ghost btn-sm" onClick={openForm}>
-        ✎ {t("creator.edit")}
+        {t("creator.edit")}
       </button>
       {beside}
     </div>

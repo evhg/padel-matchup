@@ -38,7 +38,7 @@ export function ClaimCodeForm({ token, email, initialConfirmed = false }: { toke
     );
   }
   return (
-    <div className="rounded-2xl border border-line px-4 py-3" data-testid="claim-code">
+    <div className="rounded-2xl bg-card px-4 py-3" data-testid="claim-code">
       <p className="font-bold">{t("club.codeTitle")}</p>
       <p className="mt-1 text-xs text-muted">{t("club.codeSentTo", { email })}</p>
       <div className="mt-2 flex gap-2">

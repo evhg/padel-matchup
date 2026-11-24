@@ -444,7 +444,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
                 {t("page.otherTime")} →
               </button>
             ) : (
-              <form onSubmit={ask} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-3 animate-pop" data-testid="ask-form">
+              <form onSubmit={ask} className="flex flex-col gap-2 rounded-2xl bg-card p-3 animate-pop" data-testid="ask-form">
                 <p className="text-xs text-muted">
                   {t("page.otherTimeHelp", { name: coachName })}
                   {prices?.fee ? ` ${t("page.feeLine", { amount: money(prices.fee) })}.` : ""}
@@ -472,7 +472,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
                   </li>
                 ))}
                 {requests.map((r) => (
-                  <li key={r.id}>❔ {t("page.askedList")} {r.label}</li>
+                  <li key={r.id}>{t("page.askedList")} {r.label}</li>
                 ))}
               </ul>
             )}
@@ -482,7 +482,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
         {error && <p className="mt-3 text-sm font-semibold text-danger">{error}</p>}
         {whatsappUrl && (status === "paused" || status === "requested" || days.length === 0) && (
           <a href={whatsappUrl} target="_blank" rel="noreferrer" className="btn-ghost mt-3 w-full">
-            💬 {t("page.whatsapp")}
+            {t("page.whatsapp")}
           </a>
         )}
       </section>
@@ -517,7 +517,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
               <h3 className="text-sm font-extrabold">{t("page.packages")}</h3>
               <ul className="mt-2 flex flex-col gap-2" data-testid="offers-list">
                 {packages.map((o) => (
-                  <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-bg px-4 py-3">
+                  <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-bg px-4 py-3">
                     <div className="min-w-0 flex-1 basis-40">
                       <div className="font-bold">
                         {t("page.pkgLine", { size: o.size, minutes: o.minutes })} · {t("page.pkgFor", { n: o.heads })}
@@ -549,7 +549,7 @@ export function StudentBooking({ handle, coachName, signedIn, status, openBookin
           )}
           <ul className="mt-3 flex flex-col gap-2">
             {lessons.map((l) => (
-              <li key={l.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-card px-4 py-3">
+              <li key={l.id} className="flex flex-col gap-2 rounded-2xl bg-card px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-bold">{l.label}</div>

@@ -62,16 +62,16 @@ export function ClubClaimForm({ initialName, hasIdentity, base, listed = [] }: {
           </div>
         </div>
         <p className="text-sm font-bold">{t("club.walkDoneNext")}</p>
-        <a href={`/v/${done.slug}/poster`} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3 hover:border-ink/30" data-testid="claim-poster">
+        <a href={`/v/${done.slug}/poster`} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60" data-testid="claim-poster">
           <span>
-            <span className="block font-bold">🖨 {t("club.walkPosterTitle")}</span>
+            <span className="block font-bold">{t("club.walkPosterTitle")}</span>
             <span className="block text-xs text-muted">{t("club.walkPosterHelp", { club: v.clubName })}</span>
           </span>
           <span aria-hidden>→</span>
         </a>
-        <a href={`${manage}#week`} className="flex items-center justify-between gap-3 rounded-2xl border border-line px-4 py-3 hover:border-ink/30" data-testid="claim-week">
+        <a href={`${manage}#week`} className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 hover:bg-fill/60" data-testid="claim-week">
           <span>
-            <span className="block font-bold">📅 {t("club.walkWeekTitle")}</span>
+            <span className="block font-bold">{t("club.walkWeekTitle")}</span>
             <span className="block text-xs text-muted">{t("club.walkWeekHelp")}</span>
           </span>
           <span aria-hidden>→</span>
