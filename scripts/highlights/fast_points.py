@@ -12,7 +12,8 @@ The phone's cut keeps one point in each clip, and its reaction (src/lib/reel/fas
 - the ball is dead 0.75 s after the last shot (the person who made the eighth reel set 0.7 to 0.8 s by eye);
 - the clip starts 1.5 s before the serve (or at the start of the phone's clip) and runs to its end, 5 s after the
   dead ball at most: the reaction is in it;
-- the title is the rally's length when it is 8 s or more ("12-second rally"), and nothing for a short point;
+- the title never says a length the sound cannot prove (`rally_title`): the seconds only when every hit is heard,
+  else "Long rally" or "Marathon rally" from the part of the rally that is surely in it, and nothing for a short point;
 - a replay is the hit with the fastest wrist of a near player whom the tracker holds for 1.2 s before it, at most
   four in a reel and one in a clip; a far player is a blur in a close look (README).
 - each clip gets its own cheer (cheers.py: a file is used once).
@@ -39,6 +40,25 @@ def hits_of(x, a, b):
     for i in sorted(cand, key=lambda i: -c[i]):
         if all(abs(i - j) >= 25 for j in out): out.append(i)
     return [(round(a + i * HOP / SR, 2), round(float(c[i]), 1)) for i in sorted(out)]
+
+
+def rally_title(times):
+    """The title of a rally from the times of its hits, and never a wrong one. A phone behind the glass hears half of
+    the hits, and a ball bounced before the serve sounds like one: on 24 November 2026 the length from the first to the
+    last hit said 27, 18 and 35 seconds for rallies of 12.6, 15.4 and 32.7 (a person's times). So:
+    - the seconds, when no gap is over 2.5 s and the first gap is 1.6 s at most (no lone bounce before the serve);
+    - else "Marathon rally" or "Long rally" when the longest run with no gap over 3 s, which is inside the rally for
+      sure, is 20 s or 8 s long;
+    - else nothing. Pure."""
+    if len(times) < 2: return ''
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    best, s = 0.0, times[0]
+    for a, b in zip(times, times[1:]):
+        if b - a > 3.0: s = b
+        best = max(best, b - s)
+    span = times[-1] - times[0]
+    if max(gaps) <= 2.5 and gaps[0] <= 1.6 and span >= 8: return f'{int(round(span))}-second rally'
+    return 'Marathon rally' if best >= 20 else 'Long rally' if best >= 8 else ''
 
 
 def rally(hits, gap=6.0, strong=9.0):
@@ -100,9 +120,8 @@ def main():
         dead = round(min(last + 0.75, b - 0.3), 2)
         start = round(max(a + 0.05, serve - 1.5), 2)
         end = round(min(b - 0.05, dead + 5.0), 2)
-        secs = int(round(last - serve))
         p = {'id': f'c{n}', 'match': f'{M}/match-{c["match"]}.json', 'start_t': start, 'serve_t': round(serve, 2), 'last_t': round(last, 2), 'dead_t': dead,
-             'end': end, 'next_serve_t': round(b + 1.05, 2), 'track': trf, 'title': f'{secs}-second rally' if secs >= 8 else '',
+             'end': end, 'next_serve_t': round(b + 1.05, 2), 'track': trf, 'title': rally_title([h[0] for h in r]),
              'sub': (f"Match {WORDS[c['match'] - 1] if c['match'] <= len(WORDS) else c['match']}" if multi else f'Point {n + 1}'), 'hits': [h[0] for h in r]}
         pts.append(p)
         if os.path.exists(trf):
