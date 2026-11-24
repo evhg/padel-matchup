@@ -8,8 +8,8 @@ Start. `assemble` in serve.py joins a player's upload and tells Kicksmash (POST 
 answer carries "fastReel" (the start request below), `assemble` starts `make` with it. The start request:
 
   {"upload": "<upload token>",                       the clips are uploads/<token>/video.<ext> (or "video": a path on the store)
-   "matches": [{"code": "AB12", "title_a": "Ishan & Eunice", "title_b": "Erik & Micky", "score": "6-3 6-2",
-                "players": [{"id": "<player id>", "name": "Erik", "team": 1, "sex": "m"}, ... four]}, ...],
+   "matches": [{"code": "AB12", "title_a": "Ana & Bo", "title_b": "Cy & Di", "score": "6-3 6-2",
+                "players": [{"id": "<player id>", "name": "Ana", "team": 1, "sex": "m"}, ... four]}, ...],
    "music": "bounce"?,                                 the track when the player wrote no choices.json
    "place": "<camera place>"?, "court": {court.json}?, "venue": ""?, "grade": "glass"?}
 

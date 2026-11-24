@@ -165,7 +165,7 @@ def main():
     G = {'players': {}}
     if os.environ.get('GALLERY') and os.path.exists(os.environ['GALLERY']): G = json.load(open(os.environ['GALLERY']))
     def gal_key(p):
-        """The gallery's entry of a player: by id, then by first name (one letter may differ: "Micky", "Mickey")."""
+        """The gallery's entry of a player: by id, then by first name (one letter may differ: "Jon", "John")."""
         if p['id'] in G['players']: return p['id']
         for n in G['players']:
             if edits(n.lower(), p['name'].lower()) <= (1 if len(p['name']) >= 4 else 0): return n

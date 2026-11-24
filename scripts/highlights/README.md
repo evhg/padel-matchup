@@ -685,7 +685,7 @@ on the reel host (`serve.py`), and `resume` goes on from the step "players".
 - **A name comes from every way to name the four, not from the best face** (`who.py`). The faces knew two players
   of four (a gallery of 18 November); the pairs of two matches named the other two; a model of men and women agreed
   (0.02 and 0.98). The share of the best way among all ways is how sure the names are: 1.00 for all four. A gallery
-  name that differs by one letter ("Micky", "Mickey") is the same entry; a lookup by exact name found one face of two.
+  name that differs by one letter ("Jon", "John") is the same entry; a lookup by exact name found one face of two.
 - **The pictures at 3 a second must carry their true time** (24 November 2026). With the fps filter they were 0.17 to
   0.25 s after their listed time, and a portrait cut from the 4K file at the listed time showed the fence where the
   player had stood. They are now every 10th picture of the working copy. The working copy itself drifted 0.12 s from
