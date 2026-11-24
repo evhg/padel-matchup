@@ -24,7 +24,8 @@ rather than rediscovering it.
    Do not put a gerund or a participle where a noun or an adjective belongs. Do not drop an article.
    Give one meaning to each word. File names, table names, column names and code identifiers are
    technical names, so keep them as they are. No internal shorthand, no drifting pull request numbers,
-   no codenames.
+   no codenames. Give every time in Thailand time (Asia/Bangkok, UTC+7), never in UTC: the owner, 24
+   November 2026, "dont use utc time, we are in thailand".
 5. **A player whose note became a change hears about it, every time.** Mark the note `shipped`, thank
    the player, say what changed, and invite them to try it. Give it its one line for `/built`
    (`publicSummary`: the change in our words, never theirs). The player's first name shows beside

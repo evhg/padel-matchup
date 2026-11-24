@@ -63,6 +63,22 @@ for each thing that needs the owner, set out as a decision: the options, their p
 the recommendation. A fact is reported, not asked. End the session with three lines in Simplified
 Technical English: what shipped, what is next, what needs the owner.
 
+## 5b. A match video is here
+
+The desk also wakes when a player's video or fast-reel clips arrive ("make its reel"), and every hour
+while a reel row is still `received`. The page tells the players a person makes the reel and that it can
+take a few hours, so make it now:
+
+- **Fast reel (clips):** `scripts/highlights/fast_reel.py`. The upload folder is the newest finished
+  `uploads/<dir>/meta.json` on the volume `kicksmash-matches`; the codes are the match and any other match
+  played in the same booking. Write the opening card from the match's real names and score (through
+  `/api/admin/sql`). Look at a sheet of frames before you publish. Then tell the players on their notes,
+  if they wrote one.
+- **Full reel (the whole video):** the engine in `scripts/highlights/README.md`, until the automatic job
+  exists.
+
+Give every time in Thailand time (Asia/Bangkok), the zone of the match.
+
 ## 6. Leave nothing open
 
 Every note you read ends in another status than `acknowledged`. A note left `acknowledged` wakes the

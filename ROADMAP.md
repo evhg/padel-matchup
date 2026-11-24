@@ -1620,8 +1620,9 @@ Everything in this list is live. The README describes each in detail.
   phone cannot read is said in words. On an iPhone the card says to choose the film from the Files
   app, because an iPhone converts a film that a page takes from the photo library. Proven in
   `tests/fast-plan.test.ts`, `tests/match-reel.test.ts` and the browser suite viral, with a synthetic
-  film of three rallies. Not proven: a real film of 44 GB on a real iPhone. Not built yet: the engine
-  for the clips of a fast reel; a person makes that reel too.
+  film of three rallies. Proven on 24 November 2026 with a real film: a 90-minute 4K match on an
+  iPhone gave 200 s of clips (1.5 GB). The reel from the clips is `scripts/highlights/fast_reel.py`,
+  run by a session that the arriving clips wake (the note desk); not yet a job of the reel host.
 - **The reader's grants no longer pile up** (the owner's decision A, 23 November 2026). Each schema
   change wrote a full copy of the read-only role's grants, 17 KB, into every function of every
   deployment: 18 copies, 0.27 MB. The older ones keep the role alone now

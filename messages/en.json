@@ -2938,7 +2938,7 @@
     "linkSave": "Send the link",
     "linkBad": "That is not a shared link from iCloud, Google Drive, Dropbox or OneDrive.",
     "hereTitle": "The video is here",
-    "hereBody": "The reel is in work. All four players see it on this page when it is ready.",
+    "hereBody": "The video is here. For now a person makes the reel from it, and that can take a few hours. All four players see it on this page when it is ready.",
     "chooseWay": "Choose one of two ways. Both give all four players a reel.",
     "fullTitle": "Full reel",
     "best": "Best",
@@ -2963,7 +2963,7 @@
     "fastNone": "Your phone found no rallies in the sound of this video. Use the full reel.",
     "fastNoSound": "This video has no sound that the phone can read. Use the full reel.",
     "fastBad": "Your phone cannot read this video. Use the full reel.",
-    "hereClipsBody": "The clips are here, and the fast reel is in work. All four players see it on this page when it is ready.",
+    "hereClipsBody": "The clips are here. For now a person makes the fast reel from them, and that can take a few hours. All four players see it on this page when it is ready.",
     "iphoneHint": "iPhone: in the menu, tap “Choose File”, not “Photo Library”. From the photo library, the iPhone first converts the whole video, and for a match that takes very long. Not in Files yet? In Photos: Share, then “Save to Files”.",
     "measuring": "measuring the time left…"
   }

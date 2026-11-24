@@ -7,6 +7,7 @@ import { composeAck } from "@/lib/feedback/ack";
 import { proposeToOwner } from "@/lib/feedback/propose";
 import { FeedbackError, cleanScreenshot, createFeedback, saveScreenshot, feedbackCountToday, markAcknowledged, markNotFeedback, saidBefore, webReplyRoute } from "@/lib/feedback/store";
 import { screenOf } from "@/lib/feedback/screen";
+import { pageFacts } from "@/lib/feedback/pageFacts";
 import { subscriptionsFor } from "@/lib/domain/push";
 import { pushEnabled } from "@/lib/push";
 import { LIMITS } from "@/lib/domain/ratelimit";
@@ -48,7 +49,8 @@ export async function sendFeedbackAction(text: string, contact: string, context:
     const { replyVia, canReply } = webReplyRoute(player ? { telegramId: player.telegramId, email: player.email } : null, email, hasPush);
     // This note is already a row, so its own reply (still null) is not counted and the tally is one high; `notesBefore` only decides whether this person has heard the long line before, and one is the same answer either way.
     const said = await saidBefore(db, { playerId: player?.id ?? null, email, telegramUserId: player?.telegramId ?? null });
-    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web", canReply, replyVia, said });
+    const page = await pageFacts(db, screenOf(context)).catch(() => null);
+    const ack = await composeAck(db, { text: clean, name: player?.displayName ?? null, locale, source: "web", canReply, replyVia, said, page });
     if (ack.kind === "not_feedback") await markNotFeedback(db, row.id, ack.reply);
     else {
       await markAcknowledged(db, row.id, ack.reply);

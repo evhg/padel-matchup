@@ -1,6 +1,6 @@
 import { and, eq, gt, lt, sql } from "drizzle-orm";
 import type { Db } from "@/db";
-import { feedback, researchRuns } from "@/db/schema";
+import { feedback, matchReels, researchRuns } from "@/db/schema";
 import { bumpMetric } from "@/lib/domain/metrics";
 
 /**
@@ -19,10 +19,15 @@ export const DESK = { gapMs: 10 * 60_000, key: "note_desk", maxAgeDays: 14 } as 
 
 export type DeskWake = "off" | "recent" | "woken" | "failed";
 
+const FIRE_URL = /^https:\/\/api\.anthropic\.com\/v1\/claude_code\/routines\/trig_[A-Za-z0-9]+\/fire$/;
+
+/** Whether a note can wake the desk: both variables set, and the URL a routine's. */
+export const deskOn = (): boolean => Boolean(process.env.NOTE_DESK_TOKEN?.trim()) && FIRE_URL.test(process.env.NOTE_DESK_FIRE_URL?.trim() ?? "");
+
 export async function wakeNoteDesk(db: Db, reason: string, fetchImpl: typeof fetch = fetch, now = new Date()): Promise<DeskWake> {
   const url = process.env.NOTE_DESK_FIRE_URL?.trim();
   const token = process.env.NOTE_DESK_TOKEN?.trim();
-  if (!url || !token || !/^https:\/\/api\.anthropic\.com\/v1\/claude_code\/routines\/trig_[A-Za-z0-9]+\/fire$/.test(url)) return "off";
+  if (!url || !token || !deskOn()) return "off";
   // The claim first, so two notes in the same second wake one session.
   const since = new Date(now.getTime() - DESK.gapMs);
   const claimed = await db
@@ -55,6 +60,10 @@ export async function wakeForOpenNotes(db: Db, fetchImpl: typeof fetch = fetch, 
     .select({ n: sql<number>`count(*)::int` })
     .from(feedback)
     .where(and(eq(feedback.status, "acknowledged"), lt(feedback.createdAt, new Date(now.getTime() - DESK.gapMs)), gt(feedback.createdAt, new Date(now.getTime() - DESK.maxAgeDays * 86_400_000))));
-  if (!open || open.n === 0) return "none";
-  return wakeNoteDesk(db, `${open.n} note(s) still open`, fetchImpl, now);
+  // A video or clips that arrived and still have no reel wait for the desk as a note does.
+  const [reels] = await db.select({ n: sql<number>`count(*)::int` }).from(matchReels).where(and(eq(matchReels.status, "received"), gt(matchReels.createdAt, new Date(now.getTime() - DESK.maxAgeDays * 86_400_000))));
+  const notes = open?.n ?? 0;
+  const waiting = reels?.n ?? 0;
+  if (notes === 0 && waiting === 0) return "none";
+  return wakeNoteDesk(db, [notes ? `${notes} note(s) still open` : "", waiting ? `${waiting} reel(s) to make` : ""].filter(Boolean).join(", "), fetchImpl, now);
 }
