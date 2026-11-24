@@ -2970,6 +2970,10 @@
     "workingLeft": "Quedan unos {min} min",
     "workingAlmost": "Casi listo",
     "workingBody": "Los cuatro jugadores lo verán en esta página cuando esté listo.",
-    "step": { "clips": "Limpiando los clips", "players": "Buscando a los cuatro jugadores", "follow": "Siguiendo a los jugadores", "replays": "Haciendo las repeticiones lentas", "opening": "Haciendo la presentación", "music": "Añadiendo la música", "finish": "Terminando los archivos" }
+    "step": { "clips": "Limpiando los clips", "players": "Buscando a los cuatro jugadores", "follow": "Siguiendo a los jugadores", "replays": "Haciendo las repeticiones lentas", "opening": "Haciendo la presentación", "music": "Añadiendo la música", "finish": "Terminando los archivos" },
+    "saveGetting": "Bajando el vídeo…",
+    "saveGettingPct": "Bajando el vídeo… {pct}%",
+    "saveNow": "Guardar vídeo",
+    "saveAgain": "No funcionó. Toca para probar otra vez"
   }
 }
