@@ -255,14 +255,12 @@ try {
   await shot(p, "v3-card-photo");
   // "Play again" all the way through: another day picked in the control, the next game made on it.
   await p.goto(`${BASE}/${mcode}`);
-  // "Watch highlights" (the owner, 10 November 2026): YouTube's share text, pasted, becomes one link.
-  await p.getByTestId("highlights-add").locator("summary").click();
-  await p.getByTestId("highlights-input").fill("Our match https://youtu.be/dQw4w9WgXcQ?si=x1");
-  await p.getByTestId("highlights-save").click();
-  await p.getByTestId("highlights-watch").waitFor({ timeout: 20000 });
+  // "Watch highlights" asked for a YouTube link (the owner, 10 November 2026). With the reel host on, the reel lives on
+  // our own store, so the page no longer asks (a player, 24 November 2026); after the match, the bar's share is the
+  // organiser's share and the fold under it is gone (a player, the same day: "out of place and confusing").
   check(
-    "a pasted YouTube share text becomes Watch highlights, and the person who added it can take it down",
-    (await p.getByTestId("highlights-watch").getAttribute("href")) === "https://www.youtube.com/watch?v=dQw4w9WgXcQ" && (await p.getByTestId("highlights-remove").count()) === 1,
+    "with the reel host on, a played match asks for no YouTube link, and the organiser has no second share block",
+    (await p.getByTestId("highlights-add").count()) === 0 && (await p.getByTestId("other-shares").count()) === 0,
   );
   // The numbers of a filmed match (the owner, 22 November 2026): the reel engine sends them through the
   // operator's door, and the match page, My matches and "My stats" show them. A heart rate waits for the
