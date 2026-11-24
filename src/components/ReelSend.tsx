@@ -132,8 +132,8 @@ export function ReelSend({ code, started, canUpload, failed }: { code: string; /
       let name = file.name;
       if (way === "clips") {
         setPhase({ at: "reading", done: 0, total: 0, secondsLeft: null });
-        // Time left from the speed so far (Erik, 24 November 2026: "there was no time estimate", and he
-        // stopped a 90-minute film at 5% not knowing whether it would take ten minutes or an hour).
+        // Time left from the speed so far (a player, 24 November 2026: "there was no time estimate", and they
+        // stopped a 90-minute film at 5%, not knowing whether it would take ten minutes or an hour).
         const began = Date.now();
         const cut = await fastCut(
           file,

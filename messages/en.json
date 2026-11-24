@@ -555,7 +555,8 @@
     "correctHelp": "The organizer confirmed this score. Until {when}, any player of the match can correct it, and everybody sees the change.",
     "correctedBy": "Corrected by {name}",
     "correctedLine": "{name} changed the score from {from} to {to}.",
-    "putBack": "Put back {score}"
+    "putBack": "Put back {score}",
+    "typeEveryBox": "Type the games of both teams in every set."
   },
   "me": {
     "title": "My matches",

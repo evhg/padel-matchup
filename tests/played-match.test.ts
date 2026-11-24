@@ -3,7 +3,9 @@ import { asc, eq } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, players, scores, slots } from "@/db/schema";
 import { recordMatchStats, matchNumbers } from "@/lib/domain/matchStats";
-import { recordPlayedMatch } from "@/lib/domain/playedMatch";
+import { fillPlayedMatch, recordPlayedMatch } from "@/lib/domain/playedMatch";
+import { createEvent } from "@/lib/domain/events";
+import { joinEvent, reserveNames } from "@/lib/domain/slots";
 import { createTestDb, makePlayer, DAY, HOUR } from "./helpers/db";
 
 let db: Db;
@@ -66,5 +68,52 @@ describe("a match that was played with no match page", () => {
     await expect(recordPlayedMatch(db, { ...base, teamB: ["New name", cy.id], sets: [] })).rejects.toMatchObject({ code: "invalid" });
     await expect(recordPlayedMatch(db, { ...base, durationMinutes: 75 })).rejects.toMatchObject({ code: "invalid", message: "durationMinutes" });
     expect(await rows()).toEqual(before);
+  });
+});
+
+describe("a match with its page but no score", () => {
+  // The organiser's match of 24 November 2026 as it was: the organiser in, a place held for a known record,
+  // a place held by a name only, one place open. The score form looked full and saved nothing, and once the
+  // match was over the page offered no way to put the fourth player in.
+  const setUp = async (tag: string) => {
+    const [org, held] = [await makePlayer(db, `Org ${tag}`), await makePlayer(db, `Held ${tag}`)];
+    const startsAt = new Date(NOW.getTime() - 3 * HOUR);
+    const ev = await createEvent(db, { creatorPlayerId: org.id, type: "match", startsAt, durationMinutes: 90, tz: "Asia/Bangkok", venueName: "Fill Club", whenFull: "closed" });
+    const early = new Date(startsAt.getTime() - DAY);
+    await joinEvent(db, { eventId: ev.id, playerId: org.id, now: early });
+    await reserveNames(db, { eventId: ev.id, actorPlayerId: org.id, names: [{ name: `Held ${tag}`, playerId: held.id }, { name: `Named ${tag}`, playerId: null }], now: early });
+    return { org, held, ev };
+  };
+
+  it("seats the four where they belong, on the same page, and saves the organiser's score with the pairs", async () => {
+    const { org, held, ev } = await setUp("one");
+    const before = (await db.select({ id: players.id }).from(players)).length;
+    const res = await fillPlayedMatch(db, { code: ev.code, teamA: ["Named one", "Fourth one"], teamB: [org.id, held.id], sets: [{ sideA: 6, sideB: 3 }, { sideA: 6, sideB: 2 }, { sideA: 5, sideB: 4 }], now: NOW });
+    expect(res.existed).toBe(false);
+    expect(res.code).toBe(ev.code);
+    expect(res.players.map((p) => [p.name, p.team, p.created])).toEqual([["Named one", "a", true], ["Fourth one", "a", true], [`Org one`, "b", false], ["Held one", "b", false]]);
+    expect((await db.select({ id: players.id }).from(players)).length).toBe(before + 2);
+    const seats = await db.select().from(slots).where(eq(slots.eventId, ev.id)).orderBy(asc(slots.position));
+    // The held places keep their positions: the record's place is the record's, the name's place the name's.
+    expect(seats.map((s) => [s.position, s.status, s.team])).toEqual([[1, "joined", "b"], [2, "confirmed", "b"], [3, "confirmed", "a"], [4, "confirmed", "a"]]);
+    expect(seats[1].playerId).toBe(held.id);
+    expect(seats[2].playerId).toBe(res.players[0].id);
+    const [after] = await db.select().from(events).where(eq(events.id, ev.id));
+    expect(after).toMatchObject({ status: "past", scoreLockedByCreator: true });
+    const sets = await db.select().from(scores).where(eq(scores.eventId, ev.id)).orderBy(asc(scores.setNumber));
+    expect(sets.map((s) => [s.sideA, s.sideB, s.enteredByPlayerId])).toEqual([[6, 3, org.id], [6, 2, org.id], [5, 4, org.id]]);
+    // A second call finds the score and writes nothing.
+    expect(await fillPlayedMatch(db, { code: ev.code, teamA: ["Named one", "Fourth one"], teamB: [org.id, held.id], sets: [{ sideA: 1, sideB: 6 }], now: NOW })).toEqual({ code: ev.code, existed: true, players: [] });
+  });
+
+  it("refuses a match still on, an organiser who is not one of the four, and a fifth player, before it writes", async () => {
+    const { org, held, ev } = await setUp("two");
+    const sets = [{ sideA: 6, sideB: 3 }];
+    const rows = async () => [(await db.select({ id: players.id }).from(players)).length, (await db.select({ id: scores.id }).from(scores)).length];
+    const start = await rows();
+    await expect(fillPlayedMatch(db, { code: ev.code, teamA: ["A two", "B two"], teamB: [org.id, held.id], sets, now: new Date(NOW.getTime() - 2 * HOUR) })).rejects.toMatchObject({ code: "invalid", message: "not_played" });
+    await expect(fillPlayedMatch(db, { code: ev.code, teamA: ["A two", "B two"], teamB: ["C two", held.id], sets, now: NOW })).rejects.toMatchObject({ code: "invalid", message: "organiser" });
+    await expect(fillPlayedMatch(db, { code: "nope", teamA: ["A two", "B two"], teamB: [org.id, held.id], sets, now: NOW })).rejects.toMatchObject({ code: "not_found" });
+    expect(await rows()).toEqual(start);
   });
 });

@@ -555,7 +555,8 @@
     "correctHelp": "El organizador confirmó este resultado. Hasta {when}, cualquier jugador del partido puede corregirlo, y todos verán el cambio.",
     "correctedBy": "Corregido por {name}",
     "correctedLine": "{name} cambió el resultado de {from} a {to}.",
-    "putBack": "Volver a {score}"
+    "putBack": "Volver a {score}",
+    "typeEveryBox": "Escribe los juegos de los dos equipos en cada set."
   },
   "me": {
     "title": "Mis partidos",

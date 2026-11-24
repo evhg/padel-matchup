@@ -882,7 +882,7 @@ try {
   // A new score starts empty, 6 and 4 as placeholders only: an untouched 6-4 once saved as a real result.
   const emptyScore = a.locator("#score input[type=number]");
   const scoreSays = { values: await emptyScore.evaluateAll((es) => es.map((e) => e.value)), hints: await emptyScore.evaluateAll((es) => es.map((e) => e.placeholder)), saveOff: await a.getByTestId("score-save").isDisabled() };
-  check("after Enter score the boxes are empty, 6 and 4 only as placeholders, and Save score waits", JSON.stringify(scoreSays) === JSON.stringify({ values: ["", ""], hints: ["6", "4"], saveOff: true }), JSON.stringify(scoreSays));
+  check("after Enter score the boxes are empty with a dash, Save score waits, and the form says what for", JSON.stringify(scoreSays) === JSON.stringify({ values: ["", ""], hints: ["–", "–"], saveOff: true }) && (await a.getByTestId("score-incomplete").innerText()) === "Type the games of both teams in every set.", JSON.stringify(scoreSays));
   await shot(a, "10b-score-empty");
   await a.getByText("Dana").first().click(); // team A pick
   const inputs = a.locator("input[type=number]");
