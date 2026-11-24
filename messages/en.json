@@ -555,7 +555,8 @@
     "correctHelp": "The organizer confirmed this score. Until {when}, any player of the match can correct it, and everybody sees the change.",
     "correctedBy": "Corrected by {name}",
     "correctedLine": "{name} changed the score from {from} to {to}.",
-    "putBack": "Put back {score}"
+    "putBack": "Put back {score}",
+    "typeEveryBox": "Type the games of both teams in every set."
   },
   "me": {
     "title": "My matches",
@@ -2908,7 +2909,7 @@
     "uploadOff": "Uploads are off here. Paste a link to the video.",
     "linkSummary": "Or paste a link to the video",
     "linkOnly": "Paste a link to the video",
-    "linkHelp": "A shared link from iCloud, Google Drive, Dropbox or OneDrive. Your drive uploads in the background, also when the phone is locked.",
+    "linkHelp": "A shared link from iCloud, Google Drive, Dropbox or OneDrive. The drive first uploads the whole video, and for a match that can take an hour. Photos shows no time while it works, so close this page and paste the link when it is ready. It uploads also when the phone is locked.",
     "linkLabel": "Link to the video",
     "linkSave": "Send the link",
     "linkBad": "That is not a shared link from iCloud, Google Drive, Dropbox or OneDrive.",
@@ -2939,6 +2940,7 @@
     "fastNoSound": "This video has no sound that the phone can read. Use the full reel.",
     "fastBad": "Your phone cannot read this video. Use the full reel.",
     "hereClipsBody": "The clips are here, and the fast reel is in work. All four players see it on this page when it is ready.",
-    "iphoneHint": "iPhone: first save the video to Files (in Photos: Share, then “Save to Files”), and choose it from Files here. From the photo library, the iPhone converts the video first, and that takes very long."
+    "iphoneHint": "iPhone: in the menu, tap “Choose File”, not “Photo Library”. From the photo library, the iPhone first converts the whole video, and for a match that takes very long. Not in Files yet? In Photos: Share, then “Save to Files”.",
+    "measuring": "measuring the time left…"
   }
 }

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { operatorAuthorized } from "@/lib/api/secret";
 import { DomainError } from "@/lib/domain/errors";
-import { recordPlayedMatch } from "@/lib/domain/playedMatch";
+import { fillPlayedMatch, recordPlayedMatch } from "@/lib/domain/playedMatch";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,10 @@ export const dynamic = "force-dynamic";
  * organiser and the same start is the same match: a second call answers `existed: true` and writes
  * nothing. `src/lib/domain/playedMatch.ts` says why this door exists; `/api/admin/match-stats` then
  * takes the numbers of the match.
+ *
+ * A match that has its page but no score: send its `code` with `teamA`, `teamB` and `sets` (no start,
+ * zone or venue). The four take the places they have, the places held for them, or open places, and the
+ * organiser, who must be one of the four by id, confirms the score (`fillPlayedMatch`).
  */
 export async function POST(req: Request) {
   if (!(await operatorAuthorized(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -30,6 +34,11 @@ export async function POST(req: Request) {
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
   const sets = Array.isArray(body?.sets) ? body.sets.map((s) => (Array.isArray(s) ? { sideA: Number(s[0]), sideB: Number(s[1]) } : { sideA: Number.NaN, sideB: Number.NaN })) : [];
   try {
+    if (typeof body?.code === "string") {
+      const filled = await fillPlayedMatch(await getDb(), { code: body.code, teamA: strings(body?.teamA), teamB: strings(body?.teamB), sets });
+      if (!filled.existed) revalidatePath("/", "layout");
+      return NextResponse.json({ ok: true, ...filled });
+    }
     const res = await recordPlayedMatch(await getDb(), {
       startsAt,
       tz: typeof body?.tz === "string" ? body.tz : "",

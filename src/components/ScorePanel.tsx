@@ -280,8 +280,8 @@ export function ScorePanel({
             {sets.map((s, i) => (
               <div key={i} className="contents">
                 <div className="text-sm font-bold text-muted">{t("score.set", { n: i + 1 })}</div>
-                {numInput(s.sideA, (n) => setGames(i, "sideA", n), `${t("score.set", { n: i + 1 })} ${t("score.teamA")}`, Boolean(asking?.includes(i)), "6")}
-                {numInput(s.sideB, (n) => setGames(i, "sideB", n), `${t("score.set", { n: i + 1 })} ${t("score.teamB")}`, Boolean(asking?.includes(i)), "4")}
+                {numInput(s.sideA, (n) => setGames(i, "sideA", n), `${t("score.set", { n: i + 1 })} ${t("score.teamA")}`, Boolean(asking?.includes(i)), "–")}
+                {numInput(s.sideB, (n) => setGames(i, "sideB", n), `${t("score.set", { n: i + 1 })} ${t("score.teamB")}`, Boolean(asking?.includes(i)), "–")}
               </div>
             ))}
           </div>
@@ -323,6 +323,14 @@ export function ScorePanel({
                 {t("common.cancel")}
               </button>
             </div>
+          )}
+          {/* An organiser, 24 November 2026 ("I cant save score, last set was 5-4"): the boxes showed 6 and 4 as grey
+              hints, a 6-3 6-2 5-4 looked typed with three boxes empty, and Save stayed off with no word why.
+              Now an empty box shows a dash, and the form says what Save waits for. */}
+          {!asking && !complete && (
+            <p className="-mt-1 text-sm text-muted" data-testid="score-incomplete">
+              {t("score.typeEveryBox")}
+            </p>
           )}
         </div>
       )}
