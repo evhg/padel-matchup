@@ -113,7 +113,7 @@ describe("the reel route with a report key", () => {
     const [e, f, g, h] = await people("route other");
     const theirs = await recordPlayedMatch(app, { startsAt: new Date(Date.now() - 3 * 3600_000), tz: "Asia/Bangkok", durationMinutes: 90, teamA: [e.id, f.id], teamB: [g.id, h.id], sets: [{ sideA: 6, sideB: 3 }], now: new Date() });
     const key = await signReelReport([mine.code], KEYS, new Date());
-    const call = (fn: typeof POST, body: unknown) => fn(new Request("http://test/api/admin/match-reel", { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const call = (fn: (req: Request) => Promise<Response>, body: unknown) => fn(new Request("http://test/api/admin/match-reel", { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body) }));
     expect((await call(POST, { code: mine.code, progress: { pct: 10, minutesLeft: 20, step: "clips" } })).status).toBe(200);
     expect((await call(POST, { code: theirs.code, progress: { pct: 10, minutesLeft: 20, step: "clips" } })).status).toBe(401);
     expect((await call(DELETE, { code: mine.code })).status).toBe(401);
