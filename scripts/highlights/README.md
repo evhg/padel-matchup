@@ -122,10 +122,51 @@ of 7.4 GB at 1080p and 30 frames a second, a reel of 2 minutes 21 seconds):
 
 Two steps are 60% of the time: people in each picture, and the upscale of the four slow replays.
 
+## The fast reel, with no person (`modal/fastreel.py`)
+
+A player's fast-reel clips arrive on the store; `assemble` in `modal/serve.py` joins them and tells Kicksmash, and
+Kicksmash's answer carries the start request (the matches, their players and team names, the score, the track).
+`make` then runs on Modal machines only, and reports each step to Kicksmash (`/api/admin/match-reel`):
+
+| Step | What runs | Machines | Seconds (24 November 2026, 195 s of clips) |
+| --- | --- | --- | ---: |
+| clips | `fast_reel.py`'s detector; ten pieces of the clean file, each decoded from the start | 1 + 10, 8 processors | 332 |
+| players | `run_det.py` (4 at once), `cands.py`, `feat2.py`, `feat.py`, `who.py` | 1, 16 processors | 147 (377 on a cold machine) |
+| follow | `track.py`, one machine for each clip; the four openings (`versus.py`) beside it | 8 + 4 | 322 |
+| replays, opening | `fast_points.py`, `reel_points.py ... plan`, then `render.py` for each of 30 parts | 30, 8 processors | 140 |
+| music, finish | `reel_points.py`, `cheers.py`, the level, `music.py`, 1080p; both layouts at once | 2 | 169 |
+| **All** | | | **1,117** (19 minutes; the first run, with cold machines: 1,391) |
+
+The machines of one run held about 34,000 processor-seconds and 57,000 GiB-seconds: about $0.45 and $0.13 at Modal's
+list prices ($0.0000131 a processor-second, $0.00000222 a GiB-second), so under $1 for a fast reel with the starts of
+the machines. No step needs a graphics card: the slowest ones are the HDR curve and the follower, and both split.
+
+Run it as a test (it writes under the request's `out` folder and prints each progress line instead of posting it):
+
+```bash
+FASTREEL_SECRET= modal run scripts/highlights/modal/fastreel.py --request req.json --dry
+```
+
+What it needs on the store: `assets/models/` (yolox_s, rtmpose-m, dinov2_small, yunet, sface, kokoro,
+`u2net/birefnet-general-lite`), `assets/fonts/`, `assets/cheers/`, `assets/endcard/feedback.png`, the tracks
+`assets/kicksmash-music-*.m4a`, `gallery/faces.json` (the face templates, gallery.py) and `courts/<place>.json` (the
+court lines of the camera place, court.py). The player's choices are `uploads/<token>/choices.json`. Never in the
+repository: a video, a frame, a face picture, a gallery, a court file of a real place, a `match.json`.
+
+When `who.py` is not sure who is who, the job stops at "players" with `"waiting": "names"` in its progress, and writes
+`names.json` and `face-<track>.jpg` to `reels/<upload token>/`. The players answer with `POST /u/<upload token>/names`
+on the reel host (`serve.py`), and `resume` goes on from the step "players".
+
 ## What is not done
 
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
-  them found from the picture.
+  them found from the picture. The fast reel reads them from `courts/<place>.json` on the store and stops with
+  "no court lines" for a camera place that has none: a person still draws them once for each place.
+- The fast reel names a far player only when two voices agree (`who.py`); on the clips of 24 November they agreed
+  in 2 of 8 clips, so the far players had no tags (the eighth reel, made by hand, had them).
+- The rally of a fast-reel clip comes from the sound alone (`fast_points.py`): on 24 November two titles of eight
+  were wrong ("27-second rally" for a rally of 12 s, "18-second rally" for 15 s), because the phone hears half of the
+  hits and a clip can hold two points.
 - The shot counter is an estimate. With `SHOTS` it leaves out the sounds that are proven not to be shots
   of this ball; a bounce can still count. No rally has a count that a person made to compare with. A video
   at 60 frames a second is the next test.
@@ -626,5 +667,37 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
 - **One more replay moves the number of every segment after it.** The old numbered files stayed in the folder, and
   the score box and the cheers read the folder: a reel of 4 minutes was counted as 6. `reel_points.py` now removes
   the numbered files that its plan does not use.
+- **A flash-back starts before its jump** (24 November 2026). `fast_reel.py` finds a flash-back as two jumps in the
+  picture. A person who cut five of them by eye started each one 3 to 17 frames (at 60 a second) before the first
+  jump: the picture drifts from the clip to its echo before it jumps. The detector now cuts 0.3 s more before each
+  flash (`FLASH_LEAD`, never before its join), and its five ranges hold the person's five.
+- **The HDR curve is the slow part of the clean file, and a seek after a join is not the same film** (24 November
+  2026). On a machine with 16 processors the decoder read the 4K HEVC clips at 140 pictures a second, and the HLG
+  to normal-video curve (`zscale`, `tonemap`) did 22 a second: 13 minutes for 200 s. A seek into an HEVC film that
+  the phone joined without decoding does not give the pictures (or the flash-backs) of a decode from the start. So
+  `clean_part` decodes from the start on each of ten machines, and keeps only its own tenth for the curve and the
+  encoder: 333 s for the whole step.
+- **One clip of the phone is one near pair** (`who.py`, 24 November 2026). In each clip, two people in one frame at
+  the near end are two people; then the clips join into four tracks by clothes and looks, and the two people of one
+  clip never join. On the clips of two matches with other pairs, every near sighting went to the right person
+  (checked against the labels a person checked for the eighth reel: 1,047 of 1,047). Clustering all near sightings at once
+  into four groups put the two women together (purity 0.87).
+- **A name comes from every way to name the four, not from the best face** (`who.py`). The faces knew two players
+  of four (a gallery of 18 November); the pairs of two matches named the other two; a model of men and women agreed
+  (0.02 and 0.98). The share of the best way among all ways is how sure the names are: 1.00 for all four. A gallery
+  name that differs by one letter ("Micky", "Mickey") is the same entry; a lookup by exact name found one face of two.
+- **The pictures at 3 a second must carry their true time** (24 November 2026). With the fps filter they were 0.17 to
+  0.25 s after their listed time, and a portrait cut from the 4K file at the listed time showed the fence where the
+  player had stood. They are now every 10th picture of the working copy. The working copy itself drifted 0.12 s from
+  the 4K file over ten pieces; it is now every second picture of pieces with an even count.
+- **A phone behind the glass hears half of the hits** (`fast_points.py`). A click 6 dB over its own half second finds
+  the first and the last hit of most rallies within 0.6 s of a person's times; a fixed level over the clip's median
+  found two hits in a rally of 33 s. A clip can hold two points, and the softer sounds after a point (a ball picked
+  up) are hits to the ear of the code: the last shot is the last strong click (9 dB).
+- **The detector uses four threads** (`det.py`). A machine with 16 processors ran it no faster; four processes on four
+  quarters of the frames took 149 s instead of about 230.
+- **A Modal function must see the same secrets on both sides.** A dry run without the operator's secret listed one
+  secret where the machine expected two, and every machine failed at its start ("Function has 4 dependencies but
+  container got 3"). A dry run now gets an empty secret in that place.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).

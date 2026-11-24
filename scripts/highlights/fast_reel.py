@@ -26,6 +26,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 FPS_OUT = 30
+FLASH_LEAD = 0.3            # seconds cut before a flash-back's first jump (see joins_and_flashes)
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT = '/usr/share/fonts/opentype/inter/'
 COLOURS = {'ink': (245, 245, 247), 'muted': (152, 152, 158), 'lime': (200, 241, 53)}
@@ -80,6 +81,11 @@ def joins_and_flashes(clips, work, keep=False):
             flashes.append((x, y)); i += 2
         else:
             joins.append(x); i += 1
+    # The first frames of a flash-back are not a jump: the picture drifts from the stretch to its echo. A person
+    # found the start of five flashes 3 to 17 frames (at 60 a second) before the jump that this finds (24 November
+    # 2026). So each flash starts FLASH_LEAD seconds earlier, never before its join.
+    lead = int(round(FLASH_LEAD * fps))
+    flashes = [(max(max([j for j in joins if j <= x] or [0]) + 1, x - lead), y) for x, y in flashes]
     return fps, len(a), joins, flashes
 
 
