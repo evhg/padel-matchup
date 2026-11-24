@@ -684,7 +684,8 @@ async function EventPage({ params, searchParams }: Props) {
     const inviteHref = s.inviteCode ? inviteUrl(base, code, s.inviteCode) : undefined;
     const stale = s.status === "invited" && Boolean(s.invitedAt) && now.getTime() - s.invitedAt!.getTime() > 24 * 3600 * 1000;
     const tappable = !occupiedSlot && s.status !== "invited";
-    // A place of the line-up, in the window the line-up can be put right in (`fixRights`).
+    // A place of the line-up of a match that is over, in the seven days it can be put right (`fixRights`):
+    // its control sits at the end of the row, and its form opens under it.
     const fixRow = fixing && !isWaitlist;
     return (
       // A row of the list, as in the iPhone's Contacts: a hairline between rows (the list's `divide-y`), no box.
@@ -737,8 +738,7 @@ async function EventPage({ params, searchParams }: Props) {
               <OpenSpot
                 key={`${s.id}-${s.status}`}
                 code={code}
-                // In the window the place's own control is at the end of the row (`FixOpenPlace`).
-                mode={cancelled || over || (fixRow && (fix.edit || fix.take)) ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" && !fixedPairs ? "join" : "none"}
+                mode={cancelled || over ? "none" : viewer.isCreator ? "reserve" : !isWaitlist && joinState === "join" && !fixedPairs ? "join" : "none"}
                 label={s.status === "declined" ? t("event.declinedOpen", { name }) : t("event.openSpot")}
                 slotId={s.id}
                 hasIdentity={Boolean(me)}
@@ -769,7 +769,7 @@ async function EventPage({ params, searchParams }: Props) {
           {fixRow && tappable && <FixOpenPlace code={code} slotId={s.id} rights={fix} played={fixPlayed} />}
           {fixRow && !tappable && <FixPlace code={code} slotId={s.id} name={name} rights={fix} tells={occupiedSlot && !isMe} played={fixPlayed} />}
         </div>
-        {viewer.isCreator && !cancelled && !over && !fixRow && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
+        {viewer.isCreator && !cancelled && !over && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
           <SlotActions
             code={code}
             slotId={s.id}
