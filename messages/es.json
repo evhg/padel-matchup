@@ -2938,7 +2938,7 @@
     "linkSave": "Enviar el enlace",
     "linkBad": "Eso no es un enlace compartido de iCloud, Google Drive, Dropbox o OneDrive.",
     "hereTitle": "El vídeo ha llegado",
-    "hereBody": "El reel está en marcha. Los cuatro jugadores lo verán en esta página cuando esté listo.",
+    "hereBody": "El vídeo ha llegado. Por ahora una persona hace el reel a partir de él, y eso puede tardar unas horas. Los cuatro jugadores lo verán en esta página cuando esté listo.",
     "chooseWay": "Elige una de las dos formas. Con las dos, los cuatro jugadores reciben un reel.",
     "fullTitle": "Reel completo",
     "best": "El mejor",
@@ -2963,7 +2963,7 @@
     "fastNone": "Tu móvil no encontró peloteos en el sonido de este vídeo. Usa el reel completo.",
     "fastNoSound": "Este vídeo no tiene un sonido que el móvil pueda leer. Usa el reel completo.",
     "fastBad": "Tu móvil no puede leer este vídeo. Usa el reel completo.",
-    "hereClipsBody": "Los clips han llegado y el reel rápido está en marcha. Los cuatro jugadores lo verán en esta página cuando esté listo.",
+    "hereClipsBody": "Los clips han llegado. Por ahora una persona hace el reel rápido a partir de ellos, y eso puede tardar unas horas. Los cuatro jugadores lo verán en esta página cuando esté listo.",
     "iphoneHint": "iPhone: en el menú, toca «Seleccionar archivo», no «Fototeca». Desde la fototeca, el iPhone convierte antes todo el vídeo, y para un partido eso tarda muchísimo. ¿Aún no está en Archivos? En Fotos: Compartir y «Guardar en Archivos».",
     "measuring": "midiendo el tiempo restante…"
   }

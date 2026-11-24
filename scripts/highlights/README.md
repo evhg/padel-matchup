@@ -528,6 +528,12 @@ Two steps are 60% of the time: people in each picture, and the upscale of the fo
   generated file only when a player chooses the fast reel. The sound alone finds fewer points than the
   engine (104 of 182 in the match of 18 November), and it cannot give the score: the card says so with
   crosses, and the full reel stays first.
+- **The phone's cut of an HEVC film flashes back after a join** (24 November 2026, a 90-minute iPhone
+  film). The fast reel's cut copies the stretches without decoding, and the frame numbers of HEVC
+  (its picture order counts) then repeat across a join: ffmpeg says "Duplicate POC", and 0.3 to 0.8 s
+  of the stretch before shows again a few seconds after five of seven joins. `fast_reel.py` finds each
+  flash (two jumps in the picture less than 1.5 s apart, where the picture after the second matches
+  the one before the first) and cuts it out. The cutter itself still needs the fix.
 - **"No music" is the reel before `music.py`, not a quiet track.** The owner, 23 November 2026: "add the no
   music, I will add my own". A player who puts a song on the reel inside Instagram or TikTok needs the reel
   with its own sound only: the hits, the voices, the crowd. `music.py` is the last step and writes a new

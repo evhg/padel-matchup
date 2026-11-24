@@ -1,3 +1,4 @@
+import { wakeNoteDesk } from "@/lib/feedback/desk";
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
@@ -22,9 +23,12 @@ export async function POST(req: Request) {
   const keys = passportKeys();
   const token = keys ? await readUploadTicket(body?.ticket, keys.pub, new Date()) : null;
   if (!token) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const got = await reelUploadReceived(await getDb(), token);
+  const db = await getDb();
+  const got = await reelUploadReceived(db, token);
   if (got) {
     await later(() => tellOwnerVideoHere(got.code, got.way));
+    // A session makes the reel at once (the owner, 24 November 2026: clips waited three hours for a person).
+    await later(() => wakeNoteDesk(db, `a match ${got.way === "clips" ? "video's clips are" : "video is"} here (${got.code}); make its reel`));
     revalidatePath(`/${got.code}`);
   }
   return NextResponse.json({ ok: true, changed: Boolean(got) });

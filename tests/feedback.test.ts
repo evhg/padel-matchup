@@ -474,7 +474,7 @@ describe("the note is the trigger: a proposal to the owner", () => {
     expect(text).toContain("<b>Verdict:</b> adopt (rule 2, a default)");
     expect(text).toContain("- The reminder goes out two hours before, not one");
     expect(text).toContain("<b>Size and timeline:</b> small;");
-    expect(text).toContain("Say 'build abcdefgh' or 'skip abcdefgh' in your Claude session.");
+    expect(text).toContain("Open a Claude session and say 'handle note abcdefgh'.");
     expect(formatProposal({ ...note, role: "coach" }, null)).toContain("Feedback from Olga, a coach");
     expect(formatProposal(note, null, "the model is off")).toContain("No analysis this time (the model is off)");
     // The note is data: HTML in it is escaped, a fake verdict block stays inside the quote, a multi-line name is one line.
@@ -500,7 +500,7 @@ describe("the note is the trigger: a proposal to the owner", () => {
     expect(text).toContain("<b>Verdict:</b> later (rule 9, a migration)");
     expect(text).toContain("<b>Size and timeline:</b> large;");
     expect(text).toContain("<b>Needs:</b> a migration and your decision");
-    expect(text).toContain(`build ${row.id.slice(0, 8)}`);
+    expect(text).toContain(`handle note ${row.id.slice(0, 8)}`);
     expect(JSON.stringify(msg.reply_markup)).toContain("/admin");
     const stored = await getFeedback(db, row.id);
     expect(stored?.status).toBe("acknowledged");

@@ -606,7 +606,7 @@ try {
   );
   const clipsWord = await hostSays(fastHost.ticket);
   await w.reload();
-  check("the reel host's word marks the clips as here, and the page says that the fast reel is in work", clipsWord.body?.changed === true && (await w.getByTestId("reel-here").innerText()).includes("the fast reel is in work"));
+  check("the reel host's word marks the clips as here, and the page says plainly who makes the fast reel and that it can take hours", clipsWord.body?.changed === true && (await w.getByTestId("reel-here").innerText()).includes("a person makes the fast reel from them"));
   // An iPhone converts a film from the photo library before the page gets it: the card says how to avoid that.
   const iosMatch = await p.request.post(`${BASE}/api/v1/matches`, { headers: auth, data: { startsAt: overAt, durationMinutes: 90, tz: "Asia/Bangkok", venue: "Rawai Padel Club", organizer: { name: "Xan" } } }).then((r) => r.json());
   const iosCtx = await browser.newContext({ ...iphone, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" });
