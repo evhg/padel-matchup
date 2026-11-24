@@ -205,10 +205,12 @@ const RF = (() => {
     const dv = dvOf(u8);
     const root = children(u8, 0, u8.length)[0];
     if (!root || root.type !== 'moov') throw new Error('The moov box is not readable.');
-    const res = { timescale: 0, durationSec: 0, tracks: [] };
+    const res = { timescale: 0, durationSec: 0, createdSec: 0, tracks: [] };
     for (const b of kids(u8, root)) {
       if (b.type === 'mvhd') {
         const v = u8[b.body];
+        const made = v === 1 ? u64(dv, b.body + 4) : dv.getUint32(b.body + 4);
+        res.createdSec = made > 2082844800 ? made - 2082844800 : 0;
         if (v === 1) { res.timescale = dv.getUint32(b.body + 20); res.durationSec = u64(dv, b.body + 24) / res.timescale; }
         else { res.timescale = dv.getUint32(b.body + 12); res.durationSec = dv.getUint32(b.body + 16) / res.timescale; }
       } else if (b.type === 'trak') {

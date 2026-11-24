@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { askReelUploadAction, setReelLinkAction } from "@/actions/reel";
 import { errorLine } from "@/lib/errorLine";
-import { FastError, fastCut } from "./reelFast";
+import { FastError, fastCut, type FilmTimes } from "./reelFast";
 import { ReelChoicesCard } from "./ReelChoices";
 import type { ReelChoices } from "@/lib/domain/reelChoices";
 
@@ -90,7 +90,7 @@ export function ReelSend({
   useEffect(() => setIphone(/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && navigator.maxTouchPoints > 1)), []);
 
   /** Sends one file or one cut to the reel host in parts, under this match's upload of that way. */
-  const upload = async (body: Blob, name: string, way: Way, ctl: AbortController): Promise<"sent" | "locked" | { error: string }> => {
+  const upload = async (body: Blob, name: string, way: Way, ctl: AbortController, times: FilmTimes | null = null): Promise<"sent" | "locked" | { error: string }> => {
     setPhase({ at: "sending", done: 0, total: body.size, secondsLeft: null });
     const asked = await askReelUploadAction(code, way);
     if (!asked.ok) {
@@ -141,7 +141,7 @@ export function ReelSend({
     };
     if (!there.done) await Promise.all(Array.from({ length: Math.min(LANES, todo.length || 1) }, lane));
     setPhase({ at: "joining" });
-    const fin = await fetch(`${base}/finish`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ parts: count, bytes: body.size, name, choices: latest.current }), signal: ctl.signal });
+    const fin = await fetch(`${base}/finish`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ parts: count, bytes: body.size, name, choices: latest.current, ...(times ? { times } : {}) }), signal: ctl.signal });
     if (!fin.ok) throw new Error(`finish ${fin.status}`);
     finished.current = true;
     return "sent";
@@ -163,6 +163,7 @@ export function ReelSend({
     try {
       let body: Blob = file;
       let name = file.name;
+      let times: FilmTimes | null = null;
       if (way === "clips") {
         setPhase({ at: "reading", done: 0, total: 0, secondsLeft: null });
         // Time left from the speed so far (a player, 24 November 2026: "there was no time estimate", and they
@@ -179,9 +180,10 @@ export function ReelSend({
         );
         setPhase({ at: "cutting" });
         body = cut.blob;
+        times = cut.times;
         name = `${file.name.replace(/\.[^.]*$/, "")}-clips.mp4`;
       }
-      const res = await upload(body, name, way, ctl);
+      const res = await upload(body, name, way, ctl, times);
       if (res === "locked") {
         // Another player's video arrived first: the page says so after a refresh.
         setPhase({ at: "idle" });
