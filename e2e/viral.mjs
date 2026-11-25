@@ -331,12 +331,23 @@ try {
       (await p.getByTestId("reel-video").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4` &&
       (await p.getByTestId("reel-video").getAttribute("poster")) === `https://reels.example.test/r/${reelToken}/poster.jpg` &&
       (await p.getByTestId("reel-save-tall").innerText()) === "Download the reel" &&
-      (await p.getByTestId("reel-share-link").innerText()).includes("Share the reel") &&
+      (await p.getByTestId("reel-share-link").count()) === 0 &&
       (await p.getByTestId("reel-save-wide").count()) === 1 &&
       Boolean(reelBox) && reelBox.x >= 0 && reelBox.x + reelBox.width <= 390,
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
+  // On a computer (the owner, 25 November 2026: "on desktop, there is just a download, no share?"): the reel's
+  // link to share first, then the two downloads. The same player, signed in, at a desktop's width.
+  const deskCtx = await browser.newContext({ storageState: await p.context().storageState(), viewport: { width: 1280, height: 900 } });
+  const desk = await deskCtx.newPage();
+  await desk.goto(`${BASE}/${mcode}`);
+  await desk.getByTestId("reel-share-link").waitFor({ timeout: 20000 });
+  check(
+    "on a computer the reel is shared by its link, first, and the two files download",
+    (await desk.getByTestId("reel-share-link").innerText()).includes("Share the reel") && (await desk.getByTestId("reel-save-tall").innerText()) === "Download the reel" && (await desk.getByTestId("reel-save-wide").innerText()) === "Download the wide version",
+  );
+  await deskCtx.close();
   // Saving stays on the match page (the owner, 24 November 2026: a link opened the reel host's own page on an
   // iPhone, "clunky and buggy"). The button gets the file itself and hands it to the phone's share sheet; a
   // browser that cannot share a file, as here, saves it as a download named after the match.
