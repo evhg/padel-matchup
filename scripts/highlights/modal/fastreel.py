@@ -29,7 +29,7 @@ Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report
   players  people in 3 frames a second, who is who (who.py). Not sure: the job stops here (see "Names")
   follow   the players through each clip (track.py, one machine for each clip); the openings start beside it
   replays  the plan (fast_points.py, reel_points.py) and every part drawn (render.py, one machine for each part)
-  opening  the openings are there (versus.py, one machine for each match and layout)
+  opening  the openings are there (portrait.py once, then versus.py, one machine for each match and layout)
   music    the parts joined, the crowd (cheers.py), the level, the track (music.py)
   finish   1080p wide.mp4 and tall.mp4, and versus.jpg (1200x630), under reels/<new token>/; then
            POST {code, host, token} for each match of the upload
@@ -277,25 +277,39 @@ def follow(job):
     return n, t, log.strip().splitlines()[-1] if log.strip() else ''
 
 
+@app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=8192, timeout=1800)
+def openings(work: str, matches: str, scale: int = 2, grade: str = 'glass'):
+    """The portrait of each player (portrait.py, once for all openings), then each opening on its own machine.
+    work: the work folder; matches: the matches that get an opening, "1,2". Runs beside `follow`. Alone:
+    modal run fastreel.py::openings --work /vol/<work folder> --matches 1,2."""
+    W = work
+    vol.reload(); env = home(W); M = f'{W}/match'
+    idents = sorted(f'{M}/{x}' for x in os.listdir(M) if x.startswith('ident-m') and x.endswith('.json') and x[7:-5].isdigit())
+    t, log = sh(['python', '-u', '/root/hl/portrait.py', M, f'{W}/clean4k.mp4', f'{M}/portraits.json', *idents], env=dict(env, PORTRAIT_FALLBACK=f'{M}/faces-chosen.json'))
+    vol.commit()
+    done = list(opening.map([(W, int(m), tall, scale, grade) for m in matches.split(',') if m for tall in (False, True)]))
+    return {'portraits': t, 'log': [l for l in log.splitlines() if l.startswith('portrait')], 'openings': done}
+
+
 @app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=16384, timeout=1800, max_containers=8)
 def opening(job):
-    """One opening (versus.py) for one match and one layout, in 4K, with the voice; the portraits from 4K frames."""
+    """One opening (versus.py) for one match and one layout, in 4K, with the voice; the portraits of portrait.py."""
     W, m, tall, scale, grade = job
     vol.reload(); env = home(W); M = f'{W}/match'
     kf4k = f'{M}/kf4k'; os.makedirs(kf4k, exist_ok=True)
-    F = json.load(open(f'{M}/faces-chosen.json')); T = [float(x) for x in open(f'{M}/kf_times.txt')]
+    F = json.load(open(f'{M}/portraits.json')); T = [float(x) for x in open(f'{M}/kf_times.txt')]
     for lst in F.values():
-        for o in lst:
+        for o in lst[:1]:
             p = f"{kf4k}/{o['f']}"
-            if not os.path.exists(p):
+            if not o.get('hi') and not os.path.exists(p):      # a choice of faces.py: its 4K frame
                 sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', f"{T[int(o['f'][:6]) - 1]:.3f}", '-i', f'{W}/clean4k.mp4', '-frames:v', '1', '-q:v', '2', p])
     env.update(CUTOUT='birefnet-general-lite', KF4K=kf4k, SCALE=str(scale))
     if grade: env['GRADE'] = grade
     if tall: env['TALL'] = '1'
     out = f"{M}/versus-m{m}-{'tall' if tall else 'wide'}.mp4"
-    t, log = sh(['python', '/root/hl/versus.py', f'{M}/match-{m}.json', f'{M}/faces-chosen.json', f'{M}/kf', '/tmp/v.mp4'], env=env)
+    t, log = sh(['python', '/root/hl/versus.py', f'{M}/match-{m}.json', f'{M}/portraits.json', f'{M}/kf', '/tmp/v.mp4'], env=env)
     sh(['cp', '/tmp/v.mp4', out]); vol.commit()
-    return m, tall, t, [l for l in log.splitlines() if l.startswith(('voice', 'wrote'))]
+    return m, tall, t, [l for l in log.splitlines() if l.startswith(('portrait', 'voice', 'wrote'))]
 
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=16384, timeout=1800, max_containers=30)
@@ -438,7 +452,7 @@ def make(req):
 
     # 3. follow, with the openings beside it
     a = time.time()
-    openings = [opening.spawn((W, m, tall, scale, req.get('grade', 'glass'))) for m in range(1, nm + 1) if any(c['match'] == m for c in C) for tall in (False, True)]
+    ops = openings.spawn(W, ','.join(str(m) for m in range(1, nm + 1) if any(c['match'] == m for c in C)), scale, req.get('grade', 'glass'))
     jobs = [(W, n, c['a'], c['b'], c['match']) for n, c in enumerate(C)
             if not os.path.exists(f'{M}/tracks/c{n}.json') or os.path.getmtime(f'{M}/tracks/c{n}.json') < os.path.getmtime(f"{M}/ident-m{c['match']}.json")]
     clock['follow_parts'] = [(n, t) for n, t, _ in follow.map(jobs)] if jobs else []
@@ -450,7 +464,8 @@ def make(req):
     sh(['python', '/root/hl/fast_points.py', f'{W}/proxy.mp4', f'{M}/request.json', f'{M}/points.json'], env=env)
     if not CH['numbers']:       # the card of numbers (reel_points.py "card"): fast_points.py writes none yet, and none goes in
         pts = json.load(open(f'{M}/points.json')); pts.pop('card', None); json.dump(pts, open(f'{M}/points.json', 'w'), indent=1)
-    for o in openings: print('opening', o.get(), flush=True)     # reel_points.py puts the opening in only when its files are there
+    op = ops.get(); clock['portraits'] = op['portraits']; print('\n'.join(op['log']), flush=True)
+    for o in op['openings']: print('opening', o, flush=True)     # reel_points.py puts the opening in only when its files are there
     vol.reload(); clock['opening_wait'] = round(time.time() - a)
     segs = []
     for tall in (False, True):
