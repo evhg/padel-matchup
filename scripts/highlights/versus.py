@@ -9,7 +9,8 @@ With times after the output name, it writes those frames as <out>.jpg and no vid
 Environment: TALL=1 (the vertical reel). SCALE (K: the output is K times as large; 2 gives 3840x2160). KF4K (a folder of
 4K frames with the names of the sampled frames: a portrait whose frame is there is cut from it, so at SCALE=2 a face has
 the detail of the camera and is not an enlarged picture). Each run prints one line for each portrait that says where it
-came from.
+came from. <faces.json> of portrait.py: the first entry of each player is the portrait, cut from its own camera frame
+("hi"); of faces.py: the largest sharp face that looks to the camera.
 """
 import sys, os, json, subprocess, tempfile, numpy as np, cv2
 from PIL import Image, ImageFilter
@@ -56,10 +57,16 @@ def face_again(im, face, m):
     return best
 def portrait(k, height):
     """-> the portrait of player k, px(height) high, and the design place of the face inside it."""
-    c = [o for o in FACES[str(k)] if o['sharp'] >= 220] or FACES[str(k)]
-    o = max(c, key=lambda o: o['face'][2] ** 1.5 * min(o['sharp'], 450) * o['eyes'] ** 2)
-    im = cv2.imread(f"{frames}/{o['f']}"); x, y, w, h = o['face']; said = f"sampled frame {o['f']}"
-    if KF4K and os.path.exists(f"{KF4K}/{o['f']}"):      # the same name, not the same moment: find the player again
+    if FACES[str(k)] and FACES[str(k)][0].get('hi'):
+        # portrait.py chose it (best first): its frame of the camera file, and the face in that frame
+        o = FACES[str(k)][0]; hi = o['hi']
+        im = cv2.imread(os.path.join(os.path.dirname(os.path.abspath(facesf)), hi['file'])); x, y, w, h = hi['face']
+        said = f"{hi['file']} ({hi['t']:.2f} s), score {o.get('score', 0):.3f}"
+    else:
+        c = [o for o in FACES[str(k)] if o['sharp'] >= 220] or FACES[str(k)]
+        o = max(c, key=lambda o: o['face'][2] ** 1.5 * min(o['sharp'], 450) * o['eyes'] ** 2)
+        im = cv2.imread(f"{frames}/{o['f']}"); x, y, w, h = o['face']; said = f"sampled frame {o['f']}"
+    if KF4K and not o.get('hi') and os.path.exists(f"{KF4K}/{o['f']}"):      # the same name, not the same moment: find the player again
         big = cv2.imread(f"{KF4K}/{o['f']}"); f = face_again(big, o['face'], big.shape[1] / im.shape[1])
         if f is None: said += ' (the 4K frame has no face near the old place)'
         else:

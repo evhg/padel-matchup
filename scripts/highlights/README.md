@@ -21,8 +21,10 @@ a frame or a `match.json`.
    pair WON, and `build.py` names the winner after the last shot of each clip.
 5. **`track.py`** follows the players through each selected clip and gives a name to each from all the
    sightings together. **`shots.py`** finds whose hand moved at a shot.
-6. **`faces.py`** finds the largest sharp front faces of each player. **`versus.py`** makes the opening
-   from them: the two teams, "VS", the score, "GAME ON", with sound made from numbers and an offline voice.
+6. **`faces.py`** finds the largest sharp front faces of each player (for the names). **`portrait.py`** (the
+   fast reel) chooses the portrait of each player for the opening: a flattering face, see "The portrait".
+   **`versus.py`** makes the opening from them: the two teams, "VS", the score, "GAME ON", with sound made
+   from numbers and an offline voice.
 7. **`build.py`** writes the segments and **`render.py`** draws them (`gfx.py`): the opening, name tags, a
    shot counter, the long rally at six times the speed, one slow replay for each player, the numbers of the
    match. `TALL=1` makes the vertical reel.
@@ -132,7 +134,7 @@ Kicksmash's answer carries the start request (the matches, their players and tea
 | --- | --- | --- | ---: |
 | clips | `fast_reel.py`'s detector; ten pieces of the clean file, each decoded from the start | 1 + 10, 8 processors | 332 |
 | players | `run_det.py` (4 at once), `cands.py`, `feat2.py`, `feat.py`, `who.py` | 1, 16 processors | 147 (377 on a cold machine) |
-| follow | `track.py`, one machine for each clip; the four openings (`versus.py`) beside it | 8 + 4 | 322 |
+| follow | `track.py`, one machine for each clip; beside it `portrait.py` (about 35 s), then the four openings (`versus.py`) | 8 + 1 + 4 | 322 |
 | replays, opening | `fast_points.py`, `reel_points.py ... plan`, then `render.py` for each of 30 parts | 30, 8 processors | 140 |
 | music, finish | `reel_points.py`, `cheers.py`, the level, `music.py`, 1080p; both layouts at once | 2 | 169 |
 | **All** | | | **1,117** (19 minutes; the first run, with cold machines: 1,391) |
@@ -699,5 +701,17 @@ on the reel host (`serve.py`), and `resume` goes on from the step "players".
 - **A Modal function must see the same secrets on both sides.** A dry run without the operator's secret listed one
   secret where the machine expected two, and every machine failed at its start ("Function has 4 dependencies but
   container got 3"). A dry run now gets an empty secret in that place.
+- **The portrait: the largest face is the worst face** (`portrait.py`, 25 November 2026). The rule of `faces.py`
+  (face width, sharpness, eyes apart) chose the player nearest the camera, and near the camera a player is in a
+  stroke: the opening of 24 November showed a racket swung across a face, in motion blur, from below, and a hand in
+  the hair. `portrait.py` scores every near sighting of each player in all clips. First the pose at 3 a second:
+  upright, the hands down and away from the face, nobody in front, slow, room for the cut-out. Then the face: frontal
+  or three-quarter, the head level. Then the best eight moments of each player again in the 4K file, every second
+  frame of 0.4 s: sharp, no motion blur (the structure tensor of the face), the eyes open, the mouth not open in a
+  shout, good light, the face like the player's other faces (SFace). Each test is a factor from 0 to 1, so no match
+  is left without a portrait. The portrait is cut from that 4K frame itself, so no second search for the face. On the
+  clips of 24 November three of four portraits became a smile to the camera; the fourth looks down. The faces are
+  smaller (50 to 80 pixels wide in 4K against 130 to 160), so a portrait is a little softer. `PORTRAIT_SHEET` writes
+  the candidates with their three weakest tests: look at it after a change of a weight.
 - **Look at the frames.** Every fault above was found on a sheet of frames, after the numbers looked good
   (99% on held-out seeds while the far names were close to random).
