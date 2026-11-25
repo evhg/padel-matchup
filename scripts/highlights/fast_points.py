@@ -137,6 +137,16 @@ def first_seen(tr, near, a, b):
     return min(ts) if ts else a
 
 
+def held_share(tr, near, a, b):
+    """How much of [a, b] the tracker holds the near pair: frames held over two players' frames. Pure."""
+    n = max(int((b - a) * tr['fps']), 1) * 2; held = 0
+    for who in near:
+        p = tr['players'].get(str(who))
+        if p:
+            f = np.array(p['f']) / tr['fps'] + tr['t0']; held += int(((f >= a) & (f <= b)).sum())
+    return held / n
+
+
 def reaction(tr, near, dead, end):
     """The near player who moves most in the seconds after the ball is dead (arms up, a jump, a turn): the close look
     of the editor's reel (README, "After the point: the reaction first, then the replay"). None when nobody is held."""
@@ -199,7 +209,13 @@ def main():
             print(f'c{n} has no rally after the wait: left out'); pts.append(None); continue
         dead = round(min(last + 0.75, b - 0.3), 2)
         start = max(a + 0.05, serve - 1.5)
-        if os.path.exists(trf): start = max(start, first_seen(json.load(open(trf)), c['near'], a, dead) - 0.3)
+        if os.path.exists(trf):
+            tr_ = json.load(open(trf))
+            if held_share(tr_, c['near'], serve, dead) < 0.25:
+                # the near pair is out of the picture for most of the rally (25 November 2026: legs at the bottom
+                # edge and an empty court; the good clips held the pair 42 to 50% of each rally, this one 14%)
+                print(f'c{n} shows its players too little: left out'); pts.append(None); continue
+            start = max(start, first_seen(tr_, c['near'], a, dead) - 0.3)
         start = round(min(start, dead - 4.0), 2)
         end = round(min(b - 0.05, dead + 5.0), 2)
         p = {'id': f'c{n}', 'match': f'{M}/match-{c["match"]}.json', 'start_t': start, 'serve_t': round(serve, 2), 'last_t': round(last, 2), 'dead_t': dead,
@@ -223,7 +239,7 @@ def main():
         mt = json.load(open(f'{M}/match-{c["match"]}.json'))
         team_of[c['match']] = {int(k): v for k, v in mt.get('team', {}).items()}
     used = set(); chosen = []; by_team = {0: [], 1: []}
-    cap = min(4, max(2, (sum(p is not None for p in pts) + 1) // 2)); cap -= cap % 2      # even: as many for each pair
+    cap = min(4, max(2, sum(p is not None for p in pts) // 2 + 1)); cap -= cap % 2      # even: as many for each pair
     for sp, n, who, t_ in sorted(cands, key=lambda c: -c[0]):
         if sp > 0 and pts[n] is not None: by_team[team_of[C[n]['match']].get(int(who), 0)].append((n, who, t_))
     seen_who = set()
