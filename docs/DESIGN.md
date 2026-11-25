@@ -77,7 +77,7 @@ never "OPEN".
   the left, a value or an action on the right, and a chevron (›) when the row opens a page.
 - **Optional things** sit behind one `<details>` row ("More options") with a one-line summary
   (DECIDING rule 1). A `<summary>` is a row, not a button.
-- A shadow is for what lifts above the page: the picked part of a segmented control, the share bar at the
+- A shadow is for what lifts above the page: the picked part of a segmented control, the join bar at the
   bottom, a sheet. A card never has one.
 
 ## Buttons
@@ -137,7 +137,24 @@ is wrong.
   page's "Find a game ›" is a link, not a second button.
 - The chip text (`--text-2xs`) is 12 px, the iPhone's smallest caption. It was 11 px.
 
-Still to do: the hero chips of a club and a level keep an emoji (📍, 🎚️), and the group page keeps a
+## What changed on 25 November 2026
+
+The owner, on a player's note about the match page ("its like a newspaper!"): "Basically too much text! in
+different sizes, different colours, etc. If you need to explain things with sentences you have failed in
+making the ui intuitive."
+
+- The match page shows no help sentence where the control says it. The text has three sizes in the body (the
+  headline, the body and the subheadline) and two colours (`ink` and `muted`), with `faint` for a footnote.
+- The time is one large figure, the day beside it, and one muted line under the day. After the match, the
+  time is one line, so the reel and the result lead the page.
+- A player's "Remove" is red words at the end of the row, not a red box under it.
+- Organizer tools keep the frequent tools open. The rare ones are behind one "More" row with a chevron.
+- The share is one card in the page, never a bar at the foot of the screen. Its WhatsApp button is green only
+  while sharing is the viewer's job; otherwise it is a grey button.
+- Every screen ends with one grey button at full width, "Tell us what should change", which opens the form
+  in place. It is grey because the lime button of a screen is for the screen's own job.
+
+Still to do: the hero chips of a club keep an emoji (📍), and the group page keeps a
 long paragraph about the Telegram group. Each needs its own look on a phone.
 
 When you change a screen, check it against "The test for each screen" above. When something here proves

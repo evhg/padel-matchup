@@ -36,9 +36,8 @@ export function CreateGroupButton({ code, suggestions }: { code: string; suggest
       <div className="mt-5 border-t border-line pt-4">
         {/* Quiet: an occasional step, never the screen's job (DECIDING rule 1, the audit of 9 November 2026). */}
         <button type="button" className="btn-ghost w-full" onClick={() => setOpen(true)}>
-          {`👥 ${t("group.create")}`}
+          {t("group.create")}
         </button>
-        <p className="mt-1.5 text-xs text-faint">{t("group.createHelp")}</p>
       </div>
     );
   }

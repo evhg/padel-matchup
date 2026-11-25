@@ -35,8 +35,8 @@ try {
   await shot(p, "v1-generator");
   const live = p.getByTestId("gen-live");
   check("live CTA prefills a tournament of 8 and is counted", (await live.getAttribute("href")) === "/?type=tournament&capacity=8&s=gen");
-  // The card leads with what the app is and keeps the door under it, so this asserts both.
-  check("the generator says who builds the app, and offers the door", (await p.getByRole("heading", { name: /built by the players on it/ }).count()) === 1 && (await p.getByRole("button", { name: /Tell us what should change/ }).count()) === 1);
+  // The page's own card "built by the players on it" went on 25 November 2026: the footer's button is every screen's door.
+  check("the generator offers the feedback door once, as the button in its footer", (await p.getByRole("heading", { name: /built by the players on it/ }).count()) === 0 && (await p.getByRole("button", { name: /Tell us what should change/ }).count()) === 1 && (await p.locator("footer").getByRole("button", { name: /Tell us what should change/ }).count()) === 1);
 
   // ---- Names path: 5 names → 1 court, one sits out each round ----
   await p.getByLabel("Names (optional, one per line)").fill("Ana\nBo\nCy\nDi\nEd");
@@ -165,8 +165,9 @@ try {
   // ---- Result card ----
   await p.goto(`${BASE}/PAST`);
   // The match page leads with the card once the score is in: the picture, and WhatsApp one tap away (a WhatsApp group only ever gets it by hand).
-  // A viewer with no seat finds WhatsApp under "Other ways to share"; a seated player has it in the bar (the owner, 9 November 2026).
-  check("finished match shows its result card, with WhatsApp under Other ways to share", (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.locator('[data-testid="other-shares"] a[href^="https://wa.me"]').count()) === 1);
+  // Everybody finds WhatsApp in the page's one share card, a viewer with no seat too (the owner, 25 November 2026:
+  // the share left the bar at the foot of the screen); Telegram and the rest are under "Other ways to share".
+  check("finished match shows its result card, and the share card's WhatsApp sends the result", (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.locator('[data-testid="match-share"] a[data-testid="tell-group"][href^="https://wa.me"]').count()) === 1 && (await p.locator('[data-testid="other-shares"] a[href^="https://wa.me"]').count()) === 0 && (await p.locator('.fixed a[href^="https://wa.me"]').count()) === 0);
   await p.goto(`${BASE}/PAST/card`);
   await shot(p, "v2-card");
   check("card page shows the image and the result line", (await p.locator('img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByText(/beat|drew|Result/).count()) > 0);
@@ -382,7 +383,7 @@ try {
   // The owner's report of 9 November 2026: "when erik clicked play again, he had to add the players again".
   // The tap now holds a place for each player of the last game, and the organiser lands on the new
   // match, where the line-up shows them and one message names them: since 9 November 2026 that message is
-  // the bar's one share, and the line-up says in words whom it asks.
+  // the page's one share, and the line-up says in words whom it asks.
   await p.waitForURL((u) => /^\/[^/]{4}$/.test(u.pathname) && u.pathname !== `/${mcode}`, { timeout: 30000 });
   const nextCode = new URL(p.url()).pathname.slice(1);
   check("Play again makes the next game on the day and at the time picked", nextCode !== mcode && (await p.getByText(/19:30/).count()) > 0, nextCode);

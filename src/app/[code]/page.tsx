@@ -33,7 +33,6 @@ import { pageSignInOptions } from "@/lib/passkeys/page";
 import { TelegramReturn } from "@/components/TelegramLogin";
 import { hasPasskey, mayRegister } from "@/lib/domain/passkeys";
 import { signedInByName } from "@/lib/session";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { MatchPayments } from "@/components/MatchPayments";
 import { CourtBooking } from "@/components/CourtBooking";
 import { prepareBooking } from "@/lib/booking/prepare";
@@ -57,7 +56,7 @@ import { pairName } from "@/lib/domain/reelChoices";
 import { REEL_SEND_DAYS, reelState, reelStillAt } from "@/lib/domain/matchReel";
 import { matchNumbers } from "@/lib/domain/matchStats";
 import { SeriesDoor } from "@/components/SeriesBits";
-import { CopyButton, OtherShares } from "@/components/ShareSheet";
+import { CopyButton, MatchShare } from "@/components/ShareSheet";
 import { HeldRowButton } from "@/components/TakeHeld";
 import { ListOnBoard } from "@/components/ListOnBoard";
 import { SlotActions } from "@/components/SlotActions";
@@ -102,7 +101,7 @@ import { nightField, nightPlan } from "@/lib/domain/tournamentPlan";
 import { nextEdition, seriesOfEvent } from "@/lib/domain/series";
 import { venueWithCourt } from "@/lib/labels";
 import { rangeChip, rangeText, tagChip } from "@/lib/levelText";
-import { eventUrl, inviteUrl, tagForWhatsapp, whatsappShareUrl } from "@/lib/share";
+import { eventUrl, inviteUrl } from "@/lib/share";
 import { countParts, heldSeats, lineupNames, previewText, shareMessage, shareMoment } from "@/lib/domain/groupLine";
 import { bindLink, joinLink } from "@/lib/whatsapp/link";
 import { mailBlocksAmong, normalAddress } from "@/lib/domain/emailMarks";
@@ -589,12 +588,12 @@ async function EventPage({ params, searchParams }: Props) {
   const askLevel = Boolean(me) && askLevelAfterJoin({ seated: isMember || isWaitlisted, level: me?.level ?? null, ranged, organiser: viewer.isCreator, open: !cancelled && !over });
   // Only a chat player's calendar needs the feed, and only its key costs a read (the personal token, when it is not on the row yet).
   const stayFeed = me && stay?.kind === "reached" && stay.calendar === "feed" ? feedLinks(base, await feedKeyFor(db, me), locale) : null;
-  // The match's one share (the owner, 9 November 2026: "Bottom bar (Recommended)"): one WhatsApp button
-  // in the bar for the organiser and every seated player, with the message that fits the state
-  // (`shareMessage`): the held players the plain link fills (the organiser's view only), the open spots,
-  // the line-up when full, the result card after the match. Telegram, Copy, the QR and the story image
-  // send the same message from "Other ways to share". The match's own link, never a personal one,
-  // because a message in a group can be forwarded.
+  // The match's one share: a card in the page with one WhatsApp button and the message that fits the state
+  // (`shareMessage`): the held players the plain link fills (the organiser's view only), the open spots, the
+  // line-up when full, the result card after the match. Telegram, Copy, the QR and the story image send the
+  // same message from "Other ways to share" under it. The match's own link, never a personal one, because a
+  // message in a group can be forwarded. It was a button in a bar fixed to the foot of the screen from 9 November
+  // 2026, until the owner, 25 November 2026: "remove the floating whatsapp share, its not good design".
   const shareFacts = { over, result: result ? { line: result.line, url: resultCardUrl } : null, heldNames: heldMsg?.names ?? [], spots: spotsLeft };
   const moment = cancelled ? null : shareMoment(shareFacts);
   const oneShareText = moment
@@ -615,19 +614,12 @@ async function EventPage({ params, searchParams }: Props) {
     : null;
   // The link the message carries: the result card's after the match, else the match's own.
   const oneShareUrl = moment === "result" ? resultCardUrl : url;
-  // The bar carries it for the organiser and every seated player; anybody else finds WhatsApp under "Other ways to share".
-  const sharesInBar = Boolean(oneShareText) && (viewer.isCreator || isMember);
-  const barShare =
-    sharesInBar && oneShareText
-      ? {
-          href: whatsappShareUrl(tagForWhatsapp(oneShareText, oneShareUrl)),
-          label: t(moment === "result" ? "event.shareResult" : moment === "full" ? "event.tellGroup" : "event.shareInvite"),
-          // Strong while places are open or held, and for a player's result; the organiser's after-match primary is "Play again".
-          strong: moment === "held" || moment === "open" || (moment === "result" && !viewer.isCreator),
-        }
-      : null;
-  // "Other ways to share", where the page has something to share: before the match, and after it once a result exists.
-  const otherShares = oneShareText ? <OtherShares url={oneShareUrl} text={oneShareText} whatsapp={!sharesInBar} story={moment === "result" ? null : `/${code}/story`} image={moment === "result" && resultCard ? resultCard.image : undefined} extra={waJoin && moment !== "result" ? (
+  // WhatsApp's green while sharing is the viewer's job: the organiser's open or held places, and a player's
+  // result (the organiser's after-match primary is "Play again"). A grey button for everybody else, so a
+  // visitor's one lime Join stands alone.
+  const shareStrong = (viewer.isCreator || isMember) && (moment === "held" || moment === "open" || (moment === "result" && !viewer.isCreator));
+  // Where the page has something to share: before the match, and after it once a result exists.
+  const shareCard = oneShareText ? <MatchShare url={oneShareUrl} text={oneShareText} label={t(moment === "result" ? "event.shareResult" : moment === "full" ? "event.tellGroup" : "event.shareInvite")} strong={shareStrong} story={moment === "result" ? null : `/${code}/story`} image={moment === "result" && resultCard ? resultCard.image : undefined} extra={waJoin && moment !== "result" ? (
     <div className="rounded-2xl bg-card px-4 py-3">
       <div className="text-sm font-bold">{t("wa.handoff")}</div>
       <p className="mt-1 text-xs text-muted">{t("wa.handoffHelp")}</p>
@@ -714,7 +706,7 @@ async function EventPage({ params, searchParams }: Props) {
                 <LevelChip level={s.player?.level} verified={s.player ? isLevelVerified(s.player) : false} />
                 {isMe && <span className="chip-open">{t("common.you")}</span>}
                 {isOrganizer && <span className="chip-muted">{t("common.organizer")}</span>}
-                {s.status === "confirmed" && <span className="chip-live">{t("event.confirmed")}</span>}
+                {s.status === "confirmed" && !over && <span className="chip-live">{t("event.confirmed")}</span>}
                 {viewer.isCreator && didBounce(s.player?.email) && (
                   <span className="chip-danger" data-testid="email-bounced-chip">
                     {t("creator.emailBounced")}
@@ -777,12 +769,13 @@ async function EventPage({ params, searchParams }: Props) {
           {!occupiedSlot && heldRows.get(s.id) && <HeldRowButton key={heldRows.get(s.id)!.kind} code={code} offer={heldRows.get(s.id)!} doors={backIn} />}
           {fixRow && tappable && <FixOpenPlace code={code} slotId={s.id} rights={fix} played={fixPlayed} />}
           {fixRow && !tappable && <FixPlace code={code} slotId={s.id} name={name} rights={fix} tells={occupiedSlot && !isMe} played={fixPlayed} />}
+          {viewer.isCreator && !cancelled && !over && occupiedSlot && !isOrganizer && s.status !== "invited" && <SlotActions code={code} slotId={s.id} kind="member" name={name} inline />}
         </div>
-        {viewer.isCreator && !cancelled && !over && (s.status === "invited" || (occupiedSlot && !isOrganizer)) && (
+        {viewer.isCreator && !cancelled && !over && s.status === "invited" && (
           <SlotActions
             code={code}
             slotId={s.id}
-            kind={s.status === "invited" ? "invited" : "member"}
+            kind="invited"
             name={name}
             inviteUrl={inviteHref}
             phone={s.invitedPhone}
@@ -896,8 +889,7 @@ async function EventPage({ params, searchParams }: Props) {
         <section className={`card overflow-hidden ${cancelled ? "opacity-80" : ""}`}>
           <div className="flex flex-wrap items-center gap-2">
             <span className={statusChip.cls}>{statusChip.label}</span>
-            <span className="text-xs font-semibold text-faint">{typeLabel}</span>
-            {levelChip && <span className="chip-muted">🎚️ {levelChip}</span>}
+            {levelChip && <span className="chip-muted">{levelChip}</span>}
             {levelChip && ev.levelVerifiedOnly && <span className="chip-muted">✓ {t("levelCheck.chip")}</span>}
             {forChip && (
               <span className="chip-muted" data-testid="tag-chip">
@@ -914,8 +906,6 @@ async function EventPage({ params, searchParams }: Props) {
                 {t("venue.listed", { venue: ev.venueName })}
               </Link>
             )}
-            {/* The organiser's one tap onto the venue's board; the switch that takes it off again stays in More options. */}
-            {viewer.isCreator && !ev.publicListing && ev.venueSlug && ev.venueName && !cancelled && !over && <ListOnBoard code={code} venue={ev.venueName} />}
           </div>
           <h1 className="mt-3 text-[1.75rem] font-extrabold leading-tight tracking-tight">{title}</h1>
           {night && (
@@ -929,27 +919,39 @@ async function EventPage({ params, searchParams }: Props) {
               <span className="chip-muted">{t("americano.chipEnds", { time: formatEventTime(eventEnd(ev), ev.tz, locale) })}</span>
             </div>
           )}
-          <div className="mt-4 flex items-end gap-3">
-            <div className="text-5xl font-extrabold tracking-tighter tabular-nums">{time}</div>
-            <div className="pb-1">
-              <div className="text-lg font-bold leading-tight">{formatEventDayLong(ev.startsAt, ev.tz, locale)}</div>
-              {/* How long the court is booked, beside the start: Erik could not tell whether his match was 60 or 90 minutes (25 September 2026). */}
-              <div className="text-sm font-semibold text-muted" data-testid="match-length">
+          {/* How long the court is booked, beside the start: a player could not tell whether a match was 60 or 90
+              minutes (25 September 2026). The zone is one muted line under it; "Starts tomorrow" went, because the
+              day says it and the chip says when it is on (the owner, 25 November 2026: "too much text! in different
+              sizes"). Once the match is over or called off, the time is one line, so the reel and the result lead. */}
+          {over || cancelled ? (
+            <div className="mt-2 text-[0.9375rem] text-muted">
+              {day} · {time}
+              <span data-testid="match-length">
+                {" "}
                 {t("event.until", { time: formatEventTime(eventEnd(ev), ev.tz, locale) })} · {t("event.minutes", { minutes: ev.durationMinutes })}
-              </div>
-              <div className="text-xs font-semibold text-faint">
-                {/* "Started 1 hour ago" while it is on: "Starts 1 hour ago" read as a start still to come. */}
-                {tzLabel(ev.startsAt, ev.tz, locale)} · {over || cancelled ? relativeTime(ev.startsAt, locale, now, ev.tz) : t(started ? "event.startedAgo" : "event.startsIn", { when: relativeTime(ev.startsAt, locale, now, ev.tz) })}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-4 flex items-end gap-3">
+              <div className="text-5xl font-extrabold tracking-tighter tabular-nums">{time}</div>
+              <div className="pb-1">
+                <div className="text-lg font-bold leading-tight">{formatEventDayLong(ev.startsAt, ev.tz, locale)}</div>
+                <div className="text-[0.9375rem] leading-snug text-muted">
+                  <div data-testid="match-length">
+                    {t("event.until", { time: formatEventTime(eventEnd(ev), ev.tz, locale) })} · {t("event.minutes", { minutes: ev.durationMinutes })}
+                  </div>
+                  <div>{tzLabel(ev.startsAt, ev.tz, locale)}</div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-3">
             <div className="min-w-0">
               {/* Two lines before it is cut: the court is the end of the line, and one line cut "WAREHAUS.club · Co…" at 390 px. */}
-              <div className={`line-clamp-2 break-words text-base font-bold ${ev.venueName ? "" : "text-muted"}`} data-testid="venue-line">
+              <div className={`line-clamp-2 break-words font-bold ${ev.venueName ? "" : "text-muted"}`} data-testid="venue-line">
                 <KeepTogether parts={venue.split(" · ")} />
               </div>
-              <div className="text-xs text-muted">{t("event.organizedBy", { name: creator.displayName })}</div>
+              <div className="text-[0.9375rem] text-muted">{t("event.organizedBy", { name: creator.displayName })}</div>
             </div>
             <div className="flex shrink-0 gap-1.5">
               {ev.bookingUrl && !invite && (
@@ -974,12 +976,12 @@ async function EventPage({ params, searchParams }: Props) {
             </p>
           )}
           {ev.cost && (
-            <p className="mt-3 text-sm">
-              <span className="font-bold">{t("event.costPerPlayer", { cost: ev.cost })}</span>
+            <p className="mt-3 text-[0.9375rem]">
+              {t("event.costPerPlayer", { cost: ev.cost })}
               {ev.payNote && <span className="text-muted"> · {ev.payNote}</span>}
             </p>
           )}
-          {ev.note && <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">{ev.note}</p>}
+          {ev.note && <p className="mt-3 whitespace-pre-line text-[0.9375rem] text-muted">{ev.note}</p>}
           {(booked || canMarkBooked) && !cancelled && (
             <CourtBooking code={code} book={prepared ? { url: prepared.url, checkout: prepared.prepared === "checkout" ? (platformById(prepared.platform)?.name ?? prepared.platform ?? "") : null } : null} slotLine={slotLine} booked={booked ? { name: booked.name } : null} canMark={canMarkBooked} />
           )}
@@ -990,14 +992,12 @@ async function EventPage({ params, searchParams }: Props) {
           )}
           {cancelled && (
             <div className="mt-4 border-t border-line pt-3">
-              <div className="font-extrabold text-danger">{t("event.cancelled")}</div>
-              <div className="text-sm text-danger">{t("event.cancelledHelp")}</div>
+              <div className="font-bold text-danger">{t("event.cancelled")}</div>
             </div>
           )}
           {!cancelled && over && detail.scores.length === 0 && ev.type === "match" && (
             <div className="mt-4 border-t border-line pt-3">
-              <div className="font-extrabold">{t("event.past")}</div>
-              <div className="text-sm text-muted">{t("event.pastNoScore")}</div>
+              <div className="font-bold">{t("event.past")}</div>
             </div>
           )}
           {me && stay && stay.kind !== "hidden" && (
@@ -1050,7 +1050,6 @@ async function EventPage({ params, searchParams }: Props) {
             weeklyOffered={weeklyOffered}
             weeklyWhen={weeklyWhen}
             card={resultCard}
-            prompt={creatorBanner ? t("creator.scoreReminderBanner") : null}
             playAgainQuiet={!viewer.isCreator}
             correctUntil={correctUntil}
             correction={correction}
@@ -1083,10 +1082,8 @@ async function EventPage({ params, searchParams }: Props) {
           </div>
         )}
         <MatchNumbers rows={numbers} />
-        {/* After the match the bar's "Share the result" is the share for a player and the organiser; a second share
-            block under it was "out of place and confusing" (a player, 24 November 2026). A visitor, whom the bar
-            does not serve, keeps it. */}
-        {over && !sharesInBar && otherShares}
+        {/* After the match the share leads with the result card's message, under the result and the reel. */}
+        {over && shareCard}
         {seriesRow && (
           <p className="px-1 text-sm text-muted" data-testid="series-line">
             <Link href={`/s/${seriesRow.slug}`} prefetch={false} className="link font-semibold">
@@ -1216,7 +1213,7 @@ async function EventPage({ params, searchParams }: Props) {
           )}
           {pushHere && (
             <div className="mt-4 border-t border-line pt-4">
-              <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} />
+              <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} plain />
             </div>
           )}
           {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && !weeklyShown && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
@@ -1227,11 +1224,11 @@ async function EventPage({ params, searchParams }: Props) {
           )}
         </section>
 
+        {!over && shareCard}
+
         {/* "Film this match. Get a reel.": before the start, for the match's own players and organiser (the owner's
             screen 1 of the reel flow, 22 November 2026). The four instructions are on /film. */}
         {ev.type === "match" && !cancelled && !started && canPlayAgain && <FilmCard code={code} />}
-
-        {!over && otherShares}
 
         {viewer.isCreator && (
           <CreatorPanel
@@ -1247,16 +1244,13 @@ async function EventPage({ params, searchParams }: Props) {
             isOver={over}
             paste={!cancelled && !over ? { namesHere, spots: spotsLeft, past: pastAsk } : null}
             leave={organiserLeave}
+            listOnBoard={!ev.publicListing && ev.venueSlug && ev.venueName && !cancelled && !over ? <ListOnBoard code={code} venue={ev.venueName} className="btn-ghost btn-sm max-w-full whitespace-normal px-0 text-left leading-snug [overflow-wrap:anywhere]" /> : null}
           />
         )}
 
         {forms.player && (
           <section className="card" data-testid="player-edit">
-            <h2 className="text-lg font-extrabold">{t("event.changeDetails")}</h2>
-            <p className="mt-0.5 text-sm text-muted">{t("event.changeDetailsHelp")}</p>
-            <div className="mt-3">
-              <EditMatch code={code} initial={editInitial} venues={venueOptions} startLocked={startLocked} playerFields />
-            </div>
+            <EditMatch code={code} initial={editInitial} venues={venueOptions} startLocked={startLocked} playerFields />
           </section>
         )}
 
@@ -1272,10 +1266,9 @@ async function EventPage({ params, searchParams }: Props) {
         {ev.cost && (isMember || viewer.isCreator) && payments.length > 0 && (
           <MatchPayments code={ev.code} cost={ev.cost} rows={payments} isOrganiser={viewer.isCreator} mySlotId={mySeatPaid} />
         )}
-        {/* The quiet door for what should change, where players actually are: opens in place, never a popup. */}
-        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
-      <Footer />
+      {/* "Tell us what should change" is the footer's, on every screen, and opens here in place. */}
+      <Footer signedInVia={me?.telegramId ? "telegram" : "none"} />
       {autofill && <PasskeyAutofill options={autofill} />}
       <JoinBar
         code={code}
@@ -1296,7 +1289,6 @@ async function EventPage({ params, searchParams }: Props) {
         partnerName={myPartner ? (myPartner.player?.displayName ?? myPartner.invitedName ?? "") : null}
         partnerGoes={partnerGoes}
         pairsLocked={(tstate?.rounds.length ?? 0) > 0}
-        share={barShare}
         organiser={viewer.isCreator}
         heldHint={!me && heldRows.size > 0}
         rangeWaived={rangeWaived}
@@ -1312,4 +1304,4 @@ async function EventPage({ params, searchParams }: Props) {
   );
 }
 
-export default withClientMessages(["americano", "calendar", "card", "common", "create", "creator", "errors", "event", "feedback", "group", "identity", "level", "levelCheck", "pairs", "passport", "push", "reel", "score", "series", "share", "telegram", "venue"], EventPage);
+export default withClientMessages(["americano", "calendar", "card", "common", "create", "creator", "errors", "event", "group", "identity", "level", "levelCheck", "pairs", "passport", "push", "reel", "score", "series", "share", "telegram", "venue"], EventPage);

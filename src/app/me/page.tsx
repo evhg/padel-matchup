@@ -22,7 +22,6 @@ import { formatDayMonth } from "@/lib/dates";
 import { nameOnly, personalTokenFor } from "@/actions/shared";
 import { telegramBotId } from "@/lib/telegram/api";
 import { clubStatus, listClubsClaimedBy } from "@/lib/domain/clubs";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { countShipped, showsShipped } from "@/lib/feedback/store";
 import { CoachCard } from "@/components/coach/CoachCard";
 import { getCoachForActor } from "@/lib/domain/coaching";
@@ -160,16 +159,15 @@ async function MePage({ searchParams }: Props) {
         {/* No "do you coach?" here, and no door for a club or an organiser either. This screen is a
             player's matches; the stakeholders have their own front doors on the landing page, and
             asking a player to become something else is not what they came for. */}
-        <FeedbackInline variant="card" signedInVia={me.telegramId ? "telegram" : "none"} shipped={showsShipped(shipped) ? shipped : undefined} />
         <MySettings player={me} personalToken={token} hasMatches={hasMatches} signOut />
         {/* Last on the page, always: the one action that cannot be undone. */}
         <DeleteAccount byName={byNameOnly ? proofDoors : null} />
           </div>
         </details>
       </main>
-      <Footer />
+      <Footer signedInVia={me.telegramId ? "telegram" : "none"} shipped={showsShipped(shipped) ? shipped : undefined} />
     </>
   );
 }
 
-export default withClientMessages(["common", "creator", "errors", "event", "feedback", "homescreen", "identity", "level", "me", "notices", "passport", "push", "ranking", "share", "telegram", "want"], MePage);
+export default withClientMessages(["common", "creator", "errors", "event", "homescreen", "identity", "level", "me", "notices", "passport", "push", "ranking", "share", "telegram", "want"], MePage);

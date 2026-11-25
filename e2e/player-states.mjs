@@ -87,16 +87,16 @@ const LANDMARKS = {
 /**
  * What you read, then what you set, then the one thing you cannot undo.
  *
- * `hasFeedback` because only My matches carries the feedback door; the personal link page is the
- * same screen reached another way and has never had one. Saying so here beats a helper that quietly
- * passes when the card it is looking for is missing.
+ * `hasFeedback`: the feedback door is the button in the footer, under the page and so under the delete button too
+ * (the owner, 25 November 2026: one button on every screen; My matches had a card of its own before the settings).
+ * The personal link page is the same screen reached another way; its check says so rather than passing quietly.
  */
 async function readsInOrder(p, locale, where, { hasFeedback = true } = {}) {
   const L = LANDMARKS[locale];
   const [feedback, link, del, n] = [await blockWith(p, L.feedback), await blockWith(p, L.link), await blockWith(p, L.del), await blocks(p)];
   check(`${where}: the delete button is the last thing on the page`, del >= 0 && del === n - 1, `delete at ${del} of ${n} blocks`);
   check(`${where}: the settings sit under the content, above only the delete button`, link >= 0 && link < del && link > 0, `personal link ${link}, delete ${del} of ${n}`);
-  if (hasFeedback) check(`${where}: the feedback card comes before the settings`, feedback >= 0 && link > feedback, `feedback ${feedback}, personal link ${link}`);
+  if (hasFeedback) check(`${where}: the feedback door is the footer's button, under the page, and not a card in it`, feedback === -1 && (await p.locator("footer").getByRole("button", { name: L.feedback }).count()) === 1, `feedback block ${feedback}`);
 }
 
 try {
@@ -354,10 +354,10 @@ try {
     unreachedText.includes("Kicksmash can't reach ") && unreachedText.includes("Tomasz") && unreachedText.includes("Olek") && unreachedText.includes("Send the match link to them too: they sign in as themselves.") && !unreachedText.includes("Milena") && !unreachedText.includes("Ivo"),
     unreachedText,
   );
-  // Words only since 9 November 2026 (the owner: "You decide…"): the bar's one share sends the match link.
+  // Words only since 9 November 2026 (the owner: "You decide…"): the page's one share sends the match link.
   const sendHref = (await rosa.getByTestId("tell-group").getAttribute("href")) ?? "";
   check(
-    "the line has no button of its own, and the bar's one share sends the match's own link, tagged as WhatsApp's",
+    "the line has no button of its own, and the page's one share sends the match's own link, tagged as WhatsApp's",
     (await unreached.locator("a, button").count()) === 0 && sendHref.startsWith("https://wa.me/?text=") && decodeURIComponent(sendHref).includes(`/${nextCode}?s=wa`),
     sendHref.slice(0, 120),
   );

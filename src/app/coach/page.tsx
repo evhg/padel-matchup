@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { CoachHome } from "@/components/coach/CoachHome";
 import { CoachSetup } from "@/components/coach/CoachSetup";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { countShipped, showsShipped } from "@/lib/feedback/store";
 import { Footer, Header } from "@/components/Header";
 import { NameGate } from "@/components/NameGate";
@@ -55,9 +54,8 @@ async function CoachPage({ searchParams }: Props) {
       <Header current="coach" />
       <main className="mx-auto flex w-full max-w-xl flex-col gap-4 px-4 pt-2">
         {children}
-        <FeedbackInline variant="card" signedInVia={me?.telegramId ? "telegram" : "none"} shipped={showsShipped(shippedIdeas) ? shippedIdeas : undefined} />
       </main>
-      <Footer />
+      <Footer signedInVia={me?.telegramId ? "telegram" : "none"} shipped={showsShipped(shippedIdeas) ? shippedIdeas : undefined} />
     </>
   );
   // The door a coach came through (?s=citylist, club, coachpage, invite…) is remembered for a day and counted on setup.
@@ -171,4 +169,4 @@ async function CoachPage({ searchParams }: Props) {
   );
 }
 
-export default withClientMessages(["coach.book", "coach.done", "coach.errors", "coach.eyebrow", "coach.home", "coach.how", "coach.import", "coach.invite", "coach.minutes", "coach.noPackage", "coach.packageLine", "coach.packageLineNoExpiry", "coach.page", "coach.settings", "coach.setup", "coach.students", "common", "creator", "errors", "event", "feedback", "identity", "level", "levelCheck", "push", "share"], CoachPage);
+export default withClientMessages(["coach.book", "coach.done", "coach.errors", "coach.eyebrow", "coach.home", "coach.how", "coach.import", "coach.invite", "coach.minutes", "coach.noPackage", "coach.packageLine", "coach.packageLineNoExpiry", "coach.page", "coach.settings", "coach.setup", "coach.students", "common", "creator", "errors", "event", "identity", "level", "levelCheck", "push", "share"], CoachPage);

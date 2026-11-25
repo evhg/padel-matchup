@@ -177,15 +177,20 @@ export function EmailField({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
-      <div className="flex items-start gap-2">
-        <span aria-hidden className="mt-0.5 inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-court-soft text-court text-xs font-black">
-          i
-        </span>
-        <div>
-          {title && <div className="font-bold">{title}</div>}
-          <p className="text-sm text-muted">{help ?? t("event.emailReward")}</p>
+      {/* `help=""`: the title alone, as a row of the iPhone's Settings (the organiser's tools, 25 November 2026). */}
+      {help === "" ? (
+        title && <div className="font-bold">{title}</div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <span aria-hidden className="mt-0.5 inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-court-soft text-court text-xs font-black">
+            i
+          </span>
+          <div>
+            {title && <div className="font-bold">{title}</div>}
+            <p className="text-sm text-muted">{help ?? t("event.emailReward")}</p>
+          </div>
         </div>
-      </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <input
           type="email"

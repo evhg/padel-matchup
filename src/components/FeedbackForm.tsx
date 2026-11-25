@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
 import { sendFeedbackAction } from "@/actions/feedback";
+import type { FeedbackLabels } from "./feedbackLabels";
 
 /**
  * A picture the phone makes small before it goes: a JPEG of 1280 px at most on its long side, at a
@@ -27,9 +27,14 @@ async function shrink(file: File): Promise<string | null> {
   }
 }
 
-/** One textarea, one optional email, one button. The thank-you says the note was read; a channel is named only when one exists, and nothing is promised. */
-export function FeedbackForm({ signedInVia }: { signedInVia: "telegram" | "none" }) {
-  const t = useTranslations("feedback");
+/**
+ * One textarea, one optional email, one button. The thank-you says the note was read; a channel is named only when one exists, and nothing is promised.
+ * The words come in `labels` (`feedbackLabels`), not from `useTranslations`: the form opens from the foot of every
+ * screen, and a page hands the browser only the messages it names (`withClientMessages`), so fifty pages would each
+ * have to name "feedback" for a button most visits never open.
+ */
+export function FeedbackForm({ signedInVia, labels }: { signedInVia: "telegram" | "none"; labels: FeedbackLabels }) {
+  const t = (key: keyof FeedbackLabels) => labels[key];
   const [text, setText] = useState("");
   const [contact, setContact] = useState("");
   const [state, setState] = useState<{ kind: "idle" } | { kind: "sent"; channel: string; reply: string; feedback: boolean } | { kind: "error"; msg: string }>({ kind: "idle" });
