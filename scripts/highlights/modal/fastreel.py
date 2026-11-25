@@ -383,10 +383,13 @@ class Report:
         import urllib.request
         req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + '/api/reel/report', data=json.dumps(body).encode(), method='POST',
                                      headers={'Authorization': f"Bearer {self.req.get('report', '')}", 'Content-Type': 'application/json'})
+        what = 'failed' if 'failed' in body else 'progress ' + str(body['progress'].get('step')) if 'progress' in body else 'reel'
         try:
-            with urllib.request.urlopen(req, timeout=20) as r: return r.status
-        except Exception as e:      # a progress line that does not arrive stops nothing
-            return f'failed: {str(e)[:120]}'
+            with urllib.request.urlopen(req, timeout=20) as r: got = r.status
+        except Exception as e:      # a progress line that does not arrive stops nothing, but the log says so
+            got = f'failed: {str(e)[:120]}'
+        print('POST', body.get('code'), what, '->', got, flush=True)
+        return got
 
     def fail(self, why):
         for m in self.req.get('matches', []): self.post({'code': m['code'], 'failed': why})
@@ -510,7 +513,10 @@ def run_make(req):
     clock['finish_parts'] = list(finish_layout.map([(W, False, CH['music'], CH['crowd'], scale), (W, True, CH['music'], CH['crowd'], scale)]))
     vol.reload(); clock['music'] = round(time.time() - a); R.step('music')
 
-    # 6. finish: the files under a new token, then the match pages
+    # 6. finish: the files under a new token, then the match pages. "finish" goes BEFORE the reel's address: a progress
+    # line takes a shown reel off the page (`setReelProgress`), so on 25 November 2026 the job's own last "100%" hid the
+    # reel it had just published, and the page said "being made" for good.
+    R.step('finish')
     token = pysecrets.token_urlsafe(24); d = f"{P['reels']}/{token}"; os.makedirs(d, exist_ok=True)
     sh(['cp', f'{W}/wide.mp4', f'{d}/wide.mp4']); sh(['cp', f'{W}/tall.mp4', f'{d}/tall.mp4'])
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', '4.6', '-i', f'{M}/versus-m1-wide.mp4', '-frames:v', '1', '-vf', 'scale=1200:-2:flags=lanczos,crop=1200:630', '-q:v', '3', f'{d}/versus.jpg'])
@@ -520,7 +526,6 @@ def run_make(req):
     vol.commit()
     clock['all'] = round(time.time() - t0)
     for m in req['matches']: R.post({'code': m['code'], 'host': os.environ['REELS_HOST'], 'token': token})
-    R.step('finish')
     if req.get('dry'): json.dump({'clock': clock, 'reel': d}, open(f'{W}/clock.json', 'w'), indent=1); vol.commit()
     return {'state': 'ready', 'reel': d if req.get('dry') else f'reels/{token}', 'clock': clock}
 

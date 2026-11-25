@@ -88,7 +88,7 @@ async function askModel(db: Db, note: Feedback, fetchImpl: typeof fetch, now: Da
     const res = await fetchImpl("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: anthropicHeaders(process.env.ANTHROPIC_API_KEY!),
-      body: JSON.stringify({ model: listenModel(), max_tokens: 1200, system: SYSTEM, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: listenModel(), max_tokens: 3000, system: SYSTEM, messages: [{ role: "user", content: user }] }),
       signal: AbortSignal.timeout(20_000),
     });
     const json = (await res.json().catch(() => null)) as { content?: { type: string; text?: string }[]; usage?: { input_tokens: number; output_tokens: number }; stop_reason?: string; error?: { message?: string } } | null;
