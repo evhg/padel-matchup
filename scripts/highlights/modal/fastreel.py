@@ -25,10 +25,15 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
   music: assets/kicksmash-music-<name>.m4a ("bounce": kicksmash-music-warm-bounce.m4a), "none": the match sound only.
   No file: all on, and "bounce".
 
+  A player's watch: uploads/<token>/hr.json, {"player": "Ana", "zone": "Asia/Bangkok", "rows": [{"t": "10:24", "bpm": 171}]},
+  one value a minute (read from a screenshot of the watch's graph). With the clip times of meta.json ("times": the place
+  of each clip in the film and when the film began) it is the heart-rate box of the reel (fast_points.py, meter_of).
+
 Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report, Bearer <the request's "report">):
   clips    the joins and the flash-backs of the phone's cut found, a clean 4K file and a 1080p working copy
   players  people in 3 frames a second, who is who (who.py). Not sure: the job stops here (see "Names")
-  follow   the players through each clip (track.py, one machine for each clip); the openings start beside it
+  follow   the players through each clip (track.py, one machine for each clip); beside it the ball of each clip (ball.py,
+           balllink.py, one machine for each clip) and the openings
   replays  the plan (fast_points.py, reel_points.py) and every part drawn (render.py, one machine for each part)
   opening  the openings are there (portrait.py once, then versus.py, one machine for each match and layout)
   music    the parts joined, the crowd (cheers.py), the level, the track (music.py)
@@ -125,12 +130,13 @@ def paths(req):
     if req.get('dry'):
         root = '/vol/' + req.get('out', f"test/fastreel-{time.strftime('%Y-%m-%d')}").strip('/')
         return {'W': f'{root}/work', 'reels': f'{root}/reels', 'answer': f'{root}/names-answer.json', 'choices': f'{root}/choices.json',
-                'video': '/vol/' + req['video'].lstrip('/') if req.get('video') else None}
+                'video': '/vol/' + req['video'].lstrip('/') if req.get('video') else None, 'up': f'/vol/uploads/{up}' if up else None}
     video = None
     if req.get('video'): video = '/vol/' + req['video'].lstrip('/')
     elif up:
         d = f'/vol/uploads/{up}'; video = next((f'{d}/{n}' for n in sorted(os.listdir(d)) if n.startswith('video.')), None) if os.path.isdir(d) else None
-    return {'W': f'/vol/work/fastreel/{up}', 'reels': '/vol/reels', 'answer': f'/vol/uploads/{up}/names-answer.json', 'choices': f'/vol/uploads/{up}/choices.json', 'video': video}
+    return {'W': f'/vol/work/fastreel/{up}', 'reels': '/vol/reels', 'answer': f'/vol/uploads/{up}/names-answer.json', 'choices': f'/vol/uploads/{up}/choices.json', 'video': video,
+            'up': f'/vol/uploads/{up}' if up else None}
 
 
 def choices_of(P, req):
@@ -276,6 +282,18 @@ def follow(job):
     t, log = sh(['python', '-u', '/root/hl/track.py', f'{W}/proxy.mp4', f'{M}/ident-m{m}', f'{a + 0.05:.2f}', f'{b - 0.05:.2f}', '/tmp/t.json'], env=env)
     sh(['cp', '/tmp/t.json', out]); vol.commit()
     return n, t, log.strip().splitlines()[-1] if log.strip() else ''
+
+
+@app.function(image=image, volumes={'/vol': vol}, cpu=4, memory=8192, timeout=1800, max_containers=16)
+def ball(job):
+    """One clip through ball.py and balllink.py: the flights of the ball, so the plan can see where play starts.
+    A phone hears players who wait as hits; the ball does not fly while they wait (fast_points.py, after_idle)."""
+    W, n, a, b = job
+    vol.reload(); M = f'{W}/match'; os.makedirs(f'{M}/ball', exist_ok=True)
+    t, _ = sh(['python', '-u', '/root/hl/ball.py', f'{W}/proxy.mp4', f'{a:.3f}', f'{b:.3f}', '/tmp/b.npz'])
+    sh(['python', '-u', '/root/hl/balllink.py', '/tmp/b.npz', '/tmp/bl.npz'])
+    sh(['cp', '/tmp/bl.npz', f'{M}/ball/c{n}.npz']); vol.commit()
+    return n, t
 
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=8192, timeout=1800)
@@ -485,12 +503,15 @@ def run_make(req):
     ops = openings.spawn(W, ','.join(str(m) for m in range(1, nm + 1) if any(c['match'] == m for c in C)), scale, req.get('grade', 'glass'))
     jobs = [(W, n, c['a'], c['b'], c['match']) for n, c in enumerate(C)
             if not os.path.exists(f'{M}/tracks/c{n}.json') or os.path.getmtime(f'{M}/tracks/c{n}.json') < os.path.getmtime(f"{M}/ident-m{c['match']}.json")]
+    balls = [ball.spawn((W, n, c['a'], c['b'])) for n, c in enumerate(C) if not os.path.exists(f'{M}/ball/c{n}.npz')]
     clock['follow_parts'] = [(n, t) for n, t, _ in follow.map(jobs)] if jobs else []
+    clock['ball_parts'] = [h.get() for h in balls]
     vol.reload(); clock['follow'] = round(time.time() - a); R.step('follow')
 
     # 4. replays: the plan, then every part
     a = time.time(); env = home(W)
     env.update(CHEERS=f'{ASSETS}/cheers', ENDCARD=f'{ASSETS}/endcard/feedback.png')
+    if P.get('up') and os.path.isdir(P['up']): env['UPLOAD_DIR'] = P['up']      # meta.json (clip times), hr.json (a watch)
     sh(['python', '/root/hl/fast_points.py', f'{W}/proxy.mp4', f'{M}/request.json', f'{M}/points.json'], env=env)
     if not CH['numbers']:       # the card of numbers (reel_points.py "card"): fast_points.py writes none yet, and none goes in
         pts = json.load(open(f'{M}/points.json')); pts.pop('card', None); json.dump(pts, open(f'{M}/points.json', 'w'), indent=1)
