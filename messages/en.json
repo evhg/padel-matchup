@@ -3019,6 +3019,7 @@
     "downloadWide": "Download the wide version",
     "pageTitle": "The reel",
     "linkCopied": "Link copied",
-    "linkCopyPrompt": "Copy the link to the reel"
+    "linkCopyPrompt": "Copy the link to the reel",
+    "hereClipsAutoBody": "The clips are here. The reel starts by itself in a minute, and this page then shows how long it takes. All four players get a message when it is ready."
   }
 }

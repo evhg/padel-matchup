@@ -338,6 +338,8 @@ async function EventPage({ params, searchParams }: Props) {
   // The reel of a filmed match (`match_reels`), for the match's own players and organiser: one read on the
   // match's unique index, only once it has started. A failed read shows no reel, never an error page.
   const reel = started && !cancelled && ev.type === "match" && canPlayAgain ? await reelState(db, ev.id, now).catch(() => null) : null;
+  // The fast reel's job starts by itself for two pairs of two (`fastReelStart`); for any other line-up a person makes it.
+  const autoReel = (["a", "b"] as const).every((team) => roster.filter((s) => s.team === team && s.playerId && isOccupied(s)).length === 2);
   // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
   // the wall clock where it is played; and whether its one round already went out (one read, only for
   // somebody who is offered the button on a scored match or a locked americano), and whether this viewer's tap sends it.
@@ -1059,7 +1061,7 @@ async function EventPage({ params, searchParams }: Props) {
         {/* "Did you film it? Make the reel." (the owner's screen 3, and both ways to send the film, 23 November 2026).
             A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
             for ever; a film that is here says so until the reel plays. */}
-        {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} />}
+        {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} auto={autoReel} />}
         {/* The fast reel's job waits for who is who: a player of the match answers; anybody else sees that it waits. */}
         {reel?.kind === "working" && reel.progress.names && me && (viewer.isCreator || isSeated(detail, me.id)) ? (
           <ReelNames code={code} host={reel.progress.names.host} upload={reel.progress.names.upload} />
@@ -1069,7 +1071,9 @@ async function EventPage({ params, searchParams }: Props) {
         {reel?.kind === "here" && (
           <section className="card" data-testid="reel-here">
             <h2 className="text-lg font-extrabold">{t("reel.hereTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t(reel.source === "clips" ? "reel.hereClipsBody" : "reel.hereBody")}</p>
+            <p className="mt-1 text-sm text-muted">{t(reel.source === "clips" ? (autoReel ? "reel.hereClipsAutoBody" : "reel.hereClipsBody") : "reel.hereBody")}</p>
+            {/* The job's first report turns this card into the bar: the page asks again until it comes. */}
+            <AutoRefresh seconds={20} />
           </section>
         )}
         {/* "Watch highlights": the match video on YouTube, for the match's own players and organiser only (it shows their

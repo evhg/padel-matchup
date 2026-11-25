@@ -118,5 +118,12 @@ describe("the fast reel job's door", () => {
     expect((await call(POST, { code: mine.code, progress: { pct: 10, minutesLeft: 20, step: "clips" } })).status).toBe(200);
     expect((await call(POST, { code: theirs.code, progress: { pct: 10, minutesLeft: 20, step: "clips" } })).status).toBe(401);
     expect((await call(DELETE, { code: mine.code })).status).toBe(401);
+    // A step that fails: the row goes to "failed", so the page offers to send again, and the bar stops waiting.
+    const failed = await call(POST, { code: mine.code, failed: "IndexError: list index out of range" });
+    expect(await failed.json()).toEqual({ ok: true, failed: true });
+    const [ev] = await app.select().from(events).where(eq(events.code, mine.code));
+    expect(reelStateOf((await app.select().from(matchReels).where(eq(matchReels.eventId, ev.id)))[0], new Date())).toEqual({ kind: "none", failed: true });
+    // A second word changes nothing, and a reel that already plays is never taken off by a failed new try.
+    expect(await (await call(POST, { code: mine.code, failed: "again" })).json()).toEqual({ ok: true, failed: false });
   });
 });
