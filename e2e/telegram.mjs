@@ -20,6 +20,9 @@ const hook = async (update, secret = SECRET) => {
   const res = await fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", ...(secret ? { "x-telegram-bot-api-secret-token": secret } : {}) }, body: JSON.stringify(update) });
   return { status: res.status, json: await res.json().catch(() => null) };
 };
+/** Closes a browser context, or gives up after 10 seconds and says so: a close has no time limit of its own. */
+const closeWithin = (c, name) =>
+  Promise.race([c.close().then(() => true), new Promise((r) => setTimeout(() => r(false), 10_000))]).then((ok) => ok || console.log(`· ${name} did not close in 10 s; the browser closes it at the end`));
 const group = { id: -100424242, type: "supergroup", title: "e2e padel" };
 const ivan = { id: 424242, first_name: "Ivan", username: "ivan_e2e", language_code: "ru" };
 
@@ -322,8 +325,10 @@ try {
   await returnPage.waitForLoadState("load");
   const returnedAs = await returnPage.request.get(`${BASE}/api/me/export`).then((r) => r.json());
   check("and the player is signed in there", returnedAs.player?.displayName === "Оля", JSON.stringify(returnedAs.player ?? null).slice(0, 120));
-  await returnCtx.close();
-  await ctx.close();
+  // A context that will not close held this suite for 8 minutes and more, now and then, after its last check had
+  // passed (run.mjs stopped it as a hang; 23 and 25 November 2026). Each close has 10 seconds; the browser goes at the end.
+  await closeWithin(returnCtx, "returnCtx");
+  await closeWithin(ctx, "ctx");
 
   const ctx2 = await browser.newContext(iphone);
   page = await ctx2.newPage();

@@ -2917,7 +2917,7 @@
     "title": "The reel of this match",
     "saveTall": "Save, for stories",
     "saveWide": "Save, wide",
-    "kept": "Only the players of this match see it here. Kept until {date}.",
+    "kept": "Kept until {date}. Anyone you send the link to can watch it.",
     "sendTitle": "Did you film it? Make the reel.",
     "sendBody": "Send the video of the match. Kicksmash makes a highlights reel with the score, and all four players get it.",
     "startedLine": "An upload of this match's video started and did not finish. Choose the same video to go on.",
@@ -3016,6 +3016,9 @@
     "shareTall": "Share the reel",
     "shareWide": "Share the wide version",
     "downloadTall": "Download the reel",
-    "downloadWide": "Download the wide version"
+    "downloadWide": "Download the wide version",
+    "pageTitle": "The reel",
+    "linkCopied": "Link copied",
+    "linkCopyPrompt": "Copy the link to the reel"
   }
 }
