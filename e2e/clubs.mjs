@@ -602,8 +602,9 @@ try {
   await ola.goto(`${startedMade.organizer?.personalUrl}?next=/${startedCode}`);
   await ola.waitForURL((u) => u.pathname === `/${startedCode}`, { timeout: 20000 });
   await ola.getByTestId("court-booked-mark").waitFor({ timeout: 15000 });
-  const startedSays = { book: await ola.getByTestId("book-court").count(), mark: await ola.getByTestId("court-booked-mark").count(), started: (await ola.getByText(/^.* · Started \d+ minutes ago$/).count()) };
-  check("thirty minutes after the start: no 'Book this court', 'I booked it' still there, and the time line says 'Started 30 minutes ago'", startedSays.book === 0 && startedSays.mark === 1 && startedSays.started === 1, JSON.stringify(startedSays));
+  // "Started 30 minutes ago" under the day went on 25 November 2026 (the owner: "too much text!"): the chip says it is on.
+  const startedSays = { book: await ola.getByTestId("book-court").count(), mark: await ola.getByTestId("court-booked-mark").count(), live: await ola.getByText("Happening now", { exact: true }).count(), ago: await ola.getByText(/Started \d+ minutes ago/).count() };
+  check("thirty minutes after the start: no 'Book this court', 'I booked it' still there, and the chip says 'Happening now'", startedSays.book === 0 && startedSays.mark === 1 && startedSays.live === 1 && startedSays.ago === 0, JSON.stringify(startedSays));
   await shot(ola, "clubs-started-no-book-link");
   await ola.getByTestId("court-booked-mark").click();
   await ola.getByTestId("court-booked").waitFor({ timeout: 15000 });
