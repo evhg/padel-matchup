@@ -328,9 +328,10 @@ try {
     "a player of the match sees the reel on the match page, with a poster before it plays, and on a computer both files to download",
     reelSet.status === 200 &&
       !JSON.stringify(reelSet.body).includes(reelToken) &&
-      (await p.getByTestId("reel-video").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4#t=0.1` &&
+      (await p.getByTestId("reel-video").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4` &&
       (await p.getByTestId("reel-video").getAttribute("poster")) === `https://reels.example.test/r/${reelToken}/poster.jpg` &&
       (await p.getByTestId("reel-save-tall").innerText()) === "Download the reel" &&
+      (await p.getByTestId("reel-share-link").innerText()).includes("Share the reel") &&
       (await p.getByTestId("reel-save-wide").count()) === 1 &&
       Boolean(reelBox) && reelBox.x >= 0 && reelBox.x + reelBox.width <= 390,
     JSON.stringify({ reelSet, reelBox }),
@@ -352,6 +353,17 @@ try {
   await reelVisitor.goto(`${BASE}/${mcode}`);
   await reelVisitor.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
   check("a visitor does not see the reel, and the door is the operator's", (await reelVisitor.getByTestId("match-reel").count()) === 0 && !(await reelVisitor.content()).includes(reelToken) && (await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", body: "{}" })).status === 401);
+  // The reel's own page, for anybody with the link (CLAUDE.md order 10): a computer shares this link.
+  await reelVisitor.goto(`${BASE}/${mcode}/reel`);
+  await reelVisitor.getByTestId("reel-page-video").waitFor({ timeout: 20000 });
+  const reelPageHtml = await reelVisitor.content();
+  check(
+    "anybody with the reel's link watches it, with its poster, and the link unfurls with the card and the video",
+    (await reelVisitor.getByTestId("reel-page-video").getAttribute("poster")) === `https://reels.example.test/r/${reelToken}/poster.jpg` &&
+      reelPageHtml.includes('property="og:video"') &&
+      reelPageHtml.includes(`/${mcode}/card/opengraph-image`) &&
+      reelPageHtml.includes('name="robots" content="noindex'),
+  );
   await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);

@@ -2917,7 +2917,7 @@
     "title": "El reel de este partido",
     "saveTall": "Guardar, para historias",
     "saveWide": "Guardar, horizontal",
-    "kept": "Aquí solo lo ven los jugadores de este partido. Se guarda hasta el {date}.",
+    "kept": "Se guarda hasta el {date}. Cualquiera con el enlace puede verlo.",
     "sendTitle": "¿Lo grabaste? Haz el reel.",
     "sendBody": "Envía el vídeo del partido. Kicksmash hace un reel de las mejores jugadas con el marcador, y lo reciben los cuatro jugadores.",
     "startedLine": "La subida del vídeo de este partido empezó y no terminó. Elige el mismo vídeo para continuar.",
@@ -3016,6 +3016,9 @@
     "shareTall": "Compartir el vídeo",
     "shareWide": "Compartir la versión ancha",
     "downloadTall": "Descargar el vídeo",
-    "downloadWide": "Descargar la versión ancha"
+    "downloadWide": "Descargar la versión ancha",
+    "pageTitle": "El vídeo",
+    "linkCopied": "Enlace copiado",
+    "linkCopyPrompt": "Copia el enlace del vídeo"
   }
 }

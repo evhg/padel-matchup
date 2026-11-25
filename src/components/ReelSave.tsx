@@ -98,7 +98,7 @@ export function ReelSave({ url, name, primary, label, shareLabel }: { url: strin
   const idle = state.at === "idle";
   const text = state.at === "getting" ? (state.pct === null ? t("saveGetting") : t("saveGettingPct", { pct: state.pct })) : state.at === "ready" ? t("saveNow") : state.at === "failed" ? t("saveAgain") : sheet ? shareLabel : label;
   return (
-    <button type="button" className={`${primary ? "btn-secondary" : "btn-ghost"} btn-sm inline-flex w-full items-center justify-center gap-1.5`} onClick={tap} disabled={state.at === "getting"} aria-live="polite" data-testid={primary ? "reel-save-tall" : "reel-save-wide"}>
+    <button type="button" className={`${primary && sheet ? "btn-secondary" : "btn-ghost"} btn-sm inline-flex w-full items-center justify-center gap-1.5`} onClick={tap} disabled={state.at === "getting"} aria-live="polite" data-testid={primary ? "reel-save-tall" : "reel-save-wide"}>
       {sheet && (idle || state.at === "ready") && <ShareIcon />}
       {text}
     </button>
