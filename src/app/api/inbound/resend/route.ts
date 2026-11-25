@@ -9,6 +9,7 @@ import { guessLanguage } from "@/lib/listen/parse";
 import { apexHost } from "@/lib/config";
 import { deskAddress, draftReplyTo, isAutomatedSender, notifyInbound, parseAddress, recordInbound, sendPlainEmail, type InboundMail } from "@/lib/outreach/desk";
 import { verifySvix } from "@/lib/outreach/svix";
+import { forwardInbound } from "@/lib/outreach/forward";
 import { markFromEvent, recordMark } from "@/lib/domain/emailMarks";
 import { answerBookMail, isBookMail } from "@/lib/booking/bookMail";
 import { machineMail } from "@/lib/domain/bookMail";
@@ -50,6 +51,16 @@ export async function POST(req: Request) {
   const emailId = event.data.email_id;
   const mail = await fetchReceived(emailId, event);
   if (!mail) return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
+  // A copy of every mail to the owner's inbox while MAIL_FORWARD_TO is set (src/lib/outreach/forward.ts),
+  // after the response on Vercel; inline where there is no request scope (tests).
+  const forward = async () => {
+    console.info("mail_forward", await forwardInbound(mail));
+  };
+  try {
+    after(forward);
+  } catch {
+    await forward();
+  }
   const db = await getDb();
   // Each door by its whole address at our own domain: feedback@ at another domain is not ours.
   const recipients = mail.to.map((t) => parseAddress(t).email);
