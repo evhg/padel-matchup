@@ -60,6 +60,7 @@ describe("the address of a reel", () => {
       wide: `${HOST}/r/${TOKEN}/wide.mp4`,
       saveTall: `${HOST}/r/${TOKEN}/tall.mp4?dl=1`,
       saveWide: `${HOST}/r/${TOKEN}/wide.mp4?dl=1`,
+      poster: `${HOST}/r/${TOKEN}/poster.jpg`,
       keptUntil: new Date(NOW.getTime() + 30 * DAY),
     });
     expect(reelView(row, new Date(NOW.getTime() + 30 * DAY - 1))).not.toBeNull();

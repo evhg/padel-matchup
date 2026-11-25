@@ -43,7 +43,8 @@ export function reelHostOf(raw: unknown): string | null {
 
 export const isReelToken = (raw: unknown): raw is string => typeof raw === "string" && TOKEN.test(raw);
 
-export type ReelView = { tall: string; wide: string; saveTall: string; saveWide: string; keptUntil: Date };
+/** `poster`: a frame of the opening, shown before the reel plays (`poster.jpg` beside the films; older reels have none). */
+export type ReelView = { tall: string; wide: string; saveTall: string; saveWide: string; poster: string; keptUntil: Date };
 
 /** What a screen needs of a row, or null when there is no reel to show (not ready, or past its days). Pure. */
 export function reelView(row: { status: string; host: string | null; reelToken: string; readyAt: Date | null } | null | undefined, now: Date): ReelView | null {
@@ -53,7 +54,7 @@ export function reelView(row: { status: string; host: string | null; reelToken: 
   const keptUntil = new Date(row.readyAt.getTime() + REEL_KEEP_DAYS * 86_400_000);
   if (keptUntil.getTime() <= now.getTime()) return null;
   const base = `${host}/r/${row.reelToken}`;
-  return { tall: `${base}/tall.mp4`, wide: `${base}/wide.mp4`, saveTall: `${base}/tall.mp4?dl=1`, saveWide: `${base}/wide.mp4?dl=1`, keptUntil };
+  return { tall: `${base}/tall.mp4`, wide: `${base}/wide.mp4`, saveTall: `${base}/tall.mp4?dl=1`, saveWide: `${base}/wide.mp4?dl=1`, poster: `${base}/poster.jpg`, keptUntil };
 }
 
 /** The reel of one match for its page. One read on the match's own unique index. */

@@ -3014,6 +3014,8 @@
     "namesSent": "El vídeo sigue ahora. Todos los jugadores reciben un mensaje cuando esté listo.",
     "namesWaiting": "El vídeo espera a que un jugador del partido diga quién es quién.",
     "shareTall": "Compartir el vídeo",
-    "shareWide": "Compartir la versión ancha"
+    "shareWide": "Compartir la versión ancha",
+    "downloadTall": "Descargar el vídeo",
+    "downloadWide": "Descargar la versión ancha"
   }
 }
