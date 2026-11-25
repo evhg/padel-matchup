@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Footer, Header } from "@/components/Header";
@@ -137,9 +136,6 @@ async function VenueBoardPage({ params }: Props) {
               <Link href={`/clubs/claim?name=${encodeURIComponent(unclaimed.name)}`} prefetch={false} className="btn-secondary btn-sm" data-testid="club-claim-door">
                 {t("club.isThisYours")}
               </Link>
-            </div>
-            <div className="mt-3">
-              <FeedbackInline variant="line" signedInVia="none" />
             </div>
           </section>
         )}
@@ -319,4 +315,4 @@ async function VenueBoardPage({ params }: Props) {
   );
 }
 
-export default withClientMessages(["embed", "feedback"], VenueBoardPage);
+export default withClientMessages(["embed"], VenueBoardPage);

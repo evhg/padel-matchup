@@ -92,9 +92,8 @@ export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPh
           phone must offer the album as well as the camera. `capture` forces the camera and hides it. */}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} data-testid="photo-input" />
       <button type="button" className="btn-secondary w-full" disabled={pending} onClick={() => inputRef.current?.click()} data-testid="photo-add">
-        {pending ? "…" : `📷 ${t("addPhoto")}`}
+        {pending ? "…" : t("addPhoto")}
       </button>
-      <p className="text-xs text-faint">{t("photoHelp")}</p>
       {error && <p className="text-xs font-semibold text-danger">{error}</p>}
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { cancelEventAction, setBanterAction } from "@/actions/events";
 import { leaveAction } from "@/actions/slots";
 import { errorLine } from "@/lib/errorLine";
@@ -26,6 +26,7 @@ export function CreatorPanel({
   isOver = false,
   paste = null,
   leave = null,
+  listOnBoard = null,
 }: {
   code: string;
   initial: EventFormValues;
@@ -49,6 +50,8 @@ export function CreatorPanel({
    * confirmation the bar's Leave asked, worded on the page (a fixed-pairs night names the partner).
    */
   leave?: { question: string } | null;
+  /** "Show on the … board", the one tap onto the venue's board, while the match is not listed (`ListOnBoard`). */
+  listOnBoard?: ReactNode;
 }) {
   const t = useTranslations();
   const [pending, start] = useTransition();
@@ -88,41 +91,15 @@ export function CreatorPanel({
   };
 
   return (
-    <section className="card border-ink/15">
-      <div className="flex items-center gap-2">
-        <span className="chip bg-ink text-on-ink">{t("common.organizer")}</span>
-        <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
-      </div>
+    // The tools an organiser uses often stay open (paste the names, edit, cancel); the ones a match needs once,
+    // if ever, wait behind one "More" row (the owner, 25 November 2026: "If you need to explain things with
+    // sentences you have failed in making the ui intuitive"). Their help sentences went; the manage link keeps
+    // its one line, because it warns that the link is a key.
+    <section className="card">
+      <h2 className="text-lg font-extrabold">{t("creator.tools")}</h2>
+      {listOnBoard && <div className="mt-3">{listOnBoard}</div>}
 
       {!isCancelled && paste && paste.spots > 0 && <PasteNames code={code} namesHere={paste.namesHere} spots={paste.spots} past={paste.past} />}
-
-      {emailEnabled && (
-        <div className="mt-4 border-t border-line pt-4">
-          {/* The one email switch for the organiser (the owner, 9 November 2026). Keyed by the address, so an email saved elsewhere on the page (Stay updated) shows here as the switch at once. */}
-          <EmailField key={creatorEmail ?? ""} initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help={t("share.emailHelp")} emailEnabled={emailEnabled} notifyOn={creatorNotify} />
-        </div>
-      )}
-
-      {!isCancelled && (
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
-          <div className="min-w-0">
-            <div className="font-bold">{t("creator.banter")}</div>
-            <p className="text-sm text-muted">{t("creator.banterHelp")}</p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={banter}
-            aria-label={t("creator.banter")}
-            onClick={toggleBanter}
-            data-testid="banter-switch"
-            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${banter ? "bg-ink" : "bg-line-strong"}`}
-          >
-            <span className={`inline-block h-5 w-5 rounded-full shadow transition ${banter ? "translate-x-6 bg-on-ink" : "translate-x-1 bg-knob-off"}`} />
-          </button>
-        </div>
-      )}
-      {!isCancelled && banterError && <p className="mt-1 text-sm font-semibold text-danger">{banterError}</p>}
 
       {!isCancelled && (
         <div className="mt-4 border-t border-line pt-4">
@@ -142,26 +119,58 @@ export function CreatorPanel({
         </div>
       )}
 
-      {!isCancelled && leave && (
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4" data-testid="organiser-leave">
-          <p className="min-w-0 text-sm text-muted">{t("creator.leaveSeatHelp")}</p>
-          <button type="button" className="btn-ghost btn-sm shrink-0" disabled={pending} onClick={giveUp}>
-            {t("creator.leaveSeat")}
-          </button>
-        </div>
-      )}
-      {leaveError && <p className="mt-1 text-sm font-semibold text-danger">{leaveError}</p>}
-
-      {manageUrl && (
-        <div className="mt-4 border-t border-line pt-4">
-          <h3 className="font-extrabold">{t("creator.manageLinkTitle")}</h3>
-          <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
-          <div className="mt-2 flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{manageUrl}</code>
-            <CopyButton value={manageUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+      <details className="group mt-4 border-t border-line pt-1" data-testid="organiser-more">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3">
+          <span className="text-[0.9375rem]">{t("common.more")}</span>
+          <span className="shrink-0 text-faint transition group-open:rotate-90" aria-hidden>
+            ›
+          </span>
+        </summary>
+        {emailEnabled && (
+          <div className="mt-4 border-t border-line pt-4">
+            {/* The one email switch for the organiser (the owner, 9 November 2026). Keyed by the address, so an email saved elsewhere on the page (Stay updated) shows here as the switch at once. */}
+            <EmailField key={creatorEmail ?? ""} initial={creatorEmail} mode="creator" code={code} title={t("creator.notifications")} help="" emailEnabled={emailEnabled} notifyOn={creatorNotify} />
           </div>
-        </div>
-      )}
+        )}
+
+        {!isCancelled && (
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
+            <div className="min-w-0 font-bold">{t("creator.banter")}</div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={banter}
+              aria-label={t("creator.banter")}
+              onClick={toggleBanter}
+              data-testid="banter-switch"
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition ${banter ? "bg-ink" : "bg-line-strong"}`}
+            >
+              <span className={`inline-block h-5 w-5 rounded-full shadow transition ${banter ? "translate-x-6 bg-on-ink" : "translate-x-1 bg-knob-off"}`} />
+            </button>
+          </div>
+        )}
+        {!isCancelled && banterError && <p className="mt-1 text-sm font-semibold text-danger">{banterError}</p>}
+
+        {!isCancelled && leave && (
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4" data-testid="organiser-leave">
+            <button type="button" className="btn-ghost btn-sm shrink-0 px-0" disabled={pending} onClick={giveUp}>
+              {t("creator.leaveSeat")}
+            </button>
+          </div>
+        )}
+        {leaveError && <p className="mt-1 text-sm font-semibold text-danger">{leaveError}</p>}
+
+        {manageUrl && (
+          <div className="mt-4 border-t border-line pt-4">
+            <h3 className="font-extrabold">{t("creator.manageLinkTitle")}</h3>
+            <p className="mt-0.5 text-sm text-muted">{t("share.manageHint")}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-xl bg-bg px-3 py-2.5 text-xs">{manageUrl}</code>
+              <CopyButton value={manageUrl} label={t("common.copy")} className="btn-ghost btn-sm" />
+            </div>
+          </div>
+        )}
+      </details>
     </section>
   );
 }

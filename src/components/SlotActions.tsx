@@ -18,6 +18,7 @@ export function SlotActions({
   stale,
   emailedTo = null,
   keepRecord = null,
+  inline = false,
 }: {
   code: string;
   slotId: string;
@@ -36,6 +37,8 @@ export function SlotActions({
    * October 2026: "Yes, keep the record"). The name, never an id: the server finds the record again.
    */
   keepRecord?: string | null;
+  /** A member's row: "Remove" alone, at the end of the row, as a list in the iPhone's apps puts it. */
+  inline?: boolean;
 }) {
   const t = useTranslations();
   // Closed until "Invite now" or "Nudge again": a hold opens nothing by itself (the owner's decision A of 6
@@ -63,6 +66,15 @@ export function SlotActions({
     });
   };
 
+  if (inline)
+    return (
+      <div className="shrink-0 text-right">
+        <button type="button" className="min-h-11 px-1 text-[0.9375rem] text-danger disabled:opacity-60" disabled={pending} onClick={remove}>
+          {kind === "invited" ? t("creator.cancelInvite") : t("creator.remove")}
+        </button>
+        {error && <p className="text-sm font-semibold text-danger">{error}</p>}
+      </div>
+    );
   return (
     <div className="mt-2 flex flex-col gap-2">
       {emailedTo && <div className="text-sm font-semibold text-ok">✓ {t("creator.inviteEmailed", { email: emailedTo })}</div>}
@@ -77,7 +89,8 @@ export function SlotActions({
             {t("creator.keepRecord", { name: keepRecord })}
           </button>
         )}
-        <button type="button" className="btn-danger btn-xs" disabled={pending} onClick={remove}>
+        {/* Red words, no fill: one on every row of a full line-up was four red boxes (25 November 2026). */}
+        <button type="button" className="min-h-9 px-1 text-sm text-danger disabled:opacity-60" disabled={pending} onClick={remove}>
           {kind === "invited" ? t("creator.cancelInvite") : t("creator.remove")}
         </button>
       </div>

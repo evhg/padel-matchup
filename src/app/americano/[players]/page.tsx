@@ -3,11 +3,9 @@ import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { baseUrl } from "@/lib/config";
 import { buildHistory, mulberry32, rotationLength, scheduleRound, type RoundRef } from "@/lib/domain/americano";
-import { withClientMessages } from "@/i18n/withClientMessages";
 
 // Served under /ru and /es too, so the page is rendered per request rather than once in English at build time.
 export const dynamic = "force-dynamic";
@@ -101,7 +99,6 @@ async function AmericanoStaticPage({ params }: Props) {
           </section>
         ))}
 
-        <FeedbackInline variant="card" signedInVia="none" />
 
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("americano.static.otherSizes")}</h2>
@@ -122,4 +119,4 @@ async function AmericanoStaticPage({ params }: Props) {
   );
 }
 
-export default withClientMessages(["feedback"], AmericanoStaticPage);
+export default AmericanoStaticPage;

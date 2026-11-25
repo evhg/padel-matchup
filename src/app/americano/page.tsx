@@ -4,7 +4,6 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AmericanoGenerator } from "@/components/AmericanoGenerator";
 import { parseGenLink } from "@/lib/domain/americano";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
@@ -52,7 +51,6 @@ async function AmericanoPage({ searchParams }: { searchParams: Promise<Record<st
             {t("levels.eyebrow")}
           </Link>
         </p>
-        <FeedbackInline variant="card" signedInVia="none" />
         <details className="card no-print text-sm">
           <summary className="cursor-pointer list-none font-extrabold">{t("americano.title")} · ?</summary>
           <p className="mt-2 text-muted">{t("americano.howItWorks")}</p>
@@ -63,4 +61,4 @@ async function AmericanoPage({ searchParams }: { searchParams: Promise<Record<st
   );
 }
 
-export default withClientMessages(["americano", "feedback"], AmericanoPage);
+export default withClientMessages(["americano"], AmericanoPage);

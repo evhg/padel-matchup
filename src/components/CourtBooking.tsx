@@ -77,7 +77,7 @@ export function CourtBooking({ code, book, slotLine, booked, canMark }: { code: 
         </div>
       )}
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 text-[0.9375rem] text-muted">{t("bookYourself")}</span>
+        <span className="min-w-0">{t("bookedQuestion")}</span>
         <button type="button" className="btn-secondary btn-sm shrink-0" disabled={pending} onClick={() => mark(true)} data-testid="court-booked-mark">
           {t("bookedIt")}
         </button>

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { getDb } from "@/db";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { listBuilt } from "@/lib/feedback/store";
 import { localeAlternates } from "@/lib/seo";
-import { withClientMessages } from "@/i18n/withClientMessages";
 
 // New lines arrive whenever a note ships, and the page is served under /ru and /es too.
 export const dynamic = "force-dynamic";
@@ -57,11 +55,10 @@ async function BuiltPage() {
             ))}
           </ol>
         )}
-        <FeedbackInline variant="card" signedInVia="none" />
       </main>
       <Footer />
     </>
   );
 }
 
-export default withClientMessages(["feedback"], BuiltPage);
+export default BuiltPage;

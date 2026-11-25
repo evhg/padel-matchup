@@ -70,8 +70,8 @@ export function PlayAgainButton({ code, offer, quiet = false }: { code: string; 
       <button type="button" className={`${quiet ? "btn-ghost" : "btn-primary"} w-full`} disabled={pending} onClick={go}>
         {pending ? t("common.working") : t("event.playAgainShort")}
       </button>
-      <p className="text-center text-xs text-faint">{offer.sent ? t("event.playAgainSent") : offer.sends ? t("event.playAgainOne") : t("event.playAgainPlain")}</p>
-      {offer.next && <p className="text-center text-xs text-faint">{t("event.playAgainLands")}</p>}
+      {/* One line, only when the round already went: the button then sends nothing to the players (25 November 2026). */}
+      {offer.sent && <p className="text-center text-xs text-faint">{t("event.playAgainSent")}</p>}
       {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );

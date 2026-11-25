@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import { feedbackLabels } from "@/components/feedbackLabels";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { localeAlternates } from "@/lib/seo";
 import { getSessionPlayer } from "@/lib/session";
-import { withClientMessages } from "@/i18n/withClientMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +32,11 @@ async function FeedbackPage() {
           <h1 className="text-2xl font-extrabold">{t("title")}</h1>
           <p className="mt-2 text-sm text-muted">{t("sub")}</p>
         </section>
-        <FeedbackForm signedInVia={via} />
+        <FeedbackForm signedInVia={via} labels={feedbackLabels((k) => t(k))} />
       </main>
-      <Footer />
+      <Footer feedback={false} />
     </>
   );
 }
 
-export default withClientMessages(["feedback"], FeedbackPage);
+export default FeedbackPage;

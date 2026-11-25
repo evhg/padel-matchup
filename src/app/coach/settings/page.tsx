@@ -6,7 +6,6 @@ import { CoachCalendar } from "@/components/coach/CoachCalendar";
 import { CoachManagers } from "@/components/coach/CoachManagers";
 import { CoachSettings } from "@/components/coach/CoachSettings";
 import { DeleteCoachBook } from "@/components/coach/DeleteCoachBook";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { listManagers } from "@/lib/coach/chains";
@@ -82,12 +81,11 @@ async function CoachSettingsPage() {
           initial={{ gcalId: coach.gcalId ?? "", icalUrl: coach.icalUrl ?? "", status: coach.gcalStatus, syncedAt: coach.calendarSyncedAt?.toISOString() ?? null, error: coach.calendarError }}
         />
         <CoachManagers managers={managers.map((m) => ({ id: m.id, name: m.displayName }))} isOwner={role === "coach"} />
-        <FeedbackInline variant="card" signedInVia={me?.telegramId ? "telegram" : "none"} />
         {contents && <DeleteCoachBook students={contents.students} lessons={contents.lessons} />}
       </main>
-      <Footer />
+      <Footer signedInVia={me?.telegramId ? "telegram" : "none"} />
     </>
   );
 }
 
-export default withClientMessages(["coach.calendar", "coach.errors", "coach.how", "coach.managers", "coach.minutes", "coach.page", "coach.settings", "coach.setup", "common", "create", "feedback", "level", "share"], CoachSettingsPage);
+export default withClientMessages(["coach.calendar", "coach.errors", "coach.how", "coach.managers", "coach.minutes", "coach.page", "coach.settings", "coach.setup", "common", "create", "level", "share"], CoachSettingsPage);
