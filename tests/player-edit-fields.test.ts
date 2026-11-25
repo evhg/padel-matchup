@@ -80,8 +80,10 @@ describe("which fields a seated player may send", () => {
     for (const l of ["en", "ru", "es"] as const) {
       const ev = catalogue(l).event as Record<string, string>;
       for (const w of WORDS[l]) expect(ev.organiserOnly, `${l}: ${w}`).toContain(w);
-      // The help over the form says the same, and that a new note tells nobody.
-      for (const w of WORDS[l].slice(1)) expect(ev.changeDetailsHelp, `${l}: ${w}`).toContain(w);
+      // The help over the form went on 25 November 2026 (the owner: "If you need to explain things with sentences
+      // you have failed in making the ui intuitive"): the form's own button opens it, and the refusal above names
+      // what a player may change. No locale keeps the old paragraph.
+      expect(ev.changeDetailsHelp, l).toBeUndefined();
     }
   });
 });
