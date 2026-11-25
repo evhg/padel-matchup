@@ -30,16 +30,16 @@ function recorder() {
 
 describe("the mail forward", () => {
   it("is on only for a real address outside our own domain", () => {
-    expect(forwardTarget({}, "kicksma.sh")).toBeNull();
-    expect(forwardTarget({ MAIL_FORWARD_TO: "not an address" }, "kicksma.sh")).toBeNull();
+    expect(forwardTarget(undefined, "kicksma.sh")).toBeNull();
+    expect(forwardTarget("not an address", "kicksma.sh")).toBeNull();
     // a forward to our own domain would come back through the same webhook, for ever
-    expect(forwardTarget({ MAIL_FORWARD_TO: "owner@KICKSMA.SH" }, "kicksma.sh")).toBeNull();
-    expect(forwardTarget({ MAIL_FORWARD_TO: " owner@example.com " }, "kicksma.sh")).toBe("owner@example.com");
+    expect(forwardTarget("owner@KICKSMA.SH", "kicksma.sh")).toBeNull();
+    expect(forwardTarget(" owner@example.com ", "kicksma.sh")).toBe("owner@example.com");
   });
 
   it("sends a copy with the original's facts on top, and a reply goes to the sender", async () => {
     const { calls, fetchImpl } = recorder();
-    const out = await forwardInbound(MAIL, fetchImpl, { MAIL_FORWARD_TO: "owner@example.com", RESEND_API_KEY: "re_test" });
+    const out = await forwardInbound(MAIL, fetchImpl, { to: "owner@example.com", key: "re_test" });
     expect(out).toBe("sent");
     expect(calls).toHaveLength(1);
     const b = calls[0].body;
@@ -56,8 +56,8 @@ describe("the mail forward", () => {
 
   it("sends nothing when it is off, and nothing for a mail from our own domain", async () => {
     const { calls, fetchImpl } = recorder();
-    expect(await forwardInbound(MAIL, fetchImpl, { RESEND_API_KEY: "re_test" })).toBe("off");
-    expect(await forwardInbound({ ...MAIL, from: `Claude <claude@${apexHost()}>` }, fetchImpl, { MAIL_FORWARD_TO: "owner@example.com", RESEND_API_KEY: "re_test" })).toBe("own");
+    expect(await forwardInbound(MAIL, fetchImpl, { key: "re_test" })).toBe("off");
+    expect(await forwardInbound({ ...MAIL, from: `Claude <claude@${apexHost()}>` }, fetchImpl, { to: "owner@example.com", key: "re_test" })).toBe("own");
     expect(calls).toHaveLength(0);
   });
 
@@ -71,6 +71,6 @@ describe("the mail forward", () => {
     const fetchImpl = (async () => {
       throw new Error("network");
     }) as unknown as typeof fetch;
-    expect(await forwardInbound(MAIL, fetchImpl, { MAIL_FORWARD_TO: "owner@example.com", RESEND_API_KEY: "re_test" })).toBe("failed");
+    expect(await forwardInbound(MAIL, fetchImpl, { to: "owner@example.com", key: "re_test" })).toBe("failed");
   });
 });

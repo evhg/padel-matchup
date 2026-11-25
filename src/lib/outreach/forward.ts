@@ -14,8 +14,8 @@ import { deskFrom, parseAddress, type InboundMail } from "@/lib/outreach/desk";
 const ADDRESS = /^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$/;
 
 /** The forward address, or null when it is not set, not an address, or at our own domain. */
-export function forwardTarget(env: Record<string, string | undefined> = process.env, apex = apexHost()): string | null {
-  const t = env.MAIL_FORWARD_TO?.trim();
+export function forwardTarget(value: string | undefined = process.env.MAIL_FORWARD_TO, apex = apexHost()): string | null {
+  const t = value?.trim();
   if (!t || !ADDRESS.test(t)) return null;
   return t.toLowerCase().endsWith(`@${apex.toLowerCase()}`) ? null : t;
 }
@@ -36,16 +36,20 @@ export function forwardBody(mail: InboundMail): { subject: string; text: string;
 export type ForwardOutcome = "off" | "own" | "sent" | "failed";
 
 /** Send the copy. Never throws: a forward that fails must not stop the mail's own door. */
-export async function forwardInbound(mail: InboundMail, fetchImpl: typeof fetch = fetch, env: Record<string, string | undefined> = process.env): Promise<ForwardOutcome> {
-  const to = forwardTarget(env);
-  if (!to || !env.RESEND_API_KEY) return "off";
+export async function forwardInbound(
+  mail: InboundMail,
+  fetchImpl: typeof fetch = fetch,
+  env: { to?: string; key?: string } = { to: process.env.MAIL_FORWARD_TO, key: process.env.RESEND_API_KEY },
+): Promise<ForwardOutcome> {
+  const to = forwardTarget(env.to);
+  if (!to || !env.key) return "off";
   const from = parseAddress(mail.from).email.toLowerCase();
   if (from.endsWith(`@${apexHost().toLowerCase()}`)) return "own";
   const { subject, text, html } = forwardBody(mail);
   try {
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${env.key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: deskFrom(), to: [to], reply_to: parseAddress(mail.from).email, subject, text, html }),
       signal: AbortSignal.timeout(15_000),
     });
