@@ -3014,6 +3014,8 @@
     "namesSent": "The reel goes on now. All players get a message when it is ready.",
     "namesWaiting": "The reel waits for a player of the match to say who is who.",
     "shareTall": "Share the reel",
-    "shareWide": "Share the wide version"
+    "shareWide": "Share the wide version",
+    "downloadTall": "Download the reel",
+    "downloadWide": "Download the wide version"
   }
 }

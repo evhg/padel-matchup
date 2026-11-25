@@ -325,11 +325,12 @@ try {
   await p.getByTestId("match-reel").waitFor({ timeout: 20000 });
   const reelBox = await p.getByTestId("reel-video").boundingBox();
   check(
-    "a player of the match sees the reel on the match page, with the tall file to play and both files to save",
+    "a player of the match sees the reel on the match page, with a poster before it plays, and on a computer both files to download",
     reelSet.status === 200 &&
       !JSON.stringify(reelSet.body).includes(reelToken) &&
       (await p.getByTestId("reel-video").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4#t=0.1` &&
-      (await p.getByTestId("reel-save-tall").count()) === 1 &&
+      (await p.getByTestId("reel-video").getAttribute("poster")) === `https://reels.example.test/r/${reelToken}/poster.jpg` &&
+      (await p.getByTestId("reel-save-tall").innerText()) === "Download the reel" &&
       (await p.getByTestId("reel-save-wide").count()) === 1 &&
       Boolean(reelBox) && reelBox.x >= 0 && reelBox.x + reelBox.width <= 390,
     JSON.stringify({ reelSet, reelBox }),
@@ -342,7 +343,7 @@ try {
   const urlBefore = p.url();
   const [saved] = await Promise.all([p.waitForEvent("download", { timeout: 20000 }), p.getByTestId("reel-save-tall").click()]);
   check(
-    "Save, for stories keeps the player on the match page and saves the file named after the match",
+    "Download the reel keeps the player on the match page and saves the file named after the match",
     saved.suggestedFilename() === `kicksmash-${mcode}-tall.mp4` && p.url() === urlBefore,
     JSON.stringify({ name: saved.suggestedFilename(), url: p.url() }),
   );

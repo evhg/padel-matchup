@@ -19,6 +19,11 @@ type State = { at: "idle" } | { at: "getting"; pct: number | null } | { at: "rea
  *
  * Where the phone can share a video, the button says so, with the iPhone's share mark (the owner, 24 November
  * 2026: "why can I not share the reel? ... use same icon as iOS"): the sheet saves, posts and sends alike.
+ *
+ * The sheet only on a touch screen. Chrome on a computer has `navigator.share` too, and after a download of
+ * 100 MB its share refused the stale tap: "Getting the video… 100%", then "Save video", then nothing (the
+ * owner, 25 November 2026, on a desktop). A computer downloads the file. A sheet that refuses the file on a
+ * phone downloads it as well, so a tap never ends in nothing.
  */
 export function ReelSave({ url, name, primary, label, shareLabel }: { url: string; name: string; primary: boolean; label: string; /** The words where the phone shares a video file. */ shareLabel: string }) {
   const t = useTranslations("reel");
@@ -28,22 +33,24 @@ export function ReelSave({ url, name, primary, label, shareLabel }: { url: strin
   useEffect(() => {
     const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
     try {
-      setSheet(Boolean(typeof nav.share === "function" && nav.canShare?.({ files: [new File([""], "reel.mp4", { type: "video/mp4" })] })));
+      const touch = window.matchMedia?.("(pointer: coarse)").matches && navigator.maxTouchPoints > 0;
+      setSheet(Boolean(touch && typeof nav.share === "function" && nav.canShare?.({ files: [new File([""], "reel.mp4", { type: "video/mp4" })] })));
     } catch {
       setSheet(false);
     }
   }, []);
 
-  const hand = async (file: File): Promise<boolean> => {
+  const hand = async (file: File, last = false): Promise<boolean> => {
     const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
-    if (nav.canShare?.({ files: [file] }) && nav.share) {
+    if (sheet && nav.canShare?.({ files: [file] }) && nav.share) {
       try {
         await nav.share({ files: [file] });
         return true;
       } catch (e) {
         // The player closed the sheet: done. A tap that went stale: the next tap opens it.
         if ((e as DOMException)?.name === "AbortError") return true;
-        return false;
+        // A fresh tap that the sheet still refuses: the file downloads instead.
+        if (!last) return false;
       }
     }
     const a = document.createElement("a");
@@ -59,7 +66,7 @@ export function ReelSave({ url, name, primary, label, shareLabel }: { url: strin
   const tap = async () => {
     if (busy.current) return;
     if (state.at === "ready") {
-      if (await hand(state.file)) setState({ at: "idle" });
+      if (await hand(state.file, true)) setState({ at: "idle" });
       return;
     }
     busy.current = true;

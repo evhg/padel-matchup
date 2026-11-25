@@ -46,6 +46,16 @@ rather than rediscovering it.
 9. **Compliance never worsens the UI or the UX.** What the law needs goes where it costs the player no
    tap and is not in the player's face: the privacy page, a default, a line behind a fold. The owner:
    "This is how apps die."
+10. **Only A+ content, and a reel that meets the v8 standard may go public with its match sound.** A
+    reel that does not meet the v8 standard is not shown even to the players. A reel that meets it may
+    go to a public place (Instagram, TikTok, the site) with the players' own match sound. The owner,
+    25 November 2026: "It's erik's friends, remember?" This replaces the old rule that the match sound
+    never goes public.
+11. **Instagram and TikTok (@kicksma.sh): the official APIs; Claude approves each post, the owner gets
+    a summary each day.** No password and no browser bot: a token from each platform's developer app,
+    put in through the secure form, never in the chat. Claude looks at each post before it goes out and
+    posts only A+ content (order 10). The owner gets one summary a day: what was posted, where, and what
+    waits. The owner, 25 November 2026: "A, you approve each post at first but send me a daily summary."
 
 ## The one habit underneath all of it
 
