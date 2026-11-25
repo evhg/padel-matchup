@@ -78,4 +78,4 @@ async function ReelPage({ params }: Props) {
   );
 }
 
-export default withClientMessages(["card", "common", "errors", "share", "reel"], ReelPage);
+export default withClientMessages(["common", "share"], ReelPage);
