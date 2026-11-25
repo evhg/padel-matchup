@@ -28,7 +28,6 @@ export function ScorePanel({
   weeklyOffered = false,
   weeklyWhen = null,
   card,
-  prompt = null,
   playAgainQuiet = false,
   correctUntil = null,
   correction = null,
@@ -50,13 +49,7 @@ export function ScorePanel({
   weeklyWhen?: string | null;
   /** The shareable result card, once a result exists. Its WhatsApp share is the bottom bar's; Telegram and Copy are under "Other ways to share". */
   card?: ResultCardView | null;
-  /**
-   * The organiser's question on a match over with no score ("How did it go? Enter the final score."): a
-   * sentence over "Enter score", which is the one control for it (the owner, 9 November 2026). It was a
-   * banner of its own that led to the same form.
-   */
-  prompt?: string | null;
-  /** A seated player: "Play again" is a quiet button, because the bar's result share is their one primary. */
+  /** A seated player: "Play again" is a quiet button, because the result's share is their one strong button. */
   playAgainQuiet?: boolean;
   /**
    * A player of the match while the organiser's confirmed score is still open to correction: until when,
@@ -228,7 +221,6 @@ export function ScorePanel({
         </div>
       )}
 
-      {!editing && prompt && scores.length === 0 && <p className="mt-2 font-bold" data-testid="score-prompt">{prompt}</p>}
       {!editing && canEdit && (
         <button type="button" className={`${scores.length ? "btn-ghost btn-sm" : "btn-primary w-full"} mt-4`} onClick={() => setEditing(true)}>
           {scores.length ? t("score.edit") : t("score.enter")}

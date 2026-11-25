@@ -110,7 +110,15 @@ export async function openSettings(page) {
   if ((await fold.count()) === 0) return;
   if (!(await fold.evaluate((d) => d.open))) await page.locator("[data-testid=me-settings] > summary").click();
 }
-/** Opens the match page's "Other ways to share" (Telegram, Copy link, the QR and the story image). */
+/**
+ * Opens the organiser's "More" in Organizer tools (25 November 2026: the email switch, banter, "Give up my place"
+ * and the organizer link went behind it).
+ */
+export async function openOrganiserMore(page) {
+  const fold = page.getByTestId("organiser-more");
+  if (!(await fold.evaluate((d) => d.open))) await page.locator("[data-testid=organiser-more] > summary").click();
+}
+/** Opens the match page's "Other ways to share" (Telegram, Copy link, the QR and the story image) under the share card's WhatsApp button. */
 export async function openOtherShares(page) {
   const fold = page.getByTestId("other-shares");
   if (!(await fold.evaluate((d) => d.open))) await page.locator("[data-testid=other-shares] > summary").click();

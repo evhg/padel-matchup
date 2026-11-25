@@ -10,7 +10,7 @@ import { updateEventAction } from "@/actions/events";
  * options stays for taking it off again; the way on was three taps down, and a match at a club that
  * nobody at the club could see.
  */
-export function ListOnBoard({ code, venue }: { code: string; venue: string }) {
+export function ListOnBoard({ code, venue, className = "chip-muted hover:bg-line" }: { code: string; venue: string; className?: string }) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -22,7 +22,7 @@ export function ListOnBoard({ code, venue }: { code: string; venue: string }) {
       else setFailed(true);
     });
   return (
-    <button type="button" className="chip-muted hover:bg-line disabled:opacity-60" onClick={list} disabled={pending} aria-busy={pending} data-testid="list-on-board">
+    <button type="button" className={`${className} disabled:opacity-60`} onClick={list} disabled={pending} aria-busy={pending} data-testid="list-on-board">
       {failed ? t("common.somethingWrong") : t("venue.listNow", { venue })}
     </button>
   );

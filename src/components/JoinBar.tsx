@@ -13,7 +13,6 @@ import { HeldForYou, heldNameOf, NameHereLine } from "./TakeHeld";
 import { askOf, askStanding, SeatedAsk, type NameAsk } from "./SeatedAsk";
 import type { BackInDoors } from "./BackInHelp";
 import { readDeviceSignals } from "@/lib/deviceSignals";
-import { WHATSAPP_COLOURS, WhatsAppIcon } from "./ShareSheet";
 
 export type { JoinState } from "@/lib/domain/joinState";
 import type { JoinState } from "@/lib/domain/joinState";
@@ -39,7 +38,6 @@ export function JoinBar({
   partnerName = null,
   partnerGoes = false,
   pairsLocked = false,
-  share = null,
   organiser = false,
   heldHint = false,
   rangeWaived = null,
@@ -78,13 +76,6 @@ export function JoinBar({
   partnerGoes?: boolean;
   /** Round 1 is drawn: the pairs are the field, and no partner is added any more. */
   pairsLocked?: boolean;
-  /**
-   * The match's one WhatsApp share (the owner, 9 November 2026: "Bottom bar (Recommended)"), for the
-   * organiser and every seated player: its message fits the state (`shareMessage`). `strong` while places
-   * are open or held, and for a player's result after the match: a full-width green button. Otherwise the
-   * quiet "Tell the group" beside Leave, so it never competes with the page's one primary (DECIDING rule 1).
-   */
-  share?: { href: string; label: string; strong: boolean } | null;
   /** The organiser: Leave is in Organizer tools, never in the bar (the same decision). */
   organiser?: boolean;
   /**
@@ -215,7 +206,9 @@ export function JoinBar({
     else if (!requestJoin()) setInline(true);
   }, [openJoin, state, step]);
 
-  if (state === "cancelled" || (state === "past" && !share)) return null;
+  // No share here since 25 November 2026 (the owner: "remove the floating whatsapp share, its not good design"):
+  // the page's one share is the Share card in the page (`MatchShare`). So a match that is over has no bar.
+  if (state === "cancelled" || state === "past") return null;
 
   const joinLabel = outOfRange || unverified ? t("level.askToJoin") : state === "join_waitlist" ? t("event.joinWaitlist") : isTournament ? t("event.joinTournament") : t("event.join");
 
@@ -229,18 +222,10 @@ export function JoinBar({
     if (!requestJoin()) setInline(true);
   };
 
-  // The one share: a full-width green button while it is the bar's main job, else the quiet "Tell the group".
-  const shareLink = (full: boolean) =>
-    share ? (
-      <a href={share.href} target="_blank" rel="noopener noreferrer" className={share.strong ? `btn-brand ${WHATSAPP_COLOURS}${full ? " w-full" : " btn-sm"}` : `btn-ghost btn-sm${full ? " w-full" : ""}`} data-testid="tell-group">
-        <WhatsAppIcon /> {share.label}
-      </a>
-    ) : null;
-  const tall = Boolean(share?.strong) && state === "leave";
 
   return (
     <>
-      <div className={tall ? "h-40" : "h-28"} aria-hidden />
+      <div className="h-28" aria-hidden />
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur supports-[backdrop-filter]:bg-bg/80" style={{ boxShadow: "var(--shadow-bar)" }}>
         <div className="mx-auto flex w-full max-w-xl items-center gap-3 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
           {(state === "join" || state === "join_waitlist") && (
@@ -301,8 +286,6 @@ export function JoinBar({
                   {pending ? t("common.working") : joinLabel}
                 </button>
               )}
-              {/* The organiser with no seat of their own still has the one share. */}
-              {share && !inline && shareLink(true)}
               <div className="flex justify-between gap-2 text-xs font-semibold text-muted">
                 {/* A held place of the viewer's own is theirs on a full match too: no spots-left line over it. */}
                 <span>{heldPlace ? null : outOfRange && myLevel != null ? t("level.outOfRange", { level: formatLevel(myLevel), range: rangeText }) : unverified && myLevel != null ? t(rangeWaived === "unverified" ? "levelCheck.gateWaived" : "levelCheck.gate", { level: formatLevel(myLevel) }) : state === "join" ? t("event.spotsLeft", { count: spotsLeft }) : t("event.waitlistHelp")}</span>
@@ -368,23 +351,19 @@ export function JoinBar({
                   ))}
                   {error && <div className="text-xs text-danger">{error}</div>}
                 </div>
-                {!tall && shareLink(false)}
                 {!organiser && (
                   <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={leave}>
                     {t("event.leave")}
                   </button>
                 )}
               </div>
-              {tall && shareLink(true)}
             </div>
           )}
           {state === "member_live" && (
             <>
               <div className="flex-1 text-base font-extrabold text-court">● {t("event.inProgress")}</div>
-              {shareLink(false)}
             </>
           )}
-          {state === "past" && shareLink(true)}
           {state === "leave_waitlist" && (
             <>
               <div className="flex-1">
@@ -406,7 +385,6 @@ export function JoinBar({
           {state === "full" && (
             <>
               <div className="flex-1 text-base font-extrabold text-warn">{t("event.full")}</div>
-              {shareLink(false)}
             </>
           )}
         </div>

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { StudentBooking } from "@/components/coach/StudentBooking";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { Footer, Header } from "@/components/Header";
 import { getDb } from "@/db";
 import { baseUrl } from "@/lib/config";
@@ -223,11 +222,10 @@ async function CoachPublicPage({ params, searchParams }: Props) {
             </Link>
           </p>
         )}
-        <FeedbackInline variant="line" signedInVia={me?.telegramId ? "telegram" : "none"} />
       </main>
-      <Footer />
+      <Footer signedInVia={me?.telegramId ? "telegram" : "none"} />
     </>
   );
 }
 
-export default withClientMessages(["coach.errors", "coach.how", "coach.minutes", "coach.packageLine", "coach.packageLineNoExpiry", "coach.page", "common", "feedback", "identity"], CoachPublicPage);
+export default withClientMessages(["coach.errors", "coach.how", "coach.minutes", "coach.packageLine", "coach.packageLineNoExpiry", "coach.page", "common", "identity"], CoachPublicPage);

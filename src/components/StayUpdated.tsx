@@ -153,7 +153,8 @@ export function StayUpdated({ code, member, invited, byName = false, request = f
   return (
     <div ref={box} className="mt-4 scroll-mt-4 border-t border-line pt-4" data-testid="stay-updated">
       <div className="font-bold">{t("calendar.stayTitle")}</div>
-      <p className="mt-0.5 text-sm text-muted">{t(request ? "calendar.stayHelpRequest" : "calendar.stayHelp")}</p>
+      {/* A seat needs no sentence under the title: the buttons name the places. A request says where its answer goes. */}
+      {request && <p className="mt-0.5 text-sm text-muted">{t("calendar.stayHelpRequest")}</p>}
       {chats.length > 0 && (
         <div className={`mt-3 grid gap-2 ${chats.length + (emailChoice ? 1 : 0) === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
           {chats.map((c) => (

@@ -34,10 +34,9 @@ export function SameTimeButton({ code, when }: { code: string; when: string }) {
   return (
     <div className="flex flex-col gap-1">
       <button type="button" className="btn-ghost w-full whitespace-normal text-center leading-tight" disabled={pending} data-testid="same-time" onClick={() => { setError(null); start(async () => { const r = await createGroupFromEventAction(code, undefined, true); if (r.ok) setDone({ code: r.data.code, name: r.data.name, created: r.data.created }); else setError(tr(`errors.${errorLine(r.error)}`)); }); }}>
-        {pending ? "…" : `🔁 ${t("makeWeekly")}`}
+        {pending ? "…" : t("makeWeekly")}
       </button>
       {error && <p className="text-center text-sm font-semibold text-danger">{error}</p>}
-      <p className="text-center text-xs text-faint">{t("sameTimeHelp")}</p>
     </div>
   );
 }

@@ -1637,6 +1637,18 @@ Everything in this list is live. The README describes each in detail.
   match's activity. The score's pairs offer held places, and a saved pair seats them. A change after
   the organiser's score keeps the pairs and moves the levels again. The rows show the controls once
   the match is over. Proven in `tests/lineup-fix.test.ts` and the browser suite core. No migration.
+- **A calmer match page, and one feedback button on every screen** (the owner, 25 November 2026, on two
+  players' notes: "remove the floating whatsapp share, its not good design" and "its like a newspaper!").
+  The WhatsApp share left the bar at the foot of the screen. It is now one card in the page: the WhatsApp
+  button, and "Other ways to share" under it. The bar keeps Join, Leave and the waiting list. Help sentences
+  that a control already says went from the match page: the relative start time, "Padel match" beside the
+  title, the court question's sentence, the "Stay updated" sentence, the reminder's, the group's, the photo's,
+  "Play again"'s and "Make it weekly"'s lines, and the two lines of the film card. Organizer tools keep paste,
+  edit and cancel open; the email switch, banter, "Give up my place" and the organizer link are behind one
+  "More" row. After the match, the time is one line, so the reel and the result lead. "Remove" is red words at
+  the end of a player's row. The footer's small "Feedback" link and the ten inline doors became one grey
+  button at full width in every footer, "Tell us what should change", which opens the form in place. No
+  function went, and no migration. Proven in the browser suites core, viral, seo and player-states.
 
 ## The finish line
 

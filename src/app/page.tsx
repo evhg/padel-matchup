@@ -3,7 +3,6 @@ import { localeAlternates } from "@/lib/seo";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { CreateScreen } from "@/components/CreateScreen";
-import { FeedbackInline } from "@/components/FeedbackInline";
 import { PasteBooking } from "@/components/PasteBooking";
 import { PASTE_TEXT_MAX } from "@/lib/domain/bookingPaste";
 import { screenshotOffered } from "@/lib/booking/screenshot";
@@ -83,12 +82,11 @@ async function Home({ searchParams }: { searchParams: Promise<{ type?: string; c
           </div>
         </section>
         <section className="mt-8">
-          <FeedbackInline variant="line" signedInVia="none" help={t("landing.feedbackHelp")} />
         </section>
       </main>
-      <Footer spacious />
+      <Footer spacious note={t("landing.feedbackHelp")} />
     </>
   );
 }
 
-export default withClientMessages(["common", "create", "errors", "event", "feedback", "identity", "landing", "level", "levelCheck", "pairs", "share", "telegram", "venue"], Home);
+export default withClientMessages(["common", "create", "errors", "event", "identity", "landing", "level", "levelCheck", "pairs", "share", "telegram", "venue"], Home);

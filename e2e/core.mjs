@@ -1,6 +1,6 @@
 // Core journeys on a fresh local server (see e2e/run.mjs): join, waitlist, invites,
 // calendar, personal links, cancellation, about/unsubscribe/delete-account.
-import { BASE, BASE_RE, openMore, openOtherShares, openSettings, crashed, finish, iphone, launch, makeCheck, rawKeysOn, resendEvent, shot, switchLang } from "./lib.mjs";
+import { BASE, BASE_RE, openMore, openOrganiserMore, openOtherShares, openSettings, crashed, finish, iphone, launch, makeCheck, rawKeysOn, resendEvent, shot, switchLang } from "./lib.mjs";
 
 const browser = await launch();
 const results = [];
@@ -70,26 +70,25 @@ try {
   await a.getByRole("button", { name: "Send code" }).click();
   await a.getByText(/We don't know that email yet/).waitFor({ timeout: 20000 });
   check("the landing page's way back in answers when it is used", (await a.getByText(/We don't know that email yet/).count()) === 1);
-  // The footer had one link until 19 November 2026. The owner then asked for a feedback door on every screen:
-  // about forty screens had none, and the footer is what they share. So it has two links now, and the second
-  // one has the short name, so the landing page still has one button named "Tell us what should change".
+  // The footer had a small "Feedback" link from 19 November 2026 (the owner: a feedback door on every screen).
+  // On 25 November 2026 the owner asked for the match page's door instead, "larger and a call to action button
+  // but work the same": one grey button at full width in every footer, which opens the form in place.
   check(
-    "footer carries the privacy link and the feedback door, and nothing else",
-    (await a.locator("footer a").count()) === 2 &&
+    "footer carries the feedback button and the privacy link, and nothing else",
+    (await a.locator("footer a").count()) === 1 &&
       (await a.locator("footer a").first().getAttribute("href")) === "/privacy" &&
       (await a.locator("footer a").first().textContent())?.trim() === "Privacy and terms" &&
-      (await a.getByTestId("footer-feedback").getAttribute("href")) === "/feedback?from=%2F" &&
-      /Feedback/.test((await a.getByTestId("footer-feedback").textContent()) ?? ""),
+      (await a.locator("footer").getByRole("button", { name: "Tell us what should change", exact: true }).count()) === 1 &&
+      (await a.getByTestId("footer-feedback").count()) === 0,
   );
-  // A screen that never had the door (the clubs) gets it from the footer, and the form opens from there.
+  // A screen that never had the door (the clubs) gets it from the footer, and the form opens there, in place.
   const fd = await newPage();
   await fd.goto(BASE + "/clubs");
-  check("a screen that had no feedback door has one in its footer", (await fd.getByTestId("footer-feedback").count()) === 1);
-  await fd.getByTestId("footer-feedback").click();
+  check("a screen that had no feedback door has the button in its footer", (await fd.getByTestId("feedback-cta").getByRole("button", { name: "Tell us what should change" }).count()) === 1);
+  await fd.getByTestId("feedback-cta").getByRole("button", { name: "Tell us what should change" }).click();
   await fd.locator("#feedback-text").waitFor({ timeout: 20000 });
-  check("the footer's feedback door opens the form and names the screen", new URL(fd.url()).pathname === "/feedback" && new URL(fd.url()).searchParams.get("from") === "/clubs", fd.url());
-  // The note keeps the screen the player was on. A link inside the app loads no new document, so the browser's
-  // referrer still names the page the visit began on: the door sends the screen itself, and the row proves it.
+  check("the footer's button opens the form in place, on the same screen", new URL(fd.url()).pathname === "/clubs", fd.url());
+  // The note keeps the screen the player was on: the form sends the path it was opened on, and the row proves it.
   await fd.locator("#feedback-text").fill("e2e: the list of clubs should show the price of a court");
   // A screenshot goes with the note: the phone makes it a small JPEG first, and the form shows it.
   await fd.getByTestId("feedback-shot-file").setInputFiles(new URL("../public/built/score-every-box.png", import.meta.url).pathname);
@@ -204,8 +203,8 @@ try {
   await a.getByTestId("text-size-switch").click();
   check("switched off on My matches, the text is back to 16px", (await rootSize()) === "16px");
   check("/me lists PLAY", (await a.content()).includes('href="/PLAY"'));
-  // The feedback card is the app saying what it is, not a suggestion box at the foot of the page.
-  check("the feedback card says the app is built by the players on it", (await a.getByText(/built by the players on it/).count()) === 1);
+  // My matches' card "built by the players on it" went on 25 November 2026: the footer's button is the one door.
+  check("My matches has one feedback door, the button in its footer", (await a.getByRole("button", { name: /Tell us what should change/ }).count()) === 1 && (await a.locator("footer").getByRole("button", { name: /Tell us what should change/ }).count()) === 1);
   // And it claims no number until three have shipped: on a fresh database that is none at all.
   check("no count is claimed before three ideas have shipped", (await a.getByTestId("feedback-shipped").count()) === 0);
 
@@ -318,8 +317,9 @@ try {
   await noRawKeys(a, "the match page, as its organiser");
   check("creator sees organizer tools", (await a.getByText("Organizer tools").count()) > 0);
   check("event page shows venue with court", (await a.getByText("Club Padel Test · Court 3").count()) > 0);
-  // A match under way says when it started: "Starts 1 hour ago" read as a start still to come.
-  check("a match under way says \"Started 1 hour ago\", never \"Starts … ago\"", (await a.getByText(/ · Started 1 hour ago$/).count()) === 1 && (await a.getByText(/Starts .* ago/).count()) === 0);
+  // A match under way says so in its chip. "Started 1 hour ago" under the day went on 25 November 2026 (the owner:
+  // "too much text!"); "Starts 1 hour ago" had once read as a start still to come, so neither line is back.
+  check("a match under way says \"Happening now\" in its chip, and no line of \"Started … ago\" or \"Starts … ago\"", (await a.getByText("Happening now", { exact: true }).count()) === 1 && (await a.getByText(/Start(s|ed) .* ago/).count()) === 0);
   check("no Play again before a score", (await a.getByRole("button", { name: /Play again/ }).count()) === 0);
   // The moment somebody is in, the card asks where they will hear about it. This run has a bot and email and no WhatsApp number.
   const stay = a.getByTestId("stay-updated");
@@ -331,6 +331,8 @@ try {
   await a.getByText(/Calendar invite sent to dana@example.com/).waitFor({ timeout: 20000 });
   // The organiser's tools carry a second switch (banter), so the email row's is named by what it is not;
   // and the header's ⋯ menu carries "Bigger text", so the search stays inside the page's own content.
+  // Both switches are behind Organizer tools' "More" since 25 November 2026.
+  await openOrganiserMore(a);
   const emailSwitch = a.locator('main [role="switch"]:not([data-testid="banter-switch"])');
   await emailSwitch.waitFor({ timeout: 20000 });
   check("after entering an email: one quiet line says where updates go, the invite line + email row with notifications switch, the question gone", (await a.getByText("Stay updated").count()) === 0 && (await stay.getByText("Updates reach you by email ✓").count()) === 1 && (await a.getByText("dana@example.com").count()) >= 2 && (await emailSwitch.getAttribute("aria-checked")) === "true");
@@ -411,12 +413,13 @@ try {
   // messages one at a time, because the personal link opened after each hold. Under the line-up, one
   // message with the plain match link names every held player who can take the place from it.
   check("after the hold nothing opens by itself: no \"Send them their personal link\"", (await a.getByText("Send them their personal link").count()) === 0);
-  // Since 9 November 2026 that message is the bar's one share (the owner: "Bottom bar"), and the line-up says whom it asks.
+  // Since 9 November 2026 that message is the page's one share, and the line-up says whom it asks. The share left the
+  // bar at the foot of the screen for a card in the page on 25 November 2026 (the owner: "not good design").
   const heldMessage = a.getByTestId("held-message");
   await heldMessage.waitFor({ timeout: 10000 });
   const heldMessageHref = decodeURIComponent((await a.getByTestId("tell-group").getAttribute("href")) ?? "");
   check(
-    "under the line-up, \"The WhatsApp message in the bar asks Jordi…\": the bar's share carries the plain match link tagged ?s=wa, \"tap your name\", and no personal link",
+    "under the line-up, \"The WhatsApp message below asks Jordi…\": the share carries the plain match link tagged ?s=wa, \"tap your name\", and no personal link",
     ((await heldMessage.textContent()) ?? "").includes("asks Jordi to open the link and tap their name") && heldMessageHref.includes(`/${code}?s=wa`) && heldMessageHref.includes("tap your name") && !heldMessageHref.includes("/i/") && (await heldMessage.locator("a, button").count()) === 0,
     heldMessageHref,
   );
@@ -916,7 +919,8 @@ try {
   const nextDefault = await a.getByTestId("play-again-when").inputValue();
   check(
     "after the score, Play again names the organiser's next game at the club and defaults to its day and time",
-    nextLine.startsWith("Next game:") && nextLine.endsWith(`· ${code2}`) && nextDefault === `${sg("year")}-${sg("month")}-${sg("day")}T11:30` && (await a.getByText("At that day and time, a tap opens that game.", { exact: false }).count()) === 1,
+    // "At that day and time, a tap opens that game." under the button went on 25 November 2026: the line names the game.
+    nextLine.startsWith("Next game:") && nextLine.endsWith(`· ${code2}`) && nextDefault === `${sg("year")}-${sg("month")}-${sg("day")}T11:30` && (await a.getByText("At that day and time, a tap opens that game.", { exact: false }).count()) === 0,
     JSON.stringify({ nextLine, nextDefault }),
   );
   await shot(a, "11-score-locked");
@@ -996,6 +1000,7 @@ try {
   check("/me: personal link card emails the link (no WhatsApp)", (await a.locator('a[href^="https://wa.me"]').count()) === 0 && (await a.getByRole("button", { name: /Email me this link/ }).count()) > 0);
   // Email can be changed but not removed
   await a.goto(`${BASE}/${code}`);
+  await openOrganiserMore(a); // Dana organises this match: her email row is behind Organizer tools' "More"
   await a.getByRole("button", { name: "Edit", exact: true }).first().click();
   const emailBox = a.locator('input[type="email"]').first();
   await emailBox.fill("");
@@ -1548,22 +1553,22 @@ try {
   await sofia.getByRole("button", { name: "Done", exact: true }).click();
   await sofia.getByText("Reserved for Alex", { exact: true }).waitFor({ timeout: 20000 });
   // Alex organises PLAY, so "That's me" refuses him, and he has no door of his own: his personal link only.
-  // Since 9 November 2026 the one message is the bar's one share (the owner: "Bottom bar"), and the line-up
+  // Since 9 November 2026 the one message is the page's one share (a card in the page since 25 November 2026), and the line-up
   // says in words whom it asks and whom it leaves out; no box, no second WhatsApp, no "Send all invites".
   const msg6 = sofia.getByTestId("held-message");
   await msg6.waitFor({ timeout: 10000 });
   const href6 = decodeURIComponent((await sofia.getByTestId("tell-group").getAttribute("href")) ?? "");
   const not6 = ((await msg6.getByTestId("held-message-not").textContent().catch(() => "")) ?? "").trim();
   check(
-    "the line-up says the bar's WhatsApp asks Maria and Jordi, and names Alex as one person; the bar's link has both names, the plain match link tagged ?s=wa, and no personal link",
-    ((await msg6.textContent()) ?? "").includes("The WhatsApp message in the bar asks Maria and Jordi to open the link and tap their name.") && not6 === "Not in this message: Alex. Send them their personal link from their row." && href6.includes("Maria and Jordi") && href6.includes(`/${code6}?s=wa`) && !href6.includes("/i/"),
+    "the line-up says the WhatsApp message asks Maria and Jordi, and names Alex as one person; the share's link has both names, the plain match link tagged ?s=wa, and no personal link",
+    ((await msg6.textContent()) ?? "").includes("The WhatsApp message below asks Maria and Jordi to open the link and tap their name.") && not6 === "Not in this message: Alex. Send them their personal link from their row." && href6.includes("Maria and Jordi") && href6.includes(`/${code6}?s=wa`) && !href6.includes("/i/"),
     `${not6} | ${href6}`,
   );
   check("the organiser sees no \"I'm …\" on any held row", (await sofia.getByTestId("held-row").count()) === 0);
   await msg6.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await viewShot(sofia, "12n-held-message");
   check(
-    "one WhatsApp link on the organiser's page, the bar's: no \"Send all invites in one message\", no \"Copy this message\", and the held rows keep \"Invite now\"",
+    "one WhatsApp link on the organiser's page, the share card's: no \"Send all invites in one message\", no \"Copy this message\", and the held rows keep \"Invite now\"",
     (await sofia.locator('main a[href^="https://wa.me"], a[data-testid="tell-group"]').count()) === 1 && (await sofia.getByText("Send all invites in one message").count()) === 0 && (await sofia.getByRole("button", { name: "Copy this message" }).count()) === 0 && (await sofia.locator("main li").getByRole("button", { name: "Invite now", exact: true }).count()) === 3,
   );
   // Telegram and Copy link send the same message from "Other ways to share".
@@ -1638,8 +1643,8 @@ try {
   await crew.close();
   await sofia.goto(`${BASE}/${code6}`);
   const msgAfter = ((await sofia.getByTestId("held-message").locator("p").first().textContent().catch(() => "")) ?? "").trim();
-  check("the line-up now says the bar's message asks Maria alone", msgAfter === "The WhatsApp message in the bar asks Maria to open the link and tap their name.", msgAfter);
-  check("and the bar's message names Maria alone", decodeURIComponent((await sofia.getByTestId("tell-group").getAttribute("href")) ?? "").includes("I'm holding a place for Maria."));
+  check("the line-up now says the message asks Maria alone", msgAfter === "The WhatsApp message below asks Maria to open the link and tap their name.", msgAfter);
+  check("and the share's message names Maria alone", decodeURIComponent((await sofia.getByTestId("tell-group").getAttribute("href")) ?? "").includes("I'm holding a place for Maria."));
   // The same in Russian.
   await sofia.context().addCookies([{ name: "NEXT_LOCALE", value: "ru", url: BASE }]);
   await sofia.reload();

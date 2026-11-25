@@ -784,6 +784,15 @@ Wall clock first, credits second. What actually moved it, measured:
   died with `Cannot read properties of undefined (reading 'length')` while typecheck, lint and unit
   passed. `.git/info/exclude` hides them from git and from nothing else. Take the commits out
   (`git merge --squash wf/<branch>`), then `git worktree remove --force` every one, before the gate.
+- **Inside a worktree, `pnpm lint` read two configs until `.eslintrc.json` said `"root": true`.** ESLint climbs
+  from `.claude/worktrees/<agent>` to the parent checkout's `.eslintrc.json`, finds `@next/next` twice and
+  stops with "Plugin "@next/next" was conflicted", so the gate's lint step failed in every worktree while the
+  code was clean (25 November 2026). The build only warns about it. `"root": true` stops the climb, and it
+  changes nothing in a plain checkout, where the file is the top one anyway.
+- **A client component on every page takes its words as props.** `tests/client-messages.test.ts` allows two
+  message providers, and a page hands the browser only the namespaces it names, so a translating component
+  in the footer would have put "feedback" on fifty lists. The footer's button gets its words from the server
+  (`feedbackLabels`), and the form reads them from `labels` (25 November 2026).
 - **Inside a worktree, `check-bundle` reports the worktree, not the change.** A build in
   `.claude/worktrees/<agent>` with `node_modules` linked from the parent succeeded, and
   `scripts/check-bundle.mjs` then found the 18 MB test database in all 131 routes, `/me` included,

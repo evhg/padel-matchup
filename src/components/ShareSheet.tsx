@@ -156,51 +156,55 @@ export function NativeShare({ url, text, image, className = "btn-ghost btn-sm" }
 }
 
 /**
- * "Other ways to share" (the owner, 9 November 2026: "Telegram, Copy, QR and the story image go under one
- * 'Other ways to share' line"). The one WhatsApp share lives in the bottom bar for the organiser and every
- * seated player; this fold is one line in the page that opens the rest, with the same message. A viewer
- * the bar gives no share (nobody seated, or a match over) gets WhatsApp here too (`whatsapp`), so the
- * page always has one way to send the link. `story` is the 9:16 picture's address; `extra` is the
- * WhatsApp hand-off line where a number is set.
+ * The match's one share, in the page (the owner, 25 November 2026: "remove the floating whatsapp share, its not
+ * good design"; it was a WhatsApp button in the bar at the foot of the screen since 9 November). One card: the
+ * WhatsApp button with the message that fits the state (`shareMessage`), and one row under it, "Other ways to
+ * share", that opens Telegram, Copy link, the phone's own sheet, the QR code and the story image with the same
+ * message. `strong` paints the button in WhatsApp's green while sharing is the viewer's main job (open or held
+ * places for the organiser, the result for a player); otherwise it is a grey button, so it never stands beside
+ * the page's lime one as a second loud colour. `story` is the 9:16 picture's address; `extra` is the WhatsApp
+ * hand-off line where a number is set.
  */
-export function OtherShares({ url, text, story = null, whatsapp = false, image, extra = null }: { url: string; text: string; story?: string | null; whatsapp?: boolean; /** The result card's picture, for the phone's own share sheet. */ image?: string; extra?: ReactNode }) {
+export function MatchShare({ url, text, label, strong = false, story = null, image, extra = null }: { url: string; text: string; label: string; strong?: boolean; story?: string | null; /** The result card's picture, for the phone's own share sheet. */ image?: string; extra?: ReactNode }) {
   const t = useTranslations();
+  const href = whatsappShareUrl(tagForWhatsapp(text, url));
   return (
-    <details className="card group" data-testid="other-shares">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-        <span className="min-w-0">
-          <span className="block font-bold">{t("share.otherWays")}</span>
-          <span className="block truncate text-xs text-muted">{t(story ? "share.otherWaysSummary" : "share.otherWaysSummaryShort")}</span>
-        </span>
-        <span className="shrink-0 text-faint transition group-open:rotate-180" aria-hidden>
-          ⌄
-        </span>
-      </summary>
-      <div className="mt-4 flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-2">
-          {whatsapp && <WhatsAppShare url={url} text={text} className=" btn-sm col-span-2" />}
-          {/* The link once: as the share's own address, never again inside the text (`telegramShareFor`). */}
-          <a href={telegramShareFor(url, text)} target="_blank" rel="noopener noreferrer" className={`btn-brand btn-sm ${TELEGRAM_COLOURS}`}>
-            <TelegramIcon /> {t("share.telegram")}
-          </a>
-          <CopyButton value={copiedValue(url, text, "link")} label={t("share.copyLink")} className="btn-ghost btn-sm" />
-          <NativeShare url={url} text={text} image={image} className="btn-ghost btn-sm col-span-2" />
-        </div>
-        <QrFold url={url} label={t("share.qrHint")} />
-        {story && (
-          <div>
-            <div className="text-sm font-bold">{t("share.story")}</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <a href={story} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
-                {t("share.storyOpen")}
-              </a>
-              <CopyButton value={tagMatchUrl(url, "ig")} label={t("share.storyCopy")} className="btn-ghost btn-sm" />
-            </div>
+    <section className="card" data-testid="match-share">
+      <a href={href} target="_blank" rel="noopener noreferrer" className={strong ? `btn-brand w-full ${WHATSAPP_COLOURS}` : "btn-secondary w-full"} data-testid="tell-group">
+        <WhatsAppIcon /> {label}
+      </a>
+      <details className="group mt-3 border-t border-line pt-1" data-testid="other-shares">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3">
+          <span className="text-[0.9375rem]">{t("share.otherWays")}</span>
+          <span className="shrink-0 text-faint transition group-open:rotate-90" aria-hidden>
+            ›
+          </span>
+        </summary>
+        <div className="mt-2 flex flex-col gap-4 pb-1">
+          <div className="grid grid-cols-2 gap-2">
+            {/* The link once: as the share's own address, never again inside the text (`telegramShareFor`). */}
+            <a href={telegramShareFor(url, text)} target="_blank" rel="noopener noreferrer" className={`btn-brand btn-sm ${TELEGRAM_COLOURS}`}>
+              <TelegramIcon /> {t("share.telegram")}
+            </a>
+            <CopyButton value={copiedValue(url, text, "link")} label={t("share.copyLink")} className="btn-ghost btn-sm" />
+            <NativeShare url={url} text={text} image={image} className="btn-ghost btn-sm col-span-2" />
           </div>
-        )}
-        {extra}
-      </div>
-    </details>
+          <QrFold url={url} label={t("share.qrHint")} />
+          {story && (
+            <div>
+              <div className="text-sm font-bold">{t("share.story")}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <a href={story} target="_blank" rel="noopener noreferrer" className="btn-ghost btn-sm">
+                  {t("share.storyOpen")}
+                </a>
+                <CopyButton value={tagMatchUrl(url, "ig")} label={t("share.storyCopy")} className="btn-ghost btn-sm" />
+              </div>
+            </div>
+          )}
+          {extra}
+        </div>
+      </details>
+    </section>
   );
 }
 
