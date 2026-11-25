@@ -315,6 +315,23 @@ export async function setMatchReel(db: Db, input: { code: string; host: unknown;
   return { eventId: ev.id, replaced: Boolean(old), first: !old?.readyAt };
 }
 
+/**
+ * The reel's maker says it could not make the reel (`scripts/highlights/modal/fastreel.py`, any step that fails). The
+ * row goes to "failed": the page offers to send the video again with one plain line, and the bar no longer waits for
+ * a reel that will not come (25 November 2026: the first real start failed, and the page waited for ever). A reel
+ * that already plays is not taken off by a failed new try. Answers whether the row changed.
+ */
+export async function setReelFailed(db: Db, code: string): Promise<boolean> {
+  const [ev] = await db.select({ id: events.id }).from(events).where(eq(events.code, code)).limit(1);
+  if (!ev) throw new DomainError("not_found");
+  const done = await db
+    .update(matchReels)
+    .set({ status: "failed" satisfies ReelStatus, note: null })
+    .where(and(eq(matchReels.eventId, ev.id), inArray(matchReels.status, ["received", "working"])))
+    .returning({ id: matchReels.id });
+  return done.length > 0;
+}
+
 /** The operator takes a reel off the match page. The files stay on the store until their days end. */
 export async function removeMatchReel(db: Db, code: string): Promise<boolean> {
   const [ev] = await db.select({ id: events.id }).from(events).where(eq(events.code, code)).limit(1);

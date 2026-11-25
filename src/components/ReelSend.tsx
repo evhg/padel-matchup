@@ -7,6 +7,7 @@ import { askReelUploadAction, setReelLinkAction } from "@/actions/reel";
 import { errorLine } from "@/lib/errorLine";
 import { FastError, fastCut, type FilmTimes } from "./reelFast";
 import { ReelChoicesCard } from "./ReelChoices";
+import { AutoRefresh } from "./tournament/AutoRefresh";
 import type { ReelChoices } from "@/lib/domain/reelChoices";
 
 /** One part of the film. The reel host takes 64 MB a part and 150 seconds a request; 32 MB is 26 s on a line of 10 Mbit/s. */
@@ -50,6 +51,7 @@ export function ReelSend({
   failed,
   teams,
   musicBase,
+  auto,
 }: {
   code: string;
   /** Somebody began an upload that is not finished. */ started: boolean;
@@ -57,6 +59,7 @@ export function ReelSend({
   failed: boolean;
   /** The two pairs as the page names them: the reel's team names until the player changes them. */ teams: [string, string];
   /** The reel host, for ten seconds of each track. */ musicBase: string | null;
+  /** The fast reel's job starts by itself for this match (two pairs of two). */ auto: boolean;
 }) {
   const t = useTranslations("reel");
   const tr = useTranslations();
@@ -229,7 +232,9 @@ export function ReelSend({
     return (
       <section className="card" data-testid="reel-here">
         <h2 className="text-lg font-extrabold">{t("hereTitle")}</h2>
-        <p className="mt-1 text-sm text-muted">{t(phase.way === "clips" ? "hereClipsBody" : "hereBody")}</p>
+        <p className="mt-1 text-sm text-muted">{t(phase.way === "clips" ? (auto ? "hereClipsAutoBody" : "hereClipsBody") : "hereBody")}</p>
+        {/* The reel host joins the parts, then the job's first report turns this card into the bar. */}
+        <AutoRefresh seconds={20} />
       </section>
     );
 

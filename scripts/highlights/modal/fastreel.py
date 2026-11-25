@@ -10,6 +10,7 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
   {"upload": "<upload token>",                       the clips are uploads/<token>/video.<ext> (or "video": a path on the store)
    "matches": [{"code": "AB12", "title_a": "Ana & Bo", "title_b": "Cy & Di", "score": "6-3 6-2",
                 "players": [{"id": "<player id>", "name": "Ana", "team": 1, "sex": "m"}, ... four]}, ...],
+                (team: 1 and 2, 0 and 1, or "a" and "b"; `teams_from_zero` makes them 0 and 1, the engine's count)
    "music": "bounce"?,                                 the track when the player wrote no choices.json
    "place": "<camera place>"?, "court": {court.json}?, "venue": ""?, "grade": "glass"?}
 
@@ -34,7 +35,7 @@ Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report
   finish   1080p wide.mp4 and tall.mp4, versus.jpg (1200x630) and poster.jpg (720 wide, tall), under reels/<new token>/; then
            POST {code, host, token} for each match of the upload
   Each progress POST is {code, progress: {pct, minutesLeft, step}}; while the job waits for names it adds
-  "waiting": "names" to progress.
+  "waiting": "names" to progress. A step that fails posts {code, failed: "<the error>"} for each match.
 
 Names. When who.py is not sure of a name, it writes names.json and one face picture for each track to
 reels/<upload token>/ (the token the app already keeps for this upload; the reel host serves /r/<token>/names.json and
@@ -387,6 +388,9 @@ class Report:
         except Exception as e:      # a progress line that does not arrive stops nothing
             return f'failed: {str(e)[:120]}'
 
+    def fail(self, why):
+        for m in self.req.get('matches', []): self.post({'code': m['code'], 'failed': why})
+
     def step(self, step, waiting=None):
         pct = DONE[step]; spent = (time.time() - self.t0) / 60
         left = 0 if waiting or pct >= 100 else max(1, round(max(self.total - spent, spent * (100 - pct) / max(pct, 1))))
@@ -398,11 +402,34 @@ class Report:
         print(f'STEP {step} {pct}% after {spent:.1f} min', flush=True)
 
 
+def teams_from_zero(req):
+    """The engine counts the two teams 0 and 1. Kicksmash sends 1 and 2 (`fastReelStart`), a person may write "a" and
+    "b": each becomes 0 and 1, in place. On 25 November 2026 the first real start sent 1 and 2, team 0 was empty, and
+    the opening and the tracker failed. Pure but for the change in place."""
+    for m in req.get('matches', []):
+        seen = sorted({str(p.get('team')).lower() for p in m.get('players', [])})
+        to = {seen[0]: 0, seen[1]: 1} if len(seen) == 2 else {}
+        for p in m.get('players', []): p['team'] = to.get(str(p.get('team')).lower(), p.get('team'))
+    return req
+
+
 @app.function(image=image, volumes={'/vol': vol}, secrets=SECRETS, cpu=1, memory=2048, timeout=3600)
 def make(req):
+    """The whole fast reel (`run_make`). A step that fails tells Kicksmash, for each match of the upload, before the
+    error goes on: the page then says the reel did not work, and the note desk looks at why (25 November 2026: the
+    first real start failed, and the page waited for a reel that never came)."""
+    try:
+        return run_make(req)
+    except Exception as e:
+        Report(req, 0).fail(f'{type(e).__name__}: {str(e)[-240:]}')
+        raise
+
+
+def run_make(req):
     """The whole fast reel. Each step skips what is already on the store, so `resume` goes on where it stopped."""
     t0 = time.time(); vol.reload(); P = paths(req); W = P['W']; M = f'{W}/match'; os.makedirs(M, exist_ok=True)
     if not P['video'] or not os.path.exists(P['video']): raise RuntimeError('no clips for this request')
+    teams_from_zero(req)
     json.dump(req, open(f'{W}/request.json', 'w')); vol.commit()
     clock = {}; R = Report(req, 25)
     CH = choices_of(P, req); clock['choices_start'] = CH

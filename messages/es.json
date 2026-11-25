@@ -3019,6 +3019,7 @@
     "downloadWide": "Descargar la versión ancha",
     "pageTitle": "El vídeo",
     "linkCopied": "Enlace copiado",
-    "linkCopyPrompt": "Copia el enlace del vídeo"
+    "linkCopyPrompt": "Copia el enlace del vídeo",
+    "hereClipsAutoBody": "Los clips están aquí. El vídeo empieza solo en un minuto, y esta página muestra cuánto falta. Los cuatro jugadores reciben un mensaje cuando esté listo."
   }
 }

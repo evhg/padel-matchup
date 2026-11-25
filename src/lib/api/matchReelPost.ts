@@ -4,7 +4,9 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { events } from "@/db/schema";
 import { DomainError } from "@/lib/domain/errors";
-import { setMatchReel, setReelProgress } from "@/lib/domain/matchReel";
+import { setMatchReel, setReelFailed, setReelProgress } from "@/lib/domain/matchReel";
+import { wakeNoteDesk } from "@/lib/feedback/desk";
+import { later } from "@/lib/alerts";
 import { notifyReelReady } from "@/lib/notify";
 
 /**
@@ -15,6 +17,14 @@ export async function postMatchReel(body: Record<string, unknown> | null): Promi
   const code = typeof body?.code === "string" ? body.code : "";
   try {
     const db = await getDb();
+    // The maker could not make the reel: the page says so, and a session looks at why (the note desk).
+    if (typeof body?.failed === "string") {
+      const changed = await setReelFailed(db, code);
+      revalidatePath(`/${code}`);
+      const why = body.failed.replace(/[\u0000-\u001f]+/g, " ").slice(0, 300);
+      if (changed) await later(() => wakeNoteDesk(db, `the reel of ${code} failed on the reel host (${why}); find why, fix it, and start it again`));
+      return NextResponse.json({ ok: true, failed: changed });
+    }
     if (body?.progress && typeof body.progress === "object") {
       const p = body.progress as Record<string, unknown>;
       await setReelProgress(db, { code, pct: p.pct, minutesLeft: p.minutesLeft, step: p.step, waiting: p.waiting, host: p.host, upload: p.upload });
