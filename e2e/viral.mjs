@@ -382,8 +382,8 @@ try {
   // "Make a new reel" (the owner, 26 November 2026: "Erik will redo the reel"): folded under a reel that plays, for
   // the match's own people; opened, it holds the two ways to send the video, and the reel still plays above it.
   const againDoor = p.getByTestId("reel-again");
-  const againShut = (await againDoor.count()) === 1 && (await againDoor.evaluate((el) => !el.open)) && (await againDoor.locator("summary").innerText()) === "Make a new reel";
-  await againDoor.locator("summary").click();
+  const againShut = (await againDoor.count()) === 1 && (await againDoor.evaluate((el) => !el.open)) && (await againDoor.locator(":scope > summary").innerText()) === "Make a new reel";
+  await againDoor.locator(":scope > summary").click();
   await againDoor.getByTestId("reel-send").waitFor({ timeout: 20000 });
   check(
     "a player of the match finds Make a new reel folded under the reel, and opened it offers both ways while the reel still plays",
