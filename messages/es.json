@@ -2939,7 +2939,10 @@
     "agreeLead": "By posting, you agree to TikTok's",
     "agreeAnd": "and",
     "musicPolicy": "Music Usage Confirmation",
-    "brandedPolicy": "Branded Content Policy"
+    "brandedPolicy": "Branded Content Policy",
+    "inTest": "Compartir en TikTok está en pruebas. Por ahora funciona con cuentas invitadas que son privadas.",
+    "oldReel": "Este vídeo se hizo antes de poder compartir en TikTok, así que no se puede publicar en TikTok. Haz el vídeo de nuevo y comparte el nuevo.",
+    "reelDown": "El vídeo no carga ahora. Inténtalo de nuevo en unos minutos."
   },
   "reel": {
     "title": "El reel de este partido",

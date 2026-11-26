@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { commercialLabel, formRules, initialForm, notReady, PRIVATE, STATUS_EVERY_MS, STATUS_STOP_MS, TITLE_MAX, type Creator, type PostForm, type TikTokError } from "@/lib/domain/tiktok";
+import { commercialLabel, formRules, initialForm, notAllowedYet, notReady, PRIVATE, STATUS_EVERY_MS, STATUS_STOP_MS, TITLE_MAX, type Creator, type PostForm, type TikTokError } from "@/lib/domain/tiktok";
 
 const MUSIC_URL = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
 const BRANDED_URL = "https://www.tiktok.com/legal/page/global/bc-policy/en";
@@ -39,6 +39,10 @@ export function TikTokPost({ code, creator, video, poster, title }: { code: stri
   const why = notReady(creator, form, duration);
   const label = commercialLabel(form);
   const set = (patch: Partial<PostForm>) => setForm((f) => ({ ...f, ...patch }));
+  // A refusal in one line: an account TikTok does not let in yet, and a reel with no public version, in our words;
+  // anything else in TikTok's own words.
+  const refusalLine = (e: TikTokError) =>
+    notAllowedYet(e.code) ? t("inTest") : e.code === "old_reel" ? t("oldReel") : e.code === "reel_unavailable" ? t("reelDown") : t("refused", { message: e.message || e.code });
   // Each privacy level TikTok knows in words; a level TikTok adds later shows TikTok's own word.
   const privacyName = (o: string) =>
     o === "PUBLIC_TO_EVERYONE" ? t("privacyEveryone") : o === "MUTUAL_FOLLOW_FRIENDS" ? t("privacyFriends") : o === "FOLLOWER_OF_CREATOR" ? t("privacyFollowers") : o === PRIVATE ? t("privacyOnlyMe") : o;
@@ -112,7 +116,7 @@ export function TikTokPost({ code, creator, video, poster, title }: { code: stri
   const preview = <video className="mx-auto block aspect-[9/16] max-h-[60vh] max-w-full rounded-2xl bg-night object-cover" controls playsInline preload="metadata" poster={poster} src={video} onLoadedMetadata={(e) => setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : null)} data-testid="tiktok-preview" />;
 
   if (phase.at === "status") {
-    const line = phase.state === "done" ? t("statusDone") : phase.state === "failed" ? t("statusFailed", { reason: phase.reason ?? "" }) : phase.state === "stopped" ? t("statusStopped") : t("statusWorking");
+    const line = phase.state === "done" ? t("statusDone") : phase.state === "failed" ? (notAllowedYet(phase.reason) ? t("inTest") : t("statusFailed", { reason: phase.reason ?? "" })) : phase.state === "stopped" ? t("statusStopped") : t("statusWorking");
     return (
       <>
         {account}
@@ -198,8 +202,8 @@ export function TikTokPost({ code, creator, video, poster, title }: { code: stri
         <Legal href={MUSIC_URL}>{t("musicPolicy")}</Legal>.
       </p>
       {error && (
-        <p role="alert" className="px-1 text-[0.9375rem] text-danger" data-testid="tiktok-error">
-          {t("refused", { message: error.error.message || error.error.code })}
+        <p role="alert" className="px-1 text-[0.9375rem] text-danger" data-testid="tiktok-error" data-code={error.error.code}>
+          {refusalLine(error.error)}
           {error.reconnect && (
             <>
               {" "}

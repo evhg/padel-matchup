@@ -2939,7 +2939,10 @@
     "agreeLead": "By posting, you agree to TikTok's",
     "agreeAnd": "and",
     "musicPolicy": "Music Usage Confirmation",
-    "brandedPolicy": "Branded Content Policy"
+    "brandedPolicy": "Branded Content Policy",
+    "inTest": "TikTok sharing is in test. For now it works for invited accounts set to private.",
+    "oldReel": "This reel was made before TikTok sharing, so it cannot go to TikTok. Make the reel again, then share the new one.",
+    "reelDown": "The reel does not load now. Try again in a few minutes."
   },
   "reel": {
     "title": "The reel of this match",

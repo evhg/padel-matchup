@@ -2939,7 +2939,10 @@
     "agreeLead": "By posting, you agree to TikTok's",
     "agreeAnd": "and",
     "musicPolicy": "Music Usage Confirmation",
-    "brandedPolicy": "Branded Content Policy"
+    "brandedPolicy": "Branded Content Policy",
+    "inTest": "Публикация в TikTok пока в тесте. Сейчас она работает для приглашённых аккаунтов с закрытым профилем.",
+    "oldReel": "Этот ролик сделан до появления публикации в TikTok, поэтому его нельзя отправить в TikTok. Сделайте ролик заново и поделитесь новым.",
+    "reelDown": "Ролик сейчас не загружается. Попробуйте снова через несколько минут."
   },
   "reel": {
     "title": "Ролик этого матча",

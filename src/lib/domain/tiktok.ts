@@ -11,12 +11,19 @@
  *   - commercial content off at first; on, "Your brand" or "Branded content" must be chosen, and branded
  *     content can never be private;
  *   - nothing goes to TikTok before the player presses Post;
- *   - the reel goes as it is: no watermark, no logo, no text on the video.
+ *   - the reel goes as it is: no watermark, no logo, no text on the video. TikTok gets the reel's public
+ *     version, `share.mp4` (no branding, the match sound only), never `tall.mp4`; a reel without it is not posted.
  */
 
 export const TIKTOK_AUTHORIZE_URL = "https://www.tiktok.com/v2/auth/authorize/";
 export const TIKTOK_API = "https://open.tiktokapis.com";
-export const TIKTOK_SCOPES = ["user.info.basic", "video.publish", "video.upload"] as const;
+/**
+ * Login Kit (`user.info.basic`) and Direct Post (`video.publish`), nothing more. TikTok's app review: "All selected
+ * products and scopes must be clearly demonstrated in the video. If you don't need certain products or scopes, make
+ * sure to remove them before review." The app never sends a draft to the creator's inbox, so `video.upload` is gone
+ * (the owner's decision for the review, 26 November 2026).
+ */
+export const TIKTOK_SCOPES = ["user.info.basic", "video.publish"] as const;
 /** The scope without which nothing can be posted: a player can untick it on TikTok's own screen. */
 export const POST_SCOPE = "video.publish";
 /** TikTok's limit for a video's title, in UTF-16 code units. */
@@ -55,8 +62,21 @@ export function authorizeUrl(o: { clientKey: string; redirectUri: string; state:
   return u.toString();
 }
 
+/**
+ * Whether the switch `TIKTOK_SHARE` shows the button on this match. Two forms: `on` (any letter case) for every
+ * match, or a comma-separated list of match codes (`ZeTn,YgFK`, as each code is written, letter case and all) for
+ * those matches only, so that TikTok's reviewer sees the feature on a demo match while other players see nothing.
+ * A page with no match (`code` null) shows it only for `on`. Anything else, an empty value included, is off.
+ */
+export function shareSwitchOn(raw: string | undefined, code: string | null): boolean {
+  const v = (raw ?? "").trim();
+  if (v.toLowerCase() === "on") return true;
+  if (!code) return false;
+  return v.split(",").map((c) => c.trim()).filter((c) => /^[A-Za-z0-9]{4}$/.test(c)).includes(code);
+}
+
 /** Why the sign-in went back to the reel page (`?tiktok=<why>`): the page says it in our own words, never words from the address. */
-export const CALLBACK_WHY = ["denied", "expired", "failed", "scope"] as const;
+export const CALLBACK_WHY = ["denied", "expired", "failed", "scope", "test"] as const;
 export type CallbackWhy = (typeof CALLBACK_WHY)[number];
 export const callbackWhyOf = (v: unknown): CallbackWhy | null => ((CALLBACK_WHY as readonly string[]).includes(String(v)) ? (v as CallbackWhy) : null);
 
@@ -121,6 +141,17 @@ export function creatorOf(json: unknown): { ok: true; creator: Creator } | { ok:
     },
   };
 }
+
+/**
+ * The refusals TikTok gives an account that it does not let in yet. Until TikTok reviews and audits the app, only
+ * the app's invited test users sign in, and an unaudited app posts only to a private account
+ * (`unaudited_client_can_only_post_to_private_accounts`) for a few users a day (`reached_active_user_cap`). A sign-in
+ * that TikTok refuses comes back as `access_denied` or `unauthorized_client`. For all of them the pages show one plain
+ * line (`tiktok.inTest`), never TikTok's own words. `access_denied` is also what a player's own "Cancel" on TikTok's
+ * screen sends; while the app is in test, the line is true for that player too.
+ */
+export const NOT_ALLOWED_YET = ["unaudited_client_can_only_post_to_private_accounts", "reached_active_user_cap", "access_denied", "unauthorized_client"] as const;
+export const notAllowedYet = (code: unknown): boolean => (NOT_ALLOWED_YET as readonly string[]).includes(String(code));
 
 /** Whether a refusal means the player's token is no good any more, so the way out is to connect again (not "try later"). */
 export const needsReconnect = (e: TikTokError): boolean => ["access_token_invalid", "scope_not_authorized", "scope_permission_missed"].includes(e.code);
@@ -236,6 +267,19 @@ export function statusOf(json: unknown): { ok: true; status: PostStatus } | { ok
   if (s === "PUBLISH_COMPLETE") return { ok: true, status: { state: "done" } };
   if (s === "FAILED") return { ok: true, status: { state: "failed", reason: str(d.fail_reason, 200) || "unknown" } };
   return { ok: true, status: { state: "working" } };
+}
+
+/**
+ * Whether the reel has its public version (`share.mp4`: no branding, the match sound only), from the status of the
+ * reel host's answer to a HEAD (null: no answer in time). "no" is the reel host's own 404 or 410: a reel made before
+ * TikTok sharing, which is never posted, because the tall reel never goes to TikTok. Any other answer (a fault, a
+ * time-out, a 5xx) is "unknown": the page says to try later and posts nothing, and never asks for a new reel for it.
+ */
+export type ShareFile = "yes" | "no" | "unknown";
+export function shareFileOf(status: number | null): ShareFile {
+  if (status === 200 || status === 206) return "yes";
+  if (status === 404 || status === 410) return "no";
+  return "unknown";
 }
 
 /** The reel's address on our own verified prefix, for TikTok to pull: `/api/tiktok/video/<code>.mp4?t=<ticket>`. */

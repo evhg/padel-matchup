@@ -7,6 +7,7 @@ import { needsReconnect, notReady, readPostForm, videoPath, type TikTokError } f
 import { creatorInfo, initPost } from "@/lib/tiktok/api";
 import { openToken, TOKEN_COOKIE, videoTicket } from "@/lib/tiktok/seal";
 import { sameOrigin } from "@/lib/tiktok/origin";
+import { shareFileThere } from "@/lib/tiktok/shareFile";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,9 @@ export const dynamic = "force-dynamic";
  * The form is checked against the creator's account as it is now (creator info again, one call): the privacy
  * must be one of the account's own options, commercial content needs a choice, branded content is never
  * private, and an interaction the account turns off goes off. Then Direct Post with `PULL_FROM_URL`: TikTok
- * pulls the reel from `/api/tiktok/video/<code>.mp4?t=<ticket for one hour>` on our verified prefix.
+ * pulls the reel's public version (`share.mp4`) from `/api/tiktok/video/<code>.mp4?t=<ticket for one hour>` on our
+ * verified prefix. Before any of it, the reel host must hold that file (one HEAD): a reel made before TikTok sharing
+ * answers `old_reel`, a reel host that does not answer `reel_unavailable`, and TikTok hears nothing.
  * Answers `{ ok, publishId }`, or `{ ok: false, error: { code, message }, reconnect }` with TikTok's own words.
  */
 export async function POST(req: NextRequest) {
@@ -33,7 +36,11 @@ export async function POST(req: NextRequest) {
   const read = readPostForm(body);
   if (!isValidShareCode(code) || !read) return refuse({ code: "bad_request", message: "" });
   const db = await getDb();
-  if (!(await matchReelByCode(db, code, now).catch(() => null))) return refuse({ code: "no_reel", message: "" }, 404);
+  const reel = await matchReelByCode(db, code, now).catch(() => null);
+  if (!reel) return refuse({ code: "no_reel", message: "" }, 404);
+  // Only the reel's public version goes to TikTok; a reel without it is never posted, and TikTok hears nothing.
+  const share = await shareFileThere(reel.share);
+  if (share !== "yes") return refuse({ code: share === "no" ? "old_reel" : "reel_unavailable", message: "" }, share === "no" ? 409 : 503);
   const info = await creatorInfo(token.accessToken);
   if (!info.ok) return refuse(info.error, 409);
   const why = notReady(info.creator, read.form, read.durationSec);

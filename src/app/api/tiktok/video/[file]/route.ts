@@ -8,7 +8,7 @@ import { videoTicketOk } from "@/lib/tiktok/seal";
 
 export const dynamic = "force-dynamic";
 /**
- * TikTok pulls the reel through this route at up to 100 Mbps: a tall reel of about 80 MB takes at least 7 s at that
+ * TikTok pulls the reel through this route at up to 100 Mbps: a reel of about 80 MB takes at least 7 s at that
  * speed, and longer when the reel host is slower. Five minutes leaves room for a slow pull. A stream that waits on
  * the network counts against the provisioned memory, not the CPU (docs/OPERATING.md).
  */
@@ -27,7 +27,9 @@ function passHeaders(upstream: Response): Headers {
 }
 
 /**
- * The tall reel of a match, for TikTok's PULL_FROM_URL: `GET /api/tiktok/video/<code>.mp4?t=<ticket>`.
+ * The public version of a match's reel (`share.mp4`: no branding, the match sound only), for TikTok's
+ * PULL_FROM_URL: `GET /api/tiktok/video/<code>.mp4?t=<ticket>`. Never the tall reel: a reel made before TikTok
+ * sharing has no share.mp4, its reel host answers 404, and this route answers 502, so TikTok gets nothing.
  *
  * TikTok takes the file only from the URL prefix we verified (https://kicksma.sh/), and a redirect is invalid,
  * so the reel cannot be pulled from the reel host directly: this route streams it through. The ticket
@@ -50,7 +52,8 @@ async function serve(req: NextRequest, ctx: Ctx, method: "GET" | "HEAD"): Promis
   const range = req.headers.get("range");
   let upstream: Response;
   try {
-    upstream = await fetch(reel.tall, { method, headers: range ? { range } : {}, cache: "no-store", signal: req.signal });
+    // The public version only (no branding, the match sound only), never tall.mp4. A reel without it answers 404 there.
+    upstream = await fetch(reel.share, { method, headers: range ? { range } : {}, cache: "no-store", signal: req.signal });
   } catch {
     return nothing(502);
   }

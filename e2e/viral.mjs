@@ -461,7 +461,7 @@ try {
     const started = await reelVisitor.request.get(`${BASE}/api/tiktok/start?code=${mcode}${again ? "&again=1" : ""}`, { maxRedirects: 0 });
     const at = new URL(started.headers()["location"] ?? `${BASE}/`);
     authorizeSeen.push({ origin: at.origin, path: at.pathname, ...Object.fromEntries(at.searchParams) });
-    await reelVisitor.goto(`${BASE}/api/tiktok/callback?code=${account}&scopes=user.info.basic,video.publish,video.upload&state=${encodeURIComponent(at.searchParams.get("state") ?? "")}`);
+    await reelVisitor.goto(`${BASE}/api/tiktok/callback?code=${account}&scopes=user.info.basic,video.publish&state=${encodeURIComponent(at.searchParams.get("state") ?? "")}`);
   };
   const avatar = (letter) => `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88"><rect width="88" height="88" fill="#1c1c1e"/><text x="44" y="58" font-size="40" text-anchor="middle" fill="#c8f135" font-family="sans-serif">${letter}</text></svg>`;
   await reelVisitor.context().route("https://tiktok-avatar.example.test/**", (route) => route.fulfill({ status: 200, headers: { "content-type": "image/svg+xml" }, body: avatar(route.request().url().includes("private") ? "R" : "P") }));
@@ -472,15 +472,15 @@ try {
   const switches = async () => Promise.all(["tiktok-comment", "tiktok-duet", "tiktok-stitch", "tiktok-commercial-switch"].map(async (id) => ({ id, on: await reelVisitor.getByTestId(id).getAttribute("aria-checked"), off: await reelVisitor.getByTestId(id).isDisabled() })));
   const publicSwitches = await switches();
   check(
-    "TikTok's sign-in asks for the three scopes with our callback, and the posting page shows the account, a preview, no privacy picked and every switch off",
+    "TikTok's sign-in asks for the two scopes (no video.upload) with our callback, and the posting page shows the account, a preview of share.mp4, no privacy picked and every switch off",
     `${authorizeSeen[0]?.origin}${authorizeSeen[0]?.path}` === "https://www.tiktok.com/v2/auth/authorize/" &&
-      authorizeSeen[0]?.scope === "user.info.basic,video.publish,video.upload" &&
+      authorizeSeen[0]?.scope === "user.info.basic,video.publish" &&
       /^[0-9a-f]{64}$/.test(authorizeSeen[0]?.code_challenge ?? "") &&
       authorizeSeen[0]?.code_challenge_method === "S256" &&
       authorizeSeen[0]?.redirect_uri === `${BASE}/api/tiktok/callback` &&
       new URL(reelVisitor.url()).pathname === `/${mcode}/reel/tiktok` &&
       (await reelVisitor.getByTestId("tiktok-nickname").innerText()) === "Public Padel" &&
-      (await reelVisitor.getByTestId("tiktok-preview").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4` &&
+      (await reelVisitor.getByTestId("tiktok-preview").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/share.mp4` &&
       (await reelVisitor.getByTestId("tiktok-privacy").inputValue()) === "" &&
       JSON.stringify((await privacyOptions()).map((o) => o.t)) === JSON.stringify(["Choose", "Everyone", "Friends", "Followers", "Only me"]) &&
       publicSwitches.every((s) => s.on === "false" && !s.off) &&
@@ -498,6 +498,12 @@ try {
   const brandedRules = (await privacyOptions()).find((o) => o.v === "SELF_ONLY")?.off === true && (await reelVisitor.getByTestId("tiktok-legal").getByRole("link", { name: "Branded Content Policy" }).count()) === 1 && (await reelVisitor.getByTestId("tiktok-commercial-label").innerText()).includes("Paid partnership");
   check("commercial content needs a choice before Post, and branded content is never private", waitsForChoice && brandedRules && !(await reelVisitor.getByTestId("tiktok-post").isDisabled()));
   await reelVisitor.getByTestId("tiktok-commercial-switch").click();
+  // While the app is not audited, TikTok posts only to a private account: the refusal reads as one plain line, not TikTok's words.
+  await reelVisitor.getByTestId("tiktok-privacy").selectOption("PUBLIC_TO_EVERYONE");
+  await reelVisitor.getByTestId("tiktok-post").click();
+  await reelVisitor.getByTestId("tiktok-error").waitFor({ timeout: 20000 });
+  const inTest = await reelVisitor.getByTestId("tiktok-error").innerText();
+  check("a post TikTok refuses while the app is in test says so in one plain line, and the form stays", inTest.trim() === "TikTok sharing is in test. For now it works for invited accounts set to private." && (await reelVisitor.getByTestId("tiktok-post").isEnabled()), inTest);
   await reelVisitor.getByTestId("tiktok-privacy").selectOption("SELF_ONLY");
   await reelVisitor.getByTestId("tiktok-post").click();
   await reelVisitor.locator('[data-testid="tiktok-status"][data-state="done"]').waitFor({ timeout: 30000 });
@@ -514,6 +520,27 @@ try {
     JSON.stringify(privateSwitches),
   );
   await shot(reelVisitor, "tiktok-post-private");
+  // A sign-in TikTok refused while the app is in test comes back as `?tiktok=test`: the reel page says the same plain line.
+  await reelVisitor.goto(`${BASE}/${mcode}/reel?tiktok=test`);
+  check("a sign-in TikTok refused while the app is in test reads as one plain line on the reel page", (await reelVisitor.getByTestId("tiktok-error").innerText()).trim() === "TikTok sharing is in test. For now it works for invited accounts set to private.");
+  // A reel made before TikTok sharing has no share.mp4 (the fake reel host answers 404 for an `e2e_old_` token): no
+  // sign-in at TikTok, and the posting page says to make the reel again, with nothing to post.
+  const oldPlayed = await fetch(`${BASE}/api/admin/played-match`, { method: "POST", headers: CRON, body: JSON.stringify({ ...playedBody, startsAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString() }) }).then((x) => x.json());
+  const oldCode = oldPlayed?.code ?? "";
+  await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: oldCode, host: "https://reels.example.test", token: "e2e_old_reel_token_22_chars" }) });
+  const oldStart = await reelVisitor.request.get(`${BASE}/api/tiktok/start?code=${oldCode}`, { maxRedirects: 0 });
+  await reelVisitor.goto(`${BASE}/${oldCode}/reel/tiktok`);
+  await reelVisitor.getByTestId("tiktok-old-reel").waitFor({ timeout: 20000 });
+  check(
+    "a reel made before TikTok sharing goes to no TikTok sign-in, and its posting page says to make it again and offers nothing to post",
+    oldStart.headers()["location"] === `${BASE}/${oldCode}/reel/tiktok` &&
+      (await reelVisitor.getByTestId("tiktok-old-reel").innerText()).startsWith("This reel was made before TikTok sharing") &&
+      (await reelVisitor.getByTestId("tiktok-new-reel").getAttribute("href")) === `/${oldCode}#reel-again` &&
+      (await reelVisitor.getByTestId("tiktok-post").count()) === 0 &&
+      (await reelVisitor.getByTestId("tiktok-preview").count()) === 0,
+    JSON.stringify({ oldCode, location: oldStart.headers()["location"] }),
+  );
+  await shot(reelVisitor, "tiktok-old-reel");
   await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);
