@@ -646,6 +646,11 @@ try {
     "How to film: four instructions, the court drawing, and nothing wider than the phone",
     (await f.getByTestId("film-steps").locator("li").count()) === 4 && (await f.locator("figure svg").count()) === 1 && (await f.getByText("Set the camera to 4K at 60").count()) === 1 && filmFits,
   );
+  // With the TikTok button on (the suites run with TIKTOK_SHARE=on), the page that explains reels says it in one line.
+  check(
+    "How to film says that each player can share the reel to their own TikTok",
+    ((await f.getByTestId("film-tiktok").innerText()) ?? "").startsWith("Each player can share the reel to their own TikTok"),
+  );
   await shot(f, "v9-film-how");
   await f.getByTestId("film-got-it").click();
   await f.waitForURL((u) => u.pathname === `/${fcode}`, { timeout: 20000 });

@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { FilmCourt } from "@/components/FilmCourt";
 import { Footer, Header } from "@/components/Header";
 import { isValidShareCode } from "@/lib/codes";
-import { baseUrl } from "@/lib/config";
+import { baseUrl, tiktokShareOn } from "@/lib/config";
 import { jsonLdHtml } from "@/lib/jsonLd";
 import { localeAlternates } from "@/lib/seo";
 
@@ -68,6 +68,8 @@ export default async function FilmPage({ searchParams }: { searchParams: Promise
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("afterTitle")}</h2>
           <p className="mt-1 text-sm text-muted">{t("afterBody")}</p>
+          {/* Said only while the button is there (TikTok's reviewers read the page that explains reels). */}
+          {tiktokShareOn() && <p className="mt-1 text-sm text-muted" data-testid="film-tiktok">{t("afterTikTok")}</p>}
         </section>
         {code && (
           <Link href={`/${code}`} prefetch={false} className="btn-primary w-full" data-testid="film-got-it">
