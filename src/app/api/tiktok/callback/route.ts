@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { baseUrl, tiktokKeys } from "@/lib/config";
-import { POST_SCOPE, type CallbackWhy } from "@/lib/domain/tiktok";
+import { notAllowedYet, POST_SCOPE, type CallbackWhy } from "@/lib/domain/tiktok";
 import { exchangeCode } from "@/lib/tiktok/api";
 import { checkState, cookieOptions, sealToken, STATE_COOKIE, STATE_PATH, TOKEN_COOKIE } from "@/lib/tiktok/seal";
 
@@ -27,11 +27,13 @@ export async function GET(req: NextRequest) {
   };
   if (!tiktokKeys() || !state.code) return back("failed");
   if (!state.ok || !state.verifier) return back("expired");
-  if (url.searchParams.get("error")) return back("denied");
+  // A sign-in TikTok refused for an account it does not let in yet (`notAllowedYet`) says so in one plain line ("test").
+  const error = url.searchParams.get("error");
+  if (error) return back(notAllowedYet(error) ? "test" : "denied");
   const code = url.searchParams.get("code");
   if (!code || code.length > 1000) return back("failed");
   const got = await exchangeCode(code, state.verifier, now);
-  if (!got.ok) return back("failed");
+  if (!got.ok) return back(notAllowedYet(got.error.code) ? "test" : "failed");
   if (!got.token.scopes.includes(POST_SCOPE)) return back("scope");
   const res = NextResponse.redirect(`${baseUrl()}/${state.code}/reel/tiktok`, 303);
   res.cookies.set(STATE_COOKIE, "", cookieOptions(0, STATE_PATH));

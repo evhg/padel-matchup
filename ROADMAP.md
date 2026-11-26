@@ -1657,7 +1657,11 @@ Everything in this list is live. The README describes each in detail.
   TikTok is in the sandbox, so a post is private and the account must be private until TikTok audits the
   app, and only the app's test users can sign in: the button shows only while `TIKTOK_SHARE` is `on`. The
   sign-in uses PKCE. The footer has two links, Privacy and Terms. Proven in `tests/tiktok.test.ts` and the browser suite
-  viral, against a fake TikTok.
+  viral, against a fake TikTok. For TikTok's app review (26 November 2026): the scopes are `user.info.basic` and
+  `video.publish` only; TikTok gets the reel's public version, `share.mp4`, never the tall reel, and a reel made
+  before TikTok sharing says "make the reel again" and posts nothing; `TIKTOK_SHARE` also takes a list of match
+  codes, so the reviewer sees the button on a demo match only; an account TikTok does not let in yet reads
+  "TikTok sharing is in test. For now it works for invited accounts set to private."
 
 ## The finish line
 

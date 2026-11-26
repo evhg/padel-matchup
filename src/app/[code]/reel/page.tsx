@@ -15,7 +15,7 @@ import { cardImagePath, cardVersion, matchLine } from "@/lib/resultCard";
 import { taggedUrl } from "@/lib/source";
 import { withClientMessages } from "@/i18n/withClientMessages";
 
-const TIKTOK_WHY = { denied: "errDenied", expired: "errExpired", failed: "errFailed", scope: "errScope" } as const;
+const TIKTOK_WHY = { denied: "errDenied", expired: "errExpired", failed: "errFailed", scope: "errScope", test: "inTest" } as const;
 
 type Props = { params: Promise<{ code: string }>; searchParams?: Promise<{ tiktok?: string }> };
 
@@ -71,7 +71,7 @@ async function ReelPage({ params, searchParams }: Props) {
         {line && <p className="text-sm font-semibold">{line}</p>}
         <video className="mx-auto block aspect-[9/16] max-h-[75vh] max-w-full rounded-2xl bg-night object-cover" controls playsInline preload="metadata" poster={got.reel.poster} src={got.reel.tall} data-testid="reel-page-video" />
         <ShareButtons url={url} text={line ? `${t("reel.pageTitle")} · ${line}` : t("reel.pageTitle")} />
-        {tiktokShareOn() && (
+        {tiktokShareOn(code) && (
           <>
             {/* "Share to TikTok" (the owner, 26 November 2026): any player posts the reel to their own TikTok. A plain link: nothing goes to TikTok before the player opens it. */}
             <a href={`/api/tiktok/start?code=${code}`} className="btn-secondary w-full" data-testid="tiktok-share">

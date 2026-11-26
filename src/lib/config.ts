@@ -1,3 +1,5 @@
+import { shareSwitchOn } from "@/lib/domain/tiktok";
+
 export const APP_NAME = "Kicksmash";
 export const APP_TAGLINE = "Padel match-up. No app, no account.";
 
@@ -148,8 +150,10 @@ export const tiktokKeys = (): { clientKey: string; clientSecret: string } | null
 };
 
 /**
- * Whether the reel shows "Share to TikTok": `TIKTOK_SHARE` is `on` and both TikTok values are set. The routes
- * answer either way. The app is in TikTok's sandbox until TikTok audits it, and there only the app's test users
- * can sign in: any other player would land on TikTok's error, so the button waits for this switch.
+ * Whether the reel of this match shows "Share to TikTok": both TikTok values are set, and `TIKTOK_SHARE` is `on`
+ * or a comma-separated list of match codes that holds this one (`shareSwitchOn`). The routes answer either way.
+ * The app is in TikTok's sandbox until TikTok audits it, and there only the app's test users can sign in: any other
+ * player would land on TikTok's error, so the button waits for this switch, and the list shows it to TikTok's
+ * reviewer on a demo match only. `code` null (a page about no match) asks for `on`.
  */
-export const tiktokShareOn = (): boolean => (process.env.TIKTOK_SHARE ?? "").trim().toLowerCase() === "on" && tiktokKeys() !== null;
+export const tiktokShareOn = (code: string | null): boolean => shareSwitchOn(process.env.TIKTOK_SHARE, code) && tiktokKeys() !== null;

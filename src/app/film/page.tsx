@@ -68,8 +68,9 @@ export default async function FilmPage({ searchParams }: { searchParams: Promise
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("afterTitle")}</h2>
           <p className="mt-1 text-sm text-muted">{t("afterBody")}</p>
-          {/* Said only while the button is there (TikTok's reviewers read the page that explains reels). */}
-          {tiktokShareOn() && <p className="mt-1 text-sm text-muted" data-testid="film-tiktok">{t("afterTikTok")}</p>}
+          {/* Said only while the button is there (TikTok's reviewers read the page that explains reels): for every match,
+              or, while TIKTOK_SHARE lists codes, for a player who came from one of them (`?m=`). */}
+          {tiktokShareOn(code) &&<p className="mt-1 text-sm text-muted" data-testid="film-tiktok">{t("afterTikTok")}</p>}
         </section>
         {code && (
           <Link href={`/${code}`} prefetch={false} className="btn-primary w-full" data-testid="film-got-it">

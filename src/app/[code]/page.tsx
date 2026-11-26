@@ -1053,7 +1053,8 @@ async function EventPage({ params, searchParams }: Props) {
             new video is sent; then the bar and the new reel take its place. A reel that plays proves the match was
             filmed, so this door does not wait for the booked end. */}
         {me && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && reel?.kind === "ready" && (viewer.isCreator || isSeated(detail, me.id)) && (
-          <details className="card" data-testid="reel-again">
+          // `id`: the posting page of "Share to TikTok" links here for a reel made before TikTok sharing.
+          <details id="reel-again" className="card scroll-mt-4" data-testid="reel-again">
             <summary className="cursor-pointer font-semibold">{t("reel.againOpen")}</summary>
             <p className="mt-2 text-[0.9375rem] text-muted">{t("reel.againNote")}</p>
             <div className="mt-3">

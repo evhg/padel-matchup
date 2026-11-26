@@ -19,13 +19,19 @@ import {
   formRules,
   initBody,
   initialForm,
+  notAllowedYet,
   notReady,
+  POST_SCOPE,
   readPostForm,
+  shareFileOf,
+  shareSwitchOn,
   statusOf,
+  TIKTOK_SCOPES,
   tokenOf,
   type Creator,
   type PostForm,
 } from "@/lib/domain/tiktok";
+import { SHARE_CHECK_MS, shareFileThere } from "@/lib/tiktok/shareFile";
 import { checkState, codeChallenge, newCodeVerifier, newState, openToken, sealToken, STATE_COOKIE, STATE_TTL_MS, TICKET_TTL_MS, TOKEN_COOKIE, videoTicket, videoTicketOk } from "@/lib/tiktok/seal";
 import { freezeClock } from "./helpers/clock";
 import { DAY } from "./helpers/db";
@@ -80,9 +86,16 @@ function fakeFetch(answer: (url: string, init: RequestInit) => Response | Promis
 }
 const json = (body: unknown, s = 200) => new Response(JSON.stringify(body), { status: s, headers: { "content-type": "application/json" } });
 const headerOf = (init: RequestInit, name: string) => new Headers(init.headers).get(name);
+const SHARE_URL = `${REEL_HOST}/r/${REEL_TOKEN}/share.mp4`;
+/** The reel host's answer to the HEAD for the reel's public version (`share.mp4`), before `answer` for anything else. */
+const withShare =
+  (answer: (url: string, init: RequestInit) => Response | Promise<Response>, share: number = 200) =>
+  (url: string, init: RequestInit) =>
+    url === SHARE_URL && init.method === "HEAD" ? new Response(null, { status: share }) : answer(url, init);
+const isTikTok = (c: Call) => c.url.startsWith(TIKTOK);
 
 const token = (over: Partial<{ accessToken: string; scopes: string[]; expiresAt: number }> = {}) =>
-  sealToken({ accessToken: "act.player-token", openId: "open-1", scopes: ["user.info.basic", "video.publish", "video.upload"], expiresAt: NOW.getTime() + 2 * 3600_000, ...over });
+  sealToken({ accessToken: "act.player-token", openId: "open-1", scopes: ["user.info.basic", "video.publish"], expiresAt: NOW.getTime() + 2 * 3600_000, ...over });
 const withCookies = (url: string, cookies: Record<string, string>, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) =>
   new NextRequest(url, {
     method: init.method ?? "GET",
@@ -100,6 +113,8 @@ const keysOn = () => {
   process.env.TIKTOK_CLIENT_KEY = "test-client-key";
   process.env.TIKTOK_CLIENT_SECRET = "test-client-secret";
   process.env.APP_BASE_URL = "https://kicksma.sh";
+  // The reel host holds share.mp4 unless a test says otherwise; any other call is refused, so nothing leaves.
+  fakeFetch(withShare((url) => Promise.reject(new Error(`no fetch expected: ${url}`))));
 };
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -137,13 +152,22 @@ describe("the sign-in's state", () => {
     for (const bad of ["short", "a".repeat(129), `${"a".repeat(43)}/`, null]) expect(isCodeVerifier(bad), String(bad)).toBe(false);
   });
 
-  it("starts at TikTok's own sign-in with the three scopes, the exact redirect address, the nonce and the challenge", async () => {
+  it("asks for Login Kit and Direct Post only: user.info.basic and video.publish, never video.upload", () => {
+    // TikTok's app review: every scope asked for must show in the review video, and the app shows no inbox upload.
+    expect([...TIKTOK_SCOPES]).toEqual(["user.info.basic", "video.publish"]);
+    expect(POST_SCOPE).toBe("video.publish");
+    const url = new URL(authorizeUrl({ clientKey: "k", redirectUri: "https://kicksma.sh/api/tiktok/callback", state: "s", codeChallenge: "c" }));
+    expect(url.searchParams.get("scope")).toBe("user.info.basic,video.publish");
+    expect(url.toString()).not.toContain("video.upload");
+  });
+
+  it("starts at TikTok's own sign-in with the two scopes, the exact redirect address, the nonce and the challenge", async () => {
     keysOn();
     const res = await start(withCookies(`https://kicksma.sh/api/tiktok/start?code=${code}`, {}));
     expect(res.status).toBe(302);
     const to = new URL(res.headers.get("location")!);
     expect(`${to.origin}${to.pathname}`).toBe("https://www.tiktok.com/v2/auth/authorize/");
-    expect(Object.fromEntries(to.searchParams)).toMatchObject({ client_key: "test-client-key", response_type: "code", scope: "user.info.basic,video.publish,video.upload", redirect_uri: "https://kicksma.sh/api/tiktok/callback" });
+    expect(Object.fromEntries(to.searchParams)).toMatchObject({ client_key: "test-client-key", response_type: "code", scope: "user.info.basic,video.publish", redirect_uri: "https://kicksma.sh/api/tiktok/callback" });
     const set = res.headers.getSetCookie().find((c) => c.startsWith(`${STATE_COOKIE}=`))!;
     expect(set).toMatch(/HttpOnly/i);
     expect(set).toMatch(/Path=\/api\/tiktok/);
@@ -159,17 +183,49 @@ describe("the sign-in's state", () => {
   it("shows the button only with TIKTOK_SHARE on and both values set, while the routes answer without the switch", async () => {
     keysOn();
     delete process.env.TIKTOK_SHARE;
-    expect(tiktokShareOn()).toBe(false);
+    expect(tiktokShareOn(code)).toBe(false);
     // The start answers with the keys alone (keysOn sets no switch): a test user in the sandbox can still use the routes.
     expect((await start(withCookies(`https://kicksma.sh/api/tiktok/start?code=${code}`, {}))).headers.get("location")).toMatch(/^https:\/\/www\.tiktok\.com\//);
     for (const v of ["off", "1", "true", ""]) {
       process.env.TIKTOK_SHARE = v;
-      expect(tiktokShareOn(), v).toBe(false);
+      expect(tiktokShareOn(code), v).toBe(false);
     }
     process.env.TIKTOK_SHARE = " On ";
-    expect(tiktokShareOn()).toBe(true);
+    expect([tiktokShareOn(code), tiktokShareOn("WXYZ"), tiktokShareOn(null)]).toEqual([true, true, true]);
     delete process.env.TIKTOK_CLIENT_SECRET;
-    expect(tiktokShareOn()).toBe(false);
+    expect(tiktokShareOn(code)).toBe(false);
+  });
+
+  it("takes a list of match codes too: the button shows on those matches only, so TikTok's reviewer sees a demo match", () => {
+    keysOn();
+    process.env.TIKTOK_SHARE = `ZeTn, ${code} ,YgFK`;
+    expect([tiktokShareOn(code), tiktokShareOn("ZeTn"), tiktokShareOn("YgFK")]).toEqual([true, true, true]);
+    // Any other match, a page about no match, and the same letters in another case: no button.
+    expect([tiktokShareOn("WXYZ"), tiktokShareOn(null), tiktokShareOn("zetn")]).toEqual([false, false, false]);
+    delete process.env.TIKTOK_CLIENT_KEY;
+    expect(tiktokShareOn(code)).toBe(false);
+    // The rule itself: `on` in any case for every match; a list only for its own codes; a piece that is no code is skipped.
+    expect(shareSwitchOn("ON", "WXYZ")).toBe(true);
+    expect(shareSwitchOn("on", null)).toBe(true);
+    expect(shareSwitchOn("ZeTn", "ZeTn")).toBe(true);
+    expect(shareSwitchOn("ZeTn,,", "ZeTn")).toBe(true);
+    expect(shareSwitchOn("ZeTn", null)).toBe(false);
+    expect(shareSwitchOn("on,ZeTn", "WXYZ")).toBe(false);
+    expect(shareSwitchOn("ZeTnX,ZeT", "ZeTn")).toBe(false);
+    expect(shareSwitchOn(undefined, "ZeTn")).toBe(false);
+    expect(shareSwitchOn("", "ZeTn")).toBe(false);
+  });
+
+  it("never sends a reel with no public version to TikTok's sign-in: the posting page says to make it again", async () => {
+    keysOn();
+    let calls = fakeFetch(withShare(() => Promise.reject(new Error("no other call")), 404));
+    const old = await start(withCookies(`https://kicksma.sh/api/tiktok/start?code=${code}`, {}));
+    expect(old.headers.get("location")).toBe(`https://kicksma.sh/${code}/reel/tiktok`);
+    expect(old.headers.getSetCookie().some((c) => c.startsWith(`${STATE_COOKIE}=`))).toBe(false);
+    expect(calls.map((c) => [c.url, c.init.method])).toEqual([[SHARE_URL, "HEAD"]]);
+    // A reel host that does not answer now stops nothing here: the posting page asks again and says to try later.
+    calls = fakeFetch(withShare(() => Promise.reject(new Error("no other call")), 503));
+    expect((await start(withCookies(`https://kicksma.sh/api/tiktok/start?code=${code}`, {}))).headers.get("location")).toMatch(/^https:\/\/www\.tiktok\.com\//);
   });
 
   it("skips TikTok for a browser that holds a fresh token, refuses a match with no reel, and is off without the keys", async () => {
@@ -189,9 +245,9 @@ describe("the sign-in's state", () => {
 describe("the token", () => {
   it("is exchanged for the code with the client secret and the PKCE verifier, server side, as a form", async () => {
     keysOn();
-    const calls = fakeFetch(() => json({ access_token: "act.new", expires_in: 7200, open_id: "open-9", refresh_token: "rft.never-kept", scope: "user.info.basic,video.publish,video.upload", token_type: "Bearer" }));
+    const calls = fakeFetch(() => json({ access_token: "act.new", expires_in: 7200, open_id: "open-9", refresh_token: "rft.never-kept", scope: "user.info.basic,video.publish", token_type: "Bearer" }));
     const s = newState(code, NOW);
-    const res = await callback(withCookies(`https://kicksma.sh/api/tiktok/callback?code=the-code&scopes=user.info.basic,video.publish,video.upload&state=${s.nonce}`, { [STATE_COOKIE]: s.cookie }));
+    const res = await callback(withCookies(`https://kicksma.sh/api/tiktok/callback?code=the-code&scopes=user.info.basic,video.publish&state=${s.nonce}`, { [STATE_COOKIE]: s.cookie }));
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(`${TIKTOK}/v2/oauth/token/`);
     expect(headerOf(calls[0].init, "content-type")).toBe("application/x-www-form-urlencoded");
@@ -205,7 +261,7 @@ describe("the token", () => {
     // Encrypted: neither the token nor the refresh token is readable in the cookie, and the refresh token is not kept at all.
     expect(value).not.toContain("act.new");
     expect(value).not.toContain("rft");
-    expect(openToken(value, NOW)).toEqual({ accessToken: "act.new", openId: "open-9", scopes: ["user.info.basic", "video.publish", "video.upload"], expiresAt: NOW.getTime() + 7200_000 });
+    expect(openToken(value, NOW)).toEqual({ accessToken: "act.new", openId: "open-9", scopes: ["user.info.basic", "video.publish"], expiresAt: NOW.getTime() + 7200_000 });
     // The state cookie is spent.
     expect(res.headers.getSetCookie().find((c) => c.startsWith(`${STATE_COOKIE}=`))).toMatch(/Max-Age=0/);
   });
@@ -219,7 +275,10 @@ describe("the token", () => {
       return { to: res.headers.get("location"), calls: calls.length, token: res.headers.getSetCookie().some((c) => c.startsWith(`${TOKEN_COOKIE}=`)) };
     };
     expect(await back("code=x&state=not-the-nonce")).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=expired`, calls: 0, token: false });
-    expect(await back(`error=access_denied&error_description=${encodeURIComponent("<b>hi</b>")}&state=${s.nonce}`)).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=denied`, calls: 0, token: false });
+    expect(await back(`error=server_error&error_description=${encodeURIComponent("<b>hi</b>")}&state=${s.nonce}`)).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=denied`, calls: 0, token: false });
+    // A sign-in TikTok refuses while the app is in test (an account it does not let in yet): one plain line, "test".
+    expect(await back(`error=access_denied&error_description=${encodeURIComponent("<b>hi</b>")}&state=${s.nonce}`)).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=test`, calls: 0, token: false });
+    expect(await back(`code=x&state=${s.nonce}`, () => json({ error: "unauthorized_client", error_description: "Client is not authorized." }, 401))).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=test`, calls: 1, token: false });
     expect(await back(`code=x&state=${s.nonce}`)).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=failed`, calls: 1, token: false });
     expect(await back(`code=x&state=${s.nonce}`, () => json({ access_token: "act.x", expires_in: 7200, scope: "user.info.basic" }))).toEqual({ to: `https://kicksma.sh/${code}/reel?tiktok=scope`, calls: 1, token: false });
     const stranger = await callback(withCookies("https://kicksma.sh/api/tiktok/callback?code=x&state=y", {}));
@@ -279,7 +338,7 @@ describe("the posting page's form, from the creator's account", () => {
   });
 
   it("renders the creator, the preview, no privacy picked, three switches off and two locked, and the legal line", () => {
-    const html = renderIn("en", createElement(TikTokPost, { code: "ABCD", creator: PRIVATE_ACCOUNT, video: `${REEL_HOST}/r/t/tall.mp4`, poster: `${REEL_HOST}/r/t/poster.jpg`, title: "Ana & Bo won" }));
+    const html = renderIn("en", createElement(TikTokPost, { code: "ABCD", creator: PRIVATE_ACCOUNT, video: `${REEL_HOST}/r/t/share.mp4`, poster: `${REEL_HOST}/r/t/poster.jpg`, title: "Ana & Bo won" }));
     expect(html).toContain("Kicksmash");
     expect(html).toContain("@kicksma.sh");
     expect(html).toContain('data-testid="tiktok-preview"');
@@ -301,10 +360,13 @@ describe("Post", () => {
 
   it("reads the account again, then asks for a Direct Post that TikTok pulls from our own address with a ticket", async () => {
     keysOn();
-    const calls = fakeFetch((url) => (url.endsWith("/creator_info/query/") ? json(creatorJson(PRIVATE_ACCOUNT)) : json({ data: { publish_id: "v_pub_url~v2.123" }, error: { code: "ok", message: "" } })));
+    const all = fakeFetch(withShare((url) => (url.endsWith("/creator_info/query/") ? json(creatorJson(PRIVATE_ACCOUNT)) : json({ data: { publish_id: "v_pub_url~v2.123" }, error: { code: "ok", message: "" } }))));
     const res = await post(withCookies("https://kicksma.sh/api/tiktok/post", { [TOKEN_COOKIE]: token() }, { method: "POST", body: { ...form, code }, headers: { origin: "https://kicksma.sh" } }));
     expect(await res.json()).toEqual({ ok: true, publishId: "v_pub_url~v2.123" });
-    expect(calls.map((c) => c.url)).toEqual([`${TIKTOK}/v2/post/publish/creator_info/query/`, `${TIKTOK}/v2/post/publish/video/init/`]);
+    // First the reel host's HEAD for share.mp4 (no token goes there), then TikTok.
+    expect(all.map((c) => c.url)).toEqual([SHARE_URL, `${TIKTOK}/v2/post/publish/creator_info/query/`, `${TIKTOK}/v2/post/publish/video/init/`]);
+    expect(headerOf(all[0].init, "authorization")).toBeNull();
+    const calls = all.filter(isTikTok);
     for (const c of calls) {
       expect(headerOf(c.init, "authorization")).toBe("Bearer act.player-token");
       expect(headerOf(c.init, "content-type")).toBe("application/json; charset=UTF-8");
@@ -322,7 +384,7 @@ describe("Post", () => {
   it("sends nothing to post when the form breaks a rule, and shows TikTok's own words when it refuses", async () => {
     keysOn();
     const ask = async (over: Partial<typeof form>, init: () => Response = () => json({ data: {}, error: { code: "unaudited_client_can_only_post_to_private_accounts", message: "Please review our integration guidelines." } })) => {
-      const calls = fakeFetch((url) => (url.endsWith("/creator_info/query/") ? json(creatorJson(PRIVATE_ACCOUNT)) : init()));
+      const calls = fakeFetch(withShare((url) => (url.endsWith("/creator_info/query/") ? json(creatorJson(PRIVATE_ACCOUNT)) : init())));
       const res = await post(withCookies("https://kicksma.sh/api/tiktok/post", { [TOKEN_COOKIE]: token() }, { method: "POST", body: { ...form, code, ...over } }));
       return { status: res.status, body: await res.json(), inits: calls.filter((c) => c.url.endsWith("/video/init/")).length };
     };
@@ -345,6 +407,19 @@ describe("Post", () => {
     delete process.env.TIKTOK_CLIENT_KEY;
     expect((await post(withCookies("https://kicksma.sh/api/tiktok/post", { [TOKEN_COOKIE]: token() }, { method: "POST", body: { ...form, code } }))).status).toBe(404);
     expect(calls).toHaveLength(0);
+  });
+
+  it("posts nothing for a reel with no public version, and TikTok hears nothing of it", async () => {
+    keysOn();
+    const send = async (share: number) => {
+      const calls = fakeFetch(withShare(() => json(creatorJson(PUBLIC)), share));
+      const res = await post(withCookies("https://kicksma.sh/api/tiktok/post", { [TOKEN_COOKIE]: token() }, { method: "POST", body: { ...form, code } }));
+      return { status: res.status, body: await res.json(), tiktok: calls.filter(isTikTok).length };
+    };
+    expect(await send(404)).toMatchObject({ status: 409, body: { ok: false, error: { code: "old_reel" }, reconnect: false }, tiktok: 0 });
+    expect(await send(410)).toMatchObject({ status: 409, body: { error: { code: "old_reel" } }, tiktok: 0 });
+    // A reel host that is down is not an old reel: try later, and still nothing to TikTok.
+    expect(await send(502)).toMatchObject({ status: 503, body: { error: { code: "reel_unavailable" } }, tiktok: 0 });
   });
 
   it("builds the commercial toggles only while commercial content is on", () => {
@@ -371,7 +446,7 @@ describe("the file TikTok pulls", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("streams the tall reel with the Range header passed through, answering 206 with the range, and never redirects", async () => {
+  it("streams the reel's public version (share.mp4, never tall.mp4) with the Range header passed through, answering 206 with the range, and never redirects", async () => {
     keysOn();
     let push: ((b: Uint8Array) => void) | null = null;
     let end: (() => void) | null = null;
@@ -385,7 +460,7 @@ describe("the file TikTok pulls", () => {
     const res = await video(...at(videoTicket(code, NOW), `${code}.mp4`, { range: "bytes=0-99" }));
     // The answer is here while the reel host has sent nothing yet: the body is passed on as it arrives.
     expect(res.status).toBe(206);
-    expect(calls[0].url).toBe(`${REEL_HOST}/r/${REEL_TOKEN}/tall.mp4`);
+    expect(calls.map((c) => c.url)).toEqual([SHARE_URL]);
     expect(headerOf(calls[0].init, "range")).toBe("bytes=0-99");
     expect(Object.fromEntries(res.headers)).toMatchObject({ "content-type": "video/mp4", "content-length": "100", "content-range": "bytes 0-99/83886080", "accept-ranges": "bytes" });
     expect(res.headers.get("x-host-secret")).toBeNull();
@@ -407,11 +482,59 @@ describe("the file TikTok pulls", () => {
     expect(headerOf(calls[0].init, "range")).toBeNull();
     const head = await videoHead(...at(videoTicket(code, NOW)));
     expect([head.status, head.headers.get("content-length"), head.body]).toEqual([200, "3", null]);
+    expect(calls.map((c) => c.url)).toEqual([SHARE_URL, SHARE_URL]);
+    // A reel made before TikTok sharing: no share.mp4 on the reel host, so TikTok gets nothing, and the tall reel is never asked for.
     calls = fakeFetch(() => new Response("gone", { status: 404 }));
     expect((await video(...at(videoTicket(code, NOW)))).status).toBe(502);
+    expect(calls.map((c) => c.url)).toEqual([SHARE_URL]);
     calls = fakeFetch(() => new Response(null, { status: 416, headers: { "content-range": "bytes */3" } }));
     const bad = await video(...at(videoTicket(code, NOW), `${code}.mp4`, { range: "bytes=9-" }));
     expect([bad.status, bad.headers.get("content-range")]).toEqual([416, "bytes */3"]);
+  });
+});
+
+describe("the reel's public version", () => {
+  it("is there for a 200 or 206, not there for the reel host's 404 or 410, and unknown for anything else", () => {
+    expect([200, 206].map(shareFileOf)).toEqual(["yes", "yes"]);
+    expect([404, 410].map(shareFileOf)).toEqual(["no", "no"]);
+    expect([null, 301, 403, 500, 502, 503].map(shareFileOf)).toEqual(["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"]);
+  });
+
+  it("is asked with one HEAD and a short time-out, and a fault or a time-out is unknown, never an old reel", async () => {
+    const calls: Call[] = [];
+    const answering = (status: number) => async (url: string | URL | Request, init: RequestInit = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(null, { status });
+    };
+    expect(await shareFileThere(SHARE_URL, answering(200) as typeof fetch)).toBe("yes");
+    expect(await shareFileThere(SHARE_URL, answering(404) as typeof fetch)).toBe("no");
+    expect(calls.map((c) => [c.url, c.init.method, c.init.signal instanceof AbortSignal])).toEqual([
+      [SHARE_URL, "HEAD", true],
+      [SHARE_URL, "HEAD", true],
+    ]);
+    expect(SHARE_CHECK_MS).toBeLessThanOrEqual(5000);
+    const timedOut = (async () => {
+      throw new DOMException("The operation timed out.", "TimeoutError");
+    }) as typeof fetch;
+    expect(await shareFileThere(SHARE_URL, timedOut)).toBe("unknown");
+  });
+});
+
+describe("an account TikTok does not let in yet", () => {
+  it("is named by TikTok's own codes for an unreviewed or unaudited app, and nothing else", () => {
+    for (const c of ["unaudited_client_can_only_post_to_private_accounts", "reached_active_user_cap", "access_denied", "unauthorized_client"]) expect(notAllowedYet(c), c).toBe(true);
+    for (const c of ["spam_risk_too_many_posts", "access_token_invalid", "privacy_level_option_mismatch", "network", "", undefined]) expect(notAllowedYet(c), String(c)).toBe(false);
+  });
+
+  it("has one plain line in every language, and the reel made before TikTok sharing has its own", async () => {
+    const { default: en } = await import("../messages/en.json");
+    const { default: ru } = await import("../messages/ru.json");
+    const { default: es } = await import("../messages/es.json");
+    expect(en.tiktok.inTest).toBe("TikTok sharing is in test. For now it works for invited accounts set to private.");
+    for (const m of [en, ru, es]) {
+      for (const k of ["inTest", "oldReel", "reelDown"] as const) expect(m.tiktok[k].length, k).toBeGreaterThan(20);
+      expect(m.tiktok.inTest).not.toContain("{");
+    }
   });
 });
 

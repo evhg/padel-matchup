@@ -58,6 +58,7 @@ describe("the address of a reel", () => {
     expect(reelView(row, NOW)).toEqual({
       tall: `${HOST}/r/${TOKEN}/tall.mp4`,
       wide: `${HOST}/r/${TOKEN}/wide.mp4`,
+      share: `${HOST}/r/${TOKEN}/share.mp4`,
       saveTall: `${HOST}/r/${TOKEN}/tall.mp4?dl=1`,
       saveWide: `${HOST}/r/${TOKEN}/wide.mp4?dl=1`,
       poster: `${HOST}/r/${TOKEN}/poster.jpg`,
