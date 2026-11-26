@@ -8,7 +8,9 @@ In:  match/clips.json (who.py: each clip of the phone, its match and its near pa
 The phone's cut keeps one point in each clip, and its reaction (src/lib/reel/fastPlan.ts). So in each clip:
 - the hits are the sharp clicks of the sound (above 2 kHz), 6 dB over the half second around them, 0.25 s apart;
 - the rally is the run of hits with the most strong ones (`rally`); the serve is its first hit, the last shot its
-  last strong one;
+  last strong one; the serve moves past a pause with no ball in flight (`after_idle`), and to a serve that the pose of
+  the near pair shows well after it (`pose_serve`: a still server deep in the near half, an underhand swing, a step
+  away), because players who wait, juggle or fetch a ball make the sounds of hits;
 - the ball is dead 0.75 s after the last shot (the person who made the eighth reel set 0.7 to 0.8 s by eye);
 - the clip starts 1.5 s before the serve (or at the start of the phone's clip) and runs to its end, 5 s after the
   dead ball at most: the reaction is in it;
@@ -123,6 +125,57 @@ def after_idle(spans, serve, last, gap=6.0):
     return serve
 
 
+SERVE_DEEP = 0.55       # a server's feet: this share of the way from the net's foot to the bottom of the picture, or lower
+SERVE_STILL = 0.15      # still: the feet move less than this many of the player's heights in the 1.0 s before the hit
+SERVE_SWING = 2.0       # the hit: a wrist under the shoulders at this many heights a second or more
+SERVE_GO = 0.3          # then the server leaves the spot: the feet move this many heights within 1.2 s
+SERVE_MATE = 0.25       # the partner, where the tracker holds him, keeps still too
+
+
+def pose_serve(tr, near, a, b, net_y, height=1080):
+    """The last serve from the camera end in [a, b], from the pose of the near pair (tracks at 15 a second), or None.
+    A serve in padel is an underhand hit after a bounce, from behind the service line, while the others wait. So at the
+    hit: the server's feet deep in the near half and still for the second before, a wrist fast and under the shoulders,
+    the partner still where the tracker holds him, and then the server's feet move (to the net, or to the ready place).
+    On the eight clips of 25 November 2026 it fired in one clip only, at its serve (the clip that opened with a ball
+    fetched from the back glass: 113.34 at the bounce, 113.88 at the hit; the frames show the contact at 113.8), with
+    the feet still to 0.03 and the wrist at 2.9. Looser limits (still 0.25, swing 1.5) fired inside the rallies of two
+    clips of the reel too (8 s and 19 s after their serves), and without the step away it fired at two players who stood
+    and waited. A serve from the far end is not seen here: its server is small, and a near player only waits. Pure."""
+    deep = net_y + SERVE_DEEP * (height - net_y); S = {}
+    for who in near:
+        p = tr['players'].get(str(who))
+        if not p: continue
+        f = np.array(p['f']); t = f / tr['fps'] + tr['t0']; kp = np.array(p['kp']); bx = np.array(p['box'])
+        ok = (kp[:, 15, 2] > 0.3) & (kp[:, 16, 2] > 0.3)
+        foot = np.where(ok[:, None], kp[:, [15, 16], :2].mean(1), np.stack([(bx[:, 0] + bx[:, 2]) / 2, bx[:, 3]], 1))
+        S[who] = (t, kp, bx[:, 3] - bx[:, 1], foot)
+
+    def still(s, a_, b_):
+        t, _, h, foot = s; m = (t >= a_) & (t <= b_)
+        if m.sum() < 0.6 * (b_ - a_) * tr['fps'] / 2: return None          # held for 60% of the pose frames at least
+        return float(np.ptp(foot[m], 0).max() / np.median(h[m])), float(np.median(foot[m][:, 1]))
+    best = None
+    for who, s in S.items():
+        t, kp, h, foot = s
+        for i in range(1, len(t)):
+            dt = t[i] - t[i - 1]
+            if not a <= t[i] <= b or dt <= 0 or dt > 0.1: continue
+            sh = kp[i, [5, 6], 1].mean()
+            fast = [np.linalg.norm(kp[i, w, :2] - kp[i - 1, w, :2]) / dt / h[i] for w in (9, 10)
+                    if min(kp[i, w, 2], kp[i - 1, w, 2]) >= 0.3 and kp[i, w, 1] >= sh]
+            if not fast or max(fast) < SERVE_SWING: continue
+            st = still(s, t[i] - 1.2, t[i] - 0.2)
+            if not st or st[0] > SERVE_STILL or st[1] < deep: continue
+            b4 = (t >= t[i] - 0.5) & (t <= t[i] - 0.1); af = (t >= t[i] + 0.5) & (t <= t[i] + 1.2)
+            if b4.sum() < 3 or af.sum() < 3: continue
+            if np.linalg.norm(np.median(foot[af], 0) - np.median(foot[b4], 0)) / np.median(h[b4]) < SERVE_GO: continue
+            mate = [still(S[o], t[i] - 1.2, t[i] - 0.2) for o in S if o != who]
+            if any(m is not None and m[0] > SERVE_MATE for m in mate): continue
+            if best is None or t[i] > best: best = float(t[i])
+    return round(best, 2) if best is not None else None
+
+
 def first_seen(tr, near, a, b):
     """The first moment in [a, b] at which the tracker holds a near player: a clip that opens on an empty court starts
     there (25 November 2026: three seconds of empty court before a rally)."""
@@ -204,6 +257,14 @@ def main():
             print(f'c{n} has no rally: left out'); pts.append(None); continue
         serve, last = sl
         serve = after_idle(ball_spans(f'{M}/ball/c{n}.npz', a), serve, last)
+        if os.path.exists(trf):
+            # a serve from the camera end well after the sound's first hit: what came before it was not play (25 November
+            # 2026: 10 s of a ball fetched from the back glass and juggled, which the phone hears as hits and the ball
+            # finder sees as flights). Within 2.5 s of the sound's serve it is the same serve, or the return.
+            from court import NET_FOOT_Y
+            ps = pose_serve(json.load(open(trf)), c['near'], serve + 2.5, min(last - 4.0, serve + 15.0), NET_FOOT_Y)
+            if ps:
+                print(f'c{n}: the serve from the pose at {ps} (the sound said {serve})'); serve = ps
         r = [h for h in hs if serve - 0.01 <= h[0] <= last + 0.01]
         if len(r) < 2 or last - serve < 2.0:
             print(f'c{n} has no rally after the wait: left out'); pts.append(None); continue
