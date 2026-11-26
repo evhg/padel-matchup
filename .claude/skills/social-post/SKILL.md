@@ -27,9 +27,16 @@ A reel token is a secret of the players: never print it, never put it in a messa
 `reels/<token>/reel.json` says its matches: codes, the two team titles, the score. A folder without `reel.json` is
 older than 26 November 2026: skip it.
 
+**Post `share.mp4`, never `tall.mp4` (26 November 2026).** `share.mp4` is the public version of the reel: the tall
+layout without the end card, the match sound only (no music track, no added crowd, whatever the player chose), and no
+brand in the picture (`scripts/highlights/README.md`, "The public version"). TikTok's Content Sharing Guidelines
+forbid a brand name, a logo, a watermark or promotional text on shared content, and no music track or crowd sound has
+a licence on record that allows a public post. A reel folder without `share.mp4` (older reels, or `"share": false`
+in `reel.json`) is skipped: write "skipped: no public version" in the summary.
+
 ## 2. Check each reel against the v8 table
 
-Download `tall.mp4` and take one frame a second (`ffmpeg -vf fps=1,scale=320:-2`). Put them on sheets of 36 with
+Download `share.mp4` and take one frame a second (`ffmpeg -vf fps=1,scale=320:-2`). Put them on sheets of 36 with
 the time in the BOTTOM RIGHT corner (a label at the top left hides the team names: 25 November 2026). Look at every
 sheet. The reel passes only when every row holds:
 
@@ -41,18 +48,10 @@ sheet. The reel passes only when every row holds:
 | Reaction, then replay | a close look at a near player after the points; replays at the near end, not a blur |
 | Fair | the replays are shared between the two pairs; no player singled out |
 | Names right | the name tags and the opening's names match the players (compare the opening's faces) |
-| Opening and end card | team names, faces, score and "GAME ON" readable; the end card short |
-| Sound | the match sound is there; music under it; no long silence; no level jump that hurts |
+| Opening, no end card | team names, faces, score and "GAME ON" readable; no end card, no brand anywhere in the picture |
+| Sound | the match sound is there, with no music and no crowd; no long silence; no level jump that hurts |
 
 A reel that fails a row is not posted. Write which row and at which second in the summary.
-
-**Music and added sound (26 November 2026).** No music track and no added crowd sound has a licence on record that
-allows a public post: "bounce" came from MusicGen, whose recorded licence is CC BY-NC 4.0 (no use that earns money),
-and the other tracks and `assets/cheers/` have no source or licence recorded. So a reel is posted only when the
-player chose no music and no crowd: read `uploads/<upload>/choices.json` (`reel.json` names the upload) and post only
-when `"music": "none"` and `"crowd": false`. A reel with no `choices.json` had the defaults (music "bounce", crowd on):
-skip it. Write "skipped: music not licensed for a public post" in the summary. This holds until the owner records a
-licence for a track.
 
 The fast reel (made from a player's clips) and the full reel (made from the whole match video) share this table.
 The owner, 26 November 2026: the fast reel's standard does not include a winner line or a score box, because the
@@ -62,11 +61,11 @@ and crosses for the fast reel). So never fail a fast reel for a missing winner l
 
 ## 3. Post a reel that passes
 
-1. `python3 scripts/social/instagram.py check tall.mp4` must say `"ok": true`.
+1. `python3 scripts/social/instagram.py check share.mp4` must say `"ok": true`.
 2. The caption, in English, short, no promise, no score claim the reel does not show:
    `<title A> vs <title B> · <score>` on the first line, then `Highlights made by Kicksmash, free with every game on kicksma.sh`,
    then `#padel #padellife #kicksmash`. First names only, as in the reel. No venue name, no match link.
-3. `python3 scripts/social/instagram.py post --url "<reel host>/r/<token>/tall.mp4" --caption "<caption>"`. The reel
+3. `python3 scripts/social/instagram.py post --url "<reel host>/r/<token>/share.mp4" --caption "<caption>"`. The reel
    host is `https://evhg--kicksmash-reels-web.us-east.modal.run`. Put the URL in a shell variable from the token file,
    never in the output. One post at a time; Meta allows 100 a day.
 4. Add the token to `social/reviewed.json` with `{"posted": "<permalink>", "at": "<UTC time>"}`, or with

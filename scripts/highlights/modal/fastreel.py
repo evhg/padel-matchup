@@ -37,8 +37,9 @@ Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report
   replays  the plan (fast_points.py, reel_points.py) and every part drawn (render.py, one machine for each part)
   opening  the openings are there (portrait.py once, then versus.py, one machine for each match and layout)
   music    the parts joined, the crowd (cheers.py), the level, the track (music.py)
-  finish   1080p wide.mp4 and tall.mp4, versus.jpg (1200x630), poster.jpg (720 wide, tall) and reel.json (its matches, not
-           served), under reels/<new token>/; then
+  finish   1080p wide.mp4 and tall.mp4, share.mp4 (the public version: the tall layout without the end card, the match
+           sound only; share.py), versus.jpg (1200x630), poster.jpg (720 wide, tall) and reel.json (its matches, and
+           "share": true when share.mp4 is there; not served), under reels/<new token>/; then
            POST {code, host, token} for each match of the upload
   Each progress POST is {code, progress: {pct, minutesLeft, step}}; while the job waits for names it adds
   "waiting": "names" to progress. A step that fails posts {code, failed: "<the error>"} for each match.
@@ -346,7 +347,9 @@ def render_part(job):
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=8192, timeout=1800, max_containers=2)
 def finish_layout(job):
-    """One layout: the parts joined (reel_points.py), the crowd, the level, the music, then 1080p."""
+    """One layout: the parts joined (reel_points.py), the crowd, the level, the music, then 1080p. The tall layout also
+    makes share.mp4, the public version (share.py): the pictures of tall.mp4 before the end card, copied and not encoded
+    again, over the sound of the join (the match sound only), whatever music and crowd the player chose."""
     W, tall, music, crowd, scale = job
     vol.reload(); env = home(W); M = f'{W}/match'; H = '/root/hl'; k = 'tall' if tall else 'wide'
     work = f"{M}/{'reel-tall' if tall else 'reel'}"; times = {}
@@ -358,8 +361,9 @@ def finish_layout(job):
     for f in os.listdir(work):
         if f.endswith('.mp4'): os.utime(f'{work}/{f}', (now, now))
     times['join'], _ = sh(['python', f'{H}/reel_points.py', f'{W}/proxy.mp4', f'{M}/points.json', f'{M}/match-1.json', work, f'/tmp/{k}.mp4'], env=env)
-    if crowd: times['crowd'], _ = sh(['python', f'{H}/cheers.py', f'/tmp/{k}.mp4', work, f'{M}/points.json', f'{ASSETS}/cheers', f'/tmp/{k}-c.mp4'], env=env)
-    else: os.replace(f'/tmp/{k}.mp4', f'/tmp/{k}-c.mp4')         # the player chose no crowd: the match sound only
+    join = f'/tmp/{k}.mp4'          # the parts with their own sound: the sound of share.mp4
+    if crowd: times['crowd'], _ = sh(['python', f'{H}/cheers.py', join, work, f'{M}/points.json', f'{ASSETS}/cheers', f'/tmp/{k}-c.mp4'], env=env)
+    else: os.replace(join, f'/tmp/{k}-c.mp4'); join = f'/tmp/{k}-c.mp4'         # the player chose no crowd: the match sound only
     times['level'], _ = sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', f'/tmp/{k}-c.mp4', '-c:v', 'copy', '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', '-c:a', 'aac', '-b:a', '192k',
                             '-movflags', '+faststart', f'/tmp/{k}-n.mp4'])
     src = f'/tmp/{k}-n.mp4'
@@ -368,10 +372,24 @@ def finish_layout(job):
         times['music'], _ = sh(['python', f'{H}/music.py', src, work, f'{M}/points.json', f'{ASSETS}/{name}', f'/tmp/{k}-m.mp4'], env=dict(env, **menv))
         src = f'/tmp/{k}-m.mp4'
     size = '1080:1920' if tall else '1920:1080'
-    times['1080p'], _ = sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', src, '-vf', f'scale={size}:flags=lanczos', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
-                            '-pix_fmt', 'yuv420p', *C709, '-c:a', 'copy', '-movflags', '+faststart', f'/tmp/{k}-1080.mp4'])
+    enc = ['-vf', f'scale={size}:flags=lanczos', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', *C709]
+    keys = []
+    if tall:
+        import sys; sys.path.insert(0, H); import share
+        if os.path.exists(f'{W}/share.mp4'): os.remove(f'{W}/share.mp4')      # a share.mp4 of an earlier run never passes for this one
+        keys = share.key_args(share.body(work)[0])      # the first picture of the end card: a key frame
+    times['1080p'], _ = sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', src, *enc, *keys, '-c:a', 'copy', '-movflags', '+faststart', f'/tmp/{k}-1080.mp4'])
     out = f'{W}/{k}.mp4'; sh(['cp', f'/tmp/{k}-1080.mp4', out])
-    if tall: sheet(out, f'{W}/sheet-tall.jpg')
+    if tall:
+        sheet(out, f'{W}/sheet-tall.jpg')
+        # The public version. When it fails, tall.mp4 and wide.mp4 still go out; reel.json then says "share": false,
+        # and the daily post skips the reel ("no public version").
+        a = time.time()
+        try:
+            how, secs = share.cut(work, join, f'/tmp/{k}-1080.mp4', '/tmp/share.mp4', enc)
+            sh(['cp', '/tmp/share.mp4', f'{W}/share.mp4']); times['share'] = [how, secs, round(time.time() - a, 1)]
+        except Exception as e:
+            times['share'] = f'failed: {str(e)[-300:]}'; print('share.mp4', times['share'], flush=True)
     vol.commit()
     return k, times, round(duration(out), 2)
 
@@ -541,13 +559,16 @@ def run_make(req):
     R.step('finish')
     token = pysecrets.token_urlsafe(24); d = f"{P['reels']}/{token}"; os.makedirs(d, exist_ok=True)
     sh(['cp', f'{W}/wide.mp4', f'{d}/wide.mp4']); sh(['cp', f'{W}/tall.mp4', f'{d}/tall.mp4'])
+    # share.mp4, the public version for TikTok and @kicksma.sh (finish_layout, share.py): only from this run
+    share = os.path.exists(f'{W}/share.mp4')
+    if share: sh(['cp', f'{W}/share.mp4', f'{d}/share.mp4'])
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', '4.6', '-i', f'{M}/versus-m1-wide.mp4', '-frames:v', '1', '-vf', 'scale=1200:-2:flags=lanczos,crop=1200:630', '-q:v', '3', f'{d}/versus.jpg'])
     # The tall reel's poster on the match page: the same moment of the opening, both teams on it, so the page shows a
     # picture and not a black box before the reel plays (the owner, 25 November 2026).
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', '4.6', '-i', f'{M}/versus-m1-tall.mp4', '-frames:v', '1', '-vf', 'scale=720:-2:flags=lanczos', '-q:v', '3', f'{d}/poster.jpg'])
     # Which matches the reel is of, for the post to @kicksma.sh (scripts/social/instagram.py): the reel host serves
     # only .mp4, .jpg and names.json, so this file stays on the store.
-    json.dump({'made': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'upload': req.get('upload'),
+    json.dump({'made': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'upload': req.get('upload'), 'share': share,
                'matches': [{k: m.get(k) for k in ('code', 'title_a', 'title_b', 'score')} for m in req['matches']]}, open(f'{d}/reel.json', 'w'), indent=1)
     vol.commit()
     clock['all'] = round(time.time() - t0)

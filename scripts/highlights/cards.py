@@ -19,18 +19,18 @@ def _tile(d, cx, y, row, big, mid, small, maxw):
         tracked(d, (cx - w3 / 2, y + big * 1.12 + mid * 1.55), who.upper(), f3, LIME if team == 0 else SOFT if team == 1 else (200, 205, 212), 4)
 
 
-def stats_grid(bg_bgr, title, rows, foot='kicksma.sh'):
+def stats_grid(bg_bgr, title, rows, foot=''):
     im, d = gfx._over(gfx.darken(bg_bgr))
     gfx.centred(d, 70, title.upper(), font(64, 'ExtraBold'), WHITE, 6); d.rectangle((W / 2 - 60, 158, W / 2 + 60, 164), fill=LIME)
     cols = 3; colw = W / (cols + 0.3); x0 = (W - colw * cols) / 2
     for i, row in enumerate(rows[:6]): _tile(d, x0 + colw * (i % cols + 0.5), 215 + 375 * (i // cols), row, 150, 36, 34, colw - 50)
-    gfx.centred(d, 985, foot.upper(), font(38, 'ExtraBold'), LIME, 10)
+    if foot: gfx.centred(d, 985, foot.upper(), font(38, 'ExtraBold'), LIME, 10)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 
-def stats_grid_tall(bg_bgr, title, rows, foot='kicksma.sh'):
+def stats_grid_tall(bg_bgr, title, rows, foot=''):
     im, d = gfx._over(gfx._tall_bg(bg_bgr))
     gfx._c(d, 200, title.upper(), gfx._fit(title.upper(), 68, 6, TW - 120), WHITE, 6); d.rectangle((TW / 2 - 60, 296, TW / 2 + 60, 302), fill=LIME)
     for i, row in enumerate(rows[:6]): _tile(d, TW * (0.27 if i % 2 == 0 else 0.73), 400 + 440 * (i // 2), row, 150, 34, 32, TW / 2 - 50)
-    gfx._c(d, 1760, foot.upper(), font(40, 'ExtraBold'), LIME, 10)
+    if foot: gfx._c(d, 1760, foot.upper(), font(40, 'ExtraBold'), LIME, 10)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)

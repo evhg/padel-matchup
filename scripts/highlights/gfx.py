@@ -113,13 +113,14 @@ def badge(text, bg=LIME, fg=INK, size=40):
     return rgba_to_bgra(im)
 
 def bug(venue):
-    """Top-left: KICKSMASH and the venue, always on."""
-    f1, f2 = font(34, 'ExtraBold'), font(30, 'SemiBold')
-    a, b = 'KICKSMASH', venue.upper()
-    wa, wb = int(tracked_w(a, f1, 3)), int(tracked_w(b, f2, 3))
-    im, d = _sheet('RGBA', (wa + wb + 76 if b else wa + 32, 50), (0, 0, 0, 0))
-    d.rectangle((0, 0, wa + 31, 49), fill=LIME + (255,)); tracked(d, (16, 2), a, f1, INK + (255,), 3)
-    if b: d.rectangle((wa + 32, 0, wa + wb + 75, 49), fill=INK + (225,)); tracked(d, (wa + 48, 5), b, f2, WHITE + (255,), 3)   # no venue: no empty box
+    """Top-left: the venue, on ink with a lime edge. No brand name: the picture of a reel carries none, because TikTok's
+    Content Sharing Guidelines forbid a brand name, a logo or a watermark on shared content (26 November 2026). The
+    brand is on the end card of the app's own reel only. No venue: a clear pixel, so every caller places it as before."""
+    b = venue.upper()
+    if not b.strip(): return np.zeros((1, 1, 4), np.uint8)
+    f2 = font(30, 'SemiBold'); wb = int(tracked_w(b, f2, 3))
+    im, d = _sheet('RGBA', (wb + 44, 50), (0, 0, 0, 0))
+    d.rectangle((0, 0, 7, 49), fill=LIME + (255,)); d.rectangle((8, 0, wb + 43, 49), fill=INK + (225,)); tracked(d, (24, 5), b, f2, WHITE + (255,), 3)
     return rgba_to_bgra(im)
 
 def darken(bg_bgr, blur=18, dim=0.38):
@@ -142,7 +143,7 @@ def intro_card(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HIGHLIG
     centred(d, 900, '  ·  '.join(x for x in (venue, date) if x).upper(), font(40, 'SemiBold'), (200, 205, 212), 6)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
-def stats_card(bg_bgr, title, rows, foot='kicksma.sh'):
+def stats_card(bg_bgr, title, rows, foot=''):
     """rows: [(big number, label)], up to four across."""
     im, d = _over(darken(bg_bgr))
     centred(d, 150, title.upper(), font(72, 'ExtraBold'), WHITE, 6)
@@ -154,7 +155,7 @@ def stats_card(bg_bgr, title, rows, foot='kicksma.sh'):
         tracked(d, (cx - w / 2, 380), str(num), f, LIME, 2)
         f2 = font(40, 'SemiBold'); w2 = tracked_w(lab.upper(), f2, 4)
         tracked(d, (cx - w2 / 2, 620), lab.upper(), f2, WHITE, 4)
-    centred(d, 900, foot.upper(), font(44, 'ExtraBold'), LIME, 10)
+    if foot: centred(d, 900, foot.upper(), font(44, 'ExtraBold'), LIME, 10)      # no brand by default (see bug)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def player_card(frame_bgr, box, name, team, sub=None):
@@ -292,14 +293,14 @@ def intro_card_tall(bg_bgr, venue, date, pair_a, pair_b, score, kicker='MATCH HI
     _c(d, 1330, venue.upper(), font(40, 'SemiBold'), (200, 205, 212), 6); _c(d, 1390, date.upper(), font(40, 'SemiBold'), (200, 205, 212), 6)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
-def stats_card_tall(bg_bgr, title, rows, foot='kicksma.sh'):
+def stats_card_tall(bg_bgr, title, rows, foot=''):
     im, d = _over(_tall_bg(bg_bgr))
     _c(d, 330, title.upper(), _fit(title.upper(), 72, 6, TW - 120), WHITE, 6); d.rectangle((TW / 2 - 60, 430, TW / 2 + 60, 436), fill=LIME)
     for i, (num, lab) in enumerate(rows):
         cx = TW * (0.27 if i % 2 == 0 else 0.73); y = 560 + 420 * (i // 2)
         f = font(190, 'ExtraBold'); w = tracked_w(str(num), f, 2); tracked(d, (cx - w / 2, y), str(num), f, LIME, 2)
         f2 = font(40, 'SemiBold'); w2 = tracked_w(lab.upper(), f2, 4); tracked(d, (cx - w2 / 2, y + 240), lab.upper(), f2, WHITE, 4)
-    _c(d, 1520, foot.upper(), font(44, 'ExtraBold'), LIME, 10)
+    if foot: _c(d, 1520, foot.upper(), font(44, 'ExtraBold'), LIME, 10)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def outro_card_tall(bg_bgr, line1, line2):
@@ -338,12 +339,11 @@ def player_card_tall(frame_bgr, box, name, team, sub=None):
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
 
 def tall_base(venue, pair_a, pair_b, score):
-    """The standing frame of the vertical reel: ink, the two pairs and the score under the picture."""
+    """The standing frame of the vertical reel: ink, the two pairs and the score under the picture. No brand (see bug)."""
     im, d = _sheet('RGB', (TW, TH), INK)
     d.rectangle((0, 0, TW, 10), fill=LIME)
     f = _fit(pair_a.upper(), 76, 3, TW - 160)
     tracked(d, (60, 1420), pair_a.upper(), f, LIME, 3); tracked(d, (60, 1512), 'VS', font(36, 'SemiBold'), (150, 156, 165), 6)
     tracked(d, (60, 1566), pair_b.upper(), f, (120, 160, 255), 3)
     tracked(d, (60, 1690), score, font(64, 'ExtraBold'), WHITE, 8)
-    w = tracked_w('KICKSMA.SH', font(34, 'ExtraBold'), 8); tracked(d, (TW - w - 60, 1716), 'KICKSMA.SH', font(34, 'ExtraBold'), (150, 156, 165), 8)
     return cv2.cvtColor(np.array(im), cv2.COLOR_RGB2BGR)
