@@ -3055,6 +3055,7 @@
     "has5": "Who won each point",
     "fastNo4": "No winner of each point",
     "againOpen": "Make a new reel",
-    "againNote": "Send the video again. This reel plays until you send it; then the new reel takes its place."
+    "againNote": "Send the video again. This reel plays until you send it; then the new reel takes its place.",
+    "fullByHand": "A person makes the full reel from your video. It is ready within a day."
   }
 }

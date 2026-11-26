@@ -789,6 +789,7 @@ try {
       (await fullWay.getByText("✓").count()) === 5 &&
       (await fullWay.getByText("✕").count()) === 0 &&
       (await fullWay.getByText("Who won each point").count()) === 1 &&
+      (await fullWay.getByTestId("reel-full-by-hand").innerText()) === "A person makes the full reel from your video. It is ready within a day." &&
       (await fastWay.getByText("✓").count()) === 2 &&
       (await fastWay.getByText("✕").count()) === 4 &&
       (await fastWay.getByText("No score in the corner").count()) === 1 &&
