@@ -46,6 +46,12 @@ sheet. The reel passes only when every row holds:
 
 A reel that fails a row is not posted. Write which row and at which second in the summary.
 
+The fast reel (made from a player's clips) and the full reel (made from the whole match video) share this table.
+The owner, 26 November 2026: the fast reel's standard does not include a winner line or a score box, because the
+clips alone cannot prove who won each point or the score of each point; the full reel's standard includes both. The
+app says the same in the reel choice ("Who won each point" and "The score in the corner" are ticks for the full reel
+and crosses for the fast reel). So never fail a fast reel for a missing winner line or score box.
+
 ## 3. Post a reel that passes
 
 1. `python3 scripts/social/instagram.py check tall.mp4` must say `"ok": true`.

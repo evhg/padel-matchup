@@ -300,6 +300,7 @@ export function ReelSend({
             <ul className="mt-3 flex flex-col gap-1.5 text-sm">
               {mark(true, t("has1"))}
               {mark(true, t("has2"))}
+              {mark(true, t("has5"))}
               {mark(true, t("has3"))}
               {mark(true, t("has4"))}
             </ul>
@@ -333,6 +334,7 @@ export function ReelSend({
                 {mark(true, t("fastHas1"))}
                 {mark(true, t("fastHas2"))}
                 {mark(false, t("fastNo1"))}
+                {mark(false, t("fastNo4"))}
                 {mark(false, t("fastNo2"))}
                 {mark(false, t("fastNo3"))}
               </ul>
