@@ -379,6 +379,15 @@ try {
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
+  // Organizer tools is one list of rows, with nothing behind a "More" (the owner, 26 November 2026).
+  const tools = p.getByTestId("organiser-tools");
+  check(
+    "Organizer tools is one list: Edit match is a row, Cancel match is the last row, and there is no More",
+    (await tools.getByTestId("edit-match-row").count()) === 1 &&
+      (await tools.getByText("More", { exact: true }).count()) === 0 &&
+      (await tools.getByRole("switch").count()) >= 1 &&
+      (await tools.locator(":scope > div > div").last().innerText()).trim() === "Cancel match",
+  );
   // "Make a new reel" (the owner, 26 November 2026: "Erik will redo the reel"): folded under a reel that plays, for
   // the match's own people; opened, it holds the two ways to send the video, and the reel still plays above it.
   const againDoor = p.getByTestId("reel-again");

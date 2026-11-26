@@ -457,7 +457,8 @@
     "fixReplace": "Jugué yo en lugar de {name}",
     "fixReplaceConfirm": "¿Jugaste tú en lugar de {name}? {name} recibirá un mensaje de que ocupaste su plaza.",
     "fixReplaceHeld": "¿Jugaste tú en lugar de {name}?",
-    "bookedQuestion": "¿Reservaste la pista?"
+    "bookedQuestion": "¿Reservaste la pista?",
+    "whoPlayed": "Quién jugó"
   },
   "creator": {
     "tools": "Herramientas de organizador",

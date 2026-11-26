@@ -46,6 +46,14 @@ sheet. The reel passes only when every row holds:
 
 A reel that fails a row is not posted. Write which row and at which second in the summary.
 
+**Music and added sound (26 November 2026).** No music track and no added crowd sound has a licence on record that
+allows a public post: "bounce" came from MusicGen, whose recorded licence is CC BY-NC 4.0 (no use that earns money),
+and the other tracks and `assets/cheers/` have no source or licence recorded. So a reel is posted only when the
+player chose no music and no crowd: read `uploads/<upload>/choices.json` (`reel.json` names the upload) and post only
+when `"music": "none"` and `"crowd": false`. A reel with no `choices.json` had the defaults (music "bounce", crowd on):
+skip it. Write "skipped: music not licensed for a public post" in the summary. This holds until the owner records a
+licence for a track.
+
 The fast reel (made from a player's clips) and the full reel (made from the whole match video) share this table.
 The owner, 26 November 2026: the fast reel's standard does not include a winner line or a score box, because the
 clips alone cannot prove who won each point or the score of each point; the full reel's standard includes both. The

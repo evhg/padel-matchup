@@ -160,7 +160,10 @@ try {
 
   // ---- Organizer confirms levels after the result ----
   const confirmRow = org.getByRole("button", { name: /Confirm levels/ });
-  check("confirm-levels row appears once the result is final, folded", (await confirmRow.count()) === 1 && (await org.getByRole("button", { name: /Confirm all/ }).count()) === 0);
+  check(
+    "confirm-levels row appears once the result is final, folded, as a row of Organizer tools",
+    (await confirmRow.count()) === 1 && (await org.getByTestId("organiser-tools").getByRole("button", { name: /Confirm levels/ }).count()) === 1 && (await org.getByRole("button", { name: /Confirm all/ }).count()) === 0,
+  );
   await confirmRow.click();
   check("seven players to confirm, none yet", (await org.getByText("7 players to confirm").count()) > 0 && (await org.getByRole("button", { name: "Looks right" }).count()) === 7);
   await org.getByRole("button", { name: "Looks right" }).first().click();
