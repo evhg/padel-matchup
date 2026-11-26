@@ -43,6 +43,10 @@ delete process.env.SUPABASE_DB_URL;
 // service: found on 6 November 2026. CI has no key, so the suite already passes without it, and a test
 // that wants mail on sets its own key and a sink (EMAIL_SINK_FILE).
 delete process.env.RESEND_API_KEY;
+// The same for TikTok: a test that wants "Share to TikTok" on sets its own fake key and answers for TikTok itself.
+delete process.env.TIKTOK_CLIENT_KEY;
+delete process.env.TIKTOK_CLIENT_SECRET;
+delete process.env.TIKTOK_SHARE;
 
 // Files share a worker (`isolate: false`), so one file's environment is the next one's. Whatever a
 // test sets, adds or deletes is undone when the file ends, and a file therefore starts from the same

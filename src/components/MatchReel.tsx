@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import type { ReelView } from "@/lib/domain/matchReel";
 import { ReelSave } from "./ReelSave";
 import { ReelLinkShare } from "./ReelLinkShare";
-import { baseUrl } from "@/lib/config";
+import { baseUrl, tiktokShareOn } from "@/lib/config";
 
 /**
  * The highlights reel on the match page, for the match's own players and organiser (the page decides).
@@ -11,6 +11,7 @@ import { baseUrl } from "@/lib/config";
  */
 export async function MatchReel({ reel, keptUntil, code }: { reel: ReelView; keptUntil: string; code: string }) {
   const t = await getTranslations("reel");
+  const tt = await getTranslations("tiktok");
   return (
     <section className="card" data-testid="match-reel">
       <h2 className="text-lg font-extrabold">{t("title")}</h2>
@@ -24,6 +25,12 @@ export async function MatchReel({ reel, keptUntil, code }: { reel: ReelView; kep
         <ReelLinkShare url={`${baseUrl()}/${code}/reel?s=share`} text={t("title")} />
         <ReelSave url={reel.tall} name={`kicksmash-${code}-tall.mp4`} primary label={t("downloadTall")} shareLabel={t("shareTall")} />
         <ReelSave url={reel.wide} name={`kicksmash-${code}-wide.mp4`} primary={false} label={t("downloadWide")} shareLabel={t("shareWide")} />
+        {/* "Share to TikTok" (the owner, 26 November 2026): the player posts the reel to their own TikTok, through TikTok's sign-in. */}
+        {tiktokShareOn() && (
+          <a href={`/api/tiktok/start?code=${code}`} className="btn-ghost btn-sm w-full" data-testid="reel-tiktok">
+            {tt("share")}
+          </a>
+        )}
       </div>
       <p className="mt-2 text-xs text-faint">{t("kept", { date: keptUntil })}</p>
     </section>

@@ -106,9 +106,15 @@ export async function Footer({
         />
       )}
       <div className="flex items-center justify-between gap-3">
-        <Link href="/privacy" prefetch={false} className="hover:text-muted">
-          {t("about.footerLink")}
-        </Link>
+        {/* Two links, each to its own page (26 November 2026, with "Share to TikTok"): the privacy page and the terms. */}
+        <span className="flex items-center gap-4">
+          <Link href="/privacy" prefetch={false} className="hover:text-muted">
+            {t("about.footerPrivacy")}
+          </Link>
+          <Link href="/terms" prefetch={false} className="hover:text-muted">
+            {t("about.footerTerms")}
+          </Link>
+        </span>
         <span>{APP_NAME}</span>
       </div>
     </footer>

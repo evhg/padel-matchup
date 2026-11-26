@@ -1649,6 +1649,15 @@ Everything in this list is live. The README describes each in detail.
   the end of a player's row. The footer's small "Feedback" link and the ten inline doors became one grey
   button at full width in every footer, "Tell us what should change", which opens the form in place. No
   function went, and no migration. Proven in the browser suites core, viral, seo and player-states.
+- **Share to TikTok** (the owner, 26 November 2026: TikTok refuses a tool that posts only to the owner's own
+  account). The reel page and the reel on the match page have "Share to TikTok": any player signs in with
+  TikTok and posts the reel to their own account, by TikTok's Content Sharing Guidelines; @kicksma.sh posts
+  through the same flow. Direct Post pulls the reel from our own verified address, which streams it from the
+  reel host. No table and no migration: the token is in an encrypted cookie of about two hours. The app on
+  TikTok is in the sandbox, so a post is private and the account must be private until TikTok audits the
+  app, and only the app's test users can sign in: the button shows only while `TIKTOK_SHARE` is `on`. The
+  sign-in uses PKCE. The footer has two links, Privacy and Terms. Proven in `tests/tiktok.test.ts` and the browser suite
+  viral, against a fake TikTok.
 
 ## The finish line
 

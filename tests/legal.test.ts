@@ -16,6 +16,7 @@ import { RENEW_EVERY_DAYS } from "@/lib/domain/browserSession";
 import { COACH_SOURCE_COOKIE, SOURCE_COOKIE, SOURCE_MAX_AGE } from "@/lib/source";
 import { TEXT_SIZE_COOKIE, textSizeCookie } from "@/lib/textSize";
 import { CHALLENGE_COOKIE, challengeCookie } from "@/lib/passkeys/webauthn";
+import { STATE_COOKIE as TIKTOK_STATE_COOKIE, STATE_TTL_MS as TIKTOK_STATE_TTL_MS, TOKEN_COOKIE as TIKTOK_COOKIE } from "@/lib/tiktok/seal";
 import { HINT_KEEP_DAYS } from "@/lib/domain/deviceHints";
 import { cleanSignals, isEuropeanZone, SIGNAL_BOUNDS, SIGNALS_COOKIE, SIGNALS_COOKIE_MAX_AGE } from "@/lib/domain/hintSignals";
 import { getTableColumns } from "drizzle-orm";
@@ -41,7 +42,7 @@ const notMineCookie = readFileSync(path.resolve(process.cwd(), "src/components/S
 describe("the privacy page tells the truth about the code", () => {
   it("names every cookie the app sets, in every language", () => {
     expect(notMineCookie).toBe("ks_notmine");
-    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, SIGNED_OUT_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE, SIGNALS_COOKIE];
+    const cookies = [PLAYER_COOKIE, HAS_ID_COOKIE, BY_NAME_COOKIE, SIGNED_OUT_COOKIE, LOCALE_COOKIE, manageCookieName(""), SOURCE_COOKIE, COACH_SOURCE_COOKIE, notMineCookie!, TEXT_SIZE_COOKIE, CHALLENGE_COOKIE, SIGNALS_COOKIE, TIKTOK_STATE_COOKIE, TIKTOK_COOKIE];
     for (const l of LOCALES) {
       const text = render(l, "privacy.cookiesBody");
       expect({ locale: l, missing: cookies.filter((c) => !text.includes(c)) }).toEqual({ locale: l, missing: [] });
@@ -55,6 +56,7 @@ describe("the privacy page tells the truth about the code", () => {
       [365 * 24 * 3600]: { en: "One year", ru: "Один год", es: "Un año" },
       [24 * 3600]: { en: "One day", ru: "Один день", es: "Un día" },
       [5 * 60]: { en: "Five minutes", ru: "Пять минут", es: "Cinco minutos" },
+      [10 * 60]: { en: "Ten minutes", ru: "Десять минут", es: "Diez minutos" },
       [60]: { en: "One minute", ru: "Одна минута", es: "Un minuto" },
     };
     const textSizeAge = Number(/max-age=(\d+)/.exec(textSizeCookie("big"))?.[1]);
@@ -69,6 +71,8 @@ describe("the privacy page tells the truth about the code", () => {
       [TEXT_SIZE_COOKIE, textSizeAge],
       [CHALLENGE_COOKIE, challengeCookie().maxAge],
       [SIGNALS_COOKIE, SIGNALS_COOKIE_MAX_AGE],
+      // The TikTok token's cookie lives as long as TikTok's own token (`expires_in`, about two hours), so only the state has a fixed life.
+      [TIKTOK_STATE_COOKIE, TIKTOK_STATE_TTL_MS / 1000],
     ];
     for (const l of LOCALES) {
       const lines = render(l, "privacy.cookiesBody").split("\n");
