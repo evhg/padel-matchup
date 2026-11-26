@@ -28,11 +28,11 @@ async function call(fetchImpl: Fetch, url: string, init: RequestInit): Promise<{
 
 const bearer = (token: string) => ({ authorization: `Bearer ${token}`, "content-type": "application/json; charset=UTF-8" });
 
-/** The code of TikTok's callback, for a token. */
-export async function exchangeCode(code: string, now: Date, fetchImpl: Fetch = fetch): Promise<Result<{ token: TikTokToken }> | Refused> {
+/** The code of TikTok's callback, for a token, with the PKCE verifier its authorize address was made from. */
+export async function exchangeCode(code: string, codeVerifier: string, now: Date, fetchImpl: Fetch = fetch): Promise<Result<{ token: TikTokToken }> | Refused> {
   const keys = tiktokKeys();
   if (!keys) return { ok: false, error: { code: "off", message: "" } };
-  const body = new URLSearchParams({ client_key: keys.clientKey, client_secret: keys.clientSecret, code, grant_type: "authorization_code", redirect_uri: redirectUri() });
+  const body = new URLSearchParams({ client_key: keys.clientKey, client_secret: keys.clientSecret, code, grant_type: "authorization_code", redirect_uri: redirectUri(), code_verifier: codeVerifier });
   const got = await call(fetchImpl, `${TIKTOK_API}/v2/oauth/token/`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: body.toString() });
   if (!got.ok) return got;
   const t = tokenOf(got.json, now);

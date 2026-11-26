@@ -5,7 +5,7 @@ import { baseUrl, tiktokKeys } from "@/lib/config";
 import { matchReelByCode } from "@/lib/domain/matchReel";
 import { authorizeUrl } from "@/lib/domain/tiktok";
 import { redirectUri } from "@/lib/tiktok/api";
-import { cookieOptions, newState, openToken, STATE_COOKIE, STATE_PATH, STATE_TTL_MS, TOKEN_COOKIE } from "@/lib/tiktok/seal";
+import { codeChallenge, cookieOptions, newState, openToken, STATE_COOKIE, STATE_PATH, STATE_TTL_MS, TOKEN_COOKIE } from "@/lib/tiktok/seal";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const again = url.searchParams.get("again") === "1";
   if (!again && openToken(req.cookies.get(TOKEN_COOKIE)?.value, now, 5 * 60_000)) return NextResponse.redirect(`${reelPage}/tiktok`, 302);
   const state = newState(code, now);
-  const res = NextResponse.redirect(authorizeUrl({ clientKey: keys.clientKey, redirectUri: redirectUri(), state: state.nonce }), 302);
+  const res = NextResponse.redirect(authorizeUrl({ clientKey: keys.clientKey, redirectUri: redirectUri(), state: state.nonce, codeChallenge: codeChallenge(state.verifier) }), 302);
   res.cookies.set(STATE_COOKIE, state.cookie, cookieOptions(STATE_TTL_MS / 1000, STATE_PATH));
   if (again) res.cookies.set(TOKEN_COOKIE, "", cookieOptions(0));
   res.headers.set("cache-control", "no-store");

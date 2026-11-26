@@ -46,6 +46,7 @@ delete process.env.RESEND_API_KEY;
 // The same for TikTok: a test that wants "Share to TikTok" on sets its own fake key and answers for TikTok itself.
 delete process.env.TIKTOK_CLIENT_KEY;
 delete process.env.TIKTOK_CLIENT_SECRET;
+delete process.env.TIKTOK_SHARE;
 
 // Files share a worker (`isolate: false`), so one file's environment is the next one's. Whatever a
 // test sets, adds or deletes is undone when the file ends, and a file therefore starts from the same

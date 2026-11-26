@@ -30,14 +30,28 @@ export const STATUS_STOP_MS = 15 * 60_000;
 /** The privacy level that is "Only me". The page names each level TikTok knows in words (`privacyName` in `TikTokPost`). */
 export const PRIVATE = "SELF_ONLY";
 
-/** The address TikTok's own sign-in screen opens on. No PKCE for a web app. */
-export function authorizeUrl(o: { clientKey: string; redirectUri: string; state: string }): string {
+/**
+ * A PKCE code verifier as TikTok takes one: "a high-entropy cryptographic random string using the unreserved
+ * characters [A-Z] / [a-z] / [0-9] / "-" / "." / "_" / "~", with a minimum length of 43 characters and a maximum
+ * length of 128 characters" (developers.tiktok.com/doc/login-kit-desktop, read 26 November 2026).
+ */
+export const isCodeVerifier = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9._~-]{43,128}$/.test(v);
+
+/**
+ * The address TikTok's own sign-in screen opens on, with PKCE. TikTok's page for web lists no PKCE, but TikTok's
+ * own screen refused a web sign-in without it ("error_type=code_challenge", 26 November 2026), so the address
+ * carries the challenge as TikTok's desktop page states it: `code_challenge` is the hex SHA-256 of the verifier
+ * (`codeChallenge` in src/lib/tiktok/seal.ts) and `code_challenge_method` is always `S256`.
+ */
+export function authorizeUrl(o: { clientKey: string; redirectUri: string; state: string; codeChallenge: string }): string {
   const u = new URL(TIKTOK_AUTHORIZE_URL);
   u.searchParams.set("client_key", o.clientKey);
   u.searchParams.set("response_type", "code");
   u.searchParams.set("scope", TIKTOK_SCOPES.join(","));
   u.searchParams.set("redirect_uri", o.redirectUri);
   u.searchParams.set("state", o.state);
+  u.searchParams.set("code_challenge", o.codeChallenge);
+  u.searchParams.set("code_challenge_method", "S256");
   return u.toString();
 }
 

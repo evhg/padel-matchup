@@ -44,8 +44,8 @@ globalThis.fetch = async function fakeTikTok(input, init = {}) {
   const body = typeof init.body === "string" ? init.body : "";
   if (url.pathname === "/v2/oauth/token/") {
     const f = new URLSearchParams(body);
-    if (f.get("client_key") !== KEY || f.get("client_secret") !== SECRET || f.get("grant_type") !== "authorization_code" || !/\/api\/tiktok\/callback$/.test(f.get("redirect_uri") ?? "")) {
-      return json({ error: "invalid_client", error_description: "e2e: the app's key, secret or redirect is not the suite's" }, 401);
+    if (f.get("client_key") !== KEY || f.get("client_secret") !== SECRET || f.get("grant_type") !== "authorization_code" || !/\/api\/tiktok\/callback$/.test(f.get("redirect_uri") ?? "") || !/^[A-Za-z0-9._~-]{43,128}$/.test(f.get("code_verifier") ?? "")) {
+      return json({ error: "invalid_client", error_description: "e2e: the app's key, secret, redirect or PKCE verifier is not the suite's" }, 401);
     }
     const which = { "e2e-public": "e2e-tok-public", "e2e-private": "e2e-tok-private" }[f.get("code") ?? ""];
     if (!which) return json({ error: "invalid_grant", error_description: "Authorization code is expired." }, 400);

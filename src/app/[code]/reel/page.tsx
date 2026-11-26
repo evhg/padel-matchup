@@ -6,7 +6,7 @@ import { Footer, Header } from "@/components/Header";
 import { ShareButtons } from "@/components/ShareSheet";
 import { getDb } from "@/db";
 import { isValidShareCode } from "@/lib/codes";
-import { baseUrl, tiktokKeys } from "@/lib/config";
+import { baseUrl, tiktokShareOn } from "@/lib/config";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
 import { matchReel, reelStillAt } from "@/lib/domain/matchReel";
 import { getEventByCode } from "@/lib/domain/queries";
@@ -71,7 +71,7 @@ async function ReelPage({ params, searchParams }: Props) {
         {line && <p className="text-sm font-semibold">{line}</p>}
         <video className="mx-auto block aspect-[9/16] max-h-[75vh] max-w-full rounded-2xl bg-night object-cover" controls playsInline preload="metadata" poster={got.reel.poster} src={got.reel.tall} data-testid="reel-page-video" />
         <ShareButtons url={url} text={line ? `${t("reel.pageTitle")} · ${line}` : t("reel.pageTitle")} />
-        {tiktokKeys() && (
+        {tiktokShareOn() && (
           <>
             {/* "Share to TikTok" (the owner, 26 November 2026): any player posts the reel to their own TikTok. A plain link: nothing goes to TikTok before the player opens it. */}
             <a href={`/api/tiktok/start?code=${code}`} className="btn-secondary w-full" data-testid="tiktok-share">

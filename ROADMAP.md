@@ -1655,7 +1655,8 @@ Everything in this list is live. The README describes each in detail.
   through the same flow. Direct Post pulls the reel from our own verified address, which streams it from the
   reel host. No table and no migration: the token is in an encrypted cookie of about two hours. The app on
   TikTok is in the sandbox, so a post is private and the account must be private until TikTok audits the
-  app. The footer has two links, Privacy and Terms. Proven in `tests/tiktok.test.ts` and the browser suite
+  app, and only the app's test users can sign in: the button shows only while `TIKTOK_SHARE` is `on`. The
+  sign-in uses PKCE. The footer has two links, Privacy and Terms. Proven in `tests/tiktok.test.ts` and the browser suite
   viral, against a fake TikTok.
 
 ## The finish line

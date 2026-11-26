@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
  * TikTok sends the player back here: `GET /api/tiktok/callback?code&scopes&state`, or `?error&error_description`.
  * The registered redirect URI is exactly this address on https://kicksma.sh.
  *
- * The state must be the nonce of the signed cookie that `/api/tiktok/start` set, within its ten minutes.
+ * The state must be the nonce of the sealed cookie that `/api/tiktok/start` set, within its ten minutes; the
+ * cookie also holds the PKCE verifier, which goes with the code.
  * Then the code goes for a token (server side, with the client secret), the token goes into its
  * encrypted cookie, and the player lands on the posting page. Any failure goes back to the reel page
  * with `?tiktok=<why>`; a cookie that is not ours at all goes to the home page.
@@ -25,11 +26,11 @@ export async function GET(req: NextRequest) {
     return res;
   };
   if (!tiktokKeys() || !state.code) return back("failed");
-  if (!state.ok) return back("expired");
+  if (!state.ok || !state.verifier) return back("expired");
   if (url.searchParams.get("error")) return back("denied");
   const code = url.searchParams.get("code");
   if (!code || code.length > 1000) return back("failed");
-  const got = await exchangeCode(code, now);
+  const got = await exchangeCode(code, state.verifier, now);
   if (!got.ok) return back("failed");
   if (!got.token.scopes.includes(POST_SCOPE)) return back("scope");
   const res = NextResponse.redirect(`${baseUrl()}/${state.code}/reel/tiktok`, 303);

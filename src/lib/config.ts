@@ -146,3 +146,10 @@ export const tiktokKeys = (): { clientKey: string; clientSecret: string } | null
   const clientSecret = (process.env.TIKTOK_CLIENT_SECRET ?? "").trim();
   return clientKey && clientSecret ? { clientKey, clientSecret } : null;
 };
+
+/**
+ * Whether the reel shows "Share to TikTok": `TIKTOK_SHARE` is `on` and both TikTok values are set. The routes
+ * answer either way. The app is in TikTok's sandbox until TikTok audits it, and there only the app's test users
+ * can sign in: any other player would land on TikTok's error, so the button waits for this switch.
+ */
+export const tiktokShareOn = (): boolean => (process.env.TIKTOK_SHARE ?? "").trim().toLowerCase() === "on" && tiktokKeys() !== null;

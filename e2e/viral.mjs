@@ -402,6 +402,8 @@ try {
     "TikTok's sign-in asks for the three scopes with our callback, and the posting page shows the account, a preview, no privacy picked and every switch off",
     `${authorizeSeen[0]?.origin}${authorizeSeen[0]?.path}` === "https://www.tiktok.com/v2/auth/authorize/" &&
       authorizeSeen[0]?.scope === "user.info.basic,video.publish,video.upload" &&
+      /^[0-9a-f]{64}$/.test(authorizeSeen[0]?.code_challenge ?? "") &&
+      authorizeSeen[0]?.code_challenge_method === "S256" &&
       authorizeSeen[0]?.redirect_uri === `${BASE}/api/tiktok/callback` &&
       new URL(reelVisitor.url()).pathname === `/${mcode}/reel/tiktok` &&
       (await reelVisitor.getByTestId("tiktok-nickname").innerText()) === "Public Padel" &&

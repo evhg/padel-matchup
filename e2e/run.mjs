@@ -73,6 +73,7 @@ const env = {
   // against it, with the suite's own app key and secret, so no suite calls TikTok.
   TIKTOK_CLIENT_KEY: "e2e-tiktok-key",
   TIKTOK_CLIENT_SECRET: "e2e-tiktok-secret",
+  TIKTOK_SHARE: "on",
   NODE_OPTIONS: [process.env.NODE_OPTIONS, ...["fakes/playtomic.mjs", "fakes/tiktok.mjs"].map((f) => `--import ${path.join(path.dirname(new URL(import.meta.url).pathname), f)}`)].filter(Boolean).join(" "),
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {

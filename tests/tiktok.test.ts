@@ -8,10 +8,12 @@ import { POST as post } from "@/app/api/tiktok/post/route";
 import { POST as status } from "@/app/api/tiktok/status/route";
 import { GET as video, HEAD as videoHead } from "@/app/api/tiktok/video/[file]/route";
 import { TikTokPost } from "@/components/TikTokPost";
+import { tiktokShareOn } from "@/lib/config";
 import { setMatchReel } from "@/lib/domain/matchReel";
 import { recordPlayedMatch } from "@/lib/domain/playedMatch";
 import {
   authorizeUrl,
+  isCodeVerifier,
   commercialLabel,
   creatorOf,
   formRules,
@@ -24,7 +26,7 @@ import {
   type Creator,
   type PostForm,
 } from "@/lib/domain/tiktok";
-import { checkState, newState, openToken, sealToken, STATE_COOKIE, STATE_TTL_MS, TICKET_TTL_MS, TOKEN_COOKIE, videoTicket, videoTicketOk } from "@/lib/tiktok/seal";
+import { checkState, codeChallenge, newCodeVerifier, newState, openToken, sealToken, STATE_COOKIE, STATE_TTL_MS, TICKET_TTL_MS, TOKEN_COOKIE, videoTicket, videoTicketOk } from "@/lib/tiktok/seal";
 import { freezeClock } from "./helpers/clock";
 import { DAY } from "./helpers/db";
 import { renderIn } from "./helpers/render";
@@ -104,21 +106,38 @@ afterEach(() => {
 });
 
 describe("the sign-in's state", () => {
-  it("opens only for its own nonce, within its ten minutes, under our signature", () => {
+  it("opens only for its own nonce, within its ten minutes, under our key, and gives back its verifier", () => {
     const s = newState("ABCD", NOW);
-    expect(checkState(s.cookie, s.nonce, NOW)).toEqual({ ok: true, code: "ABCD" });
+    expect(checkState(s.cookie, s.nonce, NOW)).toEqual({ ok: true, code: "ABCD", verifier: s.verifier });
     expect(checkState(s.cookie, s.nonce, new Date(NOW.getTime() + STATE_TTL_MS - 1)).ok).toBe(true);
     expect(checkState(s.cookie, s.nonce, new Date(NOW.getTime() + STATE_TTL_MS))).toEqual({ ok: false, code: "ABCD", why: "expired" });
     expect(checkState(s.cookie, "another-nonce", NOW)).toEqual({ ok: false, code: "ABCD", why: "mismatch" });
     expect(checkState(s.cookie, null, NOW).ok).toBe(false);
-    // Another match under the old signature, and a signature changed in its first character: not ours.
-    const [v, , end, nonce, sig] = s.cookie.split(".");
-    expect(checkState([v, "WXYZ", end, nonce, sig].join("."), nonce, NOW)).toEqual({ ok: false, code: null, why: "missing" });
-    expect(checkState([v, "ABCD", end, nonce, (sig[0] === "A" ? "B" : "A") + sig.slice(1)].join("."), nonce, NOW).code).toBeNull();
+    // Sealed, so neither the nonce nor the verifier can be read in the cookie; a sealed value changed in its first
+    // character, and a token cookie (another purpose's key) offered as the state, are not ours.
+    expect(s.cookie).not.toContain(s.verifier);
+    expect(s.cookie).not.toContain(s.nonce);
+    const [v, iv, body] = s.cookie.split(".");
+    expect(checkState([v, iv, (body[0] === "A" ? "B" : "A") + body.slice(1)].join("."), s.nonce, NOW)).toEqual({ ok: false, code: null, why: "missing" });
+    expect(checkState(["s2", ...token().split(".").slice(1)].join("."), s.nonce, NOW)).toEqual({ ok: false, code: null, why: "missing" });
     expect(checkState(undefined, s.nonce, NOW)).toEqual({ ok: false, code: null, why: "missing" });
   });
 
-  it("starts at TikTok's own sign-in with the three scopes, the exact redirect address and the nonce", async () => {
+  it("makes the PKCE challenge as TikTok's page states it: the hex SHA-256 of the verifier, method S256", () => {
+    // RFC 7636's example verifier. Its base64url challenge would be "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    // TikTok asks for the same SHA-256 in hex (developers.tiktok.com/doc/login-kit-desktop).
+    const verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+    expect(codeChallenge(verifier)).toBe("13d31e961a1ad8ec2f16b10c4c982e0876a878ad6df144566ee1894acb70f9c3");
+    expect(Buffer.from(codeChallenge(verifier), "hex").toString("base64url")).toBe("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    const url = new URL(authorizeUrl({ clientKey: "k", redirectUri: "https://kicksma.sh/api/tiktok/callback", state: "s", codeChallenge: codeChallenge(verifier) }));
+    expect([url.searchParams.get("code_challenge"), url.searchParams.get("code_challenge_method")]).toEqual(["13d31e961a1ad8ec2f16b10c4c982e0876a878ad6df144566ee1894acb70f9c3", "S256"]);
+    // A fresh verifier each time, within TikTok's characters and its 43 to 128.
+    const a = newCodeVerifier();
+    expect(isCodeVerifier(a) && a !== newCodeVerifier() && a.length === 64).toBe(true);
+    for (const bad of ["short", "a".repeat(129), `${"a".repeat(43)}/`, null]) expect(isCodeVerifier(bad), String(bad)).toBe(false);
+  });
+
+  it("starts at TikTok's own sign-in with the three scopes, the exact redirect address, the nonce and the challenge", async () => {
     keysOn();
     const res = await start(withCookies(`https://kicksma.sh/api/tiktok/start?code=${code}`, {}));
     expect(res.status).toBe(302);
@@ -129,8 +148,28 @@ describe("the sign-in's state", () => {
     expect(set).toMatch(/HttpOnly/i);
     expect(set).toMatch(/Path=\/api\/tiktok/);
     expect(set).toMatch(/Max-Age=600/);
-    expect(checkState(decodeURIComponent(set.split(";")[0].slice(STATE_COOKIE.length + 1)), to.searchParams.get("state"), NOW).ok).toBe(true);
-    expect(authorizeUrl({ clientKey: "k", redirectUri: "https://kicksma.sh/api/tiktok/callback", state: "s" })).not.toContain("code_challenge");
+    const opened = checkState(decodeURIComponent(set.split(";")[0].slice(STATE_COOKIE.length + 1)), to.searchParams.get("state"), NOW);
+    expect(opened.ok).toBe(true);
+    // The address carries the challenge of the verifier the cookie keeps, never the verifier itself.
+    expect(to.searchParams.get("code_challenge")).toBe(codeChallenge(opened.verifier!));
+    expect(to.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(to.toString()).not.toContain(opened.verifier!);
+  });
+
+  it("shows the button only with TIKTOK_SHARE on and both values set, while the routes answer without the switch", async () => {
+    keysOn();
+    delete process.env.TIKTOK_SHARE;
+    expect(tiktokShareOn()).toBe(false);
+    // The start answers with the keys alone (keysOn sets no switch): a test user in the sandbox can still use the routes.
+    expect((await start(withCookies(`https://kicksma.sh/api/tiktok/start?code=${code}`, {}))).headers.get("location")).toMatch(/^https:\/\/www\.tiktok\.com\//);
+    for (const v of ["off", "1", "true", ""]) {
+      process.env.TIKTOK_SHARE = v;
+      expect(tiktokShareOn(), v).toBe(false);
+    }
+    process.env.TIKTOK_SHARE = " On ";
+    expect(tiktokShareOn()).toBe(true);
+    delete process.env.TIKTOK_CLIENT_SECRET;
+    expect(tiktokShareOn()).toBe(false);
   });
 
   it("skips TikTok for a browser that holds a fresh token, refuses a match with no reel, and is off without the keys", async () => {
@@ -148,7 +187,7 @@ describe("the sign-in's state", () => {
 });
 
 describe("the token", () => {
-  it("is exchanged for the code with the client secret, server side, as a form", async () => {
+  it("is exchanged for the code with the client secret and the PKCE verifier, server side, as a form", async () => {
     keysOn();
     const calls = fakeFetch(() => json({ access_token: "act.new", expires_in: 7200, open_id: "open-9", refresh_token: "rft.never-kept", scope: "user.info.basic,video.publish,video.upload", token_type: "Bearer" }));
     const s = newState(code, NOW);
@@ -156,7 +195,7 @@ describe("the token", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(`${TIKTOK}/v2/oauth/token/`);
     expect(headerOf(calls[0].init, "content-type")).toBe("application/x-www-form-urlencoded");
-    expect(Object.fromEntries(new URLSearchParams(String(calls[0].init.body)))).toEqual({ client_key: "test-client-key", client_secret: "test-client-secret", code: "the-code", grant_type: "authorization_code", redirect_uri: "https://kicksma.sh/api/tiktok/callback" });
+    expect(Object.fromEntries(new URLSearchParams(String(calls[0].init.body)))).toEqual({ client_key: "test-client-key", client_secret: "test-client-secret", code: "the-code", grant_type: "authorization_code", redirect_uri: "https://kicksma.sh/api/tiktok/callback", code_verifier: s.verifier });
     expect(res.headers.get("location")).toBe(`https://kicksma.sh/${code}/reel/tiktok`);
     const set = res.headers.getSetCookie().find((c) => c.startsWith(`${TOKEN_COOKIE}=`))!;
     expect(set).toMatch(/HttpOnly/i);
