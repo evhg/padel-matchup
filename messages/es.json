@@ -343,7 +343,9 @@
     "nativeShareImage": "Compartir la imagen…",
     "copyMessage": "Copiar mensaje",
     "otherWays": "Otras formas de compartir",
-    "moreSummary": "Telegram, código QR, imagen para historias, recordatorio, email, enlace de organizador"
+    "moreSummary": "Telegram, código QR, imagen para historias, recordatorio, email, enlace de organizador",
+    "linkCopied": "Enlace copiado",
+    "linkCopyPrompt": "Copia el enlace del partido"
   },
   "event": {
     "match": "Partido de pádel",
@@ -556,7 +558,8 @@
     "correctedBy": "Corregido por {name}",
     "correctedLine": "{name} cambió el resultado de {from} a {to}.",
     "putBack": "Volver a {score}",
-    "typeEveryBox": "Escribe los juegos de los dos equipos en cada set."
+    "typeEveryBox": "Escribe los juegos de los dos equipos en cada set.",
+    "shareResults": "Compartir el resultado del partido"
   },
   "me": {
     "title": "Mis partidos",
@@ -1427,14 +1430,11 @@
     "pts": "{points} pts",
     "teamA": "Equipo A",
     "teamB": "Equipo B",
-    "sameTimeDone": "Hecho: «{name}». Cada {when} se publica sola una tarjeta nueva.",
-    "sameTimeExists": "Este grupo ya existe: {name}.",
     "praise": "Para los ganadores",
     "addPhoto": "Añadir la foto de la pista",
     "photoFailed": "No se pudo usar esa imagen. Prueba con otra.",
     "removePhoto": "Quitar la foto",
     "waiting": "Esperando el resultado",
-    "makeWeekly": "Hacerlo semanal",
     "removePhotoConfirm": "¿Quitar la foto de la tarjeta del resultado?",
     "watchHighlights": "Ver los mejores momentos",
     "addHighlights": "Añadir el vídeo de los mejores momentos",
@@ -1443,7 +1443,8 @@
     "highlightsNotYoutube": "Pega un enlace de YouTube, por ejemplo https://youtu.be/…",
     "removeHighlights": "Quitar el enlace del vídeo",
     "removeHighlightsConfirm": "¿Quitar el enlace de los mejores momentos para todos en este partido?",
-    "filmTips": "Para grabar un partido: pon el móvil detrás del cristal del fondo, en el centro y en horizontal. Graba en 4K a 60 fps, con una batería externa."
+    "filmTips": "Para grabar un partido: pon el móvil detrás del cristal del fondo, en el centro y en horizontal. Graba en 4K a 60 fps, con una batería externa.",
+    "changeBackground": "Cambiar el fondo"
   },
   "group": {
     "title": "Grupo",

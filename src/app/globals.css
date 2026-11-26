@@ -251,6 +251,17 @@ html[data-text="big"] .input:is([type="date"], [type="time"]) {
   padding-inline: 0.625rem;
 }
 
+/* "Play again"'s day and time (PlayAgainButton): with `appearance: none` Safari centres the value and keeps a
+   minimum width from its text; the value goes left, and the field shrinks to the card. */
+.input-when {
+  min-width: 0;
+  -webkit-appearance: none;
+}
+.input-when::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 0;
+}
+
 /* Smooth scrolling only for people who have not asked for less motion (it also keeps automated taps honest). */
 @media (prefers-reduced-motion: no-preference) {
   html {

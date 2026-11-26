@@ -71,7 +71,8 @@ import { calendarTitle } from "@/lib/calendar";
 import { isValidShareCode } from "@/lib/codes";
 import { baseUrl, emailEnabled, passportKeys, reelUploadUrl } from "@/lib/config";
 import { defaultLength, eventEnd, isOver, parseMatchLength } from "@/lib/domain/matchLength";
-import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, formatWeeklyWhen, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { formatEventDay, formatEventDayLong, formatEventTime, formatWeekdayTime, relativeTime, tzLabel, utcToZonedParts, weekdayName } from "@/lib/dates";
+import { afterMatchView, SHARE_CARD_AFTER_MATCH } from "@/lib/domain/afterMatch";
 import { groupNameSuggestions } from "@/lib/domain/groupNames";
 import { canEditMatchDetails, editFormsShown, isClaimable, isOccupied, isSeated, mayMoveStart, organiserAlone } from "@/lib/domain/events";
 import { getEventPhotoMeta } from "@/lib/domain/photos";
@@ -310,15 +311,19 @@ async function EventPage({ params, searchParams }: Props) {
   const resultPhoto = result ? await getEventPhotoMeta(db, ev.id).catch(() => null) : null;
   // The numbers of a filmed match (`match_stats`): one read on the match's own index, and only once it has started.
   const numbers = showScore ? await matchNumbers(db, ev.id).catch(() => []) : [];
+  // The card's page, not the match page: its og:image is the result card (`/[code]/card`'s `generateMetadata`),
+  // so a shared link shows the card as its preview. The match page's og:image is the invitation.
   const resultCardUrl = taggedUrl(`${baseUrl()}/${code}/card`, "card");
+  // Without a court photo the card's background is the reel's team announcement, when the match has a reel.
+  const reelStill = result && !resultPhoto ? await reelStillAt(db, ev.id, now).catch(() => null) : null;
   const resultCard = result
     ? {
         href: `/${code}/card`,
-        image: cardImagePath(code, cardVersion(detail, resultPhoto, resultPhoto ? null : await reelStillAt(db, ev.id, now).catch(() => null))),
+        image: cardImagePath(code, cardVersion(detail, resultPhoto, reelStill)),
         alt: result.line,
         shareUrl: resultCardUrl,
         shareText: t("shareText.result", { line: result.line, day, url: resultCardUrl }),
-        photo: me && (viewer.isCreator || isSeated(detail, me.id)) ? { has: Boolean(resultPhoto), canRemove: Boolean(resultPhoto && (resultPhoto.uploadedByPlayerId === me.id || viewer.isCreator)) } : null,
+        photo: me && (viewer.isCreator || isSeated(detail, me.id)) ? { has: Boolean(resultPhoto), canRemove: Boolean(resultPhoto && (resultPhoto.uploadedByPlayerId === me.id || viewer.isCreator)), reel: Boolean(reelStill) } : null,
       }
     : null;
   // Fixed pairs (decision F): the list reads as pairs and singles, and the draw and the table as pairs.
@@ -368,10 +373,6 @@ async function EventPage({ params, searchParams }: Props) {
         next: upcoming ? { code: upcoming.code, when: `${formatEventDay(upcoming.startsAt, upcoming.tz, locale)} ${formatEventTime(upcoming.startsAt, upcoming.tz, locale)}` } : null,
       }
     : null;
-  // "Make it weekly" sits under it for a match with no crew yet (it makes the weekly slot). The slot's
-  // words are given on every render, in the language of that render, also once the crew exists.
-  const weeklyOffered = Boolean(ev.type === "match" && me && !ev.groupId && (ev.creatorPlayerId === me.id || isSeated({ roster }, me.id)));
-  const weeklyWhen = ev.type === "match" ? formatWeeklyWhen(ev.startsAt, ev.tz, locale) : null;
   // After the result is in, the organizer can confirm the levels of the people they played with.
   const levelCandidates = participants
     .filter((s) => s.player && s.playerId !== ev.creatorPlayerId && s.player.level != null)
@@ -521,6 +522,13 @@ async function EventPage({ params, searchParams }: Props) {
   const runs = { email: emailEnabled(), telegram: Boolean(telegramBotId()) };
   const offer = cancelled || viewer.isCreator ? NO_OFFER : await thatsMeOffer(db, { id: ev.id, groupId: ev.groupId, creatorPlayerId: ev.creatorPlayerId }, me, namesHere, now, runs);
   const offerOnRoster = (id: string | null) => Boolean(id) && (offer.ids.has(id!) || offer.fold?.id === id);
+  // After the end, the line-up, "Play again", "Edit score", Organizer tools and "Confirm levels" are for the
+  // organiser and the players (the owner, 26 November 2026; `afterMatchView`). A visitor gets the result, the
+  // card and its share, and no line that asks them to sign in. "Play again" (`canPlayAgain`), Organizer tools
+  // and "Confirm levels" (`viewer.isCreator`) and "Edit score" (`perm`) already held to that; the line-up did not.
+  // Two doors keep the line-up for somebody outside it, each behind its constant: the line-up fix for a signed-in
+  // viewer, and "That's me" for a browser that knows nobody.
+  const after = afterMatchView({ over, organiser: viewer.isCreator, member: isMember, signedIn: Boolean(me), fixDoor: fix.take || fix.replace, thatsMeDoor: !me && offer.ids.size > 0 });
   // Every place with the name its row shows, once: the held rules read these (`heldVerdict`, `heldRowOffers`).
   const seatsWithNames = [...roster, ...waitlist].map((s) => ({ ...s, playerName: s.player?.displayName ?? null }));
   // The held place by name (DECIDING rule 34, the owner, 11 October 2026): "Take Danny's held place"
@@ -639,8 +647,10 @@ async function EventPage({ params, searchParams }: Props) {
     viewer.isCreator && joinState === "leave"
       ? { question: fixedPairs && myPartner ? t(partnerGoes ? "pairs.leaveWithName" : "pairs.leaveKeepsPartner", { name: myPartner.player?.displayName ?? myPartner.invitedName ?? "" }) : t("event.leaveConfirm") }
       : null;
-  // "Make it weekly" under "Play again" makes the crew a group with a weekly slot: then it is the one control, and "Turn this crew into a group" is not offered beside it.
-  const weeklyShown = Boolean(canPlayAgain && playAgain && weeklyOffered && weeklyWhen && ev.type === "match" && detail.scores.length > 0);
+  // Under a scored match's "Play again", "Turn this crew into a group" is not offered either: "Make it weekly" stood
+  // there and is gone from this page (the owner, 26 November 2026: "Remove the make it weekly"), and the page
+  // after a match keeps one next step.
+  const playAgainOnScore = Boolean(playAgain && ev.type === "match");
   const parts = utcToZonedParts(ev.startsAt, ev.tz);
   const editInitial: EventFormValues = {
     type: ev.type,
@@ -1037,20 +1047,19 @@ async function EventPage({ params, searchParams }: Props) {
         {/* The reel leads once it is ready: after a filmed match it is what everybody opens the page for (a player,
             24 November 2026: "the reel once ready should probably move up"). */}
         {reel?.kind === "ready" && <MatchReel reel={reel.view} code={code} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
-        {showScore && (
+        {/* A visitor after the end gets the panel only once it holds a score: its one line for them was "Only players in this match can enter the score". */}
+        {showScore && (detail.scores.length > 0 || perm.allowed || after.scoreReason) && (
           <ScorePanel
             code={code}
             scores={detail.scores.map((s) => ({ setNumber: s.setNumber, sideA: s.sideA, sideB: s.sideB }))}
             // While the line-up can be put right, the pairs may name a held place too: saving them seats it (`playHeldLocked`).
             players={scorePlayers(fixWindowOpen ? roster.filter((s) => isOccupied(s) || playsHeld(s, ev.capacity)) : participants)}
             canEdit={perm.allowed}
-            reason={perm.allowed ? null : perm.reason}
+            reason={perm.allowed || !after.scoreReason ? null : perm.reason}
             locked={ev.scoreLockedByCreator}
             enteredBy={enteredBy}
             canPlayAgain={canPlayAgain}
             playAgain={playAgain}
-            weeklyOffered={weeklyOffered}
-            weeklyWhen={weeklyWhen}
             card={resultCard}
             playAgainQuiet={!viewer.isCreator}
             correctUntil={correctUntil}
@@ -1086,8 +1095,9 @@ async function EventPage({ params, searchParams }: Props) {
           </div>
         )}
         <MatchNumbers rows={numbers} />
-        {/* After the match the share leads with the result card's message, under the result and the reel. */}
-        {over && shareCard}
+        {/* After the match the share led with the result card's message here, under the result and the reel. Off for now
+            (`SHARE_CARD_AFTER_MATCH`): "Share the game results" under the card does the job (the owner, 26 November 2026). */}
+        {over && SHARE_CARD_AFTER_MATCH && shareCard}
         {seriesRow && (
           <p className="px-1 text-sm text-muted" data-testid="series-line">
             <Link href={`/s/${seriesRow.slug}`} prefetch={false} className="link font-semibold">
@@ -1136,7 +1146,9 @@ async function EventPage({ params, searchParams }: Props) {
         {viewer.isCreator && ev.scoreLockedByCreator && !cancelled && levelCandidates.length > 0 && <ConfirmLevels code={code} players={levelCandidates} />}
         {canMakeSeries && <SeriesDoor code={code} suggestedName={ev.title ?? `${ev.venueName ?? "Padel"} ${weekdayName(ev.startsAt, ev.tz, locale)} Open`} suggestedCapacity={ev.capacity} />}
 
-        {/* Players */}
+        {/* Players: after the end, for the organiser and the players only (`afterMatchView`), and for a signed-in
+            viewer the line-up fix still lets in. Before the end the line-up is where anybody joins. */}
+        {after.lineup && (
         <section className="card">
           {/* "3/4 players · 1 place held for Alberto": a held place is named here, so "Full" is not the only hint (the owner, 12 October 2026). */}
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -1220,13 +1232,14 @@ async function EventPage({ params, searchParams }: Props) {
               <PushToggle vapidPublicKey={vapidPublicKey()} subscribed={hasPush} plain />
             </div>
           )}
-          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && !weeklyShown && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
+          {!group && me && (viewer.isCreator || isMember) && !cancelled && participants.length >= 2 && !playAgainOnScore && <CreateGroupButton code={code} suggestions={groupNameSuggestions(locale, code)} />}
           {crewChat && !cancelled && (
             <a href={crewChat} target="_blank" rel="noopener noreferrer" className="btn-secondary mt-4 w-full whitespace-normal leading-snug" data-testid="crew-telegram-join">
               {t("group.telegramJoin")}
             </a>
           )}
         </section>
+        )}
 
         {!over && shareCard}
 
