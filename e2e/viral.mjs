@@ -175,20 +175,21 @@ try {
       (await p.locator('.fixed a[href^="https://wa.me"]').count()) === 0,
   );
   // A public page after the match (the owner, 26 November 2026): a visitor sees the result, not "Edit score", not
-  // "Play again" and not "Only players can enter the score". The line-up, with its sign-in fold, stays only as the
-  // door "That's me" is (`THATS_ME_DOOR` in src/lib/domain/afterMatch.ts): rows there wear it.
+  // "Play again" and not "Only players can enter the score". The line-up stays only as a door, each behind its
+  // constant in src/lib/domain/afterMatch.ts: "That's me" for a browser that knows nobody (`THATS_ME_DOOR`), and the
+  // line-up fix's "I played instead" for a signed-in viewer in its seven days (`STRANGER_FIX_DOOR`), as this one is.
   const pastVisitor = {
     edit: await p.getByTestId("score-edit").count(),
     again: await p.getByTestId("play-again").count(),
     onlyPlayers: await p.getByText("Only players in this match can enter the score.").count(),
   };
   const pastLineup = await p.getByRole("heading", { name: /players/ }).count();
-  const pastThatsMe = await p.getByRole("button", { name: "That's me", exact: true }).count();
+  const pastDoors = (await p.getByRole("button", { name: "That's me", exact: true }).count()) + (await p.getByTestId("fix-replace").count()) + (await p.getByTestId("fix-take").count());
   const pastSignIn = await p.getByTestId("event-back-in").count();
   check(
-    "a visitor of a finished match sees no Edit score and no Play again, and a line-up with its sign-in only where That's me is its door",
-    Object.values(pastVisitor).every((n) => n === 0) && (pastLineup === 0 ? pastSignIn === 0 : pastThatsMe > 0),
-    JSON.stringify({ ...pastVisitor, pastLineup, pastThatsMe, pastSignIn }),
+    "a visitor of a finished match sees no Edit score and no Play again, and a line-up only where it is a door in",
+    Object.values(pastVisitor).every((n) => n === 0) && (pastLineup === 0 ? pastSignIn === 0 : pastDoors > 0),
+    JSON.stringify({ ...pastVisitor, pastLineup, pastDoors, pastSignIn }),
   );
   await p.goto(`${BASE}/PAST/card`);
   await shot(p, "v2-card");
@@ -758,7 +759,8 @@ try {
   // A new page: the other visitor's page was left in Russian by the check of /ru/film.
   const passerby = await newPage();
   await passerby.goto(`${BASE}/${ucode}`);
-  await passerby.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
+  // The match is over, so a visitor's page has no line-up to wait for (the owner, 26 November 2026): its title is the paint.
+  await passerby.getByRole("heading", { level: 1 }).first().waitFor({ timeout: 20000 });
   check("a visitor is not asked for the film and does not see that one is here", (await passerby.getByTestId("reel-send").count()) === 0 && (await passerby.getByTestId("reel-here").count()) === 0);
 } catch (e) {
   await crashed(browser, results, e);
