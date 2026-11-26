@@ -343,7 +343,9 @@
     "nativeShareImage": "Share the picture…",
     "copyMessage": "Copy message",
     "otherWays": "Other ways to share",
-    "moreSummary": "Telegram, QR code, story image, reminder, email, organizer link"
+    "moreSummary": "Telegram, QR code, story image, reminder, email, organizer link",
+    "linkCopied": "Link copied",
+    "linkCopyPrompt": "Copy the link to the game"
   },
   "event": {
     "match": "Padel match",
@@ -556,7 +558,8 @@
     "correctedBy": "Corrected by {name}",
     "correctedLine": "{name} changed the score from {from} to {to}.",
     "putBack": "Put back {score}",
-    "typeEveryBox": "Type the games of both teams in every set."
+    "typeEveryBox": "Type the games of both teams in every set.",
+    "shareResults": "Share the game results"
   },
   "me": {
     "title": "My matches",
@@ -1428,14 +1431,11 @@
     "pts": "{points} pts",
     "teamA": "Team A",
     "teamB": "Team B",
-    "sameTimeDone": "Done: “{name}”. Every {when} a fresh card posts itself.",
-    "sameTimeExists": "This crew is already a group: {name}.",
     "praise": "For the winners",
     "addPhoto": "Add the court photo",
     "photoFailed": "That picture could not be used. Try another one.",
     "removePhoto": "Remove the photo",
     "waiting": "Waiting for the score",
-    "makeWeekly": "Make it weekly",
     "removePhotoConfirm": "Remove the photo from the result card?",
     "watchHighlights": "Watch highlights",
     "addHighlights": "Add the highlights video",
@@ -1444,7 +1444,8 @@
     "highlightsNotYoutube": "Paste a YouTube link, for example https://youtu.be/…",
     "removeHighlights": "Remove the video link",
     "removeHighlightsConfirm": "Remove the highlights link for everybody in this match?",
-    "filmTips": "To film a match: put the phone behind the back glass, in the centre, on its side. Record in 4K at 60 fps, with a power bank."
+    "filmTips": "To film a match: put the phone behind the back glass, in the centre, on its side. Record in 4K at 60 fps, with a power bank.",
+    "changeBackground": "Change the background"
   },
   "group": {
     "title": "Group",
@@ -3045,6 +3046,8 @@
     "pageTitle": "The reel",
     "linkCopied": "Link copied",
     "linkCopyPrompt": "Copy the link to the reel",
-    "hereClipsAutoBody": "The clips are here. The reel starts by itself in a minute, and this page then shows how long it takes. All four players get a message when it is ready."
+    "hereClipsAutoBody": "The clips are here. The reel starts by itself in a minute, and this page then shows how long it takes. All four players get a message when it is ready.",
+    "has5": "Who won each point",
+    "fastNo4": "No winner of each point"
   }
 }

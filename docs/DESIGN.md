@@ -154,6 +154,22 @@ making the ui intuitive."
 - Every screen ends with one grey button at full width, "Tell us what should change", which opens the form
   in place. It is grey because the lime button of a screen is for the screen's own job.
 
+## What changed on 26 November 2026
+
+The owner, on the match page after a match: "share the game, where the picture is in the preview", and "Edit
+Score feels like its in the wrong place".
+
+- Under the result card, one grey button, "Share the game results", shares the link of the card's page, whose
+  preview is the card. It never shares the picture as a file. The share card under the match numbers is off
+  (`SHARE_CARD_AFTER_MATCH` in `src/lib/domain/afterMatch.ts`).
+- "Edit score" is a small plain action right under the score. "Enter score" stays the lime button while there is
+  no score.
+- The court photo's door is a small grey button, not one across the card. When the card's background is the
+  reel's team announcement, it is the text link "Change the background" under the share.
+- "Make it weekly" left the page.
+- After the end, the line-up, "Play again", "Edit score", Organizer tools and "Confirm levels" are for the
+  organiser and the players (`afterMatchView`), with two doors kept behind their constants.
+
 Still to do: the hero chips of a club keep an emoji (📍), and the group page keeps a
 long paragraph about the Telegram group. Each needs its own look on a phone.
 

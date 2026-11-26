@@ -49,7 +49,7 @@ export function PlayAgainButton({ code, offer, quiet = false }: { code: string; 
     });
   };
   return (
-    <div data-testid="play-again" className="flex flex-col gap-2">
+    <div data-testid="play-again" className="flex min-w-0 flex-col gap-2">
       {offer.next && (
         <p className="text-sm font-semibold" data-testid="play-again-next">
           <a href={`/${offer.next.code}`} className="link">
@@ -57,11 +57,15 @@ export function PlayAgainButton({ code, offer, quiet = false }: { code: string; 
           </a>
         </p>
       )}
+      {/* Safari on an iPhone gives a date-and-time field the width of its own text and ignores `w-full`, so the
+          field ran past the card at 390 px (the owner, 26 November 2026: "out of bounds and leaks horizontally").
+          With no native look and no minimum width it takes the card's width; the value stays on the left
+          (`.input-when` in globals.css). */}
       <input
         ref={when}
         type="datetime-local"
         aria-label={t("event.playAgainWhen")}
-        className="input w-full"
+        className="input input-when block w-full min-w-0 max-w-full appearance-none"
         defaultValue={offer.defaultWhen}
         min={offer.minWhen}
         max={offer.maxWhen}

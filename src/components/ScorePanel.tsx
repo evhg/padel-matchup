@@ -6,14 +6,17 @@ import { saveScoreAction } from "@/actions/scores";
 import { balancedTeams, formatLevel } from "@/lib/domain/levels";
 import { checkSets, MAX_SETS, setsComplete, setsOfSummary, tally, typedSets, type DraftSet } from "@/lib/domain/scores";
 import { PhotoButton } from "./PhotoButton";
-import { NativeShare } from "./ShareSheet";
+import { LinkShare } from "./ShareSheet";
 import { PlayAgainButton, type PlayAgainOffer } from "./PlayAgainButton";
-import { SameTimeButton } from "./SameTimeButton";
 
 type P = { id: string; name: string; team: "a" | "b" | null; level?: number | null };
 type S = { setNumber: number; sideA: number; sideB: number };
-/** The result card as the match page shows it once a score exists; `photo` only for the people in the match. */
-export type ResultCardView = { href: string; image: string; alt: string; shareUrl: string; shareText: string; photo: { has: boolean; canRemove: boolean } | null };
+/**
+ * The result card as the match page shows it once a score exists; `photo` only for the people in the match.
+ * `photo.reel`: the card's background is the reel's team announcement (`reelStillAt`), so the picker is the
+ * small "Change the background" link, not "Add the court photo".
+ */
+export type ResultCardView = { href: string; image: string; alt: string; shareUrl: string; shareText: string; photo: { has: boolean; canRemove: boolean; reel: boolean } | null };
 
 export function ScorePanel({
   code,
@@ -25,8 +28,6 @@ export function ScorePanel({
   enteredBy,
   canPlayAgain = false,
   playAgain = null,
-  weeklyOffered = false,
-  weeklyWhen = null,
   card,
   playAgainQuiet = false,
   correctUntil = null,
@@ -43,11 +44,7 @@ export function ScorePanel({
   canPlayAgain?: boolean;
   /** "Play again"'s day and time: the default (this match's a week on), the bounds, and whether the round went out. */
   playAgain?: PlayAgainOffer | null;
-  /** "Make it weekly" under it, for a match with no crew yet. One next game and a weekly slot: two buttons, two help lines. */
-  weeklyOffered?: boolean;
-  /** The weekly slot in words, in the page's language as it renders now ("Sat 18:00"). */
-  weeklyWhen?: string | null;
-  /** The shareable result card, once a result exists. Its WhatsApp share is the bottom bar's; Telegram and Copy are under "Other ways to share". */
+  /** The shareable result card, once a result exists, with "Share the game results" under it: the card page's link. */
   card?: ResultCardView | null;
   /** A seated player: "Play again" is a quiet button, because the result's share is their one strong button. */
   playAgainQuiet?: boolean;
@@ -60,10 +57,6 @@ export function ScorePanel({
   correction?: { by: string; from: string; to: string; canPutBack: boolean } | null;
 }) {
   const t = useTranslations();
-  // Only the fact that the offer was shown is latched: the tap makes the crew, the page then renders
-  // with a crew and no offer, and the "Done" the button shows must outlive that refresh. The words come
-  // from each render, so a change of language reaches them (a latched string kept the first language).
-  const [weekly] = useState(weeklyOffered);
   const [editing, setEditing] = useState(false);
   // A new score starts empty, 6 and 4 only as placeholders: an untouched 6-4 once saved as a real
   // result. An edit starts from the saved numbers.
@@ -188,6 +181,21 @@ export function ScorePanel({
               ))}
             </div>
           </div>
+          {/* "Edit score" right under the score it changes (the owner, 26 November 2026: "Edit Score feels like its in
+              the wrong place, it should be closer where the score is"): a small text action, for the players and
+              the organiser only (`canEdit`; `saveMatchScore` refuses anybody else). */}
+          {canEdit && (
+            <div className="mt-1">
+              <button type="button" className="btn-ghost btn-sm -ml-1 px-1" onClick={() => setEditing(true)} data-testid="score-edit">
+                {t("score.edit")}
+              </button>
+              {correctUntil && (
+                <p className="text-xs text-faint" data-testid="score-correct-help">
+                  {t("score.correctHelp", { when: correctUntil })}
+                </p>
+              )}
+            </div>
+          )}
           {enteredBy && !locked && <p className="mt-3 text-xs text-faint">{t("score.enteredBy", { name: enteredBy })}</p>}
           {correction && (
             <div className="mt-3 flex flex-col gap-2" data-testid="score-correction">
@@ -206,27 +214,28 @@ export function ScorePanel({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={card.image} alt={card.alt} width={1200} height={630} className="block h-auto w-full" />
               </a>
-              {/* The card's own share, where the phone has a share sheet (the owner, 24 November 2026: "why can I not share
-                  the match card? use same icon as iOS"). Telegram, Copy and the rest stay under "Other ways to share". */}
-              <NativeShare url={card.shareUrl} text={card.shareText} image={card.image} className="btn-secondary btn-sm w-full" />
-              {card.photo && <PhotoButton code={code} hasPhoto={card.photo.has} canRemove={card.photo.canRemove} />}
+              {/* The game's link, with the card as its preview, never the picture as a file (the owner, 26 November 2026:
+                  "It should be share the game, where the picture is in the preview of any social media platform"). */}
+              <LinkShare url={card.shareUrl} title={card.alt} label={t("score.shareResults")} testId="result-share" />
+              {/* With the reel's team announcement behind the card, the picker is a small link under the share; with the
+                  plain card, a small grey button. A photo that is there keeps its "Remove the photo". */}
+              {card.photo && <PhotoButton code={code} hasPhoto={card.photo.has} canRemove={card.photo.canRemove} look={card.photo.reel ? "link" : "small"} />}
             </div>
           )}
           {canPlayAgain && playAgain && (
             <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
               <PlayAgainButton code={code} offer={playAgain} quiet={playAgainQuiet} />
-              {weekly && weeklyWhen && <SameTimeButton code={code} when={weeklyWhen} />}
             </div>
           )}
         </div>
       )}
 
-      {!editing && canEdit && (
-        <button type="button" className={`${scores.length ? "btn-ghost btn-sm" : "btn-primary w-full"} mt-4`} onClick={() => setEditing(true)}>
-          {scores.length ? t("score.edit") : t("score.enter")}
+      {/* With a score, "Edit score" sits under the score itself (above); with none yet, "Enter score" leads the card. */}
+      {!editing && canEdit && scores.length === 0 && (
+        <button type="button" className="btn-primary mt-4 w-full" onClick={() => setEditing(true)}>
+          {t("score.enter")}
         </button>
       )}
-      {!editing && canEdit && correctUntil && <p className="mt-2 text-xs text-faint" data-testid="score-correct-help">{t("score.correctHelp", { when: correctUntil })}</p>}
       {!editing && !canEdit && reason && reason !== "cancelled" && (
         <p className="mt-3 text-sm text-muted">{reason === "not_started" ? t("score.notStarted") : reason === "locked" ? t("score.lockedHelp") : t("score.notParticipant")}</p>
       )}

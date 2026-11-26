@@ -104,10 +104,6 @@ const DYNAMIC: DynamicTable = {
     // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
     "`errors.${errorLine(r.error)}`": ["errors.*"],
   },
-  "src/components/SameTimeButton.tsx": {
-    // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
-    "`errors.${errorLine(r.error)}`": ["errors.*"],
-  },
   "src/components/SlotActions.tsx": {
     // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".
     "`errors.${errorLine(r.error)}`": ["errors.*"],
