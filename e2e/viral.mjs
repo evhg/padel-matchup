@@ -731,13 +731,15 @@ try {
   const fastWay = w.getByTestId("reel-way-fast");
   const waysFit = await w.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   check(
-    "the player chooses between two ways: the full reel is first and marked, and the fast reel says with three crosses what it lacks",
+    "the player chooses between two ways: the full reel is first and marked, and the fast reel says with four crosses what it lacks",
     (await fullWay.getByText("Best", { exact: true }).count()) === 1 &&
-      (await fullWay.getByText("✓").count()) === 4 &&
+      (await fullWay.getByText("✓").count()) === 5 &&
       (await fullWay.getByText("✕").count()) === 0 &&
+      (await fullWay.getByText("Who won each point").count()) === 1 &&
       (await fastWay.getByText("✓").count()) === 2 &&
-      (await fastWay.getByText("✕").count()) === 3 &&
+      (await fastWay.getByText("✕").count()) === 4 &&
       (await fastWay.getByText("No score in the corner").count()) === 1 &&
+      (await fastWay.getByText("No winner of each point").count()) === 1 &&
       (await w.getByTestId("reel-way-full").evaluate((el) => el.compareDocumentPosition(document.querySelector('[data-testid="reel-way-fast"]')) & Node.DOCUMENT_POSITION_FOLLOWING)) > 0 &&
       (await w.getByTestId("reel-iphone-hint").count()) === 0 &&
       waysFit,
