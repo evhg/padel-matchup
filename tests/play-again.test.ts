@@ -993,9 +993,7 @@ describe("Play again", () => {
     expect(formatWeeklyWhen(LAST, TZ, "en")).toBe("Saturday 18:00");
     expect(formatWeeklyWhen(LAST, TZ, "ru")).toBe("суббота 18:00");
     expect(formatWeeklyWhen(LAST, TZ, "es")).toBe("sábado 18:00");
-    // "Каждый" agrees with Sunday and not with Saturday or Wednesday: the line has no word that has to agree.
-    expect(ruMessages.card.sameTimeDone).not.toMatch(/Кажд(ый|ую|ое)\s*\{when\}/);
-    expect(ruMessages.card.sameTimeDone).toContain("{when}");
+    // The line that said it ("Done: … Every {when} …") went with "Make it weekly" (the owner, 26 November 2026).
   });
 
   it("keeps the old match untouched", async () => {

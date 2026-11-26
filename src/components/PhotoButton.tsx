@@ -13,7 +13,18 @@ import { errorLine } from "@/lib/errorLine";
  * Anybody in the match can add one — the organiser and everybody seated — and it becomes the card's
  * background. Only the person who added it, or the organiser, can take it down.
  */
-export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPhoto: boolean; canRemove: boolean }) {
+export function PhotoButton({ code, hasPhoto, canRemove, look = "button" }: {
+  code: string;
+  hasPhoto: boolean;
+  canRemove: boolean;
+  /**
+   * How the picker's door looks: the full-width grey button (the card page), a small grey button (the match
+   * page, a card with its plain background), or the text link "Change the background" (the match page, a
+   * card whose background is the reel's team announcement). The owner, 26 November 2026: "'Add the court
+   * photo' feels weird if it already has the team announcement, and its oversized too."
+   */
+  look?: "button" | "small" | "link";
+}) {
   const t = useTranslations("card");
   const tr = useTranslations();
   const router = useRouter();
@@ -91,8 +102,14 @@ export function PhotoButton({ code, hasPhoto, canRemove }: { code: string; hasPh
       {/* No `capture`: the photo is almost always taken during the match and added after it, so the
           phone must offer the album as well as the camera. `capture` forces the camera and hides it. */}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} data-testid="photo-input" />
-      <button type="button" className="btn-secondary w-full" disabled={pending} onClick={() => inputRef.current?.click()} data-testid="photo-add">
-        {pending ? "…" : t("addPhoto")}
+      <button
+        type="button"
+        className={look === "link" ? "btn-ghost btn-sm self-start px-0" : look === "small" ? "btn-secondary btn-sm self-start" : "btn-secondary w-full"}
+        disabled={pending}
+        onClick={() => inputRef.current?.click()}
+        data-testid="photo-add"
+      >
+        {pending ? "…" : look === "link" ? t("changeBackground") : t("addPhoto")}
       </button>
       {error && <p className="text-xs font-semibold text-danger">{error}</p>}
     </div>

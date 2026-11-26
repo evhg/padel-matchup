@@ -164,10 +164,33 @@ try {
 
   // ---- Result card ----
   await p.goto(`${BASE}/PAST`);
-  // The match page leads with the card once the score is in: the picture, and WhatsApp one tap away (a WhatsApp group only ever gets it by hand).
-  // Everybody finds WhatsApp in the page's one share card, a viewer with no seat too (the owner, 25 November 2026:
-  // the share left the bar at the foot of the screen); Telegram and the rest are under "Other ways to share".
-  check("finished match shows its result card, and the share card's WhatsApp sends the result", (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.locator('[data-testid="match-share"] a[data-testid="tell-group"][href^="https://wa.me"]').count()) === 1 && (await p.locator('[data-testid="other-shares"] a[href^="https://wa.me"]').count()) === 0 && (await p.locator('.fixed a[href^="https://wa.me"]').count()) === 0);
+  // The match page leads with the card once the score is in: the picture, and "Share the game results" right under it,
+  // a visitor with no seat too. The share card under the match numbers is off after the match (the owner, 26 November
+  // 2026: "the big share the result button is redundant"), and no share sits in a bar at the foot of the screen.
+  check(
+    "finished match shows its result card with Share the game results under it, and no second share card after the match",
+    (await p.locator('[data-testid="result-card"] img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 &&
+      (await p.getByTestId("result-card").getByTestId("result-share").getByText("Share the game results").count()) === 1 &&
+      (await p.getByTestId("match-share").count()) === 0 &&
+      (await p.locator('.fixed a[href^="https://wa.me"]').count()) === 0,
+  );
+  // A public page after the match (the owner, 26 November 2026): a visitor sees the result, not "Edit score", not
+  // "Play again" and not "Only players can enter the score". The line-up stays only as a door, each behind its
+  // constant in src/lib/domain/afterMatch.ts: "That's me" for a browser that knows nobody (`THATS_ME_DOOR`), and the
+  // line-up fix's "I played instead" for a signed-in viewer in its seven days (`STRANGER_FIX_DOOR`), as this one is.
+  const pastVisitor = {
+    edit: await p.getByTestId("score-edit").count(),
+    again: await p.getByTestId("play-again").count(),
+    onlyPlayers: await p.getByText("Only players in this match can enter the score.").count(),
+  };
+  const pastLineup = await p.getByRole("heading", { name: /players/ }).count();
+  const pastDoors = (await p.getByRole("button", { name: "That's me", exact: true }).count()) + (await p.getByTestId("fix-replace").count()) + (await p.getByTestId("fix-take").count());
+  const pastSignIn = await p.getByTestId("event-back-in").count();
+  check(
+    "a visitor of a finished match sees no Edit score and no Play again, and a line-up only where it is a door in",
+    Object.values(pastVisitor).every((n) => n === 0) && (pastLineup === 0 ? pastSignIn === 0 : pastDoors > 0),
+    JSON.stringify({ ...pastVisitor, pastLineup, pastDoors, pastSignIn }),
+  );
   await p.goto(`${BASE}/PAST/card`);
   await shot(p, "v2-card");
   check("card page shows the image and the result line", (await p.locator('img[src^="/PAST/card/opengraph-image?v="]').count()) === 1 && (await p.getByText(/beat|drew|Result/).count()) > 0);
@@ -202,48 +225,66 @@ try {
   await p.getByText("Confirmed by organizer").waitFor({ timeout: 20000 });
   check("the organizer's score is confirmed at once", true);
   await p.getByTestId("result-card").waitFor({ timeout: 20000 });
-  check("right after the score the match page offers the court photo on the card", (await p.getByTestId("result-card").getByTestId("photo-add").count()) === 1);
-  // Beside the card: "Play again" with its one control, a week on by default, and "Make it weekly" (DECIDING rule 37).
+  // A card with no reel and no photo: "Add the court photo" is a small grey button, not one across the card
+  // (the owner, 26 November 2026: "its oversized too").
+  const photoDoor = await p.getByTestId("result-card").evaluate((el) => {
+    const b = el.querySelector("[data-testid=photo-add]");
+    return b ? { label: b.textContent, narrower: b.getBoundingClientRect().width < el.getBoundingClientRect().width - 1 } : null;
+  });
+  check("right after the score the match page offers the court photo on the card, as a small button", photoDoor?.label === "Add the court photo" && photoDoor.narrower, JSON.stringify(photoDoor));
+  // "Edit score" sits under the score it changes, above the card (the owner, 26 November 2026).
+  const editAt = await p.locator("#score").evaluate((el) => {
+    const edit = el.querySelector("[data-testid=score-edit]");
+    const card = el.querySelector("[data-testid=result-card]");
+    return edit && card ? { text: edit.textContent, above: edit.getBoundingClientRect().bottom <= card.getBoundingClientRect().top + 0.5 } : null;
+  });
+  check("Edit score is a small action right under the score, above the result card", editAt?.text === "Edit score" && editAt.above, JSON.stringify(editAt));
+  // "Share the game results" shares the card page's link, whose preview is the card, and never a file.
+  await p.evaluate(() => {
+    window.__shared = null;
+    navigator.share = async (data) => {
+      window.__shared = { url: data.url, title: data.title, files: Array.isArray(data.files) ? data.files.length : 0 };
+    };
+  });
+  await p.getByTestId("result-share").click();
+  const sharedData = await p.evaluate(() => window.__shared);
+  check("Share the game results hands the phone the card page's link and a title, and no picture file", Boolean(sharedData) && sharedData.url === `${BASE}/${mcode}/card?s=card` && sharedData.files === 0 && /6-4/.test(sharedData.title ?? ""), JSON.stringify(sharedData));
+  // Beside the card: "Play again" with its one control, a week on by default, and no "Make it weekly" (the owner,
+  // 26 November 2026: "Remove the make it weekly").
   const bangkokDay = (ms) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
   const score = p.locator("#score");
   const nextWhen = await score.getByTestId("play-again-when").inputValue();
-  check("the score panel offers Play again, a week on by default, and the weekly slot beside it", nextWhen.startsWith(`${bangkokDay(playedAt + 7 * 24 * 3600 * 1000)}T`) && (await score.getByTestId("same-time").count()) === 1, nextWhen);
+  check("the score panel offers Play again, a week on by default, and no weekly slot beside it", nextWhen.startsWith(`${bangkokDay(playedAt + 7 * 24 * 3600 * 1000)}T`) && (await score.getByTestId("same-time").count()) === 0 && (await p.getByText("Make it weekly").count()) === 0, nextWhen);
   // At 390 px the field takes its own line and "Play again" keeps the panel's width under it; the field
-  // carries its bounds; "Make it weekly" says so and its label stays inside its button, in Russian too.
+  // carries its bounds; and nothing of it runs past the card's edges (the owner, 26 November 2026: the date
+  // selector "is out of bounds and leaks horizontally"), in Russian too.
   const panelLayout = () =>
     score.evaluate((el) => {
       const box = (q) => el.querySelector(q).getBoundingClientRect();
       const field = box("[data-testid=play-again-when]");
       const play = box("[data-testid=play-again] button");
-      const weekly = el.querySelector("[data-testid=same-time]");
-      const w = weekly.getBoundingClientRect();
       const panel = el.getBoundingClientRect();
-      return { stacked: play.top >= field.bottom - 1 && Math.abs(play.width - field.width) <= 1, weeklyFits: weekly.scrollWidth <= weekly.clientWidth + 1 && w.left >= panel.left - 0.5 && w.right <= panel.right + 0.5, label: weekly.textContent };
+      const inside = (r) => r.left >= panel.left - 0.5 && r.right <= panel.right + 0.5;
+      return { stacked: play.top >= field.bottom - 1 && Math.abs(play.width - field.width) <= 1, fits: inside(field) && inside(play) && document.documentElement.scrollWidth <= window.innerWidth, label: el.querySelector("[data-testid=play-again] button").textContent };
     });
   const enPanel = await panelLayout();
   const bounds = { min: await score.getByTestId("play-again-when").getAttribute("min"), max: await score.getByTestId("play-again-when").getAttribute("max") };
   await switchLang(p, "ru");
-  await score.getByTestId("same-time").getByText(/каждую неделю/).waitFor({ timeout: 20000 });
+  await score.getByTestId("play-again").getByText("Сыграть снова").waitFor({ timeout: 20000 });
   const ruPanel = await panelLayout();
   await shot(p, "v3b-score-panel-ru");
-  // "Make it weekly" after a change of language: its "Done" line names the day in the language now on
-  // screen (a string kept from the first render once said "Sun" in Russian), and follows the next change.
-  // The weekday in full and on its own ("Every Sunday 11:22"): no date's comma rides along ("Sun, 11:22").
-  const latinDay = /\b(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day \d{1,2}:\d{2}\b/;
-  await score.getByTestId("same-time").click();
-  await score.getByTestId("same-time-done").getByText(/Готово/).waitFor({ timeout: 20000 });
-  const ruDone = (await score.getByTestId("same-time-done").textContent()) ?? "";
+  // The panel after a change of language: its button says it in the language now on screen, and follows the next change.
   await switchLang(p, "en");
-  await score.getByTestId("same-time-done").getByText(/Done/).waitFor({ timeout: 20000 });
-  const enDone = (await score.getByTestId("same-time-done").textContent()) ?? "";
-  check("after a change of language, Make it weekly says its Done line in that language", !latinDay.test(ruDone) && latinDay.test(enDone), JSON.stringify({ ruDone, enDone }));
+  await score.getByTestId("play-again").getByText("Play again").waitFor({ timeout: 20000 });
+  const enAgain = await panelLayout();
+  check("after a change of language, Play again says itself in that language", /Сыграть снова/.test(ruPanel.label) && /Play again/.test(enAgain.label), JSON.stringify({ ru: ruPanel.label, en: enAgain.label }));
   check(
-    "at 390 px Play again sits full width under its field, the field has its bounds, and Make it weekly fits in English and Russian",
-    enPanel.stacked && enPanel.weeklyFits && ruPanel.stacked && ruPanel.weeklyFits && /Make it weekly/.test(enPanel.label) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(bounds.min ?? "") && (bounds.max ?? "") > (bounds.min ?? ""),
+    "at 390 px Play again sits full width under its field, the field has its bounds, and both stay inside the card in English and Russian",
+    enPanel.stacked && enPanel.fits && ruPanel.stacked && ruPanel.fits && /Play again/.test(enPanel.label) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(bounds.min ?? "") && (bounds.max ?? "") > (bounds.min ?? ""),
     JSON.stringify({ enPanel, ruPanel, bounds }),
   );
   await p.goto(`${BASE}/${mcode}/card`);
-  check("the card page praises the winners and leaves the weekly group to the match page", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 0);
+  check("the card page praises the winners and offers no weekly group", (await p.getByTestId("praise").count()) === 1 && (await p.getByTestId("same-time").count()) === 0);
   const tinyPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGNgYGD4z8DAwAAABAAC/wKzCgAAAABJRU5ErkJggg==", "base64");
   await p.getByTestId("photo-input").setInputFiles({ name: "court.png", mimeType: "image/png", buffer: tinyPng });
   await p.locator(`img[src^="/${mcode}/card/opengraph-image?v="][src*="-p"]`).waitFor({ timeout: 30000 });
@@ -338,6 +379,17 @@ try {
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
+  // With a reel and no court photo, the card's background is the reel's team announcement, so the picker is the
+  // small "Change the background" link under "Share the game results" (the owner, 26 November 2026).
+  check("with a reel and a court photo, the card keeps Remove the photo and offers no Add the court photo", (await p.getByTestId("photo-remove").count()) === 1 && (await p.getByText("Add the court photo").count()) === 0);
+  await p.getByTestId("photo-remove").click();
+  await p.getByTestId("photo-add").waitFor({ timeout: 20000 });
+  const bgDoor = await p.getByTestId("result-card").evaluate((el) => {
+    const share = el.querySelector("[data-testid=result-share]").getBoundingClientRect();
+    const door = el.querySelector("[data-testid=photo-add]");
+    return { label: door.textContent, under: door.getBoundingClientRect().top >= share.bottom - 0.5, plain: door.classList.contains("btn-ghost") };
+  });
+  check("with a reel and no photo, Change the background is a text link under Share the game results", bgDoor.label === "Change the background" && bgDoor.under && bgDoor.plain && (await p.getByText("Add the court photo").count()) === 0, JSON.stringify(bgDoor));
   // On a computer (the owner, 25 November 2026: "on desktop, there is just a download, no share?"): the reel's
   // link to share first, then the two downloads. The same player, signed in, at a desktop's width.
   const deskCtx = await browser.newContext({ storageState: await p.context().storageState(), viewport: { width: 1280, height: 900 } });
@@ -772,7 +824,8 @@ try {
   // A new page: the other visitor's page was left in Russian by the check of /ru/film.
   const passerby = await newPage();
   await passerby.goto(`${BASE}/${ucode}`);
-  await passerby.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
+  // The match is over, so a visitor's page has no line-up to wait for (the owner, 26 November 2026): its title is the paint.
+  await passerby.getByRole("heading", { level: 1 }).first().waitFor({ timeout: 20000 });
   check("a visitor is not asked for the film and does not see that one is here", (await passerby.getByTestId("reel-send").count()) === 0 && (await passerby.getByTestId("reel-here").count()) === 0);
 } catch (e) {
   await crashed(browser, results, e);

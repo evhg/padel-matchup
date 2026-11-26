@@ -156,6 +156,43 @@ export function NativeShare({ url, text, image, className = "btn-ghost btn-sm" }
 }
 
 /**
+ * "Share the game results" under the result card: the link of the card's page, never a file (the owner, 26
+ * November 2026: "share the picture.. shares a jpg file... I think thats the wrong approach. It should be share
+ * the game, where the picture is in the preview of any social media platform"). The card's page carries the
+ * card as its og:image (`/[code]/card`'s `generateMetadata`), so WhatsApp, Telegram and the rest show the
+ * picture under the link. The phone's share sheet, or a computer's share menu, gets the link and a title; a
+ * browser with neither copies the link, as "Share the reel" does on a computer (`ReelLinkShare`).
+ */
+export function LinkShare({ url, title, label, className = "btn-secondary btn-sm w-full", testId }: { url: string; title: string; label: string; className?: string; testId?: string }) {
+  const t = useTranslations();
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, url });
+        return;
+      } catch (e) {
+        // The person closed the sheet: nothing else to do. Any other refusal falls through to the copy.
+        if ((e as DOMException)?.name === "AbortError") return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt(t("share.linkCopyPrompt"), url);
+    }
+  };
+  return (
+    <button type="button" className={`${className} inline-flex items-center justify-center gap-1.5`} onClick={() => void share()} data-testid={testId}>
+      <ShareIcon />
+      {copied ? t("share.linkCopied") : label}
+    </button>
+  );
+}
+
+/**
  * The match's one share, in the page (the owner, 25 November 2026: "remove the floating whatsapp share, its not
  * good design"; it was a WhatsApp button in the bar at the foot of the screen since 9 November). One card: the
  * WhatsApp button with the message that fits the state (`shareMessage`), and one row under it, "Other ways to
