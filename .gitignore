@@ -41,3 +41,6 @@ packages/*/dist
 packages/*/LICENSE
 .drift-check/
 .claude/worktrees/
+
+# Python caches of the reel tools (a Modal run writes one beside the script)
+__pycache__/
