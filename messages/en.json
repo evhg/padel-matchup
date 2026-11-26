@@ -3048,6 +3048,8 @@
     "linkCopyPrompt": "Copy the link to the reel",
     "hereClipsAutoBody": "The clips are here. The reel starts by itself in a minute, and this page then shows how long it takes. All four players get a message when it is ready.",
     "has5": "Who won each point",
-    "fastNo4": "No winner of each point"
+    "fastNo4": "No winner of each point",
+    "againOpen": "Make a new reel",
+    "againNote": "Send the video again. This reel plays until you send it; then the new reel takes its place."
   }
 }

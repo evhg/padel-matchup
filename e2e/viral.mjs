@@ -379,6 +379,16 @@ try {
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
+  // "Make a new reel" (the owner, 26 November 2026: "Erik will redo the reel"): folded under a reel that plays, for
+  // the match's own people; opened, it holds the two ways to send the video, and the reel still plays above it.
+  const againDoor = p.getByTestId("reel-again");
+  const againShut = (await againDoor.count()) === 1 && (await againDoor.evaluate((el) => !el.open)) && (await againDoor.locator("summary").innerText()) === "Make a new reel";
+  await againDoor.locator("summary").click();
+  await againDoor.getByTestId("reel-send").waitFor({ timeout: 20000 });
+  check(
+    "a player of the match finds Make a new reel folded under the reel, and opened it offers both ways while the reel still plays",
+    againShut && (await againDoor.getByTestId("reel-way-full").count()) === 1 && (await againDoor.getByTestId("reel-way-fast").count()) === 1 && (await p.getByTestId("reel-video").count()) === 1,
+  );
   // With a reel and no court photo, the card's background is the reel's team announcement, so the picker is the
   // small "Change the background" link under "Share the game results" (the owner, 26 November 2026).
   check("with a reel and a court photo, the card keeps Remove the photo and offers no Add the court photo", (await p.getByTestId("photo-remove").count()) === 1 && (await p.getByText("Add the court photo").count()) === 0);
@@ -416,7 +426,7 @@ try {
   const reelVisitor = await newPage();
   await reelVisitor.goto(`${BASE}/${mcode}`);
   await reelVisitor.getByRole("heading", { name: /players/ }).first().waitFor({ timeout: 20000 });
-  check("a visitor does not see the reel, and the door is the operator's", (await reelVisitor.getByTestId("match-reel").count()) === 0 && !(await reelVisitor.content()).includes(reelToken) && (await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", body: "{}" })).status === 401);
+  check("a visitor does not see the reel or Make a new reel, and the door is the operator's", (await reelVisitor.getByTestId("match-reel").count()) === 0 && (await reelVisitor.getByTestId("reel-again").count()) === 0 && !(await reelVisitor.content()).includes(reelToken) && (await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", body: "{}" })).status === 401);
   // The reel's own page, for anybody with the link (CLAUDE.md order 10): a computer shares this link.
   await reelVisitor.goto(`${BASE}/${mcode}/reel`);
   await reelVisitor.getByTestId("reel-page-video").waitFor({ timeout: 20000 });

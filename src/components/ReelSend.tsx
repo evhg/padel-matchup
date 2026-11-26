@@ -52,6 +52,7 @@ export function ReelSend({
   teams,
   musicBase,
   auto,
+  again = false,
 }: {
   code: string;
   /** Somebody began an upload that is not finished. */ started: boolean;
@@ -60,6 +61,7 @@ export function ReelSend({
   /** The two pairs as the page names them: the reel's team names until the player changes them. */ teams: [string, string];
   /** The reel host, for ten seconds of each track. */ musicBase: string | null;
   /** The fast reel's job starts by itself for this match (two pairs of two). */ auto: boolean;
+  /** "Make a new reel": the match has a reel that plays, and the new one takes its place. */ again?: boolean;
 }) {
   const t = useTranslations("reel");
   const tr = useTranslations();
@@ -95,7 +97,7 @@ export function ReelSend({
   /** Sends one file or one cut to the reel host in parts, under this match's upload of that way. */
   const upload = async (body: Blob, name: string, way: Way, ctl: AbortController, times: FilmTimes | null = null): Promise<"sent" | "locked" | { error: string }> => {
     setPhase({ at: "sending", done: 0, total: body.size, secondsLeft: null });
-    const asked = await askReelUploadAction(code, way);
+    const asked = await askReelUploadAction(code, way, again);
     if (!asked.ok) {
       if (asked.error === "locked") return "locked";
       return { error: asked.detail === "upload_off" ? t("uploadOff") : tr(`errors.${errorLine(asked.error)}`) };
@@ -218,7 +220,7 @@ export function ReelSend({
   const saveLink = () => {
     setError(null);
     start(async () => {
-      const r = await setReelLinkAction(code, link);
+      const r = await setReelLinkAction(code, link, again);
       if (!r.ok) {
         if (r.error === "locked") return router.refresh();
         return setError(r.error === "invalid" ? t("linkBad") : tr(`errors.${errorLine(r.error)}`));

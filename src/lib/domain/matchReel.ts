@@ -236,15 +236,16 @@ export function videoLinkOf(raw: unknown): string | null {
 export type SendWay = "upload" | "clips";
 
 /** The organiser or a player with a place, in a match that has started and was not cancelled. */
-async function senderOf(db: Db, eventId: string, playerId: string, now: Date) {
+async function senderOf(db: Db, eventId: string, playerId: string, now: Date, again = false) {
   const [ev] = await db.select({ id: events.id, code: events.code, type: events.type, status: events.status, startsAt: events.startsAt, creatorPlayerId: events.creatorPlayerId }).from(events).where(eq(events.id, eventId)).limit(1);
   if (!ev || ev.type !== "match") throw new DomainError("not_found");
   if (ev.status === "cancelled") throw new DomainError("cancelled");
   if (ev.startsAt.getTime() > now.getTime()) throw new DomainError("not_started");
   if (ev.creatorPlayerId !== playerId && !(await isSeated(db, ev.id, playerId))) throw new DomainError("forbidden");
   const [row] = await db.select().from(matchReels).where(eq(matchReels.eventId, ev.id)).limit(1);
-  // A video that is here, and a reel that plays, are not written over by a second player.
-  if (row && (row.status === "received" || row.status === "working" || reelView(row, now))) throw new DomainError("locked");
+  // A video that is here is not written over by a second player. A reel that plays is written over only on purpose:
+  // a player of the match chose "Make a new reel" (`again`; the owner, 26 November 2026: "Erik will redo the reel").
+  if (row && (row.status === "received" || row.status === "working" || (!again && reelView(row, now)))) throw new DomainError("locked");
   return { ev, row };
 }
 
@@ -266,10 +267,10 @@ export async function namesUpload(db: Db, input: { eventId: string; playerId: st
  * "Choose the video": the token of this match's upload. A first call makes the row; a call while an
  * upload is not finished gives the same token, so any of the four players can go on with it.
  */
-export async function askReelUpload(db: Db, input: { eventId: string; playerId: string; way?: SendWay; now?: Date }): Promise<{ token: string; code: string }> {
+export async function askReelUpload(db: Db, input: { eventId: string; playerId: string; way?: SendWay; /** "Make a new reel": the reel that plays makes way. */ again?: boolean; now?: Date }): Promise<{ token: string; code: string }> {
   const now = input.now ?? new Date();
   const source = input.way === "clips" ? "clips" : "upload";
-  const { ev, row } = await senderOf(db, input.eventId, input.playerId, now);
+  const { ev, row } = await senderOf(db, input.eventId, input.playerId, now, input.again === true);
   // The same way again goes on with the same upload. The other way starts a new one: the parts of a whole
   // film and the parts of its clips are not one file.
   if (row?.status === "asked" && row.source === source) return { token: row.reelToken, code: ev.code };
@@ -279,11 +280,11 @@ export async function askReelUpload(db: Db, input: { eventId: string; playerId: 
 }
 
 /** "Paste a link": the match keeps the link to the film, and the video counts as here. */
-export async function setReelLink(db: Db, input: { eventId: string; playerId: string; text: unknown; now?: Date }): Promise<{ code: string }> {
+export async function setReelLink(db: Db, input: { eventId: string; playerId: string; text: unknown; again?: boolean; now?: Date }): Promise<{ code: string }> {
   const now = input.now ?? new Date();
   const url = videoLinkOf(input.text);
   if (!url) throw new DomainError("invalid", "link");
-  const { ev } = await senderOf(db, input.eventId, input.playerId, now);
+  const { ev } = await senderOf(db, input.eventId, input.playerId, now, input.again === true);
   const values = { status: "received" satisfies ReelStatus, source: "link", sourceUrl: url, reelToken: newReelToken(), requestedBy: input.playerId, host: null, readyAt: null, note: null };
   await db.insert(matchReels).values({ eventId: ev.id, ...values }).onConflictDoUpdate({ target: matchReels.eventId, set: values });
   return { code: ev.code };
