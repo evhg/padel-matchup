@@ -1047,6 +1047,20 @@ async function EventPage({ params, searchParams }: Props) {
         {/* The reel leads once it is ready: after a filmed match it is what everybody opens the page for (a player,
             24 November 2026: "the reel once ready should probably move up"). */}
         {reel?.kind === "ready" && <MatchReel reel={reel.view} code={code} keptUntil={formatEventDayLong(reel.view.keptUntil, ev.tz, locale)} />}
+        {/* "Make a new reel": a reel that plays can be made again by a player of the match or its organiser, in the same
+            two weeks (the owner, 26 November 2026: "Erik will redo the reel"). Folded, and directly under the reel it
+            replaces (the owner, the same day, of its first place lower down: "makes no sense"). The reel plays until the
+            new video is sent; then the bar and the new reel take its place. A reel that plays proves the match was
+            filmed, so this door does not wait for the booked end. */}
+        {me && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && reel?.kind === "ready" && (viewer.isCreator || isSeated(detail, me.id)) && (
+          <details className="card" data-testid="reel-again">
+            <summary className="cursor-pointer font-semibold">{t("reel.againOpen")}</summary>
+            <p className="mt-2 text-[0.9375rem] text-muted">{t("reel.againNote")}</p>
+            <div className="mt-3">
+              <ReelSend code={code} started={false} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={false} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} auto={autoReel} again />
+            </div>
+          </details>
+        )}
         {/* A visitor after the end gets the panel only once it holds a score: its one line for them was "Only players in this match can enter the score". */}
         {showScore && (detail.scores.length > 0 || perm.allowed || after.scoreReason) && (
           <ScorePanel
@@ -1070,19 +1084,6 @@ async function EventPage({ params, searchParams }: Props) {
             A signed-in player sends, once the match is over and for two weeks after it, so an old match does not ask
             for ever; a film that is here says so until the reel plays. */}
         {me && over && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && (reel?.kind === "none" || reel?.kind === "sending") && <ReelSend code={code} started={reel.kind === "sending"} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={reel.kind === "none" && reel.failed} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} auto={autoReel} />}
-        {/* "Make a new reel": a reel that plays can be made again by a player of the match or its organiser, in the same
-            two weeks (the owner, 26 November 2026: "Erik will redo the reel"). Folded, so the reel stays the page's
-            lead; the reel plays until the new video is sent, and then the bar and the new reel take its place. A reel that
-            plays proves the match was filmed, so this door does not wait for the booked end. */}
-        {me && now.getTime() - ev.startsAt.getTime() <= REEL_SEND_DAYS * 86_400_000 && reel?.kind === "ready" && (viewer.isCreator || isSeated(detail, me.id)) && (
-          <details className="card" data-testid="reel-again">
-            <summary className="cursor-pointer font-semibold">{t("reel.againOpen")}</summary>
-            <p className="mt-2 text-[0.9375rem] text-muted">{t("reel.againNote")}</p>
-            <div className="mt-3">
-              <ReelSend code={code} started={false} canUpload={Boolean(reelUploadUrl() && passportKeys())} failed={false} teams={reelTeams(roster, t("reel.teamOne"), t("reel.teamTwo"))} musicBase={reelUploadUrl()} auto={autoReel} again />
-            </div>
-          </details>
-        )}
         {/* The fast reel's job waits for who is who: a player of the match answers; anybody else sees that it waits. */}
         {reel?.kind === "working" && reel.progress.names && me && (viewer.isCreator || isSeated(detail, me.id)) ? (
           <ReelNames code={code} host={reel.progress.names.host} upload={reel.progress.names.upload} />

@@ -382,11 +382,13 @@ try {
   // "Make a new reel" (the owner, 26 November 2026: "Erik will redo the reel"): folded under a reel that plays, for
   // the match's own people; opened, it holds the two ways to send the video, and the reel still plays above it.
   const againDoor = p.getByTestId("reel-again");
-  const againShut = (await againDoor.count()) === 1 && (await againDoor.evaluate((el) => !el.open)) && (await againDoor.locator(":scope > summary").innerText()) === "Make a new reel";
+  // Directly under the reel it replaces: the next thing on the page after the reel's card.
+  const againUnder = await p.getByTestId("match-reel").evaluate((el) => el.nextElementSibling?.getAttribute("data-testid") ?? null);
+  const againShut = againUnder === "reel-again" && (await againDoor.count()) === 1 && (await againDoor.evaluate((el) => !el.open)) && (await againDoor.locator(":scope > summary").innerText()) === "Make a new reel";
   await againDoor.locator(":scope > summary").click();
   await againDoor.getByTestId("reel-send").waitFor({ timeout: 20000 });
   check(
-    "a player of the match finds Make a new reel folded under the reel, and opened it offers both ways while the reel still plays",
+    "a player of the match finds Make a new reel folded directly under the reel, and opened it offers both ways while the reel still plays",
     againShut && (await againDoor.getByTestId("reel-way-full").count()) === 1 && (await againDoor.getByTestId("reel-way-fast").count()) === 1 && (await p.getByTestId("reel-video").count()) === 1,
   );
   // With a reel and no court photo, the card's background is the reel's team announcement, so the picker is the
