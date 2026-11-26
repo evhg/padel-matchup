@@ -7,7 +7,7 @@ Detection on every 4th frame, the pose on every 2nd. Sightings chain into trackl
 ends where two people overlap (so a crossing never swaps two names). Each tracklet takes the name that all
 its sightings together fit best; the end of the court limits the choice to the pair that plays there; two
 tracklets alive together never share a name.
-Output: {"fps", "t0", "frames", "players": {id: {"f", "box", "kp", "head"}}, "sure": {id: margin}}
+Output: {"fps", "t0", "frames", "players": {id: {"f", "box", "kp", "head"}}, "sure": {id: margin}, "far": [ids named at the far end]}
 """
 import sys, os, json, pickle, numpy as np, cv2, onnxruntime as ort
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -84,6 +84,11 @@ def far_proba(img, people, fp):
     return out
 _mid = (t0 + t1) / 2; _b = min(len(M['near_pair']) - 1, int(_mid // M['bin']))
 npair, sure = M['near_pair'][_b], M['sure'][_b]
+# The far end of this clip: who.py names its two players clip by clip, only where its voices agree ("far_clips", the
+# spans of those clips), and labels its far sightings at 3 frames a second. A far tracklet here takes the name of the
+# labelled sightings it passes through, or none. An older ident file has only "far_named" for the whole upload.
+far_ok = any(a <= _mid < b for a, b in M['far_clips']) if 'far_clips' in M else M.get('far_named') is not False
+far_seen = [(x['t'], x['box'], x['id']) for x in M.get('sightings', []) if x.get('zone') == 'far' and x.get('id', -1) >= 0 and t0 <= x['t'] <= t1] if far_ok else []
 
 def iou(a, b):
     iw = min(a[2], b[2]) - max(a[0], b[0]); ih = min(a[3], b[3]) - max(a[1], b[1])
@@ -172,14 +177,29 @@ tracklets.sort(key=lambda tr: -len(tr['s'])); kept = []
 for tr in tracklets:
     if not any(same_person(tr, k) for k in kept): kept.append(tr)
 tracklets = kept
+def far_votes(tr):
+    """How many of who.py's labelled far sightings of each player this tracklet passes through: the sample nearest in
+    time (at most 1.6 frames away) must overlap the sighting's box. Pure but for the tracklet."""
+    v = np.zeros(4)
+    if not far_seen: return v
+    fs = np.array([x[0] for x in tr['s']])
+    for ts, bx, k in far_seen:
+        j = int(np.argmin(np.abs(t0 + fs / FPS - ts)))
+        if abs(t0 + fs[j] / FPS - ts) <= 1.6 / FPS and iou(tr['s'][j][1], bx) >= 0.4: v[k] += 1
+    return v
+FAR_VOTES, FAR_SHARE = 2, 0.75      # a far name needs two labelled sightings or more, and three in four for that name
 score = np.zeros((len(tracklets), 4))
 for ti, tr in enumerate(tracklets):
     score[ti] = np.sum(tr['lp'], 0)
     zn = max(set(tr['zn']), key=tr['zn'].count)
     if sure:
         allowed = pairs[npair] if zn == 'near' else pairs[1 - npair]
-        # who.py says when it could not tell the far partners apart ("far_named": false): no far name, not a guess
-        if zn == 'far' and M.get('far_named') is False: allowed = ()
+        if zn == 'far':
+            # no far name where who.py could not tell the far partners apart in this clip: no name, not a guess
+            allowed = ()
+            v = far_votes(tr)
+            if v.sum() >= FAR_VOTES and v.max() >= FAR_SHARE * v.sum() and int(v.argmax()) in pairs[1 - npair]:
+                allowed = (int(v.argmax()),); score[ti] = 0; score[ti, int(v.argmax())] = 10.0 * v.max()
         for k in range(4):
             if k not in allowed: score[ti, k] = -1e9
 span = [(tr['s'][0][0], tr['s'][-1][0]) for tr in tracklets]
@@ -242,6 +262,7 @@ for k, p in players.items():
     # two tracklets of one name never share a frame, but keep the frames strictly rising for the renderer
     keep = [i for i in range(len(p['f'])) if i == 0 or p['f'][i] > p['f'][i - 1]]
     for key in ('f', 'box', 'kp', 'head'): p[key] = [p[key][i] for i in keep]
-json.dump({'fps': FPS, 't0': t0, 'frames': n, 'near_pair': int(npair), 'ends_sure': bool(sure), 'players': players, 'sure': {str(k): round(v, 1) for k, v in sureness.items()},
+far_ids = sorted({int(ident[ti]) for ti in range(len(tracklets)) if ident[ti] >= 0 and zone_of[ti] == 'far'})
+json.dump({'fps': FPS, 't0': t0, 'frames': n, 'near_pair': int(npair), 'ends_sure': bool(sure), 'far': far_ids, 'players': players, 'sure': {str(k): round(v, 1) for k, v in sureness.items()},
            'tracklets': [{'id': ident[ti], 'from': span[ti][0], 'to': span[ti][1], 'n': len(tr['lp']), 'score': [round(float(x), 1) for x in np.maximum(score[ti], -999)], 'zone': zone_of[ti], 'rel': round(float(rel[ti]), 1)} for ti, tr in enumerate(tracklets)]}, open(out, 'w'))
 print(f'clip {t0:.1f}-{t1:.1f}: {n} frames, near pair {npair} sure {sure}, tracklets {len(tracklets)}, players ' + ' '.join(f"{k}:{len(p['f'])} (margin {sureness[k]:.0f})" for k, p in sorted(players.items())), flush=True)
