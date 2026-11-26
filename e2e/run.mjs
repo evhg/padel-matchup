@@ -69,7 +69,11 @@ const env = {
   SCRAPE_QUIET_HOURS: "off",
   // A fake Playtomic for clubs whose slug starts with "e2e-" (e2e/fakes/playtomic.mjs): the reader of
   // free court times reads it, and no suite calls the real platform or opens a checkout.
-  NODE_OPTIONS: [process.env.NODE_OPTIONS, `--import ${path.join(path.dirname(new URL(import.meta.url).pathname), "fakes/playtomic.mjs")}`].filter(Boolean).join(" "),
+  // A fake TikTok for the same reason (e2e/fakes/tiktok.mjs): "Share to TikTok" signs in, reads the account and posts
+  // against it, with the suite's own app key and secret, so no suite calls TikTok.
+  TIKTOK_CLIENT_KEY: "e2e-tiktok-key",
+  TIKTOK_CLIENT_SECRET: "e2e-tiktok-secret",
+  NODE_OPTIONS: [process.env.NODE_OPTIONS, ...["fakes/playtomic.mjs", "fakes/tiktok.mjs"].map((f) => `--import ${path.join(path.dirname(new URL(import.meta.url).pathname), f)}`)].filter(Boolean).join(" "),
 };
 if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) {
   const webpush = (await import("web-push")).default;

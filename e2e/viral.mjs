@@ -376,6 +376,69 @@ try {
       reelPageHtml.includes(`/${mcode}/card/opengraph-image`) &&
       reelPageHtml.includes('name="robots" content="noindex'),
   );
+  // "Share to TikTok" (the owner, 26 November 2026): any player posts the reel to their own TikTok, by TikTok's Content
+  // Sharing Guidelines. The server's TikTok is the fake in e2e/fakes/tiktok.mjs. The browser never opens TikTok's own
+  // sign-in screen: Playwright does not intercept the target of a redirect, so a click went to the real tiktok.com
+  // (26 November 2026). The start goes through the browser's own request context (its cookies, so the state cookie
+  // lands in the browser), its redirect is read, and the browser opens our callback as TikTok would send it back.
+  check("the reel page offers Share to TikTok, a link to the start, and the match page's reel offers it too", (await reelVisitor.getByTestId("tiktok-share").getAttribute("href")) === `/api/tiktok/start?code=${mcode}` && (await p.getByTestId("reel-tiktok").count()) === 1);
+  await shot(reelVisitor, "tiktok-reel-page");
+  const authorizeSeen = [];
+  const signInTikTok = async (account, again = false) => {
+    const started = await reelVisitor.request.get(`${BASE}/api/tiktok/start?code=${mcode}${again ? "&again=1" : ""}`, { maxRedirects: 0 });
+    const at = new URL(started.headers()["location"] ?? `${BASE}/`);
+    authorizeSeen.push({ origin: at.origin, path: at.pathname, ...Object.fromEntries(at.searchParams) });
+    await reelVisitor.goto(`${BASE}/api/tiktok/callback?code=${account}&scopes=user.info.basic,video.publish,video.upload&state=${encodeURIComponent(at.searchParams.get("state") ?? "")}`);
+  };
+  const avatar = (letter) => `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88"><rect width="88" height="88" fill="#1c1c1e"/><text x="44" y="58" font-size="40" text-anchor="middle" fill="#c8f135" font-family="sans-serif">${letter}</text></svg>`;
+  await reelVisitor.context().route("https://tiktok-avatar.example.test/**", (route) => route.fulfill({ status: 200, headers: { "content-type": "image/svg+xml" }, body: avatar(route.request().url().includes("private") ? "R" : "P") }));
+  await reelVisitor.context().route(/^https:\/\/([a-z0-9-]+\.)*tiktok(apis)?\.com\//, (route) => route.abort());
+  await signInTikTok("e2e-public");
+  await reelVisitor.getByTestId("tiktok-account").waitFor({ timeout: 20000 });
+  const privacyOptions = async () => reelVisitor.getByTestId("tiktok-privacy").locator("option").evaluateAll((os) => os.map((o) => ({ v: o.value, t: o.textContent, off: o.disabled })));
+  const switches = async () => Promise.all(["tiktok-comment", "tiktok-duet", "tiktok-stitch", "tiktok-commercial-switch"].map(async (id) => ({ id, on: await reelVisitor.getByTestId(id).getAttribute("aria-checked"), off: await reelVisitor.getByTestId(id).isDisabled() })));
+  const publicSwitches = await switches();
+  check(
+    "TikTok's sign-in asks for the three scopes with our callback, and the posting page shows the account, a preview, no privacy picked and every switch off",
+    `${authorizeSeen[0]?.origin}${authorizeSeen[0]?.path}` === "https://www.tiktok.com/v2/auth/authorize/" &&
+      authorizeSeen[0]?.scope === "user.info.basic,video.publish,video.upload" &&
+      authorizeSeen[0]?.redirect_uri === `${BASE}/api/tiktok/callback` &&
+      new URL(reelVisitor.url()).pathname === `/${mcode}/reel/tiktok` &&
+      (await reelVisitor.getByTestId("tiktok-nickname").innerText()) === "Public Padel" &&
+      (await reelVisitor.getByTestId("tiktok-preview").getAttribute("src")) === `https://reels.example.test/r/${reelToken}/tall.mp4` &&
+      (await reelVisitor.getByTestId("tiktok-privacy").inputValue()) === "" &&
+      JSON.stringify((await privacyOptions()).map((o) => o.t)) === JSON.stringify(["Choose", "Everyone", "Friends", "Followers", "Only me"]) &&
+      publicSwitches.every((s) => s.on === "false" && !s.off) &&
+      (await reelVisitor.getByTestId("tiktok-post").isDisabled()) &&
+      (await reelVisitor.getByTestId("tiktok-legal").getByRole("link", { name: "Music Usage Confirmation" }).getAttribute("href")) === "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en",
+    JSON.stringify({ authorizeSeen, url: reelVisitor.url(), publicSwitches }),
+  );
+  await shot(reelVisitor, "tiktok-post-public");
+  // Commercial content: on, Post waits for a choice; branded content cannot be private, both ways.
+  await reelVisitor.getByTestId("tiktok-privacy").selectOption("SELF_ONLY");
+  await reelVisitor.getByTestId("tiktok-commercial-switch").click();
+  const waitsForChoice = (await reelVisitor.getByTestId("tiktok-post").isDisabled()) && (await reelVisitor.getByTestId("tiktok-branded").isDisabled());
+  await reelVisitor.getByTestId("tiktok-privacy").selectOption("FOLLOWER_OF_CREATOR");
+  await reelVisitor.getByTestId("tiktok-branded").check();
+  const brandedRules = (await privacyOptions()).find((o) => o.v === "SELF_ONLY")?.off === true && (await reelVisitor.getByTestId("tiktok-legal").getByRole("link", { name: "Branded Content Policy" }).count()) === 1 && (await reelVisitor.getByTestId("tiktok-commercial-label").innerText()).includes("Paid partnership");
+  check("commercial content needs a choice before Post, and branded content is never private", waitsForChoice && brandedRules && !(await reelVisitor.getByTestId("tiktok-post").isDisabled()));
+  await reelVisitor.getByTestId("tiktok-commercial-switch").click();
+  await reelVisitor.getByTestId("tiktok-privacy").selectOption("SELF_ONLY");
+  await reelVisitor.getByTestId("tiktok-post").click();
+  await reelVisitor.locator('[data-testid="tiktok-status"][data-state="done"]').waitFor({ timeout: 30000 });
+  check("Post goes to TikTok, says processing takes a few minutes, and shows the status until it is posted", (await reelVisitor.getByTestId("tiktok-status").innerText()).includes("Processing can take a few minutes") && (await reelVisitor.getByTestId("tiktok-status").innerText()).includes("Posted"));
+  // A private account: "Use another account" signs in again, and the account's settings lock Duet and Stitch.
+  await signInTikTok("e2e-private", true);
+  await reelVisitor.getByTestId("tiktok-account").waitFor({ timeout: 20000 });
+  const privateSwitches = await switches();
+  check(
+    "a private account gets only its own privacy options, and Duet and Stitch locked off",
+    (await reelVisitor.getByTestId("tiktok-nickname").innerText()) === "Private Padel" &&
+      JSON.stringify((await privacyOptions()).map((o) => o.t)) === JSON.stringify(["Choose", "Followers", "Only me"]) &&
+      JSON.stringify(privateSwitches.map((s) => [s.on, s.off])) === JSON.stringify([["false", false], ["false", true], ["false", true], ["false", false]]),
+    JSON.stringify(privateSwitches),
+  );
+  await shot(reelVisitor, "tiktok-post-private");
   await p.goto(`${BASE}/${mcode}`);
   const picked = bangkokDay(Date.now() + 3 * 24 * 3600 * 1000);
   await p.getByTestId("play-again-when").fill(`${picked}T19:30`);

@@ -74,10 +74,12 @@ try {
   // On 25 November 2026 the owner asked for the match page's door instead, "larger and a call to action button
   // but work the same": one grey button at full width in every footer, which opens the form in place.
   check(
-    "footer carries the feedback button and the privacy link, and nothing else",
-    (await a.locator("footer a").count()) === 1 &&
-      (await a.locator("footer a").first().getAttribute("href")) === "/privacy" &&
-      (await a.locator("footer a").first().textContent())?.trim() === "Privacy and terms" &&
+    "footer carries the feedback button, the privacy link and the terms link, and nothing else",
+    (await a.locator("footer a").count()) === 2 &&
+      (await a.locator("footer a").nth(0).getAttribute("href")) === "/privacy" &&
+      (await a.locator("footer a").nth(0).textContent())?.trim() === "Privacy" &&
+      (await a.locator("footer a").nth(1).getAttribute("href")) === "/terms" &&
+      (await a.locator("footer a").nth(1).textContent())?.trim() === "Terms" &&
       (await a.locator("footer").getByRole("button", { name: "Tell us what should change", exact: true }).count()) === 1 &&
       (await a.getByTestId("footer-feedback").count()) === 0,
   );

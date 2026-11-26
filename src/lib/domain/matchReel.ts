@@ -64,6 +64,20 @@ export async function matchReel(db: Db, eventId: string, now = new Date()): Prom
 }
 
 /**
+ * The reel of a match found by its code, for the routes that have only the code ("Share to TikTok": the start,
+ * the post and the file TikTok pulls). One statement: the match's unique code index, then the reel's own.
+ */
+export async function matchReelByCode(db: Db, code: string, now = new Date()): Promise<ReelView | null> {
+  const [row] = await db
+    .select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt })
+    .from(events)
+    .innerJoin(matchReels, eq(matchReels.eventId, events.id))
+    .where(and(eq(events.code, code), eq(events.type, "match")))
+    .limit(1);
+  return reelView(row, now);
+}
+
+/**
  * Where a match stands with its reel, for the match page:
  *   "none"     nobody sent a video (or the reel is past its days, or the last try failed): offer to send one
  *   "sending"  a player started an upload that is not finished: the same card, so the upload can go on

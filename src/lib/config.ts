@@ -135,3 +135,14 @@ export const passportKeys = (): { priv: string; pub: string } | null => {
   const pub = process.env.PASSPORT_PUBLIC_KEY;
   return priv && pub && /^[0-9a-f]{64}$/i.test(priv) && /^[0-9a-f]{64}$/i.test(pub) ? { priv, pub } : null;
 };
+
+/**
+ * The TikTok app's key and secret ("Share to TikTok", the owner, 26 November 2026): Login Kit and the
+ * Content Posting API. Both, or null: without them no page shows the button and every TikTok route
+ * sends the player back to the reel. Read here and nowhere else; the secret never leaves the server.
+ */
+export const tiktokKeys = (): { clientKey: string; clientSecret: string } | null => {
+  const clientKey = (process.env.TIKTOK_CLIENT_KEY ?? "").trim();
+  const clientSecret = (process.env.TIKTOK_CLIENT_SECRET ?? "").trim();
+  return clientKey && clientSecret ? { clientKey, clientSecret } : null;
+};
