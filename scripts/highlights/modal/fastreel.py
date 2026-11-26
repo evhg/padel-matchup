@@ -37,7 +37,8 @@ Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report
   replays  the plan (fast_points.py, reel_points.py) and every part drawn (render.py, one machine for each part)
   opening  the openings are there (portrait.py once, then versus.py, one machine for each match and layout)
   music    the parts joined, the crowd (cheers.py), the level, the track (music.py)
-  finish   1080p wide.mp4 and tall.mp4, versus.jpg (1200x630) and poster.jpg (720 wide, tall), under reels/<new token>/; then
+  finish   1080p wide.mp4 and tall.mp4, versus.jpg (1200x630), poster.jpg (720 wide, tall) and reel.json (its matches, not
+           served), under reels/<new token>/; then
            POST {code, host, token} for each match of the upload
   Each progress POST is {code, progress: {pct, minutesLeft, step}}; while the job waits for names it adds
   "waiting": "names" to progress. A step that fails posts {code, failed: "<the error>"} for each match.
@@ -544,6 +545,10 @@ def run_make(req):
     # The tall reel's poster on the match page: the same moment of the opening, both teams on it, so the page shows a
     # picture and not a black box before the reel plays (the owner, 25 November 2026).
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', '4.6', '-i', f'{M}/versus-m1-tall.mp4', '-frames:v', '1', '-vf', 'scale=720:-2:flags=lanczos', '-q:v', '3', f'{d}/poster.jpg'])
+    # Which matches the reel is of, for the post to @kicksma.sh (scripts/social/instagram.py): the reel host serves
+    # only .mp4, .jpg and names.json, so this file stays on the store.
+    json.dump({'made': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'upload': req.get('upload'),
+               'matches': [{k: m.get(k) for k in ('code', 'title_a', 'title_b', 'score')} for m in req['matches']]}, open(f'{d}/reel.json', 'w'), indent=1)
     vol.commit()
     clock['all'] = round(time.time() - t0)
     for m in req['matches']: R.post({'code': m['code'], 'host': os.environ['REELS_HOST'], 'token': token})
