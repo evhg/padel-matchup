@@ -299,6 +299,10 @@ export function ReelSend({
               {t("fullTitle")} <span className="chip-live">{t("best")}</span>
             </h3>
             <p className="mt-1 text-xs text-muted">{t("fullSub")}</p>
+            {/* The truth until the full engine runs by itself (the owner, 27 November 2026: decision 2a). */}
+            <p className="mt-1 text-xs font-semibold text-muted" data-testid="reel-full-by-hand">
+              {t("fullByHand")}
+            </p>
             <ul className="mt-3 flex flex-col gap-1.5 text-sm">
               {mark(true, t("has1"))}
               {mark(true, t("has2"))}
