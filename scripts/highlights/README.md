@@ -159,6 +159,52 @@ When `who.py` is not sure who is who, the job stops at "players" with `"waiting"
 `names.json` and `face-<track>.jpg` to `reels/<upload token>/`. The players answer with `POST /u/<upload token>/names`
 on the reel host (`serve.py`), and `resume` goes on from the step "players".
 
+### The public version: `share.mp4` (26 November 2026)
+
+Each fast reel has three films in `reels/<token>/`: `tall.mp4` and `wide.mp4` for the match page, and `share.mp4`
+for TikTok and the @kicksma.sh Instagram account. `reel.json` says `"share": true` when `share.mp4` is there; a
+reel made before this change has no `share.mp4`, and the daily post skips it ("no public version").
+
+What `share.mp4` holds, and why:
+
+- **The tall layout without the end card.** The end card names Kicksmash and its address. TikTok's Content Sharing
+  Guidelines forbid "any brand name, logo, watermark, other promotional branding, link or promotional text" on
+  shared content.
+- **No brand in the picture of any reel, ours or a club's.** `gfx.bug` draws nothing (the club and the date stay in
+  the opening, where they are the match's own facts), `gfx.tall_base` has no
+  "KICKSMA.SH" under the score, and the numbers cards (`gfx.stats_card`, `cards.stats_grid` and their tall forms)
+  have no "kicksma.sh" foot. So the parts are drawn once, for all three films. `tall.mp4` and `wide.mp4` keep the
+  end card: in the app, the brand lives there.
+- **The match sound only.** No music track and no added crowd, whatever the player chose. No licence on record allows
+  a public post of a track or of `assets/cheers/`: "bounce" came from MusicGen (CC BY-NC 4.0, no use that earns
+  money), and the other files have no source recorded. The player keeps the chosen music and crowd in `tall.mp4`
+  and `wide.mp4`.
+- **The opening keeps its sound.** `versus.py` makes every effect from numbers (no sample), and its voice is Kokoro
+  (Apache 2.0, commercial use permitted). The piper test voice (non-commercial data) is not in the Modal image, so
+  it never speaks in a fast reel.
+
+How it is made (`share.py`, called by `finish_layout` in `modal/fastreel.py`), with no part drawn again and no
+picture encoded twice:
+
+1. `share.body` counts the pictures of the parts before the end card (`list.txt` of `reel_points.py`; the end card is
+   the last part, `NN-outro.mp4`).
+2. The 1080p encode of `tall.mp4` takes `share.key_args`: each picture once, at its own time, and the first picture
+   of the end card as a key frame. Without `-fps_mode passthrough`, ffmpeg copies a picture at a small gap between
+   two parts (the sound of a part is a little longer than its picture), and picture n of the encode is then not
+   picture n of the join. So `tall.mp4` now has no such copied pictures.
+3. `share.cut` copies the first n packets of `tall.mp4` as they are, and puts under them the sound of the join of the
+   parts (the match, the slow match sound of the replays, the opening), cut at the same moment and set to -16 LUFS
+   as the reel. It checks that the n packets are exactly the n first pictures; when they are not, it encodes those
+   pictures once more from the join, and its line in the clock says "encoded" in place of "copied".
+
+When `share.cut` fails, `tall.mp4` and `wide.mp4` still go out, and the clock has the reason. The extra work is one
+pass of the sound and one copy: about 2 seconds on the tall machine.
+
+Checked on 26 November 2026 here, with no Modal run: `finish_layout` itself (a stand-in for the `modal` module, made-up
+parts, music and crowd on) gave a `share.mp4` whose pictures are the first 421 of `tall.mp4`, picture for picture
+(frame checksums), whose last picture is the last of the clip and not the end card, with the opening's 440 Hz and
+the match's 660 Hz in its sound and the 200 Hz "music" 57 dB down, and `instagram.py check` passed.
+
 ## What is not done
 
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
@@ -183,6 +229,10 @@ on the reel host (`serve.py`), and `resume` goes on from the step "players".
 
 ## What this already cost to learn
 
+- **An mp4 encode adds pictures at the joins of the parts.** ffmpeg's default for an mp4 is a constant rate: where
+  the sound of a part is longer than its picture, the next part starts a little later, and ffmpeg copies a picture
+  to fill the gap. A join of four test parts had 369 pictures and its plain encode 370. A picture number of the
+  join is a picture number of the encode only with `-fps_mode passthrough` (`share.key_args`).
 - **Name people from the whole match, never from one clip.** In one clip two or three players are in
   view. Five versions of the lab page failed on that.
 - **Two people in one frame are never one person, and partners share an end.** These two rules do more
