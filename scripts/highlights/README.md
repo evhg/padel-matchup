@@ -170,7 +170,8 @@ What `share.mp4` holds, and why:
 - **The tall layout without the end card.** The end card names Kicksmash and its address. TikTok's Content Sharing
   Guidelines forbid "any brand name, logo, watermark, other promotional branding, link or promotional text" on
   shared content.
-- **No brand in the picture of any reel.** `gfx.bug` draws the venue only (no venue: nothing), `gfx.tall_base` has no
+- **No brand in the picture of any reel, ours or a club's.** `gfx.bug` draws nothing (the club and the date stay in
+  the opening, where they are the match's own facts), `gfx.tall_base` has no
   "KICKSMA.SH" under the score, and the numbers cards (`gfx.stats_card`, `cards.stats_grid` and their tall forms)
   have no "kicksma.sh" foot. So the parts are drawn once, for all three films. `tall.mp4` and `wide.mp4` keep the
   end card: in the app, the brand lives there.

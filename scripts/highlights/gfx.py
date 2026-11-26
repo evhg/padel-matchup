@@ -113,15 +113,12 @@ def badge(text, bg=LIME, fg=INK, size=40):
     return rgba_to_bgra(im)
 
 def bug(venue):
-    """Top-left: the venue, on ink with a lime edge. No brand name: the picture of a reel carries none, because TikTok's
-    Content Sharing Guidelines forbid a brand name, a logo or a watermark on shared content (26 November 2026). The
-    brand is on the end card of the app's own reel only. No venue: a clear pixel, so every caller places it as before."""
-    b = venue.upper()
-    if not b.strip(): return np.zeros((1, 1, 4), np.uint8)
-    f2 = font(30, 'SemiBold'); wb = int(tracked_w(b, f2, 3))
-    im, d = _sheet('RGBA', (wb + 44, 50), (0, 0, 0, 0))
-    d.rectangle((0, 0, 7, 49), fill=LIME + (255,)); d.rectangle((8, 0, wb + 43, 49), fill=INK + (225,)); tracked(d, (24, 5), b, f2, WHITE + (255,), 3)
-    return rgba_to_bgra(im)
+    """Top-left of every clip: nothing. A reel's picture carries no brand name, ours or a club's: TikTok's Content
+    Sharing Guidelines forbid "any brand name, logo, watermark, other promotional branding, link or promotional text"
+    on shared content (26 November 2026). The club and the date stay in the opening, where they are the match's own
+    facts, and our brand is on the end card of the app's own reel only. A clear pixel, so every caller places it as
+    before."""
+    return np.zeros((1, 1, 4), np.uint8)
 
 def darken(bg_bgr, blur=18, dim=0.38):
     im = Image.fromarray(cv2.cvtColor(bg_bgr, cv2.COLOR_BGR2RGB)).filter(ImageFilter.GaussianBlur(blur))
