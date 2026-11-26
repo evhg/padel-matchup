@@ -193,8 +193,9 @@ elif seg['kind'] == 'clip':
     follow = None
     if TALL and tr and os.environ.get('TALL_FOLLOW') == '1':
         nf = int(np.ceil((t1 - t0) * FPS)) + 2; want = []; last = W / 2
+        far = set(tr.get('far', []))        # the far players have names now (track.py "far"); the window keeps to the near pair
         for q in range(nf):
-            xs = [((b[0] + b[2]) / 2, b[3] - b[1]) for b in track_at(tr, q + off).values()]
+            xs = [((b[0] + b[2]) / 2, b[3] - b[1]) for k, b in track_at(tr, q + off).items() if k not in far]
             if xs:
                 lo, hi = min(x for x, _ in xs), max(x for x, _ in xs)
                 # far apart: the nearer (taller) players count more, they are the ones a viewer sees

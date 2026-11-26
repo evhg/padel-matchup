@@ -15,9 +15,13 @@ How, and why (ident.py and ident3.py needed a person; this does not):
 1. A clip of the phone is one point, so its near pair does not change inside it. In each clip the near sightings
    split into two people: two people in one frame are never one person. Then the people of all clips join into at
    most four tracks by their clothes and looks, and the two people of one clip never join.
-2. The far pair of a clip is the two tracks that are not near. Which far person is which is decided only when two
-   independent voices (the look and the colours, each against the same track at the near end) agree. Otherwise the
-   far players get no name: no name is better than a wrong name.
+2. The far pair of a clip is the two tracks that are not near. Which far person is which is decided clip by clip, by
+   three independent voices, each against the same tracks at the near end: the look (DINO), the colour of the shirt,
+   and man or woman (CLIP; it speaks only for a pair of a man and a woman, by the near end's own reading, so the
+   request's "sex" is not needed). A clip gets far names when two voices or more speak and all that speak agree;
+   otherwise its far players get no name: no name is better than a wrong name (`far_verdict`). On the clips of
+   25 November 2026 the old rule (two voices, in 75% of the clips) named no far player; this one named 7 of 8 clips,
+   all right by eye, and left the eighth (two women at the far end, colours 0.08 apart) without names.
 3. The names: every way to give the four names to the tracks gets a score from the faces (gallery.py's templates of
    the players, where a player has them), from the man/woman split (when the request says who is a man and who is a
    woman), and from the pairs (the near pair of a clip are partners in its match). How sure a name is, is its share
@@ -32,6 +36,9 @@ SURE = 0.9               # a name below this share of all the ways is asked of a
 FACE_W, FACE_0 = 15.0, 0.30   # a face: 15 per unit of cosine over 0.30 (SFace calls two faces one person from 0.363)
 PAIR_W = 6.0             # a clip whose near pair are not partners in any match: this much less
 SEX_W = 3.0              # the man/woman split: this many times the log of the model's probability
+LOOK_0, COLOUR_0 = 0.05, 0.05   # a far voice inside this dead zone says nothing (the look, the colour of the shirt)
+SEX_GAP = 0.5            # the man/woman voice speaks for a far pair only when its two tracks differ this much at the near end
+SEX_0 = 0.3              # ... and inside this dead zone it says nothing
 
 
 def main():
@@ -128,10 +135,10 @@ def main():
     print('tracks', K, 'sightings', [int((ident == k).sum()) for k in range(K)], 'merges up to', max(merges, default=0), 'closest two tracks', round(apart, 2))
     print('near pair of each clip', [sorted(near_of[s]) for s in range(len(STR))])
 
-    # 2. far: the two tracks that are not near; which is which only when two voices agree
-    far_named = False; far_lab = {}
+    # 2. far: the two tracks that are not near; which is which, clip by clip, only where the voices agree
+    far_lab = {}; far_clips = []; sexn = {}
     if K == 4:
-        groups = {}
+        groups = []
         for s in range(len(STR)):
             if len(near_of[s]) != 2: continue
             pair = tuple(k for k in range(4) if k not in near_of[s])
@@ -139,27 +146,34 @@ def main():
             if len(idx) < 4: continue
             lab = split2(idx)
             sl = [np.array([i for i, v in lab.items() if v == k], int) for k in (0, 1)]
-            if min(len(x) for x in sl) >= 2: groups.setdefault(pair, []).append(sl)
+            if min(len(x) for x in sl) >= 2: groups.append((s, pair, sl))
         nmean = {k: (X[ident == k].mean(0), pemb[ident == k][:, :32].mean(0), c9[ident == k][:, :3].mean(0)) for k in range(4)}
-        votes = []
-        for pair, sls in groups.items():
-            a, b = pair
-            for s0, s1 in sls:
-                # voice 1: the look (DINO); voice 2: the colour of the shirt. Each against the same tracks at the near end.
-                v = []
-                for key in (1, 2):
-                    f0 = (pemb[s0][:, :32] if key == 1 else c9[s0][:, :3]).mean(0); f1 = (pemb[s1][:, :32] if key == 1 else c9[s1][:, :3]).mean(0)
-                    keep = np.linalg.norm(f0 - nmean[a][key]) + np.linalg.norm(f1 - nmean[b][key]); swap = np.linalg.norm(f0 - nmean[b][key]) + np.linalg.norm(f1 - nmean[a][key])
-                    v.append((swap - keep) / (swap + keep + 1e-9))
-                agree = (v[0] > 0.05 and v[1] > 0.05) or (v[0] < -0.05 and v[1] < -0.05)
-                votes.append(agree)
-                if agree:
-                    o = (a, b) if v[0] > 0 else (b, a)
-                    for i in s0: far_lab[i] = o[0]
-                    for i in s1: far_lab[i] = o[1]
-        far_named = bool(votes) and np.mean(votes) >= 0.75
-        print('far: clips where the two voices agree', int(sum(votes)), 'of', len(votes), '-> far names', far_named)
-        if not far_named: far_lab = {}
+        # voice 3: man or woman (CLIP), the near end's reading of each track against the far person's own reading. The
+        # request's "sex" is not needed: the near end, where a player is large, says which track of the pair is the woman.
+        woman = Woman() if groups else None
+        if woman and woman.ok:
+            sexn = {k: v for k, v in ((k, woman.share(f'{M}/kf', names, fr, box, near_crops(ident, k, h))) for k in range(4)) if v is not None}
+            print('woman share at the near end', {k: round(v, 2) for k, v in sexn.items()})
+        for s, (a, b), (s0, s1) in groups:
+            # voice 1: the look (DINO); voice 2: the colour of the shirt. Each against the same tracks at the near end.
+            v = []
+            for key in (1, 2):
+                f0 = (pemb[s0][:, :32] if key == 1 else c9[s0][:, :3]).mean(0); f1 = (pemb[s1][:, :32] if key == 1 else c9[s1][:, :3]).mean(0)
+                keep = np.linalg.norm(f0 - nmean[a][key]) + np.linalg.norm(f1 - nmean[b][key]); swap = np.linalg.norm(f0 - nmean[b][key]) + np.linalg.norm(f1 - nmean[a][key])
+                v.append((swap - keep) / (swap + keep + 1e-9))
+            w = None
+            if woman and woman.ok and a in sexn and b in sexn and abs(sexn[a] - sexn[b]) >= SEX_GAP:
+                w0, w1 = (woman.share(f'{M}/kf', names, fr, box, far_crops(x, h)) for x in (s0, s1))
+                if w0 is not None and w1 is not None: w = (w0 - w1) * np.sign(sexn[a] - sexn[b]); v.append(w)
+            named, side = far_verdict(v)
+            print(f'far c{s}: tracks {a},{b} look {v[0]:+.3f} colour {v[1]:+.3f} man/woman ' + (f'{w:+.2f}' if w is not None else 'silent') + f' -> {"names" if named else "no names"}')
+            if named:
+                o = (a, b) if side > 0 else (b, a)
+                for i in s0: far_lab[i] = o[0]
+                for i in s1: far_lab[i] = o[1]
+                far_clips.append(s)
+        print('far: clips with far names', len(far_clips), 'of', len(groups), far_clips)
+    far_named = bool(far_clips)
 
     # 3. the names
     G = {'players': {}}
@@ -189,7 +203,7 @@ def main():
     print('faces of each track', {k: len(FT.get(str(k), [])) for k in range(K)}, 'likeness', like)
     sexp = {}
     if any(p.get('sex') in ('m', 'f') for p in players):
-        sexp = woman_share(f'{M}/kf', names, fr, box, ident, K, h)
+        sexp = sexn or woman_share(f'{M}/kf', names, fr, box, ident, K, h)
         for k, pw in sexp.items():
             for j, p in enumerate(players):
                 if p.get('sex') in ('m', 'f'): score[k, j] += SEX_W * np.log(max(1e-3, pw if p['sex'] == 'f' else 1 - pw))
@@ -236,8 +250,9 @@ def main():
         ta = ' & '.join(players[j]['name'] for j in range(NP) if tm.get(j) == 0); tb = ' & '.join(players[j]['name'] for j in range(NP) if tm.get(j) == 1)
         mt.update({'pair_a': ta, 'pair_b': tb, 'title_a': m.get('title_a') or ta, 'title_b': m.get('title_b') or tb})
         json.dump(mt, open(f'{M}/match-{mi + 1}.json', 'w'))
-    json.dump({'clips': [{'a': a, 'b': b, 'match': clip_match[s] + 1, 'near': [best[k] for k in near_of[s]]} for s, (a, b) in enumerate(STR)], 'far_named': bool(far_named)}, open(f'{M}/clips.json', 'w'), indent=1)
-    ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid, static, cnt, inv, h, STR, clip_match, near_of, best, far_named, team_of, NP)
+    json.dump({'clips': [{'a': a, 'b': b, 'match': clip_match[s] + 1, 'near': [best[k] for k in near_of[s]], 'far_named': s in far_clips} for s, (a, b) in enumerate(STR)],
+               'far_named': bool(far_named)}, open(f'{M}/clips.json', 'w'), indent=1)
+    ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid, static, cnt, inv, h, STR, clip_match, near_of, best, far_clips, team_of, NP)
     chosen = {}
     for k in range(K):
         if FT.get(str(k)): chosen[str(best[k])] = FT[str(k)][:1]
@@ -255,8 +270,10 @@ def edits(a, b):
     return row[-1]
 
 
-def ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid, static, cnt, inv, h, STR, clip_match, near_of, best, far_named, team_of, NP):
-    """ident-m<m>.json, -colours.json and -model.pkl for track.py, as ident3.py wrote them."""
+def ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid, static, cnt, inv, h, STR, clip_match, near_of, best, far_clips, team_of, NP):
+    """ident-m<m>.json, -colours.json and -model.pkl for track.py, as ident3.py wrote them. "far_clips": the spans of the
+    clips whose far players have names (track.py names a far player only there, from the labelled far sightings)."""
+    far_named = bool(far_clips)
     def feats(idx):
         c = col[idx].copy(); c[:, 3:6] *= ok[idx, 1:2]; c[:, 6:9] *= ok[idx, 2:3]
         return np.concatenate([c * 4.0, ok[idx, 1:3], pca.transform(emb[idx]) * 0.6], 1)
@@ -297,34 +314,70 @@ def ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid,
         pre = f'{M}/ident-m{mi + 1}'
         sights = [{'f': str(names[fr[i]]), 't': round(float(t[i]), 2), 'box': [round(float(v), 1) for v in box[i]], 'zone': str(zn[i]), 'id': int(pid[i]),
                    'conf': round(float(P[i, pid[i]]) if pid[i] >= 0 else 0, 3), 'margin': round(float(margin[i]), 2)} for i in range(N) if person[i] and st[i] in S0]
-        json.dump({'pairs': pairs, 'bin': 1.0, 'near_pair': npair.tolist(), 'sure': sure.tolist(), 'static_boxes': static_boxes, 'far_named': bool(far_named), 'sightings': sights}, open(pre + '.json', 'w'))
+        fc = [STR[s] for s in far_clips if s in S0]
+        json.dump({'pairs': pairs, 'bin': 1.0, 'near_pair': npair.tolist(), 'sure': sure.tolist(), 'static_boxes': static_boxes, 'far_named': bool(fc), 'far_clips': fc,
+                   'sightings': sights}, open(pre + '.json', 'w'))
         json.dump({'near': cn}, open(pre + '-colours.json', 'w'))
         pickle.dump({'pca': pca, 'models': MODELS, 'pairs': pairs}, open(pre + '-model.pkl', 'wb'))
         print('wrote', pre, 'pairs', pairs, 'clips', S0)
 
 
-def woman_share(frames, names, fr, box, ident, K, h):
-    """The man/woman split of each track: an open image-text model (CLIP) on the largest near sightings. Optional."""
-    try:
-        import torch
-        from transformers import CLIPModel, CLIPProcessor
-        name = os.environ.get('CLIP', 'openai/clip-vit-base-patch32')
-        model, proc = CLIPModel.from_pretrained(name).eval(), CLIPProcessor.from_pretrained(name)
-    except Exception as e:
-        print('no man/woman model:', str(e)[:200]); return {}
-    out = {}
-    for k in range(K):
-        idx = sorted(np.where(ident == k)[0], key=lambda i: -h[i])[:12]
+def far_verdict(v):
+    """One clip's far names from its voices, as (named, side): side > 0 keeps the split's order, < 0 swaps it. v holds the
+    look and the colour, and the man/woman voice when it speaks. A voice inside its dead zone says nothing; the clip gets
+    names only when two voices or more speak and every one that speaks says the same. Pure."""
+    zones = [LOOK_0, COLOUR_0, SEX_0][:len(v)]
+    said = [np.sign(x) for x, z in zip(v, zones) if abs(x) > z]
+    if len(said) < 2 or len(set(said)) != 1: return False, 0
+    return True, int(said[0])
+
+
+def near_crops(ident, k, h):
+    """The largest near sightings of track k (at most 12): the man/woman reading where a player is large."""
+    return sorted(np.where(ident == k)[0], key=lambda i: -h[i])[:12]
+
+
+def far_crops(idx, h):
+    """The largest sightings of one far person in one clip (at most 12)."""
+    return sorted(idx, key=lambda i: -h[i])[:12]
+
+
+class Woman:
+    """The man/woman split: an open image-text model (CLIP, MIT licence), loaded once. Optional: without it, ok is False."""
+
+    def __init__(self):
+        self.ok = False
+        try:
+            import torch
+            from transformers import CLIPModel, CLIPProcessor
+            name = os.environ.get('CLIP', 'openai/clip-vit-base-patch32')
+            self.torch, self.model, self.proc = torch, CLIPModel.from_pretrained(name).eval(), CLIPProcessor.from_pretrained(name)
+            self.ok = True
+        except Exception as e:
+            print('no man/woman model:', str(e)[:200])
+
+    def share(self, frames, names, fr, box, idx):
+        """The median probability of "a woman" over the crops of the sightings idx, or None."""
         crops = []
         for i in idx:
             im = cv2.imread(f'{frames}/{names[fr[i]]}'); b = box[i].astype(int)
             c = im[max(0, b[1]):b[3], max(0, b[0]):b[2]]
             if c.size: crops.append(cv2.cvtColor(c, cv2.COLOR_BGR2RGB))
-        if not crops: continue
-        with torch.no_grad():
-            x = proc(text=['a photo of a man playing padel', 'a photo of a woman playing padel'], images=crops, return_tensors='pt', padding=True)
-            p = model(**x).logits_per_image.softmax(-1)[:, 1].numpy()
-        out[k] = float(np.clip(np.median(p), 0.02, 0.98))
+        if not crops: return None
+        with self.torch.no_grad():
+            x = self.proc(text=['a photo of a man playing padel', 'a photo of a woman playing padel'], images=crops, return_tensors='pt', padding=True)
+            p = self.model(**x).logits_per_image.softmax(-1)[:, 1].numpy()
+        return float(np.clip(np.median(p), 0.02, 0.98))
+
+
+def woman_share(frames, names, fr, box, ident, K, h, woman=None):
+    """The man/woman split of each track: CLIP on the largest near sightings. Optional."""
+    woman = woman or Woman()
+    if not woman.ok: return {}
+    out = {}
+    for k in range(K):
+        v = woman.share(frames, names, fr, box, near_crops(ident, k, h))
+        if v is not None: out[k] = v
     return out
 
 

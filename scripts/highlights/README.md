@@ -164,8 +164,9 @@ on the reel host (`serve.py`), and `resume` goes on from the step "players".
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
   them found from the picture. The fast reel reads them from `courts/<place>.json` on the store and stops with
   "no court lines" for a camera place that has none: a person still draws them once for each place.
-- The fast reel names a far player only when two voices agree (`who.py`); on the clips of 24 November they agreed
-  in 2 of 8 clips, so the far players had no tags (the eighth reel, made by hand, had them).
+- The fast reel names the far players clip by clip, where its voices agree (`who.py`): on the clips of 25 November
+  in 7 of 8 clips, all right by eye. A clip with two women or two men at the far end in like colours keeps no far
+  names: the man/woman voice is silent there, and the look alone is too weak (on these clips it never passed 0.08).
 - The rally of a fast-reel clip comes from the sound alone (`fast_points.py`): on 24 November two titles of eight
   were wrong ("27-second rally" for a rally of 12 s, "18-second rally" for 15 s), because the phone hears half of the
   hits and a clip can hold two points.
@@ -688,10 +689,30 @@ on the reel host (`serve.py`), and `resume` goes on from the step "players".
   of four (a gallery of 18 November); the pairs of two matches named the other two; a model of men and women agreed
   (0.02 and 0.98). The share of the best way among all ways is how sure the names are: 1.00 for all four. A gallery
   name that differs by one letter ("Jon", "John") is the same entry; a lookup by exact name found one face of two.
+  The far end is named the same way, clip by clip, with three voices (26 November 2026). The look (DINO) and the
+  colour of the shirt agreed in 2 or 3 clips of 8 by the old rule, because the look stayed inside its dead zone:
+  0.002 to 0.074 in all eight clips, while the colour gave 0.08 to 0.80. The third voice is man or woman (CLIP): the
+  near end reads each track (0.02, 0.98, 0.05, 0.98 for the four players), and the far person's own small crops read
+  -0.96 to +0.95 against that, in the direction of the colour in all six clips where it spoke. It needs no "sex" in
+  the request, and it is silent for two women or two men. A clip gets far names when two voices or more speak and none
+  disagrees: 7 of 8 clips, every one right on a sheet of the named far sightings; the eighth (two women, colours 0.08
+  apart) got none. One pair at the far end wore the same green, and the colour still split them (0.61 to 0.80): the
+  shirt is not the whole outfit. Single sightings can still be wrong (3 of 16 on the sheet of the weakest clip), so
+  `track.py` names a far tracklet only from three in four of the labelled sightings it passes through.
 - **The pictures at 3 a second must carry their true time** (24 November 2026). With the fps filter they were 0.17 to
   0.25 s after their listed time, and a portrait cut from the 4K file at the listed time showed the fence where the
   player had stood. They are now every 10th picture of the working copy. The working copy itself drifted 0.12 s from
   the 4K file over ten pieces; it is now every second picture of pieces with an even count.
+- **A serve from the camera end is a pose, and the sound before it may be a ball fetched** (`fast_points.py`,
+  `pose_serve`, 26 November 2026). One clip opened with 10 s of a player who juggled a ball, sent it over the net,
+  walked to the back glass for another and came back. The phone heard hits, the ball finder saw flights in her hands,
+  and there was no pause of 6 s, so the clip started 10 s before the serve. Foot speed, the place on the screen and
+  free flights did not separate the fetch from play. The serve itself did: the server stood still behind the service
+  line for a second (feet within 0.03 of her height), bounced the ball, swung under the shoulders (2.9 heights a
+  second) and ran to the net, while her partner stood still at the net. That signature fired once in eight clips, at
+  that serve (113.88; the contact is at 113.8 on the frames). Looser limits (still 0.25, swing 1.5) fired inside two
+  rallies too, so the limits are not loose. It is used only 2.5 s or more after the sound's first hit. A serve from
+  the far end is not seen this way.
 - **A phone behind the glass hears half of the hits** (`fast_points.py`). A click 6 dB over its own half second finds
   the first and the last hit of most rallies within 0.6 s of a person's times; a fixed level over the clip's median
   found two hits in a rally of 33 s. A clip can hold two points, and the softer sounds after a point (a ball picked
