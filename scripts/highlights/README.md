@@ -205,6 +205,32 @@ parts, music and crowd on) gave a `share.mp4` whose pictures are the first 421 o
 (frame checksums), whose last picture is the last of the clip and not the end card, with the opening's 440 Hz and
 the match's 660 Hz in its sound and the 200 Hz "music" 57 dB down, and `instagram.py check` passed.
 
+### The same reel from the whole film (`modal/fullclips.py`, 27 November 2026)
+
+A player who sends the whole film ("Full reel") gets the same job, with clips that the store cuts itself:
+
+1. The sound of the film through `audio.js` gives the candidate points (88 minutes: 20 s on one machine).
+2. One sheet of frames for each candidate (the serve, and eight views after the last sound), and a reader of the
+   sheets says which candidates are points, who won, and who reacts. Choose the points with a clear reaction.
+3. `modal run modal/fullclips.py --video uploads/<token>/video.mov --work <out>/work --stretches s.json` decodes each
+   stretch from the camera file on its own machine and writes what the job's step "clips" writes.
+4. `modal run modal/fastreel.py --request req.json --dry` with `"out": "<out>"` makes the reel from them; look at its
+   sheet, copy the files to `reels/<new token>/`, and post the reel through `/api/admin/match-reel`.
+
+What the first one showed (the match of 24 November, 132 candidates between the warm-up and the second match):
+
+- **The loudest "rally" of the film was two players who hit balls in a break.** The sound's best stretch (31 s, 19
+  sounds) had half of the players outside the court. The phone's cut would have sent it, and the job would have
+  drawn it. A candidate is a point only when a picture shows four players and a serve.
+- **A copy of the stretches with `ffmpeg -c copy` is not a phone's cut.** A stretch that ends inside a group of
+  pictures gives "Invalid data found" at each join; the machines of the step "clips" then count other pictures, and
+  the job stops with "clean file 196.20 s, working copy 196.06 s". Decode each stretch from the camera file instead.
+- **The sound finds too few points for a score.** The readers found 59 points in 99 candidates of the first match,
+  whose 17 games need 68 points at the least; four games showed three points or fewer. A winner was read with a
+  confidence of 0.7 or more for 16 of the 59. The servers came out in the right order for the nine games of the
+  first set. So the full reel of that match has no score box, no numbers of the score engine and no fastest shot:
+  a score needs every serve from the picture (`serve.py` on the whole film), not the sound's list.
+
 ## What is not done
 
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
