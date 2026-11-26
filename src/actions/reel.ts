@@ -12,7 +12,7 @@ import { ActionFailure, loadEvent, runA, type ActionResult } from "./shared";
  * "Choose the video": where this match's film goes and the ticket that lets this browser send it. The
  * film goes from the phone to the reel host in parts; nothing of it passes through Kicksmash.
  */
-export async function askReelUploadAction(code: string, way: SendWay = "upload"): Promise<ActionResult<{ url: string; token: string; ticket: string }>> {
+export async function askReelUploadAction(code: string, way: SendWay = "upload", again = false): Promise<ActionResult<{ url: string; token: string; ticket: string }>> {
   return runA(async () => {
     const url = reelUploadUrl();
     const keys = passportKeys();
@@ -21,19 +21,19 @@ export async function askReelUploadAction(code: string, way: SendWay = "upload")
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
     const now = new Date();
-    const { token } = await askReelUpload(db, { eventId: detail.event.id, playerId: me.id, way: way === "clips" ? "clips" : "upload", now });
+    const { token } = await askReelUpload(db, { eventId: detail.event.id, playerId: me.id, way: way === "clips" ? "clips" : "upload", again: again === true, now });
     revalidatePath(`/${code}`);
     return { url, token, ticket: await signUploadTicket(token, keys, now) };
   });
 }
 
 /** "Paste a link": the match keeps the link to the film on the player's drive, and the owner hears that a video is here. */
-export async function setReelLinkAction(code: string, text: string): Promise<ActionResult<null>> {
+export async function setReelLinkAction(code: string, text: string, again = false): Promise<ActionResult<null>> {
   return runA(async () => {
     const { db, detail } = await loadEvent(code);
     const me = await getSessionPlayer(db);
     if (!me) throw new ActionFailure("no_identity");
-    await setReelLink(db, { eventId: detail.event.id, playerId: me.id, text });
+    await setReelLink(db, { eventId: detail.event.id, playerId: me.id, text, again: again === true });
     await later(() => tellOwnerVideoHere(detail.event.code, "link"));
     revalidatePath(`/${code}`);
     return null;

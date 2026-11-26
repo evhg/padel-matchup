@@ -189,6 +189,22 @@ describe("a player sends the match video", () => {
     expect((await askReelUpload(db, { eventId: ev.id, playerId: ana.id, now: later })).token).not.toBe(TOKEN);
   });
 
+  it("makes a new reel on purpose: a player of the match replaces the reel that plays, a stranger cannot, and a video that is here stays locked", async () => {
+    const { ev, ana, stranger } = await match("again");
+    await setMatchReel(db, { code: ev.code, host: HOST, token: TOKEN, now: NOW });
+    expect((await reelState(db, ev.id, NOW)).kind).toBe("ready");
+    // "Make a new reel" is the only door past a reel that plays, and only for the match's own people.
+    await expect(askReelUpload(db, { eventId: ev.id, playerId: stranger.id, again: true, now: NOW })).rejects.toMatchObject({ code: "forbidden" });
+    const again = await askReelUpload(db, { eventId: ev.id, playerId: ana.id, way: "clips", again: true, now: NOW });
+    expect(again.token).not.toBe(TOKEN);
+    expect(await row(ev.id)).toMatchObject({ status: "asked", source: "clips", requestedBy: ana.id, host: null, readyAt: null });
+    expect(await reelState(db, ev.id, NOW)).toEqual({ kind: "sending" });
+    // Once the new film is here, nobody writes over it, not even on purpose.
+    expect(await reelUploadReceived(db, again.token)).toEqual({ code: ev.code, way: "clips" });
+    await expect(askReelUpload(db, { eventId: ev.id, playerId: ana.id, again: true, now: NOW })).rejects.toMatchObject({ code: "locked" });
+    await expect(setReelLink(db, { eventId: ev.id, playerId: ana.id, text: "https://www.icloud.com/iclouddrive/abc", again: true, now: NOW })).rejects.toMatchObject({ code: "locked" });
+  });
+
   it("keeps the two ways apart: the clips of a fast reel are another upload than the whole film", async () => {
     const { ev, ana, bo } = await match("ways");
     const whole = await askReelUpload(db, { eventId: ev.id, playerId: ana.id, now: NOW });

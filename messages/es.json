@@ -3048,6 +3048,8 @@
     "linkCopyPrompt": "Copia el enlace del vídeo",
     "hereClipsAutoBody": "Los clips están aquí. El vídeo empieza solo en un minuto, y esta página muestra cuánto falta. Los cuatro jugadores reciben un mensaje cuando esté listo.",
     "has5": "Quién ganó cada punto",
-    "fastNo4": "Sin ganador de cada punto"
+    "fastNo4": "Sin ganador de cada punto",
+    "againOpen": "Hacer un nuevo vídeo",
+    "againNote": "Envía el vídeo otra vez. Este vídeo se ve hasta que lo envíes; después el nuevo ocupa su lugar."
   }
 }
