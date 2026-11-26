@@ -16,7 +16,7 @@ import type { VenueOption } from "./VenueCombobox";
  * `playerFields`: a seated player who is not the organiser, so the form holds only the fields a player
  * may change (`PLAYER_EDIT_FIELDS`, the owner's decision of 9 November 2026).
  */
-export function EditMatch({ code, initial, venues, beside, startLocked = false, playerFields = false }: { code: string; initial: EventFormValues; venues: VenueOption[]; beside?: ReactNode; startLocked?: boolean; playerFields?: boolean }) {
+export function EditMatch({ code, initial, venues, beside, startLocked = false, playerFields = false, row = false }: { code: string; initial: EventFormValues; venues: VenueOption[]; beside?: ReactNode; startLocked?: boolean; playerFields?: boolean; /** One row of the organiser's list: the label and a chevron, the width of the card. */ row?: boolean }) {
   const t = useTranslations();
   const [values, setValues] = useState<EventFormValues>(initial);
   // The page's values when the form opened: a save sends only what the person changed since (`editPatch`).
@@ -69,6 +69,15 @@ export function EditMatch({ code, initial, venues, beside, startLocked = false, 
           </button>
         </div>
       </div>
+    );
+  if (row)
+    return (
+      <button type="button" className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left font-semibold" onClick={openForm} data-testid="edit-match-row">
+        <span>{t("creator.edit")}</span>
+        <span className="shrink-0 text-faint" aria-hidden>
+          ›
+        </span>
+      </button>
     );
   return (
     <div className="flex flex-wrap gap-2">

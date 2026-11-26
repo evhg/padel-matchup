@@ -1157,7 +1157,6 @@ async function EventPage({ params, searchParams }: Props) {
         )}
         {/* Live: scores typed on one phone appear on the others. Paused while the tab is hidden, gone once the scores are final or the booking is over. */}
         {liveNight && <AutoRefresh seconds={20} />}
-        {viewer.isCreator && ev.scoreLockedByCreator && !cancelled && levelCandidates.length > 0 && <ConfirmLevels code={code} players={levelCandidates} />}
         {canMakeSeries && <SeriesDoor code={code} suggestedName={ev.title ?? `${ev.venueName ?? "Padel"} ${weekdayName(ev.startsAt, ev.tz, locale)} Open`} suggestedCapacity={ev.capacity} />}
 
         {/* Players: after the end, for the organiser and the players only (`afterMatchView`), and for a signed-in
@@ -1166,7 +1165,8 @@ async function EventPage({ params, searchParams }: Props) {
         <section className="card">
           {/* "3/4 players · 1 place held for Alberto": a held place is named here, so "Full" is not the only hint (the owner, 12 October 2026). */}
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <h2 className="text-lg font-extrabold">{t("event.players", { count: occupied, capacity: ev.capacity })}</h2>
+            {/* After the end the count says nothing (everybody played): the list is "Who played" (the owner, 26 November 2026: "4/4 Players sounds weird"). */}
+            <h2 className="text-lg font-extrabold">{over && !cancelled ? t("event.whoPlayed") : t("event.players", { count: occupied, capacity: ev.capacity })}</h2>
             {!cancelled && !over && (
               <span className="text-sm font-semibold text-muted" data-testid="count-line">
                 {countParts(lineSeats)
@@ -1275,6 +1275,7 @@ async function EventPage({ params, searchParams }: Props) {
             isOver={over}
             paste={!cancelled && !over ? { namesHere, spots: spotsLeft, past: pastAsk } : null}
             leave={organiserLeave}
+            levels={ev.scoreLockedByCreator && !cancelled && levelCandidates.length > 0 ? <ConfirmLevels code={code} players={levelCandidates} row /> : null}
             listOnBoard={!ev.publicListing && ev.venueSlug && ev.venueName && !cancelled && !over ? <ListOnBoard code={code} venue={ev.venueName} className="btn-ghost btn-sm max-w-full whitespace-normal px-0 text-left leading-snug [overflow-wrap:anywhere]" /> : null}
           />
         )}

@@ -457,7 +457,8 @@
     "fixReplace": "Я играл(а) вместо игрока {name}",
     "fixReplaceConfirm": "Вы играли вместо игрока {name}? {name} получит сообщение, что вы заняли это место.",
     "fixReplaceHeld": "Вы играли вместо игрока {name}?",
-    "bookedQuestion": "Корт забронирован?"
+    "bookedQuestion": "Корт забронирован?",
+    "whoPlayed": "Кто играл"
   },
   "creator": {
     "tools": "Инструменты организатора",

@@ -457,7 +457,8 @@
     "fixReplace": "I played instead of {name}",
     "fixReplaceConfirm": "You played instead of {name}? {name} gets a message that you took the place.",
     "fixReplaceHeld": "You played instead of {name}?",
-    "bookedQuestion": "Booked the court?"
+    "bookedQuestion": "Booked the court?",
+    "whoPlayed": "Who played"
   },
   "creator": {
     "tools": "Organizer tools",
