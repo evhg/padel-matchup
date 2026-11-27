@@ -12,8 +12,11 @@ The phone's cut keeps one point in each clip, and its reaction (src/lib/reel/fas
   the near pair shows well after it (`pose_serve`: a still server deep in the near half, an underhand swing, a step
   away), because players who wait, juggle or fetch a ball make the sounds of hits;
 - the ball is dead 0.75 s after the last shot (the person who made the eighth reel set 0.7 to 0.8 s by eye);
-- the clip starts 1.5 s before the serve (or at the start of the phone's clip) and runs to its end, 5 s after the
-  dead ball at most: the reaction is in it;
+- the clip starts 1.5 s before the serve (or at the start of the phone's clip), and not before two players are on the
+  court or the near pair is held, and runs to its end, 5 s after the dead ball at most: the reaction is in it;
+- every clip is a point: a player in each half for most of the rally and the ball in the air (`not_a_point`, from
+  the detector's boxes of everyone on the court, `court_counts`); a clip whose near pair the tracker holds too little
+  stays when three whole players are on the court (the tracker can name a near pair wrongly);
 - the title never says a length the sound cannot prove (`rally_title`): the seconds only when every hit is heard,
   else "Long rally" or "Marathon rally" from the part of the rally that is surely in it, and nothing for a short point;
 - a replay is the hit with the fastest wrist of a near player whom the tracker holds for 1.2 s before it, at most
@@ -201,6 +204,53 @@ def held_share(tr, near, a, b):
     return held / n
 
 
+# Everyone on the court, from the detector's boxes (27 November 2026, the whole film of that morning): the tracker
+# keeps a far player only when it is sure of the name, and it can name a near pair wrongly, so it cannot say that a
+# half of the court is empty. The boxes of match/kf (3 a second) and court.zone can. Measured on that film: the six
+# points had a player in each half for 87 to 100% of the rally and 8 to 22 ball flights in each 10 s; a break that the
+# sound called "Long rally" (the far half empty, two players who walk back and talk) had 44% and 3.0.
+BOTH_HALVES = 0.7       # a point: a player in each half for this share of the rally, or more
+FLIGHTS_10S = 5.0       # and this many ball flights in each 10 s, or more (when the ball step ran)
+ON_COURT_KEEP = 0.8     # three whole players or more on the court for this share: the players are in the picture
+EDGE = 8                # px: a box this close to the left, right or bottom edge is a player cut off by the picture
+
+
+def court_counts(M):
+    """[(t, players in the far half, players in the near half, near players not cut off by the picture's edge)] for
+    each frame of match/kf, or None without the files (dets.jsonl of the detector, kf_times.txt). A box counts when the
+    detector is 0.45 sure or more (as cands.py). A near player cut off at the edge plays, but is not in the picture
+    (25 November 2026: legs at the bottom edge, an arm and a racket at the side, and the far pair small)."""
+    if not (os.path.exists(f'{M}/dets.jsonl') and os.path.exists(f'{M}/kf_times.txt')): return None
+    from court import zone
+    times = [float(x) for x in open(f'{M}/kf_times.txt') if x.strip()]
+    out = []
+    for line, t in zip(open(f'{M}/dets.jsonl'), times):
+        bs = [b for b in json.loads(line)['d'] if b[4] >= 0.45]; z = [zone(b) for b in bs]
+        whole = sum(1 for b, k in zip(bs, z) if k == 'near' and b[0] > EDGE and b[2] < 1920 - EDGE and b[3] < 1080 - EDGE)
+        out.append((t, z.count('far'), z.count('near'), whole))
+    return out
+
+
+def on_court(cc, a, b):
+    """The share of the frames in [a, b] with a player in each half, and with three whole players or more. Pure."""
+    w = [x[1:] for x in (cc or []) if a <= x[0] <= b]
+    if not w: return None
+    return {'both': sum(f >= 1 and n >= 1 for f, n, _ in w) / len(w), 'three': sum(f + k >= 3 for f, _, k in w) / len(w), 'frames': len(w)}
+
+
+def first_on_court(cc, a, b, k=2):
+    """The first frame in [a, b] with k players or more on the court, or None. Pure."""
+    return next((x[0] for x in (cc or []) if a <= x[0] <= b and x[1] + x[2] >= k), None)
+
+
+def not_a_point(oc, flights, a, b):
+    """Why [a, b] is not a point, or None: the far or the near half empty for much of it, or too few ball flights
+    (`flights`: the flight starts, or None when the ball step did not run). Pure."""
+    if oc and oc['frames'] >= 3 and oc['both'] < BOTH_HALVES: return 'half_empty'
+    if flights is not None and b - a >= 3.0 and 10 * len(flights) / (b - a) < FLIGHTS_10S: return 'few_flights'
+    return None
+
+
 def reaction(tr, near, dead, end, misses=None):
     """The near player who moves most in the seconds after the ball is dead (arms up, a jump, a turn): the close look
     of the editor's reel (README, "After the point: the reaction first, then the replay"), 2.4 s from the first moment
@@ -274,6 +324,7 @@ def main():
         subprocess.run(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', video, '-vn', '-ac', '1', '-ar', str(SR), '-f', 's16le', raw], check=True)
     x = np.fromfile(raw, np.int16).astype(np.float32) / 32768
     multi = len(REQ['matches']) > 1
+    cc = court_counts(M)       # everyone on the court, each frame of match/kf (None without the detector's files)
     pts, cands = [], []
     left = []       # what was left out and why (points.json "left_out"; missing.py says it on the match page)
     for n, c in enumerate(C):
@@ -296,13 +347,25 @@ def main():
             print(f'c{n} has no rally after the wait: left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'no_rally'}); continue
         dead = round(min(last + 0.75, b - 0.3), 2)
         start = max(a + 0.05, serve - 1.5)
+        oc = on_court(cc, serve, dead)
+        spans = ball_spans(f'{M}/ball/c{n}.npz', a)
+        why = not_a_point(oc, None if spans is None else [x for x, _ in spans if serve - 0.5 <= x <= dead], serve, dead)
+        if why:
+            # every clip is a point (the v8 table): not a break that the sound heard as hits
+            print(f'c{n} is not a point ({why}, {oc}): left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'no_rally'}); continue
         if os.path.exists(trf):
             tr_ = json.load(open(trf))
-            if held_share(tr_, c['near'], serve, dead) < 0.25:
+            # the boxes see everyone on the court, the tracker only the players it could name (27 November 2026: a
+            # 40 s rally with all four players left out, because the tracker had named the near pair wrongly)
+            if held_share(tr_, c['near'], serve, dead) < 0.25 and not (oc and oc['three'] >= ON_COURT_KEEP):
                 # the near pair is out of the picture for most of the rally (25 November 2026: legs at the bottom
                 # edge and an empty court; the good clips held the pair 42 to 50% of each rally, this one 14%)
                 print(f'c{n} shows its players too little: left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'out_of_frame'}); continue
-            start = max(start, first_seen(tr_, c['near'], a, dead) - 0.3)
+            # the clip opens when players are on the court: the near pair, or two players anywhere. A far pair that
+            # serves while the near pair waits under the phone is play (27 November 2026: the clip began 2.7 s after
+            # such a serve, at the first near player)
+            seen = [x for x in (first_seen(tr_, c['near'], a, dead), first_on_court(cc, a, dead)) if x is not None]
+            start = max(start, min(seen) - 0.3)
         start = round(min(start, dead - 4.0), 2)
         end = round(min(b - 0.05, dead + 5.0), 2)
         p = {'id': f'c{n}', 'match': f'{M}/match-{c["match"]}.json', 'start_t': start, 'serve_t': round(serve, 2), 'last_t': round(last, 2), 'dead_t': dead,
