@@ -20,9 +20,6 @@ const hook = async (update, secret = SECRET) => {
   const res = await fetch(`${BASE}/api/telegram/webhook`, { method: "POST", headers: { "content-type": "application/json", ...(secret ? { "x-telegram-bot-api-secret-token": secret } : {}) }, body: JSON.stringify(update) });
   return { status: res.status, json: await res.json().catch(() => null) };
 };
-/** Closes a browser context, or gives up after 10 seconds and says so: a close has no time limit of its own. */
-const closeWithin = (c, name) =>
-  Promise.race([c.close().then(() => true), new Promise((r) => setTimeout(() => r(false), 10_000))]).then((ok) => ok || console.log(`· ${name} did not close in 10 s; the browser closes it at the end`));
 const group = { id: -100424242, type: "supergroup", title: "e2e padel" };
 const ivan = { id: 424242, first_name: "Ivan", username: "ivan_e2e", language_code: "ru" };
 
@@ -316,19 +313,29 @@ try {
   const tappedCode = (tapPlace.json?.outcome ?? "").split(":")[1];
   const returnCtx = await browser.newContext(iphone);
   const returnPage = await returnCtx.newPage();
+  // The tab is back on the match page when the document the 303 names commits, not before. The first document
+  // fires "load" too, and its URL is already the match page once the hash is gone (`history.replaceState`), so
+  // neither waitForLoadState nor waitForURL can tell the two apart: the request event can, and it comes first.
+  let hopSent = false;
+  returnPage.on("request", (r) => {
+    if (r.url().includes("/api/telegram/login")) hopSent = true;
+  });
+  const backOnPage = returnPage.waitForEvent("framenavigated", { predicate: (f) => hopSent && f === returnPage.mainFrame() && new URL(f.url()).pathname === `/${tappedCode}`, timeout: 30000 });
   const loginHop = returnPage.waitForRequest((r) => r.url().includes("/api/telegram/login"), { timeout: 30000 });
   await returnPage.goto(`${BASE}/${tappedCode}#tgAuthResult=${authResultHash(olya)}`);
   // Each hop of a redirect is its own request in Playwright, so this one's response is the 303 itself.
   const hop = await (await loginHop).response();
   const landed = new URL(hop?.headers()["location"] ?? "/", BASE);
   check("a Telegram sign-in returns to the page it started from", hop?.status() === 303 && landed.pathname === `/${tappedCode}` && !landed.search, `${hop?.status()} ${landed.href}`);
+  await backOnPage;
   await returnPage.waitForLoadState("load");
   const returnedAs = await returnPage.request.get(`${BASE}/api/me/export`).then((r) => r.json());
   check("and the player is signed in there", returnedAs.player?.displayName === "Оля", JSON.stringify(returnedAs.player ?? null).slice(0, 120));
-  // A context that will not close held this suite for 8 minutes and more, now and then, after its last check had
-  // passed (run.mjs stopped it as a hang; 23 and 25 November 2026). Each close has 10 seconds; the browser goes at the end.
-  await closeWithin(returnCtx, "returnCtx");
-  await closeWithin(ctx, "ctx");
+  // This close once ran while the tab was still in the redirect, with the new context's service worker in its
+  // install: Chrome then waited 500 ms every time, and now and then for ever (23 to 25 November 2026). Closed
+  // after the page above has landed, it takes about 10 ms.
+  await returnCtx.close();
+  await ctx.close();
 
   const ctx2 = await browser.newContext(iphone);
   page = await ctx2.newPage();

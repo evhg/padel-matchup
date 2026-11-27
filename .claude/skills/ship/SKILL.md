@@ -959,6 +959,16 @@ Wall clock first, credits second. What actually moved it, measured:
   e2e/"` names the suite and its age, and the gate's own temp file (`ls -t /tmp/tmp.*`) has its last
   line. `e2e/run.mjs` now stops a suite after eight minutes (`SUITE_LIMIT_MS`) and says so. Stop a hung
   suite by its process number; the runner goes on with the next one.
+- **Close a browser context only after its last navigation has landed.** That window was the return from
+  Telegram: the suite closed it while the tab was still in the 303 back to the match page and the new
+  context's service worker was in its install. Chrome then waited about 500 ms on every close (140 of 140,
+  509 ms under load), and on the gate's machine now and then for ever; closed after the landing, it takes 7
+  to 51 ms (27 November 2026). A time limit on each
+  close (`closeWithin`, 25 November) hid it and moved the wait to `browser.close()`. `waitForLoadState`
+  answers for the first document, and `waitForURL` matches it too once `history.replaceState` takes the
+  hash away: wait for the `framenavigated` of the document the redirect names (`backOnPage`). To measure
+  a close, put `DEBUG=pw:protocol` on one run and read the time between `Target.disposeBrowserContext`
+  and its answer.
 - **Name a migration when you generate it, and read the file after any move.** A generated
   `0111_burly_paladin.sql` was renamed with `git mv -k … || mv …`. `-k` skips an error in silence and the
   file was untracked, so nothing moved, the `||` never ran, and the lines appended next made a second
