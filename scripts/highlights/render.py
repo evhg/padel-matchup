@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gfx
 from people import read_frames
 import hdr
+# where a player is at a frame, and where the window of a close look goes: one copy, which the plan's guard reads too
+from closeup import track_at, centres
 
 video, segf, out = sys.argv[1], sys.argv[2], sys.argv[3]
 seg = json.load(open(segf))
@@ -70,25 +72,6 @@ def encoder(out, audio_args):
     return subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
 def ease(x): x = min(1.0, max(0.0, x)); return x * x * (3 - 2 * x)
-
-def track_at(tr, f):
-    """Each player at frame f, interpolated: box (4) followed by the head point (2). Absent when not followed there."""
-    out = {}
-    for k, p in tr['players'].items():
-        fs = p['f']
-        v = lambda j: np.array(p['box'][j] + p['head'][j])
-        i = np.searchsorted(fs, f)
-        if i == 0:
-            if fs[0] - f <= 6: out[int(k)] = v(0)
-            continue
-        if i >= len(fs):
-            if f - fs[-1] <= 6: out[int(k)] = v(-1)
-            continue
-        a, b = fs[i - 1], fs[i]
-        if b - a > 30: continue
-        w = (f - a) / (b - a)
-        out[int(k)] = (1 - w) * v(i - 1) + w * v(i)
-    return out
 
 HDR = hdr.kind(video) if seg['kind'] in ('clip', 'fast', 'replay') else None; SDRVF = hdr.vf(HDR) if HDR else None
 
@@ -295,20 +278,12 @@ elif seg['kind'] == 'replay':
     src = source(t0, t1, FPS * steps)
     # the window follows the focus player (or the given point), smoothed
     cw, ch = int(W / zoom) // 2 * 2, int(H / zoom) // 2 * 2
-    cx, cy = seg.get('cx', W / 2), seg.get('cy', H / 2)
     frames = [] if src.hires else list(read_frames(video, t0, t1 - t0))
-    centres = []; first = None
-    for n in range(int(np.ceil((t1 - t0) * FPS)) if src.hires else len(frames)):
-        b = track_at(tr, n + off).get(seg.get('focus')) if tr and seg.get('focus') is not None else None
-        if b is not None:
-            cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2 - 0.05 * (b[3] - b[1])
-            if first is None: first = n
-        centres.append((cx, cy))
     # Before the tracker has the player, the window waits where the player will be found, not at the middle of the
-    # picture: a replay once opened on two seconds of empty grass, because the track began late.
-    if first: centres[:first] = [centres[first]] * first
-    c = np.array(centres); k = 9
-    c = np.stack([np.convolve(np.pad(c[:, j], k, mode='edge'), np.ones(2 * k + 1) / (2 * k + 1), mode='valid') for j in (0, 1)], 1)
+    # picture: a replay once opened on two seconds of empty grass, because the track began late. Where the tracker
+    # loses the player, the window holds the last place; the plan draws a close look only when the player is in this
+    # window for most of it (closeup.py, `framed`).
+    c, first = centres(tr, seg.get('focus'), off, int(np.ceil((t1 - t0) * FPS)) if src.hires else len(frames), (seg.get('cx', W / 2), seg.get('cy', H / 2)))
     def origin(cc, r=1):
         """The top left corner of the window around a centre. r: the pixels of the source for one design unit."""
         return int(np.clip((cc[0] - cw / 2) * r, 0, (W - cw) * r)), int(np.clip((cc[1] - ch / 2) * r, 0, (H - ch) * r))

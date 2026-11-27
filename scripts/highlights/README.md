@@ -267,6 +267,10 @@ What the first one showed (the match of 24 November, 132 candidates between the 
   confidence of 0.7 or more for 16 of the 59. The servers came out in the right order for the nine games of the
   first set. So the full reel of that match has no score box, no numbers of the score engine and no fastest shot:
   a score needs every serve from the picture (`serve.py` on the whole film), not the sound's list.
+- **A stretch can hold a break before its point** (27 November 2026, not fixed). The third stretch of the test reel
+  starts about 20 s before play: the near pair stands behind the side glass, and the sound hears hits there. The
+  clip shows about 16 s of empty court, and a replay was chosen in that break. `closeup.py` now keeps such a replay
+  out (see "A close look is drawn only when its player is in it"), but the clip still starts too early.
 
 ## What is not done
 
@@ -554,6 +558,24 @@ What the first one showed (the match of 24 November, 132 candidates between the 
   two seconds of empty grass: the window waited where the player would be found. Now the replay starts there, and
   with less than 1.2 s left there is no replay. A measured number over a head (`"notes"`) obeys the same rule:
   without the player in the track it is not drawn.
+- **A close look is drawn only when its player is in it** (`closeup.py`, 27 November 2026). A reel from the whole
+  film had two close looks with no player. In one, the player walked out of the picture at the bottom left after the
+  point; the tracker lost her, and the window held her last box at the edge for 2 s of empty court. In the other, the
+  "hit" of a replay came in a break, and its player stood behind the side glass, small beside the glass wall. The
+  track was right both times: its boxes agree with the picture, and the times agree with the film. Nothing checked
+  the window against the track before the part was drawn. Now `closeup.framed` moves the window as `render.py` does
+  and measures it in the tall layout (the middle 3/4 of the window's width, the narrower layout), so both layouts
+  keep the same parts. The rule:
+  - the player's box is in the shown window (75% of its area or more) in **70%** of the part's frames or more; a
+    frame where the tracker does not hold the player counts as outside;
+  - the box's median height is **0.33** of the window's height or more.
+
+  `fast_points.py` applies it when it chooses: a reaction that fails starts later, 0.2 s at a time, up to 3 s after
+  the dead ball and never shorter than 1.2 s; then the other near player is tried; then the point has no reaction. A
+  replay candidate that fails is not a candidate, so the turns of the two pairs choose from good ones only.
+  `reel_points.py` applies it again before it adds a part, for a plan written by hand. On that reel the eight good
+  close looks scored 78% to 100% of the frames and 0.35 to 0.68 of the height; the two bad ones scored 8% of the
+  frames and 0.30 of the height.
 - **A line-call review first shows the whole serve land** (`review.py`, `"after"`): the full picture runs 0.7 s
   past the landing, and only then comes the slow close part. The first version cut away before the bounce.
 - **The score is added last, from a log that the rules have checked** (`score_log.py`, `scorebox.py`). A log has

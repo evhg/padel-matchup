@@ -17,7 +17,8 @@ The phone's cut keeps one point in each clip, and its reaction (src/lib/reel/fas
 - the title never says a length the sound cannot prove (`rally_title`): the seconds only when every hit is heard,
   else "Long rally" or "Marathon rally" from the part of the rally that is surely in it, and nothing for a short point;
 - a replay is the hit with the fastest wrist of a near player whom the tracker holds for 1.2 s before it, at most
-  four in a reel and one in a clip; a far player is a blur in a close look (README).
+  four in a reel and one in a clip; a far player is a blur in a close look (README);
+- a close look (the reaction, a replay) is chosen only where its window shows its player (closeup.py, README).
 - each clip gets its own cheer (cheers.py: a file is used once).
 """
 import sys, os, json, subprocess, numpy as np
@@ -202,8 +203,15 @@ def held_share(tr, near, a, b):
 
 def reaction(tr, near, dead, end):
     """The near player who moves most in the seconds after the ball is dead (arms up, a jump, a turn): the close look
-    of the editor's reel (README, "After the point: the reaction first, then the replay"). None when nobody is held."""
-    best = None
+    of the editor's reel (README, "After the point: the reaction first, then the replay"), 2.4 s from the first moment
+    the tracker holds him. None when nobody is held.
+    Moving most is not enough: a player who walks out of the picture moves too (27 November 2026: the close look
+    followed a player out at the bottom left, then held her last box for 2 s of empty court). So the window must show
+    its player (closeup.framed: in it for 70% of the part, and not small). When it does not, the close look starts
+    later, by 0.2 s at a time up to 3 s after the dead ball and never shorter than 1.2 s, and then the next player is
+    tried. When no window shows a player, there is no close look; the clip and its replay stay."""
+    import closeup
+    ranked = []
     for who in near:
         p = tr['players'].get(str(who))
         if not p: continue
@@ -215,10 +223,25 @@ def reaction(tr, near, dead, end):
         w = kp[ok][:, [9, 10], :2]; move = float(np.abs(np.diff(w, axis=0)).sum(axis=(1, 2)).mean() / h)
         up = float(((kp[ok][:, [9, 10], 1] < kp[ok][:, [5, 6], 1]).any(axis=1)).mean())
         score = move * (1 + up)
-        if best is None or score > best[0]: best = (score, int(who), float(t[m][0]))
-    if not best or best[0] <= 0: return None
-    t0 = round(best[2], 2)
-    return {'who': best[1], 't0': t0, 't1': round(min(t0 + 2.4, end), 2)}
+        if score > 0: ranked.append((score, int(who), float(t[m][0])))
+    for score, who, first in sorted(ranked, reverse=True):
+        t0 = round(first, 2)
+        while t0 <= dead + 3.0:
+            t1 = round(min(t0 + 2.4, end), 2)
+            if t0 > first and t1 - t0 < 1.2: break      # a later start keeps 1.2 s at least; the first one is as it was
+            if closeup.framed(tr, who, t0, t1)['ok']: return {'who': who, 't0': t0, 't1': t1}
+            t0 = round(t0 + 0.2, 2)
+        print(f'reaction: player {who} is not in the window of a close look after {dead}')
+    return None
+
+
+def replay_framed(tr, who, t_, before=1.5, after=1.0):
+    """Whether the replay of the hit at t_ shows its player (closeup.framed), from the moment the tracker holds him, as
+    reel_points.py cuts it. 27 November 2026: a "hit" in a break, its player behind the side glass, 0.30 of the
+    window's height. Pure."""
+    import closeup
+    first = held_from(tr, who, t_ - before, t_ + after)
+    return first is not None and closeup.framed(tr, who, max(t_ - before, first), t_ + after)['ok']
 
 
 def meter_of(clips, times, hr):
@@ -291,6 +314,7 @@ def main():
                 for t_, lvl in r:
                     first = held_from(tr, who, t_ - 1.7, t_ + 1.0)
                     if first is None or t_ + 1.0 - first < 1.2: continue
+                    if not replay_framed(tr, who, t_): continue        # its player is not in the close look
                     cands.append((wrist_speed(tr, who, t_) * (1 + lvl / 20), n, who, t_))
     # at most four replays, one in a clip, the fastest wrists first, and the two pairs in turn: the owner, 14 November
     # 2026, "we should of course not single out one team or one player"; on 25 November one pair had three replays
