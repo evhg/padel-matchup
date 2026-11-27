@@ -201,7 +201,7 @@ def held_share(tr, near, a, b):
     return held / n
 
 
-def reaction(tr, near, dead, end):
+def reaction(tr, near, dead, end, misses=None):
     """The near player who moves most in the seconds after the ball is dead (arms up, a jump, a turn): the close look
     of the editor's reel (README, "After the point: the reaction first, then the replay"), 2.4 s from the first moment
     the tracker holds him. None when nobody is held.
@@ -209,7 +209,8 @@ def reaction(tr, near, dead, end):
     followed a player out at the bottom left, then held her last box for 2 s of empty court). So the window must show
     its player (closeup.framed: in it for 70% of the part, and not small). When it does not, the close look starts
     later, by 0.2 s at a time up to 3 s after the dead ball and never shorter than 1.2 s, and then the next player is
-    tried. When no window shows a player, there is no close look; the clip and its replay stay."""
+    tried. When no window shows a player, there is no close look; the clip and its replay stay. `misses` gets each
+    player who moved but was not in the window (the match page says so: missing.py, "players_out_of_frame")."""
     import closeup
     ranked = []
     for who in near:
@@ -232,6 +233,7 @@ def reaction(tr, near, dead, end):
             if closeup.framed(tr, who, t0, t1)['ok']: return {'who': who, 't0': t0, 't1': t1}
             t0 = round(t0 + 0.2, 2)
         print(f'reaction: player {who} is not in the window of a close look after {dead}')
+        if misses is not None: misses.append(who)
     return None
 
 
@@ -273,11 +275,12 @@ def main():
     x = np.fromfile(raw, np.int16).astype(np.float32) / 32768
     multi = len(REQ['matches']) > 1
     pts, cands = [], []
+    left = []       # what was left out and why (points.json "left_out"; missing.py says it on the match page)
     for n, c in enumerate(C):
         a, b = c['a'], c['b']; trf = f'{M}/tracks/c{n}.json'
         hs = hits_of(x, a + 0.05, b - 0.05); sl = rally(hs)
         if not sl:      # no rally in the sound: not a point (25 November 2026, a clip of players who walk about)
-            print(f'c{n} has no rally: left out'); pts.append(None); continue
+            print(f'c{n} has no rally: left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'no_rally'}); continue
         serve, last = sl
         serve = after_idle(ball_spans(f'{M}/ball/c{n}.npz', a), serve, last)
         if os.path.exists(trf):
@@ -290,7 +293,7 @@ def main():
                 print(f'c{n}: the serve from the pose at {ps} (the sound said {serve})'); serve = ps
         r = [h for h in hs if serve - 0.01 <= h[0] <= last + 0.01]
         if len(r) < 2 or last - serve < 2.0:
-            print(f'c{n} has no rally after the wait: left out'); pts.append(None); continue
+            print(f'c{n} has no rally after the wait: left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'no_rally'}); continue
         dead = round(min(last + 0.75, b - 0.3), 2)
         start = max(a + 0.05, serve - 1.5)
         if os.path.exists(trf):
@@ -298,7 +301,7 @@ def main():
             if held_share(tr_, c['near'], serve, dead) < 0.25:
                 # the near pair is out of the picture for most of the rally (25 November 2026: legs at the bottom
                 # edge and an empty court; the good clips held the pair 42 to 50% of each rally, this one 14%)
-                print(f'c{n} shows its players too little: left out'); pts.append(None); continue
+                print(f'c{n} shows its players too little: left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'out_of_frame'}); continue
             start = max(start, first_seen(tr_, c['near'], a, dead) - 0.3)
         start = round(min(start, dead - 4.0), 2)
         end = round(min(b - 0.05, dead + 5.0), 2)
@@ -308,8 +311,9 @@ def main():
         pts.append(p)
         if os.path.exists(trf):
             tr = json.load(open(trf))
-            rx = reaction(tr, c['near'], dead, end)
+            misses = []; rx = reaction(tr, c['near'], dead, end, misses)
             if rx: p['react'] = rx
+            elif misses: left.append({'id': f'c{n}', 'why': 'closeup'})
             for who in c['near']:
                 for t_, lvl in r:
                     first = held_from(tr, who, t_ - 1.7, t_ + 1.0)
@@ -347,7 +351,7 @@ def main():
         if c['match'] not in seen:
             seen.add(c['match']); out.append({'file': f'{M}/versus-m{c["match"]}-wide.mp4', 'file_tall': f'{M}/versus-m{c["match"]}-tall.mp4'})
         out.append(p)
-    P = {'points': out}
+    P = {'points': out, 'left_out': left}
     up = os.environ.get('UPLOAD_DIR')       # the player's upload: meta.json (the clip times) and hr.json (a watch)
     if up and os.path.exists(f'{up}/hr.json') and os.path.exists(f'{up}/meta.json'):
         m = meter_of(C, json.load(open(f'{up}/meta.json')).get('times'), json.load(open(f'{up}/hr.json')))

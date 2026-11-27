@@ -191,5 +191,11 @@ describe("a whole film's arrival", () => {
     await post({ code: film.ev.code, host: "https://reels.example.test", token: "whole_film_reel_token_22", noScore: "<b>made up</b>" });
     expect((await matchReel(app, film.ev.id))?.noScore).toBeNull();
     expect((await row(film.ev.id)).note).toBeNull();
+    // What the reel could not do comes with it as codes (scripts/highlights/missing.py), kept in the same note.
+    await post({ code: film.ev.code, host: "https://reels.example.test", token: "whole_film_reel_token_22", noScore: "no_winners", missing: ["no_winners", "no_speed", "made_up", "no_heart_rate"] });
+    expect(await matchReel(app, film.ev.id)).toMatchObject({ noScore: "no_winners", missing: ["no_winners", "no_speed", "no_heart_rate"] });
+    expect(JSON.parse((await row(film.ev.id)).note ?? "")).toEqual({ noScore: "no_winners", missing: ["no_winners", "no_speed", "no_heart_rate"] });
+    await post({ code: film.ev.code, host: "https://reels.example.test", token: "whole_film_reel_token_22", missing: ["fast_by_design"] });
+    expect(JSON.parse((await row(film.ev.id)).note ?? "")).toEqual({ missing: ["fast_by_design"] });
   });
 });

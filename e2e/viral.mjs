@@ -379,22 +379,40 @@ try {
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
-  // A reel from the whole film with no score says why in one plain line under it (the owner, 27 November 2026: the
-  // score, the winner of each point and the numbers only when the engine is sure). A reel that claims nothing has none.
-  const plainBefore = await p.getByTestId("reel-no-score").count();
-  const noScoreSet = await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken, noScore: "few_points" }) }).then((x) => x.status);
+  // Under every reel, what it could not do, why, and one tip for the next film (the owner, 27 November 2026): a fold
+  // with one row for each code the reel's job sent. A reel that lacks nothing has no fold.
+  const foldBefore = await p.getByTestId("reel-missing").count();
+  const missingSet = await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken, noScore: "few_points", missing: ["no_heart_rate", "few_points", "no_speed", "players_out_of_frame", "made_up"] }) }).then((x) => x.status);
   await p.goto(`${BASE}/${mcode}`);
-  await p.getByTestId("reel-no-score").waitFor({ timeout: 20000 });
+  const fold = p.getByTestId("match-reel").getByTestId("reel-missing");
+  await fold.waitFor({ timeout: 20000 });
+  const closedRows = await fold.locator("li").first().isVisible();
+  await fold.locator("summary").click();
+  const rows = await fold.locator("li").evaluateAll((els) => els.map((e) => [e.getAttribute("data-missing"), ...[...e.querySelectorAll("p")].map((x) => x.textContent)]));
+  const foldBox = await fold.boundingBox();
   check(
-    "a reel from the whole film with no score says why in one line under the reel, and a reel without the reason says nothing",
-    plainBefore === 0 && noScoreSet === 200 && (await p.getByTestId("reel-no-score").innerText()) === "This reel has no score: the sound did not find every point." && (await p.getByTestId("match-reel").getByTestId("reel-no-score").count()) === 1,
-    JSON.stringify({ plainBefore, noScoreSet }),
+    "a reel that lacks something says what, why and one tip, in a fold under the reel, one row for each code it knows",
+    foldBefore === 0 &&
+      missingSet === 200 &&
+      !closedRows &&
+      (await fold.locator("summary").innerText()).startsWith("What this reel could not do") &&
+      JSON.stringify(rows) ===
+        JSON.stringify([
+          ["few_points", "The score, who won each point and your numbers", "The sound did not find every point of the match.", "Record the whole match in one video. Keep the microphone away from the fence, fans and speakers."],
+          ["no_speed", "The fastest shot", "Kicksmash cannot measure the speed of a shot yet.", "Film in 4K at 60 frames a second, so that the ball is sharp in each picture."],
+          ["players_out_of_frame", "Some points and close-ups", "The players were out of the picture for too long.", "Use 0.5× with the phone on its side, and check that all four players are in the picture."],
+          ["no_heart_rate", "Your heart rate", "No data from a watch came with the video.", "Send a screenshot of your watch's workout with “Tell us what should change” below."],
+        ]) &&
+      Boolean(foldBox) && foldBox.x >= 0 && foldBox.x + foldBox.width <= 390,
+    JSON.stringify({ foldBefore, missingSet, closedRows, rows, foldBox }),
   );
-  await p.getByTestId("reel-no-score").scrollIntoViewIfNeeded();
-  await shot(p, "v8-match-reel-no-score");
+  await fold.scrollIntoViewIfNeeded();
+  await shot(p, "v8-match-reel-missing");
+  if (process.env.SHOTS) await p.getByTestId("match-reel").screenshot({ path: `${process.env.SHOTS}/v8-match-reel-missing-card.png` });
   await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken }) });
   await p.goto(`${BASE}/${mcode}`);
   await p.getByTestId("match-reel").waitFor({ timeout: 20000 });
+  check("the same reel sent again with nothing missing has no fold", (await p.getByTestId("reel-missing").count()) === 0);
   // Organizer tools is one list of rows, with nothing behind a "More" (the owner, 26 November 2026).
   const tools = p.getByTestId("organiser-tools");
   check(
@@ -688,6 +706,13 @@ try {
   check(
     "How to film: four instructions, the court drawing, and nothing wider than the phone",
     (await f.getByTestId("film-steps").locator("li").count()) === 4 && (await f.locator("figure svg").count()) === 1 && (await f.getByText("Set the camera to 4K at 60").count()) === 1 && filmFits,
+  );
+  // The steps say what the tips under a reel say, word for word (`reelMissing`).
+  const filmSteps = await f.getByTestId("film-steps").innerText();
+  check(
+    "How to film gives the same tips as the fold under a reel",
+    ["Turn the phone until the service line is level, and do not touch it during the match.", "Use 0.5× with the phone on its side, and check that all four players are in the picture.", "Before the first serve, each player stands in front of the phone for 3 seconds."].every((tip) => filmSteps.includes(tip)),
+    filmSteps.slice(0, 400),
   );
   // With the TikTok button on (the suites run with TIKTOK_SHARE=on), the page that explains reels says it in one line.
   check(

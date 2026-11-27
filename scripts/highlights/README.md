@@ -232,8 +232,31 @@ note desk made it by hand the night before (below). How it flows:
    was read for each of them. No step reads a winner yet, so today such a reel has none of the three, and
    `honest.strip` takes them out of `points.json` if a later step ever writes them. `reel.json` keeps
    `"score": {"shown": false, "why": "no_score" | "few_points" | "no_winners", "found", "need"}`, the post of the
-   reel carries `"noScore"`, and the match page says it in one line under the reel ("This reel has no score: the
-   sound did not find every point."). `share.mp4` is made as for every fast reel (`finish_layout`).
+   reel carries `"noScore"`, and the match page shows the reason as a row of the fold under the reel (below).
+   `share.mp4` is made as for every fast reel (`finish_layout`).
+
+### What a reel could not do (`missing.py`, 27 November 2026)
+
+The owner: under every reel, fast and full, the match page says what the reel could not do, why, and what the player
+can do differently the next time they film. `missing.missing_of` gives the codes, in one fixed order, each once, after
+the plan (`run_make` in `modal/fastreel.py`); `reel.json` keeps them as `"missing"`, and the post of the finished reel
+carries them. Kicksmash keeps them in the ready row's `note` (`{"noScore": ..., "missing": [...]}`, no new column) and
+shows one row for each code in the fold "What this reel could not do": the thing, the reason, and one tip
+(`MISSING_COPY` in `src/lib/domain/matchReel.ts`, the words in `reelMissing` in `messages/`; `/film` takes its tips
+from the same words).
+
+| Code | When the job sends it |
+| --- | --- |
+| `fast_by_design` | a fast reel: no score, no winner of each point, no numbers, no fastest shot |
+| `no_score`, `few_points`, `no_winners` | a whole film: `honest.py`'s reason when the score stays out |
+| `no_speed` | a whole film: no step measures the speed of a shot yet |
+| `court_not_found`, `phone_moved` | reserved for the court finder that is being built: never sent yet |
+| `players_out_of_frame` | `fast_points.py` left a clip out (`held_share` under 0.25) or a close look out (`closeup.framed`): `points.json` `"left_out"` |
+| `far_names_unsure` | a clip of the reel has `"far_named": false` in `clips.json` (`who.py`) |
+| `no_heart_rate` | no `hr.json` came with the upload |
+
+The music and the crowd are the player's choices, never a thing missing. `test_missing.py` checks the list on plans
+made by hand (`python3 scripts/highlights/test_missing.py`; `tests/reel-missing.test.ts` runs it in the unit suite).
 
 The test of 27 November 2026 (the 40 GB film of 24 November, 88 minutes of 4K HEVC, a dry run): the sound was read
 in 25 s and planned in 4 s, and gave the same 8 stretches (195 s) as the phone's code on the desk's own lists. The

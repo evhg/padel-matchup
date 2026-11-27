@@ -20,7 +20,9 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
   the camera file on its own machine (`film_stretch`, `film_join`: film_clips.py, the work of fullclips.py). The steps
   after it are the fast reel's. The score box, the winner of each point and the numbers go in only when the engine is
   sure (honest.py); when they stay out, reel.json says why ("score": {"shown": false, "why": "<code>"}) and the post of
-  the finished reel carries "noScore": "<code>", which the match page says in one line.
+  the finished reel carries "noScore": "<code>". Every reel, fast and whole, also says what it could not do, as codes
+  (missing.py): reel.json and the post of the finished reel carry "missing": ["<code>", ...], and the match page shows
+  each code as a row of "What this reel could not do": the thing, the reason and a tip for the next film.
 
   An upload may hold more than one match of the same four players (24 November 2026: two matches, other pairs). The
   job finds the match of each clip from its near pair. "sex" is optional: with it the man/woman split is evidence.
@@ -49,8 +51,8 @@ Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report
   finish   1080p wide.mp4 and tall.mp4, share.mp4 (the public version: the tall layout without the end card, the match
            sound only; share.py), versus.jpg (1200x630), poster.jpg (720 wide, tall) and reel.json (its matches, and
            "share": true when share.mp4 is there; not served), under reels/<new token>/; then
-           POST {code, host, token} for each match of the upload, and "noScore": "<code>" for a whole film's reel
-           with no score (honest.py)
+           POST {code, host, token, missing: [codes]} for each match of the upload (missing.py), and "noScore": "<code>"
+           for a whole film's reel with no score (honest.py)
   Each progress POST is {code, progress: {pct, minutesLeft, step}}; while the job waits for names it adds
   "waiting": "names" to progress. A step that fails posts {code, failed: "<the error>"} for each match.
 
@@ -612,6 +614,11 @@ def run_make(req):
         if not shown:
             pts = json.load(open(f'{M}/points.json')); score['stripped'] = honest.strip(pts); json.dump(pts, open(f'{M}/points.json', 'w'), indent=1)
         json.dump(score, open(f'{M}/score.json', 'w')); clock['score'] = score; print('score', score, flush=True)
+    # What the reel could not do, and why (missing.py): codes only; the match page has the words and a tip for each.
+    import sys; sys.path.insert(0, '/root/hl'); import missing
+    heart = bool(P.get('up')) and os.path.exists(f"{P['up']}/hr.json")
+    gaps = missing.missing_of(whole, score, json.load(open(f'{M}/points.json')), C, heart)
+    clock['missing'] = gaps; print('missing', gaps, flush=True)
     op = ops.get(); clock['portraits'] = op['portraits']; print('\n'.join(op['log']), flush=True)
     for o in op['openings']: print('opening', o, flush=True)     # reel_points.py puts the opening in only when its files are there
     vol.reload(); clock['opening_wait'] = round(time.time() - a)
@@ -646,14 +653,15 @@ def run_make(req):
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', '4.6', '-i', f'{M}/versus-m1-tall.mp4', '-frames:v', '1', '-vf', 'scale=720:-2:flags=lanczos', '-q:v', '3', f'{d}/poster.jpg'])
     # Which matches the reel is of, for the post to @kicksma.sh (scripts/social/instagram.py): the reel host serves
     # only .mp4, .jpg and names.json, so this file stays on the store.
-    # A whole film's reel says whether it has a score, and why not (honest.py): the match page says it in one line.
+    # A whole film's reel says whether it has a score, and why not (honest.py); every reel says what it could not do
+    # (missing.py), and the match page says it in the fold "What this reel could not do".
     json.dump({'made': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'upload': req.get('upload'), 'share': share, 'whole': whole,
-               **({'score': {k: score[k] for k in ('shown', 'why', 'found', 'need')}} if score else {}),
+               **({'score': {k: score[k] for k in ('shown', 'why', 'found', 'need')}} if score else {}), 'missing': gaps,
                'matches': [{k: m.get(k) for k in ('code', 'title_a', 'title_b', 'score')} for m in req['matches']]}, open(f'{d}/reel.json', 'w'), indent=1)
     vol.commit()
     clock['all'] = round(time.time() - t0)
     no_score = {'noScore': score['why']} if score and not score['shown'] else {}
-    for m in req['matches']: R.post({'code': m['code'], 'host': os.environ['REELS_HOST'], 'token': token, **no_score})
+    for m in req['matches']: R.post({'code': m['code'], 'host': os.environ['REELS_HOST'], 'token': token, **no_score, 'missing': gaps})
     if req.get('dry'): json.dump({'clock': clock, 'reel': d}, open(f'{W}/clock.json', 'w'), indent=1); vol.commit()
     return {'state': 'ready', 'reel': d if req.get('dry') else f'reels/{token}', 'clock': clock}
 

@@ -4,11 +4,8 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import en from "../messages/en.json";
-import ru from "../messages/ru.json";
-import es from "../messages/es.json";
 import { pickStretches } from "@/lib/reel/fastPlan";
-import { NO_SCORE_LINE, NO_SCORE_WHY } from "@/lib/domain/matchReel";
+import { MISSING_CODES, NO_SCORE_WHY } from "@/lib/domain/matchReel";
 
 /**
  * A whole film becomes a reel with no person (the owner, 27 November 2026, stage A). The reel's job chooses the
@@ -126,11 +123,7 @@ describe("what a reel from the whole film may claim", () => {
     expect(gone).toEqual(["card", "score_box", "won:c0"]);
   });
 
-  it("says why in one plain line in every language", () => {
-    for (const why of NO_SCORE_WHY) {
-      const key = NO_SCORE_LINE[why];
-      for (const m of [en, ru, es]) expect(m.reel[key], `${why} ${key}`).toMatch(/^\S.{20,120}$/);
-    }
-    expect(en.reel.noScoreFew).toBe("This reel has no score: the sound did not find every point.");
+  it("gives each reason as a code the match page has a row for", () => {
+    for (const why of NO_SCORE_WHY) expect(MISSING_CODES as readonly string[], why).toContain(why);
   });
 });
