@@ -219,9 +219,14 @@ note desk made it by hand the night before (below). How it flows:
    pairs of two, as for clips. With no start request (another line-up), the note desk wakes as before.
 3. `assemble` starts `make` with it. The step "clips" for a whole film (`whole_film`):
    - `film_sound` reads the sound track alone (`ffmpeg -map 0:a:0 -vn`: the demuxer skips the picture, so the 4K
-     film is never decoded) and runs `film_plan.js`: the Rally Finder's core and the phone's own choice of the
-     stretches (`planCut` of the best points, `planReel("celebrations")`, `pickStretches`: 12 clips and 200 s at
-     most). A whole film's reel is the reel its fast reel would be. The plan stays in `match/film-plan.json`.
+     film is never decoded) and runs `film_plan.js longest`: the Rally Finder's core, then the full reel's own plan
+     (the owner, 27 November 2026: "the clips should focus on the longest rallies"). No warm-up (`afterWarmup`, the
+     rule of `plan.py`); rallies of 8 s or more from the first hit to the last, the longest first, each from 4 s
+     before its first heard hit (a far serve is quiet) to 4 s after its last; 12 stretches and 320 s at most, more
+     than the reel needs. `fast_points.py` then leaves out what is not a point and keeps the 6 longest points
+     (`WHOLE_KEEP`). On the film of 24 November: the warm-up ends at 7:30, 8 stretches of 319 s. The plan stays in
+     `match/film-plan.json`; a plan without `"plan": "longest"` (the phone's, before this) is made again. The
+     phone's own plan (`planOf`) is unchanged and still held line for line to the phone's.
    - `film_stretch` decodes each stretch from the camera file on its own machine, and `film_join` writes what the
      step writes for clips (`film_clips.py`, the work that `fullclips.py` does by hand).
    The steps after it are the fast reel's, with the same progress on the match page (a first report at 6% once the

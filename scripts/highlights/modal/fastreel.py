@@ -16,7 +16,7 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
    "whole": true?}                                     the upload is the whole film (the "Full reel"), not a phone's cut
 
   A whole film (27 November 2026): the same reel, with no person. The step "clips" reads the film's sound only (no
-  picture is decoded: `film_sound`, film_plan.js, the phone's own choice of stretches), then decodes each stretch from
+  picture is decoded: `film_sound`, film_plan.js "longest": the longest rallies after the warm-up), then decodes each stretch from
   the camera file on its own machine (`film_stretch`, `film_join`: film_clips.py, the work of fullclips.py). The steps
   after it are the fast reel's. The score box, the winner of each point and the numbers go in only when the engine is
   sure (honest.py); when they stay out, reel.json says why ("score": {"shown": false, "why": "<code>"}) and the post of
@@ -208,14 +208,15 @@ def track_of(name):
 @app.function(image=sound_image, volumes={'/vol': vol}, cpu=2, memory=4096, timeout=1800)
 def film_sound(video):
     """A whole film's stretches from its sound: the sound track alone (the demuxer skips the picture, so a 4K film of
-    40 GB is not decoded), then film_plan.js, what the phone runs for a fast reel. Answers the plan: the stretches, and
-    every point the sound found ("rallies"), the most the film can hold (honest.py)."""
+    40 GB is not decoded), then film_plan.js "longest": the longest rallies after the warm-up (the owner, 27 November
+    2026). Answers the plan: the stretches, and every point the sound found ("rallies"), the most the film can hold
+    (honest.py)."""
     vol.reload(); a = time.time()
     rate = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=sample_rate', '-of', 'csv=p=0', video], capture_output=True, text=True).stdout.strip()
     if not rate.isdigit(): raise RuntimeError('the film has no sound: its stretches come from the sound')
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', video, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', rate, '-f', 'f32le', '/tmp/sound.raw'])
     read = round(time.time() - a, 1)
-    t, log = sh(['node', '/root/hl/film_plan.js', '/tmp/sound.raw', rate, '/tmp/plan.json'])
+    t, log = sh(['node', '/root/hl/film_plan.js', '/tmp/sound.raw', rate, '/tmp/plan.json', 'longest'])      # the full reel's own plan
     plan = json.load(open('/tmp/plan.json')); plan.update(read_s=read, plan_s=t); print(log.strip(), flush=True)
     return plan
 
@@ -519,7 +520,8 @@ def whole_film(P, W, M, R):
     second run reads no sound again), then each stretch decoded from the camera file on its own machine, then one join."""
     import sys; sys.path.insert(0, '/root/hl'); import film_clips
     a = time.time(); fp = f'{M}/film-plan.json'
-    plan = json.load(open(fp)) if os.path.exists(fp) else film_sound.remote(P['video'])
+    plan = json.load(open(fp)) if os.path.exists(fp) else None
+    if not plan or plan.get('plan') != 'longest': plan = film_sound.remote(P['video'])      # an older plan was the phone's
     json.dump(plan, open(fp, 'w')); vol.commit()
     try: S = film_clips.checked(plan['stretches'])
     except ValueError: raise RuntimeError(f"the sound of the film gave no stretch to make a reel of ({plan.get('rallies')} points heard)")
