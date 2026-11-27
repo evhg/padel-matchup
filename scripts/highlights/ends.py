@@ -24,8 +24,9 @@ looser far thresholds (flight.py FAR_Y=910) doubled the bounces seen in the far 
 the old thresholds and the poses of walk_mps.py for the hitter, the six votes of winner.py and the end votes give 31 of
 the 51 held-back points (61%, as before), and 31 with the votes of react.py too (react.py alone: 33). The end votes on the
 held-back points: endunret 3 of 3, endnet 3 of 7, endnobounce 3 of 7. Against the owner's words of set 3, the code finds
-3 of 14 points into the net; most points get "none", because no hit is seen in the last 3 s: flight.py names a hitter
-only when the ball that came to the player is seen too, and that is rare at the far end.
+3 of 14 points into the net. Most points (120 of 182) get "none", but not for want of a hit: 177 have a hitter in the
+last 3 s. The last hit seen is a near player's in 137 of them, and in 101 of the 120 its ball ends "at a person" with
+no bounce and no flight after it: the far return is not seen (swing.py).
 """
 import json, os, sys
 

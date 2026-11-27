@@ -817,6 +817,29 @@ the lines". Look at `court-find.jpg` (red: the floor lines, yellow: the net's ba
   `winner.py measure feats.json weights.json <truth>`; `winner.py points ... points-det.json`; then
   `score_engine.py` and `score_rows.py` on it. Weights on match2: bounce 1.07, voice 0.61, partners 0.47, away 0.46,
   crossed 0.05, hitter -0.04. The serve and the dead moment of each point still come from the readers' files.
+  - *The truth of a point score comes from the owner's set 3 file only* (`points-S3-owner.json`, 27 November 2026).
+    Never take it from an engine run on the readers. Such a run showed one point score of the detector as wrong: at
+    serve 3834.41 of set 3 the detector's count gave 30-40, and the truth run gave 40-30. The owner's winners of that
+    game give 30-40. Reader D counts the serve at 3853.5 as a point, and the owner marks it "not a point". The truth
+    run took the extra point, went to deuce and changed earlier winners to fit it. The owner's set 4 file cannot give
+    point scores alone: it has "probable", "unclear" and "not a point" rows and one serve counted two times. Its
+    own count also leaves game 1 at deuce in a 0-6 set. Against the owner's set 3 points, no run of the Mac lab shows
+    a wrong point score: 4 of 4 with the six votes, 10 of 10 with `react.py`, 12 of 12 with `react.py` and the words
+    or the ends. 12 point scores are few, so give the counts each time.
+  - *The Mac lab, three improvements* (27 November 2026, issue 374; chosen on sets 1 and 2, each measured once on
+    the 51 held-out points). (1) The 8 s after the point, poses of both ends at 10 pictures a second (`walk_mps.py`,
+    `react.py`): 33 of 51 (65%). (2) The ball at both ends and the kind of the end (`ends.py`): 31 of 51 (61%).
+    (3) The words of the two recorders (`words.py` on Scribe's words): 34 of 51 (67%). Whisper on the Mac
+    (`hear_words.py`) invents text ("All right." 22 times) and gives 31 of 51; do not use it. All three: 32 of 51
+    (63%). So the detector of single points stays at the guess from the set score. The gain is in the engine with
+    `honest.py`: sure games 16 to 23 of 30, winner lines 7 to 12, and no wrong line in any run. The route for a full
+    reel is "show the winner where the engine is sure", not "know the winner of every point".
+  - *The far hitter and the speed of a shot* (27 November 2026, issue 374). The last swing from the wrist speed
+    (`swing.py`) gives no gain: 30 of 51 held-out points. A reader named the contact and end pictures of the 40
+    fastest timed flights of match2: 16 are not a shot and 6 cannot be read, and of the 18 others only 9 are within
+    10%. `speed.py` keeps a flight only for a far hitter, a fit error of 0.10 or less and the ball seen in 92% of its
+    pictures: 6 of 78 flights on match2, every checked one within 10% (the fastest 54 km/h, reader 50). It drops
+    every near smash, so it gives a true speed, not the fastest shot.
 - **A recogniser writes the nearest common sentence, not the padel word** (21 November 2026). A player shouted
   "Golden" before the last point, and a person who watched the reel heard it. Five recognisers did not (Scribe,
   Whisper turbo, Whisper large-v3, Parakeet, and Voxtral, a model that answers questions about a sound), on three
