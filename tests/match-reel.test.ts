@@ -234,7 +234,7 @@ describe("a player sends the match video", () => {
     await expect(setReelLink(db, { eventId: ev.id, playerId: bo.id, text: "https://example.com/film.mov", now: NOW })).rejects.toMatchObject({ code: "invalid" });
     await expect(setReelLink(db, { eventId: ev.id, playerId: stranger.id, text: "https://www.icloud.com/iclouddrive/abc", now: NOW })).rejects.toMatchObject({ code: "forbidden" });
     expect((await row(ev.id)).status).toBe("asked");
-    expect(await setReelLink(db, { eventId: ev.id, playerId: bo.id, text: "The film: https://www.icloud.com/iclouddrive/abc", now: NOW })).toEqual({ code: ev.code });
+    expect(await setReelLink(db, { eventId: ev.id, playerId: bo.id, text: "The film: https://www.icloud.com/iclouddrive/abc", now: NOW })).toEqual({ code: ev.code, fetch: null });
     expect(await row(ev.id)).toMatchObject({ status: "received", source: "link", sourceUrl: "https://www.icloud.com/iclouddrive/abc", requestedBy: bo.id });
     expect(await reelState(db, ev.id, NOW)).toEqual({ kind: "here", source: "link" });
   });

@@ -3030,7 +3030,7 @@
     "workingLeft": "Quedan unos {min} min",
     "workingAlmost": "Casi listo",
     "workingBody": "Los cuatro jugadores lo verán en esta página cuando esté listo.",
-    "step": { "clips": "Limpiando los clips", "players": "Buscando a los cuatro jugadores", "follow": "Siguiendo a los jugadores", "replays": "Haciendo las repeticiones lentas", "opening": "Haciendo la presentación", "music": "Añadiendo la música", "finish": "Terminando los archivos" },
+    "step": { "fetch": "Trayendo el vídeo de tu unidad", "clips": "Limpiando los clips", "players": "Buscando a los cuatro jugadores", "follow": "Siguiendo a los jugadores", "replays": "Haciendo las repeticiones lentas", "opening": "Haciendo la presentación", "music": "Añadiendo la música", "finish": "Terminando los archivos" },
     "saveGetting": "Bajando el vídeo…",
     "saveGettingPct": "Bajando el vídeo… {pct}%",
     "saveNow": "Guardar vídeo",
@@ -3084,6 +3084,7 @@
     "againOpen": "Hacer un nuevo vídeo",
     "againNote": "Envía el vídeo otra vez. Este vídeo se ve hasta que lo envíes; después el nuevo ocupa su lugar.",
     "hereAutoBody": "El vídeo está aquí. El reel empieza solo en unos minutos, y esta página muestra cuánto falta. Los cuatro jugadores reciben un mensaje cuando esté listo.",
-    "fullByHand": "Listo en unos 30 minutos, sin ninguna persona. El marcador, quién ganó cada punto y los números aparecen solo cuando Kicksmash está seguro de ellos."
+    "fullByHand": "Listo en unos 30 minutos, sin ninguna persona. El marcador, quién ganó cada punto y los números aparecen solo cuando Kicksmash está seguro de ellos.",
+    "failedLinkLine": "Kicksmash no pudo obtener el vídeo de este enlace. En Google Drive, compártelo con «Cualquier persona con el enlace». Si ya está compartido, Drive detiene las descargas de un vídeo grande durante un día: elige el vídeo aquí."
   }
 }
