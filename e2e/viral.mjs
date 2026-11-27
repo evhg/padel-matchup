@@ -805,6 +805,7 @@ try {
       (await fullWay.getByText("✓").count()) === 5 &&
       (await fullWay.getByText("✕").count()) === 0 &&
       (await fullWay.getByText("Who won each point").count()) === 1 &&
+      (await fullWay.getByTestId("reel-full-by-hand").innerText()) === "Ready in about 30 minutes, with no person. The score, the winner of each point and the numbers show only when Kicksmash is sure of them." &&
       (await fastWay.getByText("✓").count()) === 2 &&
       (await fastWay.getByText("✕").count()) === 4 &&
       (await fastWay.getByText("No score in the corner").count()) === 1 &&

@@ -94,6 +94,18 @@ When the desk wakes for a video:
 
 Look at a sheet of frames before you call a reel done. Then tell the players on their notes, if they wrote one.
 
+Before any Modal run, and after it (the owner, 27 November 2026, after one night's reel used most of a month):
+- **Check the money first.** `modal billing report --start <first of the month> --end <tomorrow> --csv` and sum
+  `Cost`. A reel costs about $1 to $3 (a whole film about $1.30, 27 November 2026). When the month's total plus the run passes the workspace's credit or
+  limit, do not run: send the owner one Telegram line with the total, the limit and the cost of the run.
+- **One run, not three.** Test a fix on the smallest piece you can (one clip, saved steps, `--dry`), locally where
+  the step allows it, before a full run on Modal.
+- **Say what the reel is.** When the reel cannot hold what the player chose (a full reel without a score, because
+  the sound found too few points), write it on the player's note if there is one, and in the owner's line: what
+  the reel has, what it lacks, and why.
+- **Tell the owner every time.** One Telegram line for each reel you make: the match code, its length, what it
+  holds, what it cost on Modal, and the pull request if you shipped code.
+
 Give every time in Thailand time (Asia/Bangkok), the zone of the match.
 
 ## 6. Leave nothing open

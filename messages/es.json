@@ -3059,6 +3059,7 @@
     "noScoreFew": "Este reel no tiene marcador: el sonido no encontró todos los puntos.",
     "noScoreWinners": "Este reel no tiene marcador: Kicksmash aún no sabe quién ganó cada punto.",
     "noScoreResult": "Este reel no tiene marcador: el partido no tiene resultado en esta página.",
-    "hereAutoBody": "El vídeo está aquí. El reel empieza solo en unos minutos, y esta página muestra cuánto falta. Los cuatro jugadores reciben un mensaje cuando esté listo."
+    "hereAutoBody": "El vídeo está aquí. El reel empieza solo en unos minutos, y esta página muestra cuánto falta. Los cuatro jugadores reciben un mensaje cuando esté listo.",
+    "fullByHand": "Listo en unos 30 minutos, sin ninguna persona. El marcador, quién ganó cada punto y los números aparecen solo cuando Kicksmash está seguro de ellos."
   }
 }
