@@ -12,7 +12,7 @@ import { getEventByCode } from "@/lib/domain/queries";
 import { joinEvent } from "@/lib/domain/slots";
 import { handleTelegramUpdate, syncTelegram } from "@/lib/telegram/bot";
 import { CREW_ADMIN_RIGHTS, crewGroupLink, crewPayloadGroup, crewStartPayload, verifyCrewPayload } from "@/lib/telegram/deepLinks";
-import { CREW_NOTICE_VERSION } from "@/lib/telegram/handlers/crew";
+import { CREW_NOTICE_VERSION, crewRightsChanged } from "@/lib/telegram/handlers/crew";
 import { strings } from "@/lib/telegram/card";
 import type { TgMessage, TgUpdate } from "@/lib/telegram/api";
 import { freezeClock } from "./helpers/clock";
@@ -44,12 +44,15 @@ let nextMessageId = 1000;
 let members = new Map<string, Record<string, unknown>>();
 let ephemeralFails = false;
 let pinFails = false;
+/** Runs once inside the next pin, before Telegram answers: a second update can then act while the first one starts. */
+let duringPin: (() => Promise<unknown>) | null = null;
 
 function stubTelegram() {
   calls = [];
   members = new Map();
   ephemeralFails = false;
   pinFails = false;
+  duringPin = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string | URL, init?: RequestInit) => {
@@ -59,6 +62,11 @@ function stubTelegram() {
       const reply = (result: unknown, ok = true) => new Response(JSON.stringify(ok ? { ok: true, result } : { ok: false, error_code: 400, description: String(result) }), { status: ok ? 200 : 400, headers: { "content-type": "application/json" } });
       if (method === "sendMessage" && body.ephemeral_message_parameters && ephemeralFails) return reply("Bad Request: ephemeral message can't be sent", false);
       if (method === "pinChatMessage" && pinFails) return reply("Bad Request: not enough rights to pin a message", false);
+      if (method === "pinChatMessage" && duringPin) {
+        const run = duringPin;
+        duringPin = null;
+        await run();
+      }
       if (method === "sendMessage" || method === "sendPhoto") return reply({ message_id: nextMessageId++, chat: { id: body.chat_id } });
       if (method === "getChatMember") {
         // A member written as { error, code } is Telegram refusing the question ("bot was kicked", "chat not found").
@@ -768,11 +776,56 @@ describe("a seat by a word, and the crew's own Telegram group", () => {
     members.set(`${chat.id}:1`, { status: "creator" });
     expect(await say(chat, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_needs_admin");
     calls = [];
-    const outcomes = await Promise.all([promote(chat, ADMIN_RIGHTS), promote(chat, ADMIN_RIGHTS)]);
-    expect(outcomes.sort()).toEqual(["crew_listening", "rejoined"]);
+    const outcomes = (await Promise.all([promote(chat, ADMIN_RIGHTS), promote(chat, ADMIN_RIGHTS)])).sort();
+    // One update wins the start. The other reads the row before the claim or after the link is stored
+    // ("rejoined"), or in between, and then makes the invite link itself ("crew_invite", the test below).
+    // Real Postgres gives both orders (CI, 23 November 2026); PGlite gives only the first.
+    expect([["crew_listening", "rejoined"], ["crew_invite", "crew_listening"]]).toContainEqual(outcomes);
     expect(sent("sendMessage")).toHaveLength(1);
     expect(sent("pinChatMessage")).toHaveLength(1);
-    expect((await chatRow(chat.id)).listeningSince).not.toBeNull();
+    expect(sent("createChatInviteLink")).toHaveLength(outcomes.includes("crew_invite") ? 2 : 1);
+    const row = await chatRow(chat.id);
+    expect(row.listeningSince).not.toBeNull();
+    expect(row.inviteLink).toBe(inviteOf(chat.id));
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
+  });
+
+  it("an update inside another's start makes the invite link, never a second notice or pin", async () => {
+    const chat = { id: -201650, type: "supergroup" as const, title: "Racing again" };
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Racing again crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok" });
+    members.set(`${chat.id}:1`, { status: "creator" });
+    expect(await say(chat, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_needs_admin");
+    calls = [];
+    // The second promotion arrives while the first holds the claim and waits for its pin, with no link stored yet.
+    // A second link opens the same group, and the bot revokes no link it made, so the cost is one Bot API call.
+    let second: string | undefined;
+    duringPin = async () => (second = await promote(chat, ADMIN_RIGHTS));
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_listening");
+    expect(second).toBe("crew_invite");
+    expect(sent("sendMessage")).toHaveLength(1);
+    expect(sent("pinChatMessage")).toHaveLength(1);
+    expect(sent("createChatInviteLink")).toHaveLength(2);
+    expect(await crewTelegramInvite(db, crew.id)).toEqual({ invite: inviteOf(chat.id), listening: true });
+  });
+
+  it("an update that read the row before another's claim posts nothing: the claim refuses it", async () => {
+    const chat = { id: -201660, type: "supergroup" as const, title: "Racing late" };
+    const owner = await makePlayer(db, "Ana");
+    const crew = await createGroup(db, { name: "Racing late crew", creatorPlayerId: owner.id, tz: "Asia/Bangkok" });
+    members.set(`${chat.id}:1`, { status: "creator" });
+    expect(await say(chat, user(1, "Ana"), `/start ${crewStartPayload(crew.id, owner.id)}`).outcome).toBe("crew_needs_admin");
+    // The row as the second update read it: opted in, not reading yet. It acts while the first one waits for its pin.
+    const stale = await chatRow(chat.id);
+    expect(stale.listeningSince).toBeNull();
+    calls = [];
+    let second: string | null | undefined;
+    duringPin = async () => (second = await crewRightsChanged(db, stale, ADMIN_RIGHTS));
+    expect(await promote(chat, ADMIN_RIGHTS)).toBe("crew_listening");
+    expect(second).toBeNull();
+    expect(sent("sendMessage")).toHaveLength(1);
+    expect(sent("pinChatMessage")).toHaveLength(1);
+    expect(sent("createChatInviteLink")).toHaveLength(1);
   });
 
   it("an ordinary line in a group the bot reads costs no database read at all", async () => {
