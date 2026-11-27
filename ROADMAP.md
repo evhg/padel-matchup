@@ -1662,6 +1662,15 @@ Everything in this list is live. The README describes each in detail.
   before TikTok sharing says "make the reel again" and posts nothing; `TIKTOK_SHARE` also takes a list of match
   codes, so the reviewer sees the button on a demo match only; an account TikTok does not let in yet reads
   "TikTok sharing is in test. For now it works for invited accounts set to private."
+- **A whole film becomes a reel with no person** (the owner's stage A, 27 November 2026). When a player's whole
+  film ("Full reel") is joined on the reel host, Kicksmash answers with the job's start request, marked as a whole
+  film, for a match of two pairs of two, as it does for clips. The job reads the film's sound only, chooses the
+  stretches with the phone's own code, decodes them from the camera file, and goes on as the fast reel does, with
+  the same bar on the match page and `share.mp4`. A score box, the winner of each point and the numbers appear only
+  when the engine is sure; today it never is, so the reel says why in one line under it, in three languages. The
+  note desk wakes only when no job starts or a step fails. No migration: the reason is in the ready row's note.
+  Proven in `tests/whole-film-reel.test.ts`, `tests/fast-reel-start.test.ts`, `tests/match-reel.test.ts`, the
+  browser suite viral, and one dry run on the 40 GB film of 24 November 2026 (`scripts/highlights/README.md`).
 
 ## The finish line
 

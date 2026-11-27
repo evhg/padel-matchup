@@ -112,6 +112,12 @@ learning can be a test, a gate step or a script, make it one and put the story i
 
 ### Check the thing, not the description of the thing
 
+- **A whole film's sound is cheap; its picture is not.** `ffmpeg -map 0:a:0 -vn` read the sound of a 40 GB 4K film
+  on the store in 25 s (27 November 2026), because the demuxer skips the picture. Choose from the sound, then decode
+  only the chosen stretches. A dry run of the reel job can stop at "players" for names: put the answer in
+  `<out>/names-answer.json` and run the same request again; every step before it is saved. And `modal` here needs
+  `pip install 'modal[api-proxy-support]'`, or it says only "Could not connect".
+
 - **A gate shares the machine with nobody.** Two full gates hung in the browser step for over 100
   minutes on 9 November 2026 while agents ran their own builds and browser suites beside them; each
   suite alone then finished in 11 to 148 seconds. Run the gate only when no other build, server or
