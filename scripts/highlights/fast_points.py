@@ -213,6 +213,7 @@ BOTH_HALVES = 0.7       # a point: a player in each half for this share of the r
 FLIGHTS_10S = 5.0       # and this many ball flights in each 10 s, or more (when the ball step ran)
 ON_COURT_KEEP = 0.8     # three whole players or more on the court for this share: the players are in the picture
 EDGE = 8                # px: a box this close to the left, right or bottom edge is a player cut off by the picture
+WHOLE_KEEP = 6          # the full reel: its longest points, at most (a reel of three to four minutes)
 
 
 def court_counts(M):
@@ -383,6 +384,14 @@ def main():
                     if first is None or t_ + 1.0 - first < 1.2: continue
                     if not replay_framed(tr, who, t_): continue        # its player is not in the close look
                     cands.append((wrist_speed(tr, who, t_) * (1 + lvl / 20), n, who, t_))
+    # the full reel keeps its longest points (the owner, 27 November 2026: "the clips should focus on the longest
+    # rallies"). film_plan.js "longest" plans more stretches than the reel needs, because a third of a busy hall's
+    # "rallies" are not points: the checks above leave those out, and here the shorter points go.
+    if REQ.get('whole'):
+        kept = sorted((p for p in pts if p is not None), key=lambda p: p['last_t'] - p['serve_t'], reverse=True)
+        for p in kept[WHOLE_KEEP:]:
+            pts[int(p['id'][1:])] = None; left.append({'id': p['id'], 'why': 'shorter'})
+            print(f"{p['id']} is shorter than the {WHOLE_KEEP} longest points: left out")
     # at most four replays, one in a clip, the fastest wrists first, and the two pairs in turn: the owner, 14 November
     # 2026, "we should of course not single out one team or one player"; on 25 November one pair had three replays
     # and the other one, and one player none

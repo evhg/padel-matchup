@@ -76,7 +76,7 @@ reports to `/api/reel/report`:
 
 - **Fast reel (clips):** the phone's own cut. The job finds the joins of the cut, then makes the reel.
 - **Full reel (the whole film, since 27 November 2026):** the start request says `"whole": true`. The job reads
-  the film's sound only, chooses the stretches as the phone does (`film_plan.js`), decodes them from the camera
+  the film's sound only, chooses the longest rallies after the warm-up (`film_plan.js longest`), decodes them from the camera
   file (`film_clips.py`), then goes on as for clips. Its reel has a score, a winner of each point and numbers
   only when the engine is sure (`honest.py`). Otherwise `reel.json` keeps the reason, and the match page shows one
   line under the reel. Do not add a score to such a reel by hand.
