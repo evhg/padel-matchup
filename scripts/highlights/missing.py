@@ -15,7 +15,8 @@ in this order, each once:
   phone_moved           the same, and the finder's reason was "moved": the picture moved during the film
   players_out_of_frame  fast_points.py left a clip out because the tracker held its near pair too little
                         (`held_share`), or left a close look out because its player was not in the window
-  far_names_unsure      who.py was not sure of the far names in a clip of the reel, so that clip has none
+  far_names_unsure      who.py was not sure of the far names in a clip of the reel, or of who is who in it at all (its near
+                        pair were not partners: who.py "names_sure"), so that clip has none of those names
   no_heart_rate         no watch file came with the upload (uploads/<token>/hr.json)
 
 The music and the crowd are the player's choices, never a thing missing. Pure, the standard library only.

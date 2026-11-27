@@ -115,12 +115,14 @@ for i, c in enumerate(P['points']):
     if c.get('file'):
         add({'kind': 'file', 'path': c['file'], 'path_tall': c.get('file_tall') or c['file']}, f'part{i}'); continue
     mt, TEAMS_ = match_of(c); team = [mt['team'][str(k)] for k in range(4)]; M_ = (mt, TEAMS_)
+    # who.py was not sure who is who in this clip (its near pair were not partners): no names at all, not a guess
+    cn_ = names if c.get('names_sure', True) else [''] * len(names)
     trf = c['track']; t0 = round(c['start_t'] if c.get('start_t') else c['serve_t'] - LEAD, 2); dead = c.get('dead_t') or c['last_t'] + 1.0
     t1 = max(c.get('end') or 0, dead + HOLD)
     if c.get('next_serve_t'): t1 = min(t1, c['next_serve_t'] - 1.0)
     t1 = round(t1, 2)
     # the length of the rally is a fact (serve to last shot); the number of shots was wrong too often to show
-    seg = {'kind': 'clip', 't0': t0, 't1': t1, 'track': trf, 'names': names, 'team': team, 'title': c.get('title'),
+    seg = {'kind': 'clip', 't0': t0, 't1': t1, 'track': trf, 'names': cn_, 'team': team, 'title': c.get('title'),
            'sub': c.get('sub') or (f"late in a {int(round(c['last_t'] - c['serve_t']))} s rally · {mmss(c['last_t'])}" if c.get('start_t') else f"{int(round(c['last_t'] - c['serve_t']))} s rally · {mmss(c['last_t'])}"), 'tags_until': 4.5, 'hits': []}
     if BADGE_LEFT: seg['score_box'] = True        # render.py keeps a number over a head out of that corner
     if P.get('meter'):
@@ -134,8 +136,8 @@ for i, c in enumerate(P['points']):
     if r:   # the player who reacts, close and slow, with the name and no "Replay" badge: it is the same moment, seen closer
         z = r.get('zoom') or zoom_for(trf, r['who'], r['t0'], r['t1'])
         if framed(i, trf, r['who'], r['t0'], r['t1'], z, 'reaction'):
-            add({'kind': 'replay', 't0': round(r['t0'], 2), 't1': round(r['t1'], 2), 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']],
-                 'focus_team': team[r['who']], 'zoom': z, 'title': r.get('title') or names[r['who']], 'sub': None, 'badge': None}, f'react{i}', M_)
+            add({'kind': 'replay', 't0': round(r['t0'], 2), 't1': round(r['t1'], 2), 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': cn_[r['who']],
+                 'focus_team': team[r['who']], 'zoom': z, 'title': r.get('title') or cn_[r['who']] or None, 'sub': None, 'badge': None}, f'react{i}', M_)
     r = c.get('replay')
     if r:
         a, b = round(r['t'] - r.get('before', 1.7), 2), round(r['t'] + r.get('after', 1.0), 2)
@@ -144,8 +146,8 @@ for i, c in enumerate(P['points']):
         else:
             a = round(max(a, first), 2); z = r.get('zoom') or zoom_for(trf, r['who'], a, b)
             if framed(i, trf, r['who'], a, b, z, 'replay'):
-                add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']], 'focus_team': team[r['who']],
-                     'zoom': z, 'title': r.get('title') or names[r['who']], 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}', M_)
+                add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': cn_[r['who']], 'focus_team': team[r['who']],
+                     'zoom': z, 'title': r.get('title') or cn_[r['who']] or None, 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}', M_)
 
 def picture(path, img):
     """Write a card's picture only when it is not the same as the file: a part is built again when its picture is newer."""
