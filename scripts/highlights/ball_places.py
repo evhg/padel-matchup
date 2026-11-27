@@ -13,6 +13,11 @@ The time of a picture is its own time stamp in the file, not a count from the st
 import sys, subprocess, json, os, numpy as np, cv2
 
 GAPS = (2, 5); KEEP = int(os.environ.get('KEEP', 10)); FLOOR = float(os.environ.get('FLOOR', 6.0))
+# CROP=x0,y0,x1,y1 (camera pixels) reads one part of the picture only, and writes the places in the whole picture.
+# Over the whole picture the KEEP strongest islands are mostly the near players (shoes, arms, skin), and the far ball,
+# a few pixels wide, is not among them: on match2 the last flight of a point ended in the far half in 32 of 182 points.
+# A second run over the far half (CROP) keeps its own KEEP islands there. VT=1 decodes with VideoToolbox (a Mac).
+CROP = [int(v) for v in os.environ['CROP'].split(',')] if os.environ.get('CROP') else None
 
 
 def probe(f):
@@ -44,23 +49,26 @@ def candidates(d):
 def main():
     f, t0, t1, o = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]; W, H, fps = probe(f); G = max(GAPS)
     ts = stamps(f, t0, t1)
-    p = subprocess.Popen(['ffmpeg', '-v', 'error', '-nostdin', '-ss', f'{t0:.4f}', '-i', f, '-t', f'{t1 - t0:.4f}', '-map', '0:v:0', '-fps_mode', 'passthrough',
-                          '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], stdout=subprocess.PIPE)
+    hw = ['-hwaccel', 'videotoolbox'] if os.environ.get('VT') else []
+    x0, y0, x1, y1 = CROP or (0, 0, W, H); vf = ['-vf', f'crop={x1 - x0}:{y1 - y0}:{x0}:{y0}'] if CROP else []
+    w, h = x1 - x0, y1 - y0
+    p = subprocess.Popen(['ffmpeg', '-v', 'error', '-nostdin', *hw, '-ss', f'{t0:.4f}', '-i', f, '-t', f'{t1 - t0:.4f}', '-map', '0:v:0', '-fps_mode', 'passthrough',
+                          *vf, '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-'], stdout=subprocess.PIPE)
     Y = []; frames = []; i = 0
     while True:
-        b = p.stdout.read(W * H * 3)
-        if len(b) < W * H * 3: break
-        im = np.frombuffer(b, np.uint8).reshape(H, W, 3); bl, g, r = cv2.split(im)
+        b = p.stdout.read(w * h * 3)
+        if len(b) < w * h * 3: break
+        im = np.frombuffer(b, np.uint8).reshape(h, w, 3); bl, g, r = cv2.split(im)
         Y.append(cv2.subtract(cv2.min(r, g).astype(np.int16), bl.astype(np.int16)))
         if len(Y) == 2 * G + 1:                                 # the picture in the middle has its neighbours on both sides
             c = []; mid = Y[G]
             for gap in GAPS:
                 d = cv2.subtract(mid, cv2.max(Y[G - gap], Y[G + gap])).astype(np.float32)
-                c += [[gap] + v for v in candidates(d)]
+                c += [[gap, v[0] + x0, v[1] + y0] + v[2:] for v in candidates(d)]
             k = i - G; frames.append({'t': round(ts[k], 4) if k < len(ts) else round(t0 + k / fps, 4), 'c': c}); Y.pop(0)
         i += 1
     p.wait()
-    json.dump({'t0': t0, 't1': t1, 'fps': fps, 'size': [W, H], 'pictures': i, 'stamps': len(ts), 'frames': frames}, open(o, 'w'), separators=(',', ':'))
+    json.dump({'t0': t0, 't1': t1, 'fps': fps, 'size': [W, H], 'crop': CROP, 'pictures': i, 'stamps': len(ts), 'frames': frames}, open(o, 'w'), separators=(',', ':'))
     print('BALL_DONE', i, 'pictures', len(frames), 'with candidates', sum(len(x['c']) for x in frames))
 
 

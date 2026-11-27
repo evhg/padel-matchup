@@ -325,6 +325,42 @@ So a clip is a point with a player in each half for 70% of the rally and 5 fligh
 the serve, and not before two players are on the court or the near pair is held (`first_on_court`). Tests:
 `test_fast_points.py` (15 checks).
 
+## The start of every serve (`serve_find.py`, Mac lab, 27 November 2026)
+
+The fast reel must open each clip on its serve. Measured on match2 (a camera on the back glass, the whole film), against
+the readers' serve times (`score-v6/points-A..F.json`, 182 points: 95 from the near end, 87 from the far end; in set 3
+each one is within 0.05 s of the owner's own file). match2 has no phone clips, so each clip is simulated: from 20 s
+before the serve (but not before 1 s after the last dead ball) to 5 s after the dead ball. Tuned on sets 1 and 2
+(101 points), measured on sets 3 and 4 (81 points). "Within" is 0.3 s or less from the serve. The bar: 95% within,
+and no clip that starts more than 1 s after its serve.
+
+| method | within 0.3 s | early | late (all more than 1 s) | missed |
+|---|---|---|---|---|
+| today: the sound's rally, then `pose_serve` (all 182) | 1 | 2 | 30 | 149 |
+| `pose_serve` alone on the whole clip (all 182) | 13 (all near) | 12 | 25 (21) | 132 |
+| pictures, then ball, then sound, poses at 10 a second (sets 3 and 4) | 40 of 81 (19 of 38 near, 21 of 43 far) | 8 | 19 (16) | 14 |
+| the same with boxes at 3 a second (sets 3 and 4) | 31 of 81 | 12 | 26 (22) | 12 |
+
+- **The sound.** The camera hears one hit in a clip at the median, and none in 50 clips. The clock is right (the mean
+  sound over the 182 serves peaks 0.05 s after them), but a serve is 1.5 dB over the noise and `hits_of` needs 6.
+- **The pictures** (`activity`, `onsets`, `choose`): before a serve everyone waits, and then play starts. A near serve
+  shows it at once: the chosen onset is within 1 s for 25 of 38 near serves (sets 3 and 4). A far serve does not: the far pair
+  does not move for 0.5 to 1.5 s after the hit, and the near receiver is often under the camera. Far: 12 of 43.
+  The near server under the camera is a cut box and does not count. Boxes at 3 a second (the detector's rate; on this
+  Mac the pose model's boxes stand in for `match/kf`, which match2 does not have here) are worse: 23 near, 8 far.
+- **The ball** (`serve_flight`): the longest flight that starts in [onset - 0.6, onset + 1.0], 16 pictures or more,
+  from the server's half towards the net. With a window cut from the truth, it is right for 80 of 101 serves of sets
+  1 and 2; the rest are a ball sent to the server, a flight first seen late, or no flight. A far serve is searched in a
+  far-half pass (`ball_places.py` with CROP) over the whole start of the clip: the far flights after a wait hold the
+  serve in 29 of 43 far clips, but the latest one is the serve in only 21.
+- **The sound after the ball** (`sound_hit`, the click in the 0.25 s before the ball's first picture): on sets 1 and 2
+  it moved 3 serves into the 0.3 s; on sets 3 and 4 it changed no count.
+- **Time a match on this Mac (16 cores):** poses at 10 a second over the start of every clip 85 min (40,700
+  pictures), the far-half ball pass 18 min, the full-picture windows at the onsets about 11 min. About 115 min in all,
+  or about 30 min with the detector's boxes in place of the poses.
+- **Not reached.** The main losses: far serves (the pictures cannot place them), and the choice between candidates in a
+  clip (a ball sent to the server before the serve, a first serve's fault). The job does not call `serve_find.py`.
+
 ## The court finder (`court_find.py`, 27 November 2026)
 
 A player puts the phone behind the back glass by hand, so its height, place and angle change every match. The court
