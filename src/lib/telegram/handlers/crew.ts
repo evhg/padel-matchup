@@ -181,6 +181,11 @@ async function botGoneFrom(chatId: number): Promise<boolean> {
  * in the group is pinned again rather than posted again. The invite link follows the right to invite:
  * made when the right arrives while the bot reads, dropped when the right goes (the link stops being a
  * door the bot holds). Null when nothing changed for a crew.
+ *
+ * An update that arrives while another one starts the group (the start is claimed, no link is stored
+ * yet) makes a link too, and the last write is kept. That is accepted (27 November 2026): both links
+ * open the same group, the bot revokes no link it made, and one claim for it would need a new column.
+ * The start itself, the notice and the pin, stays claimed once (`claimStart`).
  */
 export async function crewRightsChanged(db: Db, chat: TelegramChat, member: TgChatMember): Promise<string | null> {
   const set: Partial<typeof telegramChats.$inferInsert> = {};

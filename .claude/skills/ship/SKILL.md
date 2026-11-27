@@ -910,7 +910,14 @@ Wall clock first, credits second. What actually moved it, measured:
   fresh table may get a bitmap scan where PGlite showed an index scan. `tests/player-history.test.ts`
   passed the local gate and failed CI: take both shapes, `analyze` the tables first, and accept every
   scan that starts from the index. Prove it on a throwaway Postgres 16 (`/usr/lib/postgresql/16/bin`,
-  run as the `postgres` user) with `TEST_DATABASE_URL`, not only on PGlite.
+  run as the `postgres` user) with `TEST_DATABASE_URL`, not only on PGlite. Put its data folder in
+  `/var/lib/postgresql`, never in the scratchpad: the scratchpad's permissions were reset mid-loop on
+  27 November 2026, the server stopped, and 20 of 25 "runs" tested nothing (`ECONNREFUSED`, 28 skipped).
+- **A race test with `Promise.all` tests chance on real Postgres.** "Two updates at once" on the crew
+  group gave two orders on Postgres 16 (6 of 15 runs the second update made the invite link) and one on
+  PGlite; with the start's claim broken it still passed on Postgres. Name each window and force it with
+  a hook in the fake (`duringPin` in `tests/telegram-crew.test.ts`): the second update acts inside the
+  first one's pin, once with a row read before the claim, once after. Then break the guard on both databases.
 
 - **A time zone set inside a running test is not a time zone.** `process.env.TZ = "Asia/Bangkok"` in a
   `beforeAll` passed the local gate and failed CI's real-Postgres run: a worker thread ignores the
