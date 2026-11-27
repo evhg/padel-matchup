@@ -250,7 +250,7 @@ from the same words).
 | `fast_by_design` | a fast reel: no score, no winner of each point, no numbers, no fastest shot |
 | `no_score`, `few_points`, `no_winners` | a whole film: `honest.py`'s reason when the score stays out |
 | `no_speed` | a whole film: no step measures the speed of a shot yet |
-| `court_not_found`, `phone_moved` | reserved for the court finder that is being built: never sent yet |
+| `court_not_found`, `phone_moved` | `court_find.py` was not sure of the film's lines (`phone_moved`: its reason was `moved`), so the job took `courts/<place>.json` (`court_of`, `"source": "place"`) |
 | `players_out_of_frame` | `fast_points.py` left a clip out (`held_share` under 0.25) or a close look out (`closeup.framed`): `points.json` `"left_out"` |
 | `far_names_unsure` | a clip of the reel has `"far_named": false` in `clips.json` (`who.py`) |
 | `no_heart_rate` | no `hr.json` came with the upload |
@@ -311,6 +311,13 @@ python court_find.py 'match/kf/*.jpg' --out match/court.json --report match/cour
 python court_find.py --video film.mp4 --report r.json        # 27 frames read from the film by seeking
 python -m unittest scripts/highlights/test_court_find.py      # 12 tests, about 35 s (numpy, scipy, opencv)
 ```
+
+**In the reel job** (`fastreel.py` `court_of`, right after the step "clips", on the frames in `match/kf/`): a court in
+the start request wins (a person drew it). Otherwise the finder runs, about 20 s on the job's own machine. When it is
+sure, its court is the film's, and its floor map also goes to `match/court-H.json`. When it is not sure, the job takes
+`courts/<place>.json` from the store and the reel says so (`court_not_found`, or `phone_moved` for the reason `moved`).
+With neither, the job stops with the finder's reason. `match/court-source.json` keeps the choice, and a second run
+keeps it too; `match/court-find.json` and `match/court-find.jpg` show what the finder saw.
 
 How it works (all pixels of a 1920x1080 picture):
 

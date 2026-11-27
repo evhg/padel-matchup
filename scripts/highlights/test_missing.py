@@ -61,12 +61,22 @@ check(got == ['fast_by_design', 'players_out_of_frame'], f'the clip with no far 
 got = missing.missing_of(False, None, plan('c0'), [{'a': 0, 'b': 20}], heart=True)
 check(got == ['fast_by_design'], f'no far_named key {got}')
 
-# everything at once: each code once, in the order of CODES, never a reserved code
-got = missing.missing_of(True, {'shown': False, 'why': 'no_winners'}, plan('c1', left=[{'id': 'c0', 'why': 'out_of_frame'}, {'id': 'c1', 'why': 'closeup'}]), far)
-check(got == ['no_winners', 'no_speed', 'players_out_of_frame', 'far_names_unsure', 'no_heart_rate'], f'all of them {got}')
+# the court lines (fastreel.py court_of): found in the film, or drawn by a person, is not a thing missing
+for src in ({'source': 'found', 'confidence': 0.9}, {'source': 'request'}, None):
+    got = missing.missing_of(False, None, plan('c0'), FAR, heart=True, court=src)
+    check(got == ['fast_by_design'], f'court {src} {got}')
+# the finder was not sure, so the store's court of the place: the reel says so, and "moved" has its own reason
+for reason in ('lines_not_found', 'walls_not_found', 'fit_poor', 'camera_implausible', 'too_few_frames', 'failed', None):
+    got = missing.missing_of(False, None, plan('c0'), FAR, heart=True, court={'source': 'place', 'reason': reason})
+    check(got == ['fast_by_design', 'court_not_found'], f'place court, {reason} {got}')
+got = missing.missing_of(False, None, plan('c0'), FAR, heart=True, court={'source': 'place', 'reason': 'moved'})
+check(got == ['fast_by_design', 'phone_moved'], f'place court, moved {got}')
+
+# everything at once: each code once, in the order of CODES
+got = missing.missing_of(True, {'shown': False, 'why': 'no_winners'}, plan('c1', left=[{'id': 'c0', 'why': 'out_of_frame'}, {'id': 'c1', 'why': 'closeup'}]), far,
+                         court={'source': 'place', 'reason': 'moved'})
+check(got == ['no_winners', 'no_speed', 'phone_moved', 'players_out_of_frame', 'far_names_unsure', 'no_heart_rate'], f'all of them {got}')
 check(got == [c for c in missing.CODES if c in got], 'the order of CODES')
-check(not set(missing.RESERVED) & set(got), 'no reserved code')
-check(set(missing.RESERVED) <= set(missing.CODES), 'the reserved codes are codes')
 # a made-up verdict code is not passed on
 got = missing.missing_of(True, {'shown': False, 'why': '<b>made up</b>'}, plan('c0'), FAR, heart=True)
 check(got == ['no_speed'], f'a made-up code {got}')

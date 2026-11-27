@@ -12,7 +12,7 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
                 "players": [{"id": "<player id>", "name": "Ana", "team": 1, "sex": "m"}, ... four]}, ...],
                 (team: 1 and 2, 0 and 1, or "a" and "b"; `teams_from_zero` makes them 0 and 1, the engine's count)
    "music": "bounce"?,                                 the track when the player wrote no choices.json
-   "place": "<camera place>"?, "court": {court.json}?, "venue": ""?, "grade": "glass"?,
+   "place": "<camera place>"?, "court": {court.json}?, "venue": ""?, "grade": "glass"?,     the court lines: court_of
    "whole": true?}                                     the upload is the whole film (the "Full reel"), not a phone's cut
 
   A whole film (27 November 2026): the same reel, with no person. The step "clips" reads the film's sound only (no
@@ -532,6 +532,37 @@ def whole_film(P, W, M, R):
     return {'sound': sound, 'read_s': plan.get('read_s'), 'rallies': plan.get('rallies'), 'stretches': len(S), 'parts': [p['seconds'] for p in parts], 'join': {k: j[k] for k in ('clean4k', 'proxy', 'frames3')}}
 
 
+def court_of(req, M):
+    """The court lines of this film in match/court.json, and where they came from in match/court-source.json. A player
+    puts the phone behind the glass by hand, so the lines belong to the film, not to the club (the owner, 27 November
+    2026). In this order:
+    - "request": the start request carries a court (a person drew it, README "court lines");
+    - "found": court_find.py is sure of the court in this film's frames (match/kf/, after the step "clips"); its
+      floor map also goes to match/court-H.json;
+    - "place": the finder is not sure, so the store's courts/<place>.json; "reason" keeps the finder's reason, and
+      missing.py turns it into court_not_found or phone_moved under the reel.
+    No court at all stops the job with the finder's reason. A second run keeps what the first one chose."""
+    src = f'{M}/court-source.json'
+    if os.path.exists(src) and os.path.exists(f'{M}/court.json'): return json.load(open(src))
+    if req.get('court'):
+        json.dump(req['court'], open(f'{M}/court.json', 'w')); out = {'source': 'request'}
+    else:
+        a = time.time()
+        r = subprocess.run(['python', '/root/hl/court_find.py', f'{M}/kf/*.jpg', '--out', f'{M}/court.json', '--report', f'{M}/court-find.json',
+                            '--debug', f'{M}/court-find.jpg'], capture_output=True, text=True)
+        rep = json.load(open(f'{M}/court-find.json')) if os.path.exists(f'{M}/court-find.json') else {'status': 'not_sure', 'reason': 'failed', 'detail': (r.stdout + r.stderr)[-300:]}
+        out = {'seconds': round(time.time() - a), 'confidence': rep.get('confidence'), 'reason': rep.get('reason'), 'detail': rep.get('detail')}
+        place = f"/vol/courts/{req['place']}.json" if req.get('place') else None
+        if rep.get('status') == 'ok' and os.path.exists(f'{M}/court.json'):
+            out['source'] = 'found'; json.dump({'H': rep['court']['H']}, open(f'{M}/court-H.json', 'w'))
+        elif place and os.path.exists(place):
+            sh(['cp', place, f'{M}/court.json']); out['source'] = 'place'
+        else:
+            raise RuntimeError(f"no court lines for this film: the finder is not sure ({rep.get('reason')}: {rep.get('detail')}), and the store has no courts/<place>.json")
+    json.dump(out, open(src, 'w'))
+    return out
+
+
 def run_make(req):
     """The whole fast reel. Each step skips what is already on the store, so `resume` goes on where it stopped."""
     t0 = time.time(); vol.reload(); P = paths(req); W = P['W']; M = f'{W}/match'; os.makedirs(M, exist_ok=True)
@@ -543,10 +574,6 @@ def run_make(req):
     CH = choices_of(P, req); clock['choices_start'] = CH
     for i, t in enumerate(CH['teams']):       # the team names the player chose are for the upload's own match, the first
         if t: req['matches'][0]['title_a' if i == 0 else 'title_b'] = t
-    # the camera place: the request's court, or the store's court of the place (court.py; README "court lines")
-    court = req.get('court') or (json.load(open(f"/vol/courts/{req['place']}.json")) if req.get('place') and os.path.exists(f"/vol/courts/{req['place']}.json") else None)
-    if not court and not os.path.exists(f'{M}/court.json'): raise RuntimeError('no court lines for this camera place: put courts/<place>.json on the store')
-    if court: json.dump(court, open(f'{M}/court.json', 'w'))
 
     # 1. clips
     a = time.time()
@@ -573,6 +600,8 @@ def run_make(req):
                    'scale': 2 if info['h'] >= 2000 or info['w'] >= 3000 else 1}, open(f'{M}/stretches.json', 'w'))
         vol.commit(); print('clips:', len(joins) + 1, 'clips,', len(drop), 'flash-backs cut,', j, flush=True)
     clock['clips'] = round(time.time() - a); R.step('clips')
+    # the court lines of this film (court_of): found in its frames, or the store's court of the place when not sure
+    clock['court'] = court_of(req, M); vol.commit(); print('court', clock['court'], flush=True)
 
     # 2. players
     a = time.time(); ans = P['answer'] if os.path.exists(P['answer']) else ''
@@ -617,7 +646,7 @@ def run_make(req):
     # What the reel could not do, and why (missing.py): codes only; the match page has the words and a tip for each.
     import sys; sys.path.insert(0, '/root/hl'); import missing
     heart = bool(P.get('up')) and os.path.exists(f"{P['up']}/hr.json")
-    gaps = missing.missing_of(whole, score, json.load(open(f'{M}/points.json')), C, heart)
+    gaps = missing.missing_of(whole, score, json.load(open(f'{M}/points.json')), C, heart, clock.get('court'))
     clock['missing'] = gaps; print('missing', gaps, flush=True)
     op = ops.get(); clock['portraits'] = op['portraits']; print('\n'.join(op['log']), flush=True)
     for o in op['openings']: print('opening', o, flush=True)     # reel_points.py puts the opening in only when its files are there
