@@ -276,15 +276,119 @@ What the first one showed (the match of 24 November, 132 candidates between the 
   clip shows about 16 s of empty court, and a replay was chosen in that break. `closeup.py` now keeps such a replay
   out (see "A close look is drawn only when its player is in it"), but the clip still starts too early.
 
+## The court finder (`court_find.py`, 27 November 2026)
+
+A player puts the phone behind the back glass by hand, so its height, place and angle change every match. The court
+lines therefore belong to the film, not to the club. `court_find.py` finds them from the film's frames and writes the
+`court.json` that `court.py` reads, plus `H` (court metres to pixels, as in `court-H.json`), the camera and a
+confidence. When it cannot be sure, it says "not sure" with a reason and writes no court.
+
+```bash
+python court_find.py 'match/kf/*.jpg' --out match/court.json --report match/court-find.json --debug match/court-find.jpg
+python court_find.py --video film.mp4 --report r.json        # 27 frames read from the film by seeking
+python -m unittest scripts/highlights/test_court_find.py      # 12 tests, about 35 s (numpy, scipy, opencv)
+```
+
+How it works (all pixels of a 1920x1080 picture):
+
+1. **Backgrounds.** The film in three parts; each part gives the median of up to 15 of its frames, the whole film the
+   median of up to 25. The players move and the lines do not, so the players vanish.
+2. **Three white lines.** A white top-hat of the brightness where the colour is pale, then Hough and a fit to the
+   middle of the line in each column: the near service line (court Y 3.05 m), the centre line up from its T (X 5 m),
+   and the net's white band (Y 10 m, 0.92 m at the posts): the flat white line with the most white on both sides of
+   the centre line. A run along the band often goes on past a post (the rail of the side wall, the next court's net),
+   so it is scored only as far as it reaches on both sides.
+3. **The camera.** The three lines leave two numbers open, the focal length and the tilt: from a phone in the middle
+   of the glass, the plane of the centre line holds the camera's own axis, so the centre line cannot give the tilt.
+   A grid of both gives one camera each in closed form, and the side walls decide: the camera whose two wall feet lie
+   on colour edges with the floor's colour inside wins. A least-squares fit of eight numbers (focal length, place,
+   three angles, one lens bend) and the net's sag then takes every line, the walls too, and the far service line
+   where it is seen through the net.
+4. **The checks.** Line error (all lines 4 px RMS or less, each line 7 px or less); both walls found; the far
+   service line where the camera puts it, when the band does not hide it; no second court that fits nearly as well;
+   a phone's camera (focal length 500 to 2400 px, 0.4 to 4.5 m high, up to 4 m behind the glass, roll 8° or less);
+   each part's court within 40 px of the whole film's. And the phone did not move: the three parts' pictures,
+   phase-correlated, within 8 px.
+
+Reason codes: `lines_not_found`, `walls_not_found`, `fit_poor`, `camera_implausible`, `moved` (the player tip "do
+not move the phone"), `too_few_frames` (fewer than 9).
+
+### Measured on the stored films
+
+Three films with a court drawn by hand: film 1 (`match1`, 1x lens low on the glass; the numbers in `court.py`),
+film 2 (`match2`, wide lens higher up; `court.json` and eight measured points in `camera-points.json`), film 3
+(`match3`, wide lens; `courts/<place>.json`; the clips and the whole film are the same recording: their pictures
+match to 0.07 px). 23, 46 and 45 frames; about 20 s for each film on one machine.
+
+| | film 1 | film 2 | film 3 |
+| --- | --- | --- | --- |
+| camera found | f 853 px, 1.30 m high, at the glass, tilt 5.7° | f 823 px, 2.35 m, 0.1 m in front, 19.4° | f 884 px, 2.36 m, 0.2 m behind, 19.9° |
+| line error (RMS) | 2.0 px | 1.5 px | 1.3 px |
+| net's foot `NET_FOOT_Y`, against the hand | -5 px | -3 px | +8 px |
+| posts | 24, 27 px | 6, 16 px | 11, 11 px |
+| near side walls (mean distance) | 1.3, 1.1 px | 0.4, 4.5 px | 15, 16 px |
+| far glass line, far corners | 10 px; 12, 16 px | 0 px; 19, 50 px | 4 px; 38, 61 px |
+| `court.zone` changed on the stored sightings | (none stored) | 93 of 15,074 (0.6%) | 49 of 4,338 detections (1.1%) |
+| serve depth (`pose_serve`) changed | | 12 of 8,116 near boxes | 1 of 1,124 near boxes |
+
+The hand courts are not the truth, and where the two disagree the picture sides with the finder:
+
+- Film 2's eight measured points: the finder's camera is 1.3 to 5.3 px from seven of them. The eighth, the net's
+  foot at the right post, is 20 px off: the point was taken at the post's middle, and the court's corner (where the
+  wall's foot meets the net's line) is about 10 px inside it. A camera fitted to the eight points (5.1 px RMS) puts
+  the far corners at x 761 and 1188: the finder has 759 and 1180, the hand court 740 and 1230.
+- Film 3's hand court does not come from one camera: a camera fitted to its corners misses them by up to 28 px. Its
+  side lines run along the glass about 15 px outside the floor; 36 of its 49 zone changes are near → None at a wall.
+- Film 1's posts: the hand court has the posts' middles, the finder the court's corners. Film 1 is the hard case:
+  from a low phone the walls are almost flat in the picture, so the focal length is the least sure number, and the
+  parts' courts differ by up to 24 px at the posts.
+
+`serve.py`'s own depth numbers (705, 770, 546, 530) are pixels of the first film and do not read `court.json`.
+
+### How often it says "not sure"
+
+- The full frame sets (above, and film 2's 12 frames of 4K): 5 of 5 sure.
+- Twelve smaller sets of 12 to 15 frames (the first and the last frames of each film, and two random picks): 11
+  sure, each within 1 to 8 px of its film's full-set court; 1 not sure (film 1, `fit_poor`: its parts' courts 47 px
+  apart).
+- One frame: `too_few_frames`, 6 of 6. Before that rule one frame of film 1 gave a "sure" court 49 px off: a single
+  picture keeps its players, and no part of the film checks another.
+- Made-up cases: film 2 with the phone moved by 29 px and turned 0.6° after the middle: `moved` (38 px); the
+  clips of film 3 joined to film 1: `moved`; the top of the picture only: `lines_not_found`.
+- The films that did not move: 0.3 to 1.2 px between the parts' pictures. Film 3's picture sank 3.7 px over its 3
+  minutes of clips (the phone sagging), under the limit of 8 px.
+
+### How the job should call it (not wired yet)
+
+In `modal/fastreel.py`, `make`: after step 1 ("clips", which writes `match/kf/`) and before step 2 ("players", whose
+detector reads `TILES`), and only when the request has no `court` (a person's court still wins):
+
+```python
+r = subprocess.run(['python', '/root/hl/court_find.py', f'{M}/kf/*.jpg', '--out', f'{M}/court.json',
+                    '--report', f'{M}/court-find.json', '--debug', f'{M}/court-find.jpg'], env=home(W))
+rep = json.load(open(f'{M}/court-find.json'))
+if rep['status'] == 'ok':
+    json.dump({'H': rep['court']['H']}, open(f'{M}/court-H.json', 'w'))          # court_map.py's floor map
+    # court_map.py's HCAM (the lens's height) is rep['court']['camera']['C'][2]; its Y0 (the horizon) follows too
+elif req.get('place') and os.path.exists(f"/vol/courts/{req['place']}.json"):           # the place's court, drawn once
+    json.dump(json.load(open(f"/vol/courts/{req['place']}.json")), open(f'{M}/court.json', 'w'))
+else:
+    raise RuntimeError(f"court not sure: {rep['reason']}: {rep['detail']}")       # the reason picks the tip
+```
+
+The base image already has numpy, scipy and opencv. The check "no court lines" before step 1 then moves after it.
+The report's `reason` picks the player's tip: `moved` "do not move the phone"; `lines_not_found` and
+`walls_not_found` "the near service line, the net and both side walls in the picture"; the others "a person draws
+the lines". Look at `court-find.jpg` (red: the floor lines, yellow: the net's band) on the job's sheet.
+
 ## What is not done
 
 - A whole film's stretches come from the sound alone, as the phone's do. A break where two players hit balls can be
   chosen (the lesson above); `fast_points.py` drops a clip that shows its near pair too little, and no step checks for
   four players and a serve yet. No step reads the winner of a point, so a whole film's reel never has a score today.
 
-- `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
-  them found from the picture. The fast reel reads them from `courts/<place>.json` on the store and stops with
-  "no court lines" for a camera place that has none: a person still draws them once for each place.
+- `court_find.py` finds the court lines of a film (above), but the job does not call it yet: the fast reel reads
+  them from `courts/<place>.json` on the store and stops with "no court lines" for a camera place that has none.
 - The fast reel names the far players clip by clip, where its voices agree (`who.py`): on the clips of 25 November
   in 7 of 8 clips, all right by eye. A clip with two women or two men at the far end in like colours keeps no far
   names: the man/woman voice is silent there, and the look alone is too weak (on these clips it never passed 0.08).
@@ -443,6 +547,10 @@ What the first one showed (the match of 24 November, 132 candidates between the 
 - **The court lines belong to the camera place, not to the code.** A second match was filmed with the wide
   lens from higher up: the net's foot moved from y 570 to y 455 and the side walls became twice as steep.
   `court.py` now reads `match/court.json`; draw the lines and the zones on two frames before the long steps.
+  And they belong to the film, not even to the place: the phone is put there by hand every match. `court_find.py`
+  finds them per film (27 November 2026). Its first try fitted a camera to the three white lines alone: cameras
+  from 0.1 m to 3.7 m high fitted them to 2 px. The three lines leave the focal length and the tilt open, and only
+  the side walls close them. A good fit to some lines is no proof; the lines that were not fitted are.
 - **Answers that live in a browser are lost by a new version of the page.** A person answered 33 clips; the
   page showed its copy line only after the last clip, so a new version with a copy button was published,
   and the answers were gone. Give the copy button in the first version, and do not publish over a page

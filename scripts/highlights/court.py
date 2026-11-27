@@ -8,7 +8,8 @@ are outside both is not a player (next court, bar, benches).
 Another camera place has other numbers. Put them in match/court.json of the work folder (HL_HOME, or the
 folder the pipeline runs in); a key that is not there keeps its value from this file.
 
-TODO for production: find these lines per video (the net and the white lines) instead of numbers by hand.
+court_find.py finds these numbers for each film from its frames (the net, the white lines, the side walls; README
+"The court finder"). The job does not call it yet.
 """
 import json, os
 
