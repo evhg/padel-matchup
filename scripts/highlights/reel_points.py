@@ -42,13 +42,13 @@ What the owner saw in the fifth reel (19 November 2026), and the rules that came
 - "Team X wins the point" stood on screen while the rally went on, twice. The line belongs to the moment the ball is
   dead ("dead_t"), not to the last hit somebody found, and the clip runs 2.6 s past it.
 - A close look at a player at the far end is a blur: the camera has about 300 pixels for that player. A window is
-  never narrower than half the picture (ZMAX), and a reaction or replay is chosen at the near end where there is one.
+  never narrower than half the picture (closeup.ZMAX), and a reaction or replay is chosen at the near end where there is one.
 - A replay opened on empty grass for two seconds, because its player walked into the picture late. A replay starts
   when the tracker has its player; if less than 1.2 s is left, there is no replay.
 """
 import sys, os, json, subprocess, numpy as np, cv2, glob
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gfx, hdr, teams
+import gfx, hdr, teams, closeup
 
 video, pointsf, matchf, work, out = sys.argv[1:6]
 P = json.load(open(pointsf)); MT = teams.fill(json.load(open(matchf)))
@@ -67,7 +67,6 @@ def match_of(c):
     if c['match'] not in MTS: m = teams.fill(json.load(open(c['match']))); MTS[c['match']] = (m, titles(m))
     return MTS[c['match']]
 LEAD, HOLD = 1.5, 2.6                              # before the serve hit; after the moment the ball is dead
-ZMAX = 2.0                                         # a window is never narrower than half the picture
 segs = []
 
 
@@ -84,18 +83,18 @@ def add(seg, name, mt=None):
 def mmss(t): return f'{int(t // 60)}:{int(t % 60):02d}'
 
 
-def height(trf, who, a, b):
-    """How tall the player is in the picture between a and b (in the 1080 lines of a track), or None."""
-    tr = json.load(open(trf)); p = tr['players'].get(str(who))
-    if not p: return None
-    f = np.array(p['f']) / tr['fps'] + tr['t0']; m = (f >= a) & (f <= b)
-    if not m.any(): return None
-    box = np.array(p['box'])[m]; return float(np.median(box[:, 3] - box[:, 1]))
-
-
 def zoom_for(trf, who, a, b):
-    h = height(trf, who, a, b)
-    return float(np.clip(520 / max(h, 60), 1.5, ZMAX)) if h else ZMAX
+    return closeup.zoom_for(json.load(open(trf)), who, a, b)
+
+
+def framed(i, trf, who, a, b, zoom, what):
+    """A close look is drawn only when its player is in its window for most of it, and not small (closeup.py).
+    Else it is left out: the clip before it stays, and the reel stays fair (replays stay shared between the pairs)."""
+    q = closeup.framed(json.load(open(trf)), who, a, b, zoom)
+    if not q['ok']:
+        print(f"point {i}: no {what}, player {who} is in the window in {q['share']:.0%} of {a}-{b} at {q['tall']:.2f} of its height "
+              f"(at least {closeup.SHARE:.0%} and {closeup.TALL})")
+    return q['ok']
 
 
 def seen_from(trf, who, a, b):
@@ -133,17 +132,20 @@ for i, c in enumerate(P['points']):
     add(seg, f'point{i}', M_)
     r = c.get('react')
     if r:   # the player who reacts, close and slow, with the name and no "Replay" badge: it is the same moment, seen closer
-        add({'kind': 'replay', 't0': round(r['t0'], 2), 't1': round(r['t1'], 2), 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']],
-             'focus_team': team[r['who']], 'zoom': r.get('zoom') or zoom_for(trf, r['who'], r['t0'], r['t1']), 'title': r.get('title') or names[r['who']], 'sub': None, 'badge': None}, f'react{i}', M_)
+        z = r.get('zoom') or zoom_for(trf, r['who'], r['t0'], r['t1'])
+        if framed(i, trf, r['who'], r['t0'], r['t1'], z, 'reaction'):
+            add({'kind': 'replay', 't0': round(r['t0'], 2), 't1': round(r['t1'], 2), 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']],
+                 'focus_team': team[r['who']], 'zoom': z, 'title': r.get('title') or names[r['who']], 'sub': None, 'badge': None}, f'react{i}', M_)
     r = c.get('replay')
     if r:
         a, b = round(r['t'] - r.get('before', 1.7), 2), round(r['t'] + r.get('after', 1.0), 2)
         first = seen_from(trf, r['who'], a, b)
         if first is None or b - max(a, first) < 1.2: print(f'point {i}: no replay, the tracker has player {r["who"]} for less than 1.2 s of {a}-{b}')
         else:
-            a = round(max(a, first), 2)
-            add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']], 'focus_team': team[r['who']],
-                 'zoom': r.get('zoom') or zoom_for(trf, r['who'], a, b), 'title': r.get('title') or names[r['who']], 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}', M_)
+            a = round(max(a, first), 2); z = r.get('zoom') or zoom_for(trf, r['who'], a, b)
+            if framed(i, trf, r['who'], a, b, z, 'replay'):
+                add({'kind': 'replay', 't0': a, 't1': b, 'track': trf, 'speed': 0.5, 'focus': r['who'], 'focus_name': names[r['who']], 'focus_team': team[r['who']],
+                     'zoom': z, 'title': r.get('title') or names[r['who']], 'sub': r.get('sub'), 'badge_left': BADGE_LEFT}, f'replay{i}', M_)
 
 def picture(path, img):
     """Write a card's picture only when it is not the same as the file: a part is built again when its picture is newer."""
