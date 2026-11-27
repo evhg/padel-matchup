@@ -6,7 +6,7 @@ import { passportKeys } from "@/lib/config";
 import { later } from "@/lib/alerts";
 import { readUploadTicket, reelUploadReceived, setReelProgress } from "@/lib/domain/matchReel";
 import { tellOwnerVideoHere } from "@/lib/reelNotice";
-import { fastReelStart } from "@/lib/domain/fastReelStart";
+import { fastReelStart, startMinutes } from "@/lib/domain/fastReelStart";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +19,10 @@ export const dynamic = "force-dynamic";
  * without a ticket of that match, and the signature is checked before the database is asked anything.
  * The row goes from asked to received, and the owner hears it once. A second call changes nothing.
  *
- * For the clips of a fast reel the answer carries `fastReel`, the job's start request (`fastReelStart`), and the
- * reel host starts the job at once: no person makes it. A whole film, or clips that make no start (no two pairs),
- * wake the note desk instead, where a session makes the reel.
+ * The answer carries `fastReel`, the job's start request (`fastReelStart`), and the reel host starts the job at once:
+ * no person makes it. For the clips of a fast reel, and since 27 November 2026 for a whole film too, marked
+ * `whole: true` (the owner's stage A). Only an upload that makes no start (no two pairs of two) wakes the note desk,
+ * where a session makes the reel.
  */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { ticket?: unknown } | null;
@@ -30,14 +31,14 @@ export async function POST(req: Request) {
   if (!token) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const db = await getDb();
   const got = await reelUploadReceived(db, token);
-  const start = got?.way === "clips" && keys ? await fastReelStart(db, got.code, keys, new Date()) : null;
-  // The bar shows at once: the job's own first report comes when the clips are cleaned, minutes later. 25 minutes
-  // is the job's own first estimate (`Report(req, 25)` in fastreel.py; the dry run of 24 November 2026 took 19).
-  if (start) await setReelProgress(db, { code: got!.code, pct: 0, minutesLeft: 25, step: "clips" }).catch(() => undefined);
+  const start = got && keys ? await fastReelStart(db, got.code, keys, new Date(), { whole: got.way === "upload" }) : null;
+  // The bar shows at once: the job's own first report comes minutes later. The minutes are the job's own first
+  // estimate (`Report` in fastreel.py; the dry run of clips of 24 November 2026 took 19).
+  if (start) await setReelProgress(db, { code: got!.code, pct: 0, minutesLeft: startMinutes(start), step: "clips" }).catch(() => undefined);
   if (got) {
-    await later(() => tellOwnerVideoHere(got.code, got.way));
+    await later(() => tellOwnerVideoHere(got.code, got.way, Boolean(start)));
     // A session makes the reel at once (the owner, 24 November 2026: clips waited three hours for a person). The
-    // fast reel's job wakes nobody: if it stops, the row stays "received" and the hourly wake finds it.
+    // reel's job wakes nobody: if it stops, it reports "failed" and the desk wakes then (`postMatchReel`).
     if (!start) await later(() => wakeNoteDesk(db, `a match ${got.way === "clips" ? "video's clips are" : "video is"} here (${got.code}); make its reel`));
     revalidatePath(`/${got.code}`);
   }

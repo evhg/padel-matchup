@@ -205,9 +205,46 @@ parts, music and crowd on) gave a `share.mp4` whose pictures are the first 421 o
 (frame checksums), whose last picture is the last of the clip and not the end card, with the opening's 440 Hz and
 the match's 660 Hz in its sound and the 200 Hz "music" 57 dB down, and `instagram.py check` passed.
 
-### The same reel from the whole film (`modal/fullclips.py`, 27 November 2026)
+### A whole film, with no person (`modal/fastreel.py`, "whole", 27 November 2026)
 
-A player who sends the whole film ("Full reel") gets the same job, with clips that the store cuts itself:
+The owner's stage A: a player who sends the whole film ("Full reel") gets the fast reel's job with no person, as the
+note desk made it by hand the night before (below). How it flows:
+
+1. The reel host joins the parts (`assemble` in `modal/serve.py`) and tells Kicksmash (`POST /api/reel/upload`).
+2. Kicksmash answers with the job's start request marked `"whole": true` (`fastReelStart`), when the match has two
+   pairs of two, as for clips. With no start request (another line-up), the note desk wakes as before.
+3. `assemble` starts `make` with it. The step "clips" for a whole film (`whole_film`):
+   - `film_sound` reads the sound track alone (`ffmpeg -map 0:a:0 -vn`: the demuxer skips the picture, so the 4K
+     film is never decoded) and runs `film_plan.js`: the Rally Finder's core and the phone's own choice of the
+     stretches (`planCut` of the best points, `planReel("celebrations")`, `pickStretches`: 12 clips and 200 s at
+     most). A whole film's reel is the reel its fast reel would be. The plan stays in `match/film-plan.json`.
+   - `film_stretch` decodes each stretch from the camera file on its own machine, and `film_join` writes what the
+     step writes for clips (`film_clips.py`, the work that `fullclips.py` does by hand).
+   The steps after it are the fast reel's, with the same progress on the match page (a first report at 6% once the
+   sound is read).
+4. `honest.py` decides what the reel may claim. A score box, the winner of each point and the numbers go in only
+   when every match has a set score, the sound heard at least the points the set scores need (four a game, a
+   tie-break's seven; every rally of the whole film counts, so it is the most the film can hold), and a sure winner
+   was read for each of them. No step reads a winner yet, so today such a reel has none of the three, and
+   `honest.strip` takes them out of `points.json` if a later step ever writes them. `reel.json` keeps
+   `"score": {"shown": false, "why": "no_score" | "few_points" | "no_winners", "found", "need"}`, the post of the
+   reel carries `"noScore"`, and the match page says it in one line under the reel ("This reel has no score: the
+   sound did not find every point."). `share.mp4` is made as for every fast reel (`finish_layout`).
+
+The test of 27 November 2026 (the 40 GB film of 24 November, 88 minutes of 4K HEVC, a dry run): the sound was read
+in 25 s and planned in 4 s, and gave the same 8 stretches (195 s) as the phone's code on the desk's own lists. The
+step "clips" took 3.9 minutes in all. `who.py` was not sure of two names, so the run stopped at "players", as a
+player's would; the answer went in `names-answer.json`, and the second run went on from the saved work and took 9
+minutes (follow 305 s, replays 74 s, music and finish 102 s). `fast_points.py` left out two of the 8 stretches (the
+first, with one near player, and the last); the reel has 6 points, 176 s, and `share.mp4`. `reel.json` says
+`"why": "no_winners"` (113 points heard, 68 needed). Both runs together cost $1.28 on Modal's bill. The sheet of the
+tall reel showed the opening, names and play in every clip, and two close looks after a point that missed their
+player (an empty corner of the court): the reaction step is the weak part, not the stretches.
+
+### The same reel from the whole film, by hand (`modal/fullclips.py`, 27 November 2026)
+
+When a person chooses the stretches (the note desk, for a film whose job did not start), the clips are cut the same
+way:
 
 1. The sound of the film through `audio.js` gives the candidate points (88 minutes: 20 s on one machine).
 2. One sheet of frames for each candidate (the serve, and eight views after the last sound), and a reader of the
@@ -232,6 +269,10 @@ What the first one showed (the match of 24 November, 132 candidates between the 
   a score needs every serve from the picture (`serve.py` on the whole film), not the sound's list.
 
 ## What is not done
+
+- A whole film's stretches come from the sound alone, as the phone's do. A break where two players hit balls can be
+  chosen (the lesson above); `fast_points.py` drops a clip that shows its near pair too little, and no step checks for
+  four players and a serve yet. No step reads the winner of a point, so a whole film's reel never has a score today.
 
 - `court.py` has the lines of this one court and this one camera position as numbers. Another video needs
   them found from the picture. The fast reel reads them from `courts/<place>.json` on the store and stops with

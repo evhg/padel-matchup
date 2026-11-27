@@ -31,7 +31,8 @@ export async function postMatchReel(body: Record<string, unknown> | null): Promi
       revalidatePath(`/${code}`);
       return NextResponse.json({ ok: true, working: true });
     }
-    const res = await setMatchReel(db, { code, host: body?.host, token: body?.token });
+    // `noScore`: a reel from the whole film with no score says why, and the match page says it in one line.
+    const res = await setMatchReel(db, { code, host: body?.host, token: body?.token, noScore: body?.noScore });
     revalidatePath(`/${code}`);
     if (res.first)
       after(async () => {

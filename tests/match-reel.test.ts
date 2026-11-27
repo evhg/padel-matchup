@@ -63,7 +63,11 @@ describe("the address of a reel", () => {
       saveWide: `${HOST}/r/${TOKEN}/wide.mp4?dl=1`,
       poster: `${HOST}/r/${TOKEN}/poster.jpg`,
       keptUntil: new Date(NOW.getTime() + 30 * DAY),
+      noScore: null,
     });
+    // A reel from the whole film with no score keeps why in its note, and the page reads only a reason it knows.
+    expect(reelView({ ...row, note: JSON.stringify({ noScore: "no_winners" }) }, NOW)?.noScore).toBe("no_winners");
+    for (const note of [JSON.stringify({ noScore: "anything" }), JSON.stringify({ pct: 40, readyBy: NOW.toISOString() }), "not json", "null", null]) expect(reelView({ ...row, note }, NOW)?.noScore, String(note)).toBeNull();
     expect(reelView(row, new Date(NOW.getTime() + 30 * DAY - 1))).not.toBeNull();
     expect(reelView(row, new Date(NOW.getTime() + 30 * DAY))).toBeNull();
     expect(reelView({ ...row, status: "working" }, NOW)).toBeNull();

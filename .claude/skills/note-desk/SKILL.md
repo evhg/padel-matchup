@@ -65,23 +65,38 @@ Technical English: what shipped, what is next, what needs the owner.
 
 ## 5b. A match video is here
 
-The desk also wakes when a player's video or fast-reel clips arrive ("make its reel"), and every hour
-while a reel row is still `received`. The page tells the players a person makes the reel and that it can
-take a few hours, so make it now:
+The desk wakes for a match video only when no job makes its reel: the job did not start, or a step of it
+failed. It wakes with "make its reel", with "the reel of <code> failed on the reel host", and every hour while
+a reel row is still `received`. The page then tells the players a person makes the reel and that it can take a
+few hours, so make it now.
 
-- **Fast reel (clips):** the job makes it with no person (`scripts/highlights/modal/fastreel.py`). The reel
-  host starts it when Kicksmash answers the clips with a start request (`/api/reel/upload`, `fastReelStart`), and
-  the job reports to `/api/reel/report`. The desk wakes for clips only when the job did not start (no two pairs
-  of two) or stopped: the row stays `received`. The usual cause is a camera place with no court lines
-  (`courts/<venue slug>.json` on the volume): draw them once (`court.py`, README "court lines"), then start the
-  job again with the request in `work/fastreel/<upload>/request.json`. Look at a sheet of frames before you call
-  a reel done. Then tell the players on their notes, if they wrote one.
-- **Full reel (the whole video):** the engine in `scripts/highlights/README.md`, until the automatic job
-  exists. From a whole film on the store, `modal/fullclips.py` cuts clean clips for the reel job (README).
+Both ways to send a film are automatic (`scripts/highlights/modal/fastreel.py`). The reel host starts the job
+when Kicksmash answers the arrival with a start request (`/api/reel/upload`, `fastReelStart`), and the job
+reports to `/api/reel/report`:
+
+- **Fast reel (clips):** the phone's own cut. The job finds the joins of the cut, then makes the reel.
+- **Full reel (the whole film, since 27 November 2026):** the start request says `"whole": true`. The job reads
+  the film's sound only, chooses the stretches as the phone does (`film_plan.js`), decodes them from the camera
+  file (`film_clips.py`), then goes on as for clips. Its reel has a score, a winner of each point and numbers
+  only when the engine is sure (`honest.py`). Otherwise `reel.json` keeps the reason, and the match page shows one
+  line under the reel. Do not add a score to such a reel by hand.
+
+When the desk wakes for a video:
+
+1. **No start request** (the match has no two pairs of two, or the film came as a link to a drive): the row is
+   `received`. Put the line-up right with the players, or make the reel by hand: `fullclips.py` with stretches
+   you chose from a sheet of frames, then `fastreel.py --request … --dry` (README, "The same reel from the whole
+   film").
+2. **A step failed:** the row is `failed` and the reason is in the wake. The usual cause is a camera place with no
+   court lines (`courts/<venue slug>.json` on the volume): draw them once (`court.py`, README "court lines"). Then
+   start the job again with the request in `work/fastreel/<upload>/request.json`. Each step skips what is already
+   on the store.
+
+Look at a sheet of frames before you call a reel done. Then tell the players on their notes, if they wrote one.
 
 Before any Modal run, and after it (the owner, 27 November 2026, after one night's reel used most of a month):
 - **Check the money first.** `modal billing report --start <first of the month> --end <tomorrow> --csv` and sum
-  `Cost`. A full fast reel costs about $3. When the month's total plus the run passes the workspace's credit or
+  `Cost`. A reel costs about $1 to $3 (a whole film about $1.30, 27 November 2026). When the month's total plus the run passes the workspace's credit or
   limit, do not run: send the owner one Telegram line with the total, the limit and the cost of the run.
 - **One run, not three.** Test a fix on the smallest piece you can (one clip, saved steps, `--dry`), locally where
   the step allows it, before a full run on Modal.

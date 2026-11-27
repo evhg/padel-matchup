@@ -23,7 +23,8 @@ GET  /usage                       {"bytes", "at"}: what the whole store holds, m
 POST /u/<token>/finish            {"parts": n, "bytes": total, "name": "IMG_1234.MOV", "choices": {...}, "times": {...}}:
                                   every part is here; `assemble` joins them to uploads/<token>/video.<ext> and tells
                                   Kicksmash. When Kicksmash answers with "fastReel" (the start request of fastreel.py),
-                                  the fast reel starts at once. `times` (fast reel only): where each clip sits in the
+                                  the reel's job starts at once: for the clips of a fast reel, and since 27 November
+                                  2026 for a whole film too ("whole": true). `times` (fast reel only): where each clip sits in the
                                   film and when the film began, {"clips": [[start, end], ...], "recordedAt": ISO,
                                   "recordedFrom": "film" | "file"}, kept in meta.json, so a watch's heart rate lines up
                                   with the clips.
@@ -351,12 +352,15 @@ def assemble(token: str):
                 try: start = (json.load(r) or {}).get('fastReel')
                 except ValueError: start = None
         except Exception as e: told = f'failed: {e}'
-    # Kicksmash answers the clips of a fast reel with its start request (fastreel.py: the matches, the players, the
-    # music). The reel is made at once, with no person.
-    if isinstance(start, dict) and start.get('matches'):
-        modal.Function.from_name(os.environ['FASTREEL_APP'], 'make').spawn({**start, 'upload': token, 'dry': False})
-    print('joined', meta['bytes'], 'bytes; Kicksmash answered', told, '; fast reel started' if start else '')
-    return {'bytes': meta['bytes'], 'told': told, 'fast_reel': bool(start)}
+    # Kicksmash answers with the job's start request (fastreel.py: the matches, the players, the music), for the clips of
+    # a fast reel and for a whole film ("whole": true, `fastReelStart`). The reel is made at once, with no person. With
+    # no start request (no two pairs of two, or a link), Kicksmash wakes the note desk instead.
+    started = isinstance(start, dict) and bool(start.get('matches'))
+    if started:
+        modal.Function.from_name(os.environ['FASTREEL_APP'], 'make').spawn({**start, 'upload': token, 'dry': False, 'whole': start.get('whole') is True})
+    what = ('; reel started' + (' from the whole film' if start.get('whole') is True else ' from the clips')) if started else ''
+    print('joined', meta['bytes'], 'bytes; Kicksmash answered', told, what)
+    return {'bytes': meta['bytes'], 'told': told, 'fast_reel': started, 'whole': started and start.get('whole') is True}
 
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=0.25, memory=256, timeout=900, schedule=modal.Cron('17 20 * * *'))

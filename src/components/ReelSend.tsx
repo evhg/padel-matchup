@@ -60,7 +60,7 @@ export function ReelSend({
   failed: boolean;
   /** The two pairs as the page names them: the reel's team names until the player changes them. */ teams: [string, string];
   /** The reel host, for ten seconds of each track. */ musicBase: string | null;
-  /** The fast reel's job starts by itself for this match (two pairs of two). */ auto: boolean;
+  /** The reel's job starts by itself for this match (two pairs of two), from the clips or the whole film. */ auto: boolean;
   /** "Make a new reel": the match has a reel that plays, and the new one takes its place. */ again?: boolean;
 }) {
   const t = useTranslations("reel");
@@ -234,7 +234,7 @@ export function ReelSend({
     return (
       <section className="card" data-testid="reel-here">
         <h2 className="text-lg font-extrabold">{t("hereTitle")}</h2>
-        <p className="mt-1 text-sm text-muted">{t(phase.way === "clips" ? (auto ? "hereClipsAutoBody" : "hereClipsBody") : "hereBody")}</p>
+        <p className="mt-1 text-sm text-muted">{t(phase.way === "clips" ? (auto ? "hereClipsAutoBody" : "hereClipsBody") : auto ? "hereAutoBody" : "hereBody")}</p>
         {/* The reel host joins the parts, then the job's first report turns this card into the bar. */}
         <AutoRefresh seconds={20} />
       </section>
@@ -299,7 +299,7 @@ export function ReelSend({
               {t("fullTitle")} <span className="chip-live">{t("best")}</span>
             </h3>
             <p className="mt-1 text-xs text-muted">{t("fullSub")}</p>
-            {/* The truth until the full engine runs by itself (the owner, 27 November 2026: decision 2a). */}
+            {/* The truth about the full reel (the owner, 27 November 2026): it is made by itself, and its ticks hold only when the engine is sure (`honest.py`). */}
             <p className="mt-1 text-xs font-semibold text-muted" data-testid="reel-full-by-hand">
               {t("fullByHand")}
             </p>

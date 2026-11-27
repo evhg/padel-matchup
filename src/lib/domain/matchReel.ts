@@ -44,26 +44,50 @@ export function reelHostOf(raw: unknown): string | null {
 export const isReelToken = (raw: unknown): raw is string => typeof raw === "string" && TOKEN.test(raw);
 
 /**
+ * Why a reel from the whole film has no score box, no winner of each point and no numbers (the owner, 27 November 2026:
+ * they appear only when the engine is sure). The reel's job decides (`scripts/highlights/honest.py`) and says it with
+ * the finished reel (`noScore`); the match page says it in one line under the reel (`NO_SCORE_LINE`).
+ *   no_score     the match has no set score to check the points against
+ *   few_points   the sound found fewer points than the set scores need
+ *   no_winners   the engine cannot yet tell who won each point
+ */
+export const NO_SCORE_WHY = ["no_score", "few_points", "no_winners"] as const;
+export type NoScoreWhy = (typeof NO_SCORE_WHY)[number];
+/** The one plain line under such a reel, by its reason: a key of `reel` in messages/. */
+export const NO_SCORE_LINE = { no_score: "noScoreResult", few_points: "noScoreFew", no_winners: "noScoreWinners" } as const satisfies Record<NoScoreWhy, string>;
+export const noScoreWhyOf = (raw: unknown): NoScoreWhy | null => ((NO_SCORE_WHY as readonly unknown[]).includes(raw) ? (raw as NoScoreWhy) : null);
+
+/** The note of a ready row: `{"noScore": "<code>"}` when the reel has no score (`setMatchReel`), else null. Pure. */
+export function readyNoteOf(note: string | null | undefined): NoScoreWhy | null {
+  try {
+    return noScoreWhyOf((JSON.parse(note ?? "") as { noScore?: unknown } | null)?.noScore);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * `poster`: a frame of the opening, shown before the reel plays (`poster.jpg` beside the films; older reels have none).
  * `share`: the reel's public version (`share.mp4`: no branding, the match sound only), the only file that goes to
  * TikTok; older reels have none, so "Share to TikTok" asks the reel host first (`shareFileThere`).
+ * `noScore`: why the reel has no score, for the one line under it; null for a reel that claims nothing it lacks.
  */
-export type ReelView = { tall: string; wide: string; share: string; saveTall: string; saveWide: string; poster: string; keptUntil: Date };
+export type ReelView = { tall: string; wide: string; share: string; saveTall: string; saveWide: string; poster: string; keptUntil: Date; noScore: NoScoreWhy | null };
 
 /** What a screen needs of a row, or null when there is no reel to show (not ready, or past its days). Pure. */
-export function reelView(row: { status: string; host: string | null; reelToken: string; readyAt: Date | null } | null | undefined, now: Date): ReelView | null {
+export function reelView(row: { status: string; host: string | null; reelToken: string; readyAt: Date | null; note?: string | null } | null | undefined, now: Date): ReelView | null {
   if (!row || row.status !== "ready" || !row.readyAt) return null;
   const host = reelHostOf(row.host);
   if (!host || !isReelToken(row.reelToken)) return null;
   const keptUntil = new Date(row.readyAt.getTime() + REEL_KEEP_DAYS * 86_400_000);
   if (keptUntil.getTime() <= now.getTime()) return null;
   const base = `${host}/r/${row.reelToken}`;
-  return { tall: `${base}/tall.mp4`, wide: `${base}/wide.mp4`, share: `${base}/share.mp4`, saveTall: `${base}/tall.mp4?dl=1`, saveWide: `${base}/wide.mp4?dl=1`, poster: `${base}/poster.jpg`, keptUntil };
+  return { tall: `${base}/tall.mp4`, wide: `${base}/wide.mp4`, share: `${base}/share.mp4`, saveTall: `${base}/tall.mp4?dl=1`, saveWide: `${base}/wide.mp4?dl=1`, poster: `${base}/poster.jpg`, keptUntil, noScore: readyNoteOf(row.note) };
 }
 
 /** The reel of one match for its page. One read on the match's own unique index. */
 export async function matchReel(db: Db, eventId: string, now = new Date()): Promise<ReelView | null> {
-  const [row] = await db.select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt }).from(matchReels).where(eq(matchReels.eventId, eventId)).limit(1);
+  const [row] = await db.select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt, note: matchReels.note }).from(matchReels).where(eq(matchReels.eventId, eventId)).limit(1);
   return reelView(row, now);
 }
 
@@ -73,7 +97,7 @@ export async function matchReel(db: Db, eventId: string, now = new Date()): Prom
  */
 export async function matchReelByCode(db: Db, code: string, now = new Date()): Promise<ReelView | null> {
   const [row] = await db
-    .select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt })
+    .select({ status: matchReels.status, host: matchReels.host, reelToken: matchReels.reelToken, readyAt: matchReels.readyAt, note: matchReels.note })
     .from(events)
     .innerJoin(matchReels, eq(matchReels.eventId, events.id))
     .where(and(eq(events.code, code), eq(events.type, "match")))
@@ -233,9 +257,10 @@ export function videoLinkOf(raw: unknown): string | null {
 }
 
 /**
- * What a player's upload holds: "upload" is the whole film (the full reel: the score, the numbers), and
- * "clips" is the phone's own cut of the best points by sound (the fast reel: no score, no numbers). The
- * owner, 23 November 2026: both, the player's choice, and the full reel is the one to prefer.
+ * What a player's upload holds: "upload" is the whole film (the full reel: the score and the numbers when the engine is
+ * sure, `NO_SCORE_WHY`), and "clips" is the phone's own cut of the best points by sound (the fast reel: no score, no
+ * numbers). The owner, 23 November 2026: both, the player's choice, and the full reel is the one to prefer. Since 27
+ * November 2026 the reel's job makes both with no person (`fastReelStart`).
  */
 export type SendWay = "upload" | "clips";
 
@@ -313,9 +338,10 @@ export async function reelUploadReceived(db: Db, token: string): Promise<{ code:
 /**
  * The operator says "the reel of this match is on the store": the row is written as ready, or an older
  * row of the match is replaced. Refuses a match that has not started, a host that is not an https
- * address and a token of the wrong shape, each before any write.
+ * address and a token of the wrong shape, each before any write. `noScore`: why a reel from the whole film has
+ * no score (`NO_SCORE_WHY`), kept in the ready row's note; anything else keeps no note.
  */
-export async function setMatchReel(db: Db, input: { code: string; host: unknown; token: unknown; now?: Date }): Promise<{ eventId: string; replaced: boolean; first: boolean }> {
+export async function setMatchReel(db: Db, input: { code: string; host: unknown; token: unknown; noScore?: unknown; now?: Date }): Promise<{ eventId: string; replaced: boolean; first: boolean }> {
   const now = input.now ?? new Date();
   const host = reelHostOf(input.host);
   if (!host) throw new DomainError("invalid", "host");
@@ -324,7 +350,8 @@ export async function setMatchReel(db: Db, input: { code: string; host: unknown;
   if (!ev || ev.status === "cancelled") throw new DomainError("not_found");
   if (ev.startsAt.getTime() > now.getTime()) throw new DomainError("not_started");
   const [old] = await db.select({ id: matchReels.id, readyAt: matchReels.readyAt }).from(matchReels).where(eq(matchReels.eventId, ev.id)).limit(1);
-  const values = { status: "ready" satisfies ReelStatus, host, reelToken: input.token, readyAt: now, note: null };
+  const why = noScoreWhyOf(input.noScore);
+  const values = { status: "ready" satisfies ReelStatus, host, reelToken: input.token, readyAt: now, note: why ? JSON.stringify({ noScore: why }) : null };
   await db
     .insert(matchReels)
     .values({ eventId: ev.id, source: "operator", ...values })
