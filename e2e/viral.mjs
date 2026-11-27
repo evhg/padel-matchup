@@ -388,7 +388,7 @@ try {
   await fold.waitFor({ timeout: 20000 });
   const closedRows = await fold.locator("li").first().isVisible();
   await fold.locator("summary").click();
-  const rows = await fold.locator("li").evaluateAll((els) => els.map((e) => [e.getAttribute("data-missing"), ...[...e.querySelectorAll("p")].map((x) => x.textContent)]));
+  const missingRows = await fold.locator("li").evaluateAll((els) => els.map((e) => [e.getAttribute("data-missing"), ...[...e.querySelectorAll("p")].map((x) => x.textContent)]));
   const foldBox = await fold.boundingBox();
   check(
     "a reel that lacks something says what, why and one tip, in a fold under the reel, one row for each code it knows",
@@ -396,7 +396,7 @@ try {
       missingSet === 200 &&
       !closedRows &&
       (await fold.locator("summary").innerText()).startsWith("What this reel could not do") &&
-      JSON.stringify(rows) ===
+      JSON.stringify(missingRows) ===
         JSON.stringify([
           ["few_points", "The score, who won each point and your numbers", "The sound did not find every point of the match.", "Record the whole match in one video. Keep the microphone away from the fence, fans and speakers."],
           ["no_speed", "The fastest shot", "Kicksmash cannot measure the speed of a shot yet.", "Film in 4K at 60 frames a second, so that the ball is sharp in each picture."],
@@ -404,7 +404,7 @@ try {
           ["no_heart_rate", "Your heart rate", "No data from a watch came with the video.", "Send a screenshot of your watch's workout with “Tell us what should change” below."],
         ]) &&
       Boolean(foldBox) && foldBox.x >= 0 && foldBox.x + foldBox.width <= 390,
-    JSON.stringify({ foldBefore, missingSet, closedRows, rows, foldBox }),
+    JSON.stringify({ foldBefore, missingSet, closedRows, missingRows, foldBox }),
   );
   await fold.scrollIntoViewIfNeeded();
   await shot(p, "v8-match-reel-missing");
