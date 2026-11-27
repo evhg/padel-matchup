@@ -379,6 +379,22 @@ try {
     JSON.stringify({ reelSet, reelBox }),
   );
   await shot(p, "v8-match-reel");
+  // A reel from the whole film with no score says why in one plain line under it (the owner, 27 November 2026: the
+  // score, the winner of each point and the numbers only when the engine is sure). A reel that claims nothing has none.
+  const plainBefore = await p.getByTestId("reel-no-score").count();
+  const noScoreSet = await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken, noScore: "few_points" }) }).then((x) => x.status);
+  await p.goto(`${BASE}/${mcode}`);
+  await p.getByTestId("reel-no-score").waitFor({ timeout: 20000 });
+  check(
+    "a reel from the whole film with no score says why in one line under the reel, and a reel without the reason says nothing",
+    plainBefore === 0 && noScoreSet === 200 && (await p.getByTestId("reel-no-score").innerText()) === "This reel has no score: the sound did not find every point." && (await p.getByTestId("match-reel").getByTestId("reel-no-score").count()) === 1,
+    JSON.stringify({ plainBefore, noScoreSet }),
+  );
+  await p.getByTestId("reel-no-score").scrollIntoViewIfNeeded();
+  await shot(p, "v8-match-reel-no-score");
+  await fetch(`${BASE}/api/admin/match-reel`, { method: "POST", headers: CRON, body: JSON.stringify({ code: mcode, host: "https://reels.example.test", token: reelToken }) });
+  await p.goto(`${BASE}/${mcode}`);
+  await p.getByTestId("match-reel").waitFor({ timeout: 20000 });
   // Organizer tools is one list of rows, with nothing behind a "More" (the owner, 26 November 2026).
   const tools = p.getByTestId("organiser-tools");
   check(

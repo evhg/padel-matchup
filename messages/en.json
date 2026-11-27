@@ -3055,6 +3055,10 @@
     "has5": "Who won each point",
     "fastNo4": "No winner of each point",
     "againOpen": "Make a new reel",
-    "againNote": "Send the video again. This reel plays until you send it; then the new reel takes its place."
+    "againNote": "Send the video again. This reel plays until you send it; then the new reel takes its place.",
+    "noScoreFew": "This reel has no score: the sound did not find every point.",
+    "noScoreWinners": "This reel has no score: Kicksmash cannot yet tell who won each point.",
+    "noScoreResult": "This reel has no score: the match has no result on this page.",
+    "hereAutoBody": "The video is here. The reel starts by itself in a few minutes, and this page then shows how long it takes. All four players get a message when it is ready."
   }
 }

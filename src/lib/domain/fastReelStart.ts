@@ -9,6 +9,8 @@ import { signReelReport } from "@/lib/domain/matchReel";
  * What the fast reel's job needs to start, with no person (`scripts/highlights/modal/fastreel.py`, "Start"): the
  * matches in the clips, their players and pairs, the score, the camera place, and the key it reports with. Kicksmash
  * gives it in its answer to the reel host when the clips are here (`/api/reel/upload`), and the host starts the job.
+ * Since 27 November 2026 the same for a whole film ("Full reel"), marked `whole`: the job finds the stretches in the
+ * film's sound, cuts them from the camera file, and goes on as for clips (the owner's stage A: no person).
  *
  * The clips of one booking can hold more than one match of the same people: on 24 November 2026 the third set was a
  * match of its own, with other pairs (the owner: "it's two matches"). So the start names every match that shares
@@ -16,7 +18,10 @@ import { signReelReport } from "@/lib/domain/matchReel";
  * its near pair. The uploaded match is first: the team names the player chose are for it.
  */
 export type FastReelMatch = { code: string; title_a: string; title_b: string; score: string; players: { id: string; name: string; team: 1 | 2 }[] };
-export type FastReelStart = { matches: FastReelMatch[]; place: string | null; report: string };
+export type FastReelStart = { matches: FastReelMatch[]; place: string | null; report: string; whole?: true };
+
+/** The minutes the bar first shows: the job's own first estimate (`Report` in fastreel.py: 25 for clips, 30 for a film). */
+export const startMinutes = (start: Pick<FastReelStart, "whole">): number => (start.whole ? 30 : 25);
 
 const NEAR_MS = 3 * 3600 * 1000;
 const SHARED = 3;
@@ -48,8 +53,12 @@ export function fastReelMatch(code: string, seats: readonly Seat[], sets: readon
   };
 }
 
-/** Five reads on indexed keys: the match, its seats, the near matches of its players, their seats, their scores. */
-export async function fastReelStart(db: Db, code: string, keys: { priv: string; pub: string }, now: Date): Promise<FastReelStart | null> {
+/**
+ * Five reads on indexed keys: the match, its seats, the near matches of its players, their seats, their scores. Null
+ * when the uploaded match has no two pairs of two: then a person makes the reel (the note desk). `whole`: the upload is
+ * the whole film, not the phone's clips.
+ */
+export async function fastReelStart(db: Db, code: string, keys: { priv: string; pub: string }, now: Date, opts: { whole?: boolean } = {}): Promise<FastReelStart | null> {
   const [ev] = await db.select({ id: events.id, code: events.code, startsAt: events.startsAt, venueSlug: events.venueSlug }).from(events).where(eq(events.code, code)).limit(1);
   if (!ev) return null;
   const own = await seatsOf(db, [ev.id]);
@@ -98,5 +107,5 @@ export async function fastReelStart(db: Db, code: string, keys: { priv: string; 
     return made ? [made] : [];
   });
   if (matches.length === 0 || matches[0].code !== ev.code) return null;
-  return { matches, place: ev.venueSlug, report: await signReelReport(matches.map((m) => m.code), keys, now) };
+  return { matches, place: ev.venueSlug, report: await signReelReport(matches.map((m) => m.code), keys, now), ...(opts.whole ? { whole: true as const } : {}) };
 }

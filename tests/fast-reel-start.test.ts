@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { Db } from "@/db";
-import { events, matchReels } from "@/db/schema";
+import { events, matchReels, slots } from "@/db/schema";
 import { fastReelMatch, fastReelStart } from "@/lib/domain/fastReelStart";
-import { namesUpload, progressOf, readReelReport, reelStateOf, signReelReport, signUploadTicket, setReelProgress, REPORT_TTL_MS } from "@/lib/domain/matchReel";
+import { askReelUpload, matchReel, namesUpload, progressOf, setMatchReel, readReelReport, reelStateOf, signReelReport, signUploadTicket, setReelProgress, REPORT_TTL_MS } from "@/lib/domain/matchReel";
 import { recordPlayedMatch } from "@/lib/domain/playedMatch";
 import { questionOf } from "@/components/ReelNames";
 import { createTestDb, makePlayer } from "./helpers/db";
@@ -125,5 +125,71 @@ describe("the fast reel job's door", () => {
     expect(reelStateOf((await app.select().from(matchReels).where(eq(matchReels.eventId, ev.id)))[0], new Date())).toEqual({ kind: "none", failed: true });
     // A second word changes nothing, and a reel that already plays is never taken off by a failed new try.
     expect(await (await call(POST, { code: mine.code, failed: "again" })).json()).toEqual({ ok: true, failed: false });
+  });
+});
+
+describe("a whole film's arrival", () => {
+  it("answers the reel host with a start request marked whole, for clips without the mark, and with none for a match without two pairs", async () => {
+    const { POST } = await import("@/app/api/reel/upload/route");
+    process.env.PASSPORT_PRIVATE_KEY = KEYS.priv;
+    process.env.PASSPORT_PUBLIC_KEY = KEYS.pub;
+    const app = await (await import("@/db")).getDb();
+    const now = new Date();
+    const people = (tag: string) => Promise.all(["Ana", "Bo", "Cy", "Di"].map((n) => makePlayer(app, `${n} ${tag}`)));
+    const played = async (tag: string) => {
+      const [ana, bo, cy, di] = await people(tag);
+      const m = await recordPlayedMatch(app, { startsAt: new Date(now.getTime() - 3 * 3600_000), tz: "Asia/Bangkok", durationMinutes: 90, teamA: [ana.id, bo.id], teamB: [cy.id, di.id], sets: [{ sideA: 6, sideB: 3 }, { sideA: 6, sideB: 2 }], now });
+      const [ev] = await app.select().from(events).where(eq(events.code, m.code));
+      return { ev, ana };
+    };
+    const arrive = async (eventId: string, playerId: string, way: "upload" | "clips") => {
+      const { token } = await askReelUpload(app, { eventId, playerId, way, now });
+      const ticket = await signUploadTicket(token, KEYS, now);
+      const res = await POST(new Request("http://test/api/reel/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ticket, bytes: 40e9 }) }));
+      return { status: res.status, body: (await res.json()) as { changed: boolean; fastReel?: { matches: { code: string; score: string }[]; whole?: boolean; report: string } }, ticket };
+    };
+    const row = async (eventId: string) => (await app.select().from(matchReels).where(eq(matchReels.eventId, eventId)))[0];
+
+    // The whole film: a start request marked whole, the score of the match, a key for its code, and the bar at once.
+    const film = await played("whole film");
+    const got = await arrive(film.ev.id, film.ana.id, "upload");
+    expect(got.status).toBe(200);
+    expect(got.body.fastReel?.whole).toBe(true);
+    expect(got.body.fastReel?.matches[0]).toMatchObject({ code: film.ev.code, score: "6-3 6-2" });
+    expect(await readReelReport(got.body.fastReel?.report, KEYS.pub, now)).toEqual([film.ev.code]);
+    const working = await row(film.ev.id);
+    expect(working.status).toBe("working");
+    const minutes = (progressOf(working.note)!.readyBy.getTime() - Date.now()) / 60_000;
+    expect(minutes).toBeGreaterThan(28);
+    expect(minutes).toBeLessThanOrEqual(30);
+    // The reel host's second word changes nothing and starts nothing.
+    const again = await POST(new Request("http://test/api/reel/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ticket: got.ticket }) }));
+    expect(await again.json()).toEqual({ ok: true, changed: false });
+
+    // The clips of a fast reel: the same start, with no mark.
+    const clips = await played("whole clips");
+    const fast = await arrive(clips.ev.id, clips.ana.id, "clips");
+    expect(fast.body.fastReel?.matches[0].code).toBe(clips.ev.code);
+    expect(fast.body.fastReel && "whole" in fast.body.fastReel).toBe(false);
+
+    // One pair of one: no start request, so the row waits for a person (the note desk), as before.
+    const odd = await played("whole odd");
+    const [seat] = await app.select().from(slots).where(and(eq(slots.eventId, odd.ev.id), ne(slots.playerId, odd.ana.id))).limit(1);
+    await app.update(slots).set({ team: null }).where(eq(slots.id, seat.id));
+    const none = await arrive(odd.ev.id, odd.ana.id, "upload");
+    expect(none.body).toEqual({ ok: true, changed: true });
+    expect((await row(odd.ev.id)).status).toBe("received");
+
+    // The finished reel says why it has no score; the page reads the reason, and only a reason the app knows. (A first
+    // reel tells the players in `after`, which needs a request: the reel is there once before the job's posts.)
+    await setMatchReel(app, { code: film.ev.code, host: "https://reels.example.test", token: "whole_film_reel_token_22" });
+    expect((await matchReel(app, film.ev.id))?.noScore).toBeNull();
+    const { POST: report } = await import("@/app/api/reel/report/route");
+    const post = (body: unknown) => report(new Request("http://test/api/reel/report", { method: "POST", headers: { authorization: `Bearer ${got.body.fastReel?.report}`, "content-type": "application/json" }, body: JSON.stringify(body) }));
+    expect((await post({ code: film.ev.code, host: "https://reels.example.test", token: "whole_film_reel_token_22", noScore: "few_points" })).status).toBe(200);
+    expect((await matchReel(app, film.ev.id))?.noScore).toBe("few_points");
+    await post({ code: film.ev.code, host: "https://reels.example.test", token: "whole_film_reel_token_22", noScore: "<b>made up</b>" });
+    expect((await matchReel(app, film.ev.id))?.noScore).toBeNull();
+    expect((await row(film.ev.id)).note).toBeNull();
   });
 });

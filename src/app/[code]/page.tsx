@@ -342,7 +342,8 @@ async function EventPage({ params, searchParams }: Props) {
   // The reel of a filmed match (`match_reels`), for the match's own players and organiser: one read on the
   // match's unique index, only once it has started. A failed read shows no reel, never an error page.
   const reel = started && !cancelled && ev.type === "match" && canPlayAgain ? await reelState(db, ev.id, now).catch(() => null) : null;
-  // The fast reel's job starts by itself for two pairs of two (`fastReelStart`); for any other line-up a person makes it.
+  // The reel's job starts by itself for two pairs of two (`fastReelStart`), from clips or the whole film; for any other
+  // line-up, or a link to a drive, a person makes it.
   const autoReel = (["a", "b"] as const).every((team) => roster.filter((s) => s.team === team && s.playerId && isOccupied(s)).length === 2);
   // "Play again": this match's day and time a week on by default, now and 90 days on as the bounds, all as
   // the wall clock where it is played; and whether its one round already went out (one read, only for
@@ -1094,7 +1095,7 @@ async function EventPage({ params, searchParams }: Props) {
         {reel?.kind === "here" && (
           <section className="card" data-testid="reel-here">
             <h2 className="text-lg font-extrabold">{t("reel.hereTitle")}</h2>
-            <p className="mt-1 text-sm text-muted">{t(reel.source === "clips" ? (autoReel ? "reel.hereClipsAutoBody" : "reel.hereClipsBody") : "reel.hereBody")}</p>
+            <p className="mt-1 text-sm text-muted">{t(reel.source === "clips" ? (autoReel ? "reel.hereClipsAutoBody" : "reel.hereClipsBody") : reel.source === "upload" && autoReel ? "reel.hereAutoBody" : "reel.hereBody")}</p>
             {/* The job's first report turns this card into the bar: the page asks again until it comes. */}
             <AutoRefresh seconds={20} />
           </section>
