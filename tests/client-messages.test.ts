@@ -93,7 +93,7 @@ const DYNAMIC: DynamicTable = {
   },
   // The step the reel's maker reports (REEL_STEPS in src/lib/domain/matchReel.ts).
   "src/components/ReelProgress.tsx": {
-    "`step.${step}`": ["step.clips", "step.players", "step.follow", "step.replays", "step.opening", "step.music", "step.finish"],
+    "`step.${step}`": ["step.fetch", "step.clips", "step.players", "step.follow", "step.replays", "step.opening", "step.music", "step.finish"],
   },
   "src/components/ReelSend.tsx": {
     // `errorLine` in src/lib/errorLine.ts: an action's error code with a line of its own, else "generic".

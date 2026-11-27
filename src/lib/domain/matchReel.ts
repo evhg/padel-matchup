@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Db } from "@/db";
 import { events, matchReels } from "@/db/schema";
 import { newReelToken } from "@/lib/codes";
@@ -149,7 +149,7 @@ export async function matchReelByCode(db: Db, code: string, now = new Date()): P
  *   "ready"    the reel plays
  */
 /** What the maker does now, as a key the page translates (`reel.step.<key>`). */
-export const REEL_STEPS = ["clips", "players", "follow", "replays", "opening", "music", "finish"] as const;
+export const REEL_STEPS = ["fetch", "clips", "players", "follow", "replays", "opening", "music", "finish"] as const;
 export type ReelStep = (typeof REEL_STEPS)[number];
 const stepOf = (v: unknown): ReelStep | null => ((REEL_STEPS as readonly string[]).includes(String(v)) ? (String(v) as ReelStep) : null);
 /**
@@ -158,7 +158,7 @@ const stepOf = (v: unknown): ReelStep | null => ((REEL_STEPS as readonly string[
  * reel host with a ticket of that upload (`namesTicketAction`).
  */
 export type ReelProgress = { pct: number; readyBy: Date; step: ReelStep | null; names: { host: string; upload: string } | null };
-export type ReelState = { kind: "none"; failed: boolean } | { kind: "sending" } | { kind: "here"; source: string | null } | { kind: "working"; progress: ReelProgress } | { kind: "ready"; view: ReelView };
+export type ReelState = { kind: "none"; failed: boolean; /** The reel host could not open the player's link. */ linkFailed?: boolean } | { kind: "sending" } | { kind: "here"; source: string | null } | { kind: "working"; progress: ReelProgress } | { kind: "ready"; view: ReelView };
 
 /** The progress the reel's maker last reported (`setReelProgress`), from the row's note; null when there is none. */
 export function progressOf(note: string | null | undefined): ReelProgress | null {
@@ -180,11 +180,16 @@ export function reelStateOf(row: { status: string; host: string | null; reelToke
   if (!row) return { kind: "none", failed: false };
   const view = reelView(row, now);
   if (view) return { kind: "ready", view };
-  if (row.status === "asked") return { kind: "sending" };
+  // A link the reel host fetches itself is "asked" until the film is on the store, with the fetch's own bar.
+  if (row.status === "asked") {
+    const fetching = progressOf(row.note);
+    return fetching ? { kind: "working", progress: fetching } : { kind: "sending" };
+  }
   // The maker reports its progress: a bar and the minutes left, never "in work" with nothing behind it.
   const progress = row.status === "working" ? progressOf(row.note) : null;
   if (progress) return { kind: "working", progress };
   if (row.status === "received" || row.status === "working") return { kind: "here", source: row.source };
+  if (row.status === "failed" && row.note === LINK_FAILED) return { kind: "none", failed: true, linkFailed: true };
   return { kind: "none", failed: row.status === "failed" };
 }
 
@@ -293,6 +298,34 @@ export function videoLinkOf(raw: unknown): string | null {
 }
 
 /**
+ * The Google Drive file of a link, which the reel host can fetch itself when it is shared with "anyone with the link":
+ * `/file/d/<id>/...`, `open?id=<id>` and `uc?id=<id>`. Null for a folder, any other drive, or an id of a wrong shape.
+ * Pure.
+ */
+export function driveFileOf(url: string | null | undefined): string | null {
+  let u: URL;
+  try {
+    u = new URL(url ?? "");
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== "https:" || (host !== "drive.google.com" && host !== "docs.google.com")) return null;
+  const id = /^\/file\/d\/([^/]+)/.exec(u.pathname)?.[1] ?? (/^\/(open|uc)$/.test(u.pathname) ? u.searchParams.get("id") : null);
+  return id && /^[A-Za-z0-9_-]{20,100}$/.test(id) ? id : null;
+}
+
+/** The fetch of a link as the page's bar: a share done, the minutes left (the fetch's and then the job's), the step. */
+const fetchNote = (pct: number, minutesLeft: number, now: Date) => JSON.stringify({ pct: Math.round(pct), readyBy: new Date(now.getTime() + minutesLeft * 60_000).toISOString(), step: "fetch" });
+/**
+ * The minutes the bar first shows for a link: the fetch, then the job (`startMinutes`). A 4K film of a match is about 40
+ * GB, and the reel host took it from Drive at about 30 MB a second on 27 November 2026; its own reports correct this.
+ */
+export const LINK_START_MINUTES = 25 + 30;
+/** The note of a row whose link the reel host could not open, so the page says what to fix. */
+const LINK_FAILED = JSON.stringify({ failed: "link" });
+
+/**
  * What a player's upload holds: "upload" is the whole film (the full reel: the score and the numbers when the engine is
  * sure, `NO_SCORE_WHY`), and "clips" is the phone's own cut of the best points by sound (the fast reel: no score, no
  * numbers). The owner, 23 November 2026: both, the player's choice, and the full reel is the one to prefer. Since 27
@@ -310,7 +343,7 @@ async function senderOf(db: Db, eventId: string, playerId: string, now: Date, ag
   const [row] = await db.select().from(matchReels).where(eq(matchReels.eventId, ev.id)).limit(1);
   // A video that is here is not written over by a second player. A reel that plays is written over only on purpose:
   // a player of the match chose "Make a new reel" (`again`; the owner, 26 November 2026: "Erik will redo the reel").
-  if (row && (row.status === "received" || row.status === "working" || (!again && reelView(row, now)))) throw new DomainError("locked");
+  if (row && (row.status === "received" || row.status === "working" || (row.status === "asked" && progressOf(row.note)) || (!again && reelView(row, now)))) throw new DomainError("locked");
   return { ev, row };
 }
 
@@ -345,14 +378,52 @@ export async function askReelUpload(db: Db, input: { eventId: string; playerId: 
 }
 
 /** "Paste a link": the match keeps the link to the film, and the video counts as here. */
-export async function setReelLink(db: Db, input: { eventId: string; playerId: string; text: unknown; again?: boolean; now?: Date }): Promise<{ code: string }> {
+export async function setReelLink(
+  db: Db,
+  input: { eventId: string; playerId: string; text: unknown; again?: boolean; /** The reel host is on, so it can fetch a Drive file itself. */ fetch?: boolean; now?: Date },
+): Promise<{ code: string; fetch: { token: string; file: string } | null }> {
   const now = input.now ?? new Date();
   const url = videoLinkOf(input.text);
   if (!url) throw new DomainError("invalid", "link");
   const { ev } = await senderOf(db, input.eventId, input.playerId, now, input.again === true);
-  const values = { status: "received" satisfies ReelStatus, source: "link", sourceUrl: url, reelToken: newReelToken(), requestedBy: input.playerId, host: null, readyAt: null, note: null };
+  // A Drive file goes the way of an upload (the owner, 27 November 2026: "The screen just says 'The video is here'.
+  // Improve that. Remaining minutes and progress bar"): the row waits as "asked" while the reel host fetches the film to
+  // uploads/<token>, with the bar from the first minute; then `reelUploadReceived` starts the job as for an upload.
+  const file = input.fetch ? driveFileOf(url) : null;
+  const values = file
+    ? { status: "asked" satisfies ReelStatus, source: "upload", sourceUrl: url, reelToken: newReelToken(), requestedBy: input.playerId, host: null, readyAt: null, note: fetchNote(0, LINK_START_MINUTES, now) }
+    : { status: "received" satisfies ReelStatus, source: "link", sourceUrl: url, reelToken: newReelToken(), requestedBy: input.playerId, host: null, readyAt: null, note: null };
   await db.insert(matchReels).values({ eventId: ev.id, ...values }).onConflictDoUpdate({ target: matchReels.eventId, set: values });
-  return { code: ev.code };
+  return { code: ev.code, fetch: file ? { token: values.reelToken, file } : null };
+}
+
+/** A link the reel host fetches: the row of that token, while the fetch runs. */
+const fetching = (token: string) => and(eq(matchReels.reelToken, token), eq(matchReels.status, "asked"), eq(matchReels.source, "upload"), isNotNull(matchReels.sourceUrl));
+
+/**
+ * The reel host reports its fetch of a link (`fetch_link` in serve.py): a share of the film done and the minutes left in
+ * all. Null when the token is not a link in fetch (an upload, a second call after the film arrived).
+ */
+export async function setReelFetch(db: Db, token: string, input: { pct: unknown; minutesLeft: unknown; now?: Date }): Promise<{ code: string } | null> {
+  const pct = Number(input.pct);
+  const minutes = Number(input.minutesLeft);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100 || !Number.isFinite(minutes) || minutes < 0 || minutes > 24 * 60) throw new DomainError("invalid", "progress");
+  const done = await db.update(matchReels).set({ note: fetchNote(pct, minutes, input.now ?? new Date()) }).where(fetching(token)).returning({ eventId: matchReels.eventId });
+  return done.length > 0 ? codeOf(db, done[0].eventId) : null;
+}
+
+/**
+ * The link did not give the film (not shared with "anyone with the link", or not a video), or the reel host could not
+ * be asked: the row fails with the reason, and the page asks for the link again with what to fix.
+ */
+export async function reelFetchFailed(db: Db, token: string): Promise<{ code: string } | null> {
+  const done = await db.update(matchReels).set({ status: "failed" satisfies ReelStatus, note: LINK_FAILED }).where(fetching(token)).returning({ eventId: matchReels.eventId });
+  return done.length > 0 ? codeOf(db, done[0].eventId) : null;
+}
+
+async function codeOf(db: Db, eventId: string): Promise<{ code: string } | null> {
+  const [ev] = await db.select({ code: events.code }).from(events).where(eq(events.id, eventId)).limit(1);
+  return ev ? { code: ev.code } : null;
 }
 
 /**

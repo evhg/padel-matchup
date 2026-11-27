@@ -12,3 +12,10 @@ export async function tellOwnerVideoHere(code: string, source: "upload" | "clips
   const what = source === "clips" ? "The clips of a fast reel are here (the phone's own cut, no score)" : `A match video is here (${source === "upload" ? "an upload to the store" : "a link to a drive"})`;
   await sendMessage(owner, esc(`🎬 ${what}: ${baseUrl()}/${code}\n${started ? "The reel started by itself." : "The reel is not started yet."}`));
 }
+
+/** The reel host could not make or fetch what a player sent: the owner hears it once, with the match's link only. */
+export async function tellOwnerReelFailed(code: string, why: string): Promise<void> {
+  const owner = ownerTelegramId();
+  if (!owner || !telegramEnabled()) return;
+  await sendMessage(owner, esc(`⚠️ A match reel stopped (${why}): ${baseUrl()}/${code}\nThe page asks the player to send it again.`));
+}

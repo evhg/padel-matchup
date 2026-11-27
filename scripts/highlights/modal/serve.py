@@ -33,6 +33,9 @@ POST /u/<token>/choices           {"teams": [a, b], "crowd": bool, "numbers": bo
                                   also after the finish. Kept in uploads/<token>/choices.json; the reel's job reads it.
 POST /u/<token>/names             {"names": {"<track>": "<player id>"}}: the players' answer to reels/<token>/names.json
                                   (fastreel.py stops there when it is not sure who is who); the fast reel goes on.
+POST /u/<token>/link              {"file": "<Google Drive file id>"}: a player pasted a Drive link (`setReelLink`). `fetch_link`
+                                  fetches the film to uploads/<token>/video.mov, reports its share done to Kicksmash
+                                  (/api/reel/fetch) for the page's bar, and then goes on as `assemble` does.
 GET  /music/<track>               ten seconds of a reel's track, for the page's "tap to hear". No ticket.
 GET  /r/<token>/names.json        (on `web`) what fastreel.py asks, beside face-<n>.jpg; never cached.
 
@@ -47,7 +50,7 @@ name and a test key. With no key given, the host reads Kicksmash's public key fr
 """
 import modal
 
-import os
+import os, re
 
 SETTINGS = {'REELS_APP': os.environ.get('REELS_APP', 'kicksmash-reels'), 'KICKSMASH_URL': os.environ.get('KICKSMASH_URL', 'https://kicksma.sh'), 'TICKET_PUBLIC_KEY': os.environ.get('TICKET_PUBLIC_KEY', ''),
             'FASTREEL_APP': os.environ.get('FASTREEL_APP', 'kicksmash-fastreel')}
@@ -60,6 +63,8 @@ PART = 1 << 20
 PART_MAX = 64 << 20          # one part of an upload, at most
 UPLOAD_MAX = 80 << 30        # one match video, at most (a 4K film of 97 minutes is 44 GB)
 TICKET_PREFIX = 'kicksmash-reel-upload.'
+
+DRIVE_FILE = re.compile(r'[A-Za-z0-9_-]{20,100}')
 
 
 def b64url(s):
@@ -306,6 +311,20 @@ def up():
         await modal.Function.from_name(os.environ['FASTREEL_APP'], 'resume').spawn.aio(token, got)
         return {'ok': True}
 
+    @api.post('/u/{token}/link')
+    async def link(token: str, request: Request):
+        t = allowed(request, token)
+        if not t: return no
+        if done(token): return {'ok': True, 'again': True}
+        body = await request.json()
+        file = str((body or {}).get('file', '')) if isinstance(body, dict) else ''
+        if not DRIVE_FILE.fullmatch(file): return JSONResponse({'error': 'file'}, status_code=400)
+        d = f'/vol/uploads/{token}'; os.makedirs(d, exist_ok=True)
+        with open(f'{d}/link.json', 'w') as f: json.dump({'file': file, 'ticket': t['ticket'], 'max': t['max'], 'at': time.time()}, f)
+        await vol.commit.aio()
+        await fetch_link.spawn.aio(token)
+        return {'ok': True}
+
     @api.post('/u/{token}/finish')
     async def finish(token: str, request: Request):
         t = allowed(request, token)
@@ -343,14 +362,25 @@ def assemble(token: str):
     ticket = meta.pop('ticket', None)
     with open(f'{d}/meta.json', 'w') as f: json.dump({**meta, 'joined': True}, f)   # the ticket's work is done: it is not kept
     vol.commit()
+    return tell_and_start(token, ticket, meta['bytes'])
+
+
+def tell(path, body, timeout=30):
+    """POST JSON to Kicksmash; the answer's status and JSON (or None)."""
+    import json, urllib.request
+    req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + path, data=json.dumps(body).encode(), headers={'content-type': 'application/json'}, method='POST')
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        try: return r.status, json.load(r)
+        except ValueError: return r.status, None
+
+
+def tell_and_start(token, ticket, size):
+    """The film is uploads/<token>/video.<ext>: tell Kicksmash, and start the reel's job from its answer."""
     told, start = None, None
     if ticket:
-        req = urllib.request.Request(os.environ['KICKSMASH_URL'].rstrip('/') + '/api/reel/upload', data=json.dumps({'ticket': ticket, 'bytes': meta['bytes']}).encode(), headers={'content-type': 'application/json'}, method='POST')
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                told = r.status
-                try: start = (json.load(r) or {}).get('fastReel')
-                except ValueError: start = None
+            told, answer = tell('/api/reel/upload', {'ticket': ticket, 'bytes': size})
+            start = (answer or {}).get('fastReel')
         except Exception as e: told = f'failed: {e}'
     # Kicksmash answers with the job's start request (fastreel.py: the matches, the players, the music), for the clips of
     # a fast reel and for a whole film ("whole": true, `fastReelStart`). The reel is made at once, with no person. With
@@ -359,8 +389,61 @@ def assemble(token: str):
     if started:
         modal.Function.from_name(os.environ['FASTREEL_APP'], 'make').spawn({**start, 'upload': token, 'dry': False, 'whole': start.get('whole') is True})
     what = ('; reel started' + (' from the whole film' if start.get('whole') is True else ' from the clips')) if started else ''
-    print('joined', meta['bytes'], 'bytes; Kicksmash answered', told, what)
-    return {'bytes': meta['bytes'], 'told': told, 'fast_reel': started, 'whole': started and start.get('whole') is True}
+    print('joined', size, 'bytes; Kicksmash answered', told, what)
+    return {'bytes': size, 'told': told, 'fast_reel': started, 'whole': started and start.get('whole') is True}
+
+
+@app.function(image=image, volumes={'/vol': vol}, secrets=[settings], cpu=1, memory=1024, timeout=4 * 3600, max_containers=3)
+def fetch_link(token: str):
+    """Fetch a player's Drive file (uploads/<token>/link.json) to uploads/<token>/video.mov, report the share done for the
+    page's bar every half minute, and then go on as `assemble` does. A link that gives no film (not shared with "anyone
+    with the link": Drive answers with a page) is reported as failed, and the page asks for it again."""
+    import json, time, urllib.request
+    vol.reload()
+    d = f'/vol/uploads/{token}'; ln = json.load(open(f'{d}/link.json')); ticket = ln['ticket']
+    out = f'{d}/video.mov'; tmp = out + '.tmp'       # "video." already: a second POST of the link is "done"
+    url = f"https://drive.usercontent.google.com/download?id={ln['file']}&export=download&confirm=t"
+
+    def report(**body):
+        try: tell('/api/reel/fetch', {'ticket': ticket, **body}, timeout=15)
+        except Exception as e: print('report failed:', e, flush=True)
+
+    total, got, t0, last, why = None, 0, time.time(), 0.0, None
+    with open(tmp, 'wb') as w:
+        for k in range(6):                            # go on where it stopped, when the line breaks
+            try:
+                req = urllib.request.Request(url, headers={'Range': f'bytes={got}-', 'User-Agent': 'kicksmash-reels'} if got else {'User-Agent': 'kicksmash-reels'})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    if got and r.status != 206: w.seek(0); w.truncate(); got = 0
+                    if 'text/html' in (r.headers.get('content-type') or ''): why = 'a page, not a film'; break
+                    n = r.headers.get('content-length')
+                    if n and total is None: total = int(n) + got
+                    while True:
+                        chunk = r.read(8 << 20)
+                        if not chunk: break
+                        w.write(chunk); got += len(chunk)
+                        if got > ln['max']: why = 'larger than the ticket allows'; break
+                        if time.time() - last > 30:
+                            last = time.time(); rate = got / max(last - t0, 1)
+                            pct = min(99, got * 100 / total) if total else 0
+                            report(pct=round(pct), minutesLeft=round((total - got) / rate / 60, 1) if total else 10)
+                if why or not total or got >= total: break
+            except Exception as e:
+                print('fetch stopped:', str(e)[-200:], 'try', k + 1, flush=True); time.sleep(15)
+    head = open(tmp, 'rb').read(600) if got else b''
+    if not why and (got < 5_000_000 or b'<html' in head.lower() or (total and got < total)): why = f'{got} bytes of {total}'
+    if why:
+        print('no film:', why, flush=True)
+        for f in (tmp, f'{d}/link.json'):
+            try: os.remove(f)
+            except OSError: pass
+        vol.commit(); report(failed=True)
+        return {'ok': False, 'why': why}
+    os.replace(tmp, out); os.remove(f'{d}/link.json')     # the ticket's work is done: it is not kept
+    with open(f'{d}/meta.json', 'w') as f: json.dump({'bytes': got, 'ext': 'mov', 'link': True, 'joined': True, 'fetch_s': round(time.time() - t0)}, f)
+    vol.commit()
+    print('fetched', got, 'bytes in', round(time.time() - t0), 's', flush=True)
+    return tell_and_start(token, ticket, got)
 
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=0.25, memory=256, timeout=900, schedule=modal.Cron('17 20 * * *'))

@@ -49,6 +49,7 @@ export function ReelSend({
   started,
   canUpload,
   failed,
+  linkFailed = false,
   teams,
   musicBase,
   auto,
@@ -58,6 +59,7 @@ export function ReelSend({
   /** Somebody began an upload that is not finished. */ started: boolean;
   canUpload: boolean;
   failed: boolean;
+  /** The last try was a link the reel host could not open. */ linkFailed?: boolean;
   /** The two pairs as the page names them: the reel's team names until the player changes them. */ teams: [string, string];
   /** The reel host, for ten seconds of each track. */ musicBase: string | null;
   /** The reel's job starts by itself for this match (two pairs of two), from the clips or the whole film. */ auto: boolean;
@@ -269,7 +271,7 @@ export function ReelSend({
   return (
     <section className="card" data-testid="reel-send">
       <h2 className="text-lg font-extrabold">{t("sendTitle")}</h2>
-      <p className="mt-1 text-sm text-muted">{failed ? t("failedLine") : started && phase.at === "idle" ? t("startedLine") : t(canUpload ? "chooseWay" : "sendBody")}</p>
+      <p className="mt-1 text-sm text-muted">{failed ? t(linkFailed ? "failedLinkLine" : "failedLine") : started && phase.at === "idle" ? t("startedLine") : t(canUpload ? "chooseWay" : "sendBody")}</p>
       {busy && (
         <div className="mt-3" data-testid="reel-progress">
           <div className="h-3 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>

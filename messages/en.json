@@ -3030,7 +3030,7 @@
     "workingLeft": "About {min} min left",
     "workingAlmost": "Almost ready",
     "workingBody": "All four players see it on this page when it is ready.",
-    "step": { "clips": "Cleaning the clips", "players": "Finding the four players", "follow": "Following the players", "replays": "Making the slow replays", "opening": "Making the opening", "music": "Adding the music", "finish": "Finishing the files" },
+    "step": { "fetch": "Bringing the film from your drive", "clips": "Cleaning the clips", "players": "Finding the four players", "follow": "Following the players", "replays": "Making the slow replays", "opening": "Making the opening", "music": "Adding the music", "finish": "Finishing the files" },
     "saveGetting": "Getting the video…",
     "saveGettingPct": "Getting the video… {pct}%",
     "saveNow": "Save video",
@@ -3084,6 +3084,7 @@
     "againOpen": "Make a new reel",
     "againNote": "Send the video again. This reel plays until you send it; then the new reel takes its place.",
     "hereAutoBody": "The video is here. The reel starts by itself in a few minutes, and this page then shows how long it takes. All four players get a message when it is ready.",
-    "fullByHand": "Ready in about 30 minutes, with no person. The score, the winner of each point and the numbers show only when Kicksmash is sure of them."
+    "fullByHand": "Ready in about 30 minutes, with no person. The score, the winner of each point and the numbers show only when Kicksmash is sure of them.",
+    "failedLinkLine": "Kicksmash could not get the video from this link. In Google Drive, share it with “Anyone with the link”. If it is shared already, Drive stops downloads of a large video for a day: choose the video here instead."
   }
 }
