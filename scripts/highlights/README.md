@@ -840,6 +840,10 @@ the lines". Look at `court-find.jpg` (red: the floor lines, yellow: the net's ba
     10%. `speed.py` keeps a flight only for a far hitter, a fit error of 0.10 or less and the ball seen in 92% of its
     pictures: 6 of 78 flights on match2, every checked one within 10% (the fastest 54 km/h, reader 50). It drops
     every near smash, so it gives a true speed, not the fastest shot.
+  - *Closed* (27 November 2026). The detector of single points by code (the signals above: 61% to 67% on 51
+    held-out points, against 67% for the set-winner guess) does not beat the guess. The engine with `honest.py` gains
+    sure games (16 to 23 of 30) and winner lines (7 to 12), with no wrong line. The reel job keeps its votes and keeps
+    "no fastest shot". The running score of a full reel now comes from AI readers of each point's frames.
 - **A recogniser writes the nearest common sentence, not the padel word** (21 November 2026). A player shouted
   "Golden" before the last point, and a person who watched the reel heard it. Five recognisers did not (Scribe,
   Whisper turbo, Whisper large-v3, Parakeet, and Voxtral, a model that answers questions about a sound), on three
