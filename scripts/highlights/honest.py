@@ -14,7 +14,7 @@ least (README, "The same reel from the whole film"). So, in this order:
 
 When one of them holds, `strip` takes out of points.json what would claim a score: the card of numbers ("card"), the
 score box ("score_box") and the winner of each point ("won"). reel.json keeps the code, and the match page says it in
-one line (`NO_SCORE_LINE` in src/lib/domain/matchReel.ts). Pure, the standard library only.
+a row of the fold under the reel ("What this reel could not do", missing.py). Pure, the standard library only.
 
 The verdict has tiers (`tiers`), because the engine is sure of more than the point score (README, "The score is
 counted backwards from what is sure"): a new server is a new game, and the typed set scores say how many games each

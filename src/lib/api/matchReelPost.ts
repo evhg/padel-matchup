@@ -31,8 +31,9 @@ export async function postMatchReel(body: Record<string, unknown> | null): Promi
       revalidatePath(`/${code}`);
       return NextResponse.json({ ok: true, working: true });
     }
-    // `noScore`: a reel from the whole film with no score says why, and the match page says it in one line.
-    const res = await setMatchReel(db, { code, host: body?.host, token: body?.token, noScore: body?.noScore });
+    // `noScore`: why a reel from the whole film has no score. `missing`: what the reel could not do, as codes; the match
+    // page shows a row for each under the reel ("What this reel could not do").
+    const res = await setMatchReel(db, { code, host: body?.host, token: body?.token, noScore: body?.noScore, missing: body?.missing });
     revalidatePath(`/${code}`);
     if (res.first)
       after(async () => {

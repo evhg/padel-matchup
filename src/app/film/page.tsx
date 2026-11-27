@@ -19,7 +19,18 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title, description, alternates: localeAlternates("/film", locale), openGraph: { title, description, type: "article", url: `${baseUrl()}/film` } };
 }
 
-const STEPS = ["s1", "s2", "s3", "s4"] as const;
+/**
+ * The four steps. A step's words are the tips the match page gives under a reel that lacks something (`reelMissing`,
+ * `MISSING_COPY` in src/lib/domain/matchReel.ts), so the two pages never say two things; `own` is the step's own
+ * words after them (the camera's settings, the battery).
+ */
+type Tip = "winnersTip" | "levelTip" | "frameTip" | "pointsTip" | "namesTip";
+const STEPS = [
+  { id: "s1", tips: ["winnersTip", "levelTip"], own: null },
+  { id: "s2", tips: [], own: "s2Body" },
+  { id: "s3", tips: ["frameTip"], own: "s3Body" },
+  { id: "s4", tips: ["pointsTip", "namesTip"], own: null },
+] as const satisfies readonly { id: string; tips: readonly Tip[]; own: "s2Body" | "s3Body" | null }[];
 
 /**
  * How to film a padel match with one phone: four instructions, short enough to read at the court (the
@@ -28,6 +39,8 @@ const STEPS = ["s1", "s2", "s3", "s4"] as const;
  */
 export default async function FilmPage({ searchParams }: { searchParams: Promise<{ m?: string | string[] }> }) {
   const t = await getTranslations("film");
+  const tm = await getTranslations("reelMissing");
+  const bodyOf = (s: (typeof STEPS)[number]) => [...s.tips.map((k: Tip) => tm(k)), ...(s.own ? [t(s.own)] : [])].join(" ");
   const m = (await searchParams).m;
   const code = typeof m === "string" && isValidShareCode(m) ? m : null;
   const jsonLd = {
@@ -35,7 +48,7 @@ export default async function FilmPage({ searchParams }: { searchParams: Promise
     "@type": "HowTo",
     name: t("metaTitle"),
     description: t("metaDescription"),
-    step: STEPS.map((s) => ({ "@type": "HowToStep", name: t(`${s}Title`), text: t(`${s}Body`) })),
+    step: STEPS.map((s) => ({ "@type": "HowToStep", name: t(`${s.id}Title`), text: bodyOf(s) })),
   };
   return (
     <>
@@ -55,11 +68,11 @@ export default async function FilmPage({ searchParams }: { searchParams: Promise
           </figure>
           <ol className="mt-5 flex flex-col gap-4" data-testid="film-steps">
             {STEPS.map((s, i) => (
-              <li key={s} className="flex gap-3">
+              <li key={s.id} className="flex gap-3">
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-night text-sm font-extrabold text-accent">{i + 1}</span>
                 <div>
-                  <h2 className="font-extrabold leading-snug">{t(`${s}Title`)}</h2>
-                  <p className="mt-0.5 text-sm text-muted">{t(`${s}Body`)}</p>
+                  <h2 className="font-extrabold leading-snug">{t(`${s.id}Title`)}</h2>
+                  <p className="mt-0.5 text-sm text-muted">{bodyOf(s)}</p>
                 </div>
               </li>
             ))}
@@ -68,6 +81,7 @@ export default async function FilmPage({ searchParams }: { searchParams: Promise
         <section className="card">
           <h2 className="text-lg font-extrabold">{t("afterTitle")}</h2>
           <p className="mt-1 text-sm text-muted">{t("afterBody")}</p>
+          <p className="mt-1 text-sm text-muted">{tm("resultTip")}</p>
           {/* Said only while the button is there (TikTok's reviewers read the page that explains reels): for every match,
               or, while TIKTOK_SHARE lists codes, for a player who came from one of them (`?m=`). */}
           {tiktokShareOn(code) &&<p className="mt-1 text-sm text-muted" data-testid="film-tiktok">{t("afterTikTok")}</p>}

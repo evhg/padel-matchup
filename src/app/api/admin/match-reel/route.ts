@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
  * The reel of a filmed match is on the store: show it on the match page. Bearer CRON_SECRET.
  *
  *   POST   /api/admin/match-reel   { "code": "AB12", "host": "https://<the reel host>", "token": "<the reel's token>" }
+ *          Optional: "noScore" (NO_SCORE_WHY) and "missing": ["few_points", ...] (MISSING_CODES), what the reel
+ *          could not do; the match page shows a row for each code under the reel.
  *   POST   /api/admin/match-reel   { "code": "AB12", "progress": { "pct": 40, "minutesLeft": 12, "step": "follow" } }
  *          step is one of clips, players, follow, replays, opening, music, finish (REEL_STEPS).
  *          The reel's maker reports its progress: the page shows a bar and the minutes left, and a reel

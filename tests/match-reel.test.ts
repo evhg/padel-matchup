@@ -64,10 +64,15 @@ describe("the address of a reel", () => {
       poster: `${HOST}/r/${TOKEN}/poster.jpg`,
       keptUntil: new Date(NOW.getTime() + 30 * DAY),
       noScore: null,
+      missing: [],
     });
-    // A reel from the whole film with no score keeps why in its note, and the page reads only a reason it knows.
-    expect(reelView({ ...row, note: JSON.stringify({ noScore: "no_winners" }) }, NOW)?.noScore).toBe("no_winners");
-    for (const note of [JSON.stringify({ noScore: "anything" }), JSON.stringify({ pct: 40, readyBy: NOW.toISOString() }), "not json", "null", null]) expect(reelView({ ...row, note }, NOW)?.noScore, String(note)).toBeNull();
+    // A reel from the whole film with no score keeps why in its note, and the page reads only a reason it knows. A
+    // reel made before the list of what it lacks has that reason as its one row.
+    expect(reelView({ ...row, note: JSON.stringify({ noScore: "no_winners" }) }, NOW)).toMatchObject({ noScore: "no_winners", missing: ["no_winners"] });
+    for (const note of [JSON.stringify({ noScore: "anything" }), JSON.stringify({ pct: 40, readyBy: NOW.toISOString() }), "not json", "null", null]) expect(reelView({ ...row, note }, NOW), String(note)).toMatchObject({ noScore: null, missing: [] });
+    // What the reel could not do: the known codes, each once, in the order of the list, whatever order the job sent.
+    const note = JSON.stringify({ noScore: "few_points", missing: ["no_heart_rate", "few_points", "<b>x</b>", "no_speed", "no_heart_rate", 7] });
+    expect(reelView({ ...row, note }, NOW)?.missing).toEqual(["few_points", "no_speed", "no_heart_rate"]);
     expect(reelView(row, new Date(NOW.getTime() + 30 * DAY - 1))).not.toBeNull();
     expect(reelView(row, new Date(NOW.getTime() + 30 * DAY))).toBeNull();
     expect(reelView({ ...row, status: "working" }, NOW)).toBeNull();
