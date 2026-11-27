@@ -299,6 +299,32 @@ What the first one showed (the match of 24 November, 132 candidates between the 
   clip shows about 16 s of empty court, and a replay was chosen in that break. `closeup.py` now keeps such a replay
   out (see "A close look is drawn only when its player is in it"), but the clip still starts too early.
 
+## Every clip is a point, and it opens on the serve (`fast_points.py`, 27 November 2026)
+
+The whole film of 27 November had three faults that the sound alone could not see:
+
+- **A break as a "Long rally".** The far half was empty, and two players walked back and talked; the sound heard
+  19 "hits". The check of the near pair let it through, because the pair walked into the picture.
+- **A far serve cut off.** The far pair served while the near pair waited at the back glass, under the phone and out
+  of the picture. The clip waited for a near player and began 2.7 s after the serve. A fast reel of the same match
+  had the same fault (2.5 s).
+- **A 40 s rally with all four players left out.** The tracker had named the near pair wrongly and held one player.
+
+The tracker keeps a far player only when it is sure of the name, so it cannot say that a half is empty. The detector's
+boxes of `match/kf` (3 a second) with `court.zone` can (`court_counts`). Measured on both films:
+
+| | a player in each half | ball flights in 10 s | three whole players on court |
+| --- | --- | --- | --- |
+| the six points of the whole film | 87 to 100% | 8.2 to 21.6 | 70 to 100% |
+| the break | 44% | 3.0 | |
+| the fast reel's clip with the near pair cut off at the edges (25 November) | 91% | | 23% |
+
+So a clip is a point with a player in each half for 70% of the rally and 5 flights in 10 s or more
+(`not_a_point`). A near player whose box touches the left, right or bottom edge plays, but is not in the picture: the
+"keep" rule for a clip that the tracker holds too little counts whole players only (80%). The clip opens 1.5 s before
+the serve, and not before two players are on the court or the near pair is held (`first_on_court`). Tests:
+`test_fast_points.py` (15 checks).
+
 ## The court finder (`court_find.py`, 27 November 2026)
 
 A player puts the phone behind the back glass by hand, so its height, place and angle change every match. The court
