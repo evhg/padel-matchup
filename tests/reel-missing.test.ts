@@ -15,9 +15,10 @@ const py = (code: string) => execFileSync("python3", ["-I", "-c", `import sys, j
 
 describe("what a reel could not do", () => {
   it("has the same codes, in the same order, on the reel host and in the app", () => {
-    const job = JSON.parse(py("print(json.dumps({'codes': missing.CODES, 'reserved': missing.RESERVED}))")) as { codes: string[]; reserved: string[] };
+    const job = JSON.parse(py("print(json.dumps({'codes': missing.CODES, 'court': [missing.missing_of(False, court={'source': 'place', 'reason': r}) for r in ('fit_poor', 'moved')]}))")) as { codes: string[]; court: string[][] };
     expect(job.codes).toEqual([...MISSING_CODES]);
-    expect(job.reserved).toEqual(["court_not_found", "phone_moved"]);
+    // the court finder's two codes are sent, since the job takes a court the finder was not sure of (fastreel.py court_of)
+    expect(job.court).toEqual([["fast_by_design", "court_not_found", "no_heart_rate"], ["fast_by_design", "phone_moved", "no_heart_rate"]]);
     for (const why of NO_SCORE_WHY) expect(job.codes, why).toContain(why);
   });
 

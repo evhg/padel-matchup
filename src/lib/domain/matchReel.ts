@@ -60,7 +60,8 @@ export const noScoreWhyOf = (raw: unknown): NoScoreWhy | null => ((NO_SCORE_WHY 
  * what the reel could not do, why, and what the player can do differently when they film the next match). The reel's
  * job sends the codes with the finished reel (`missing`, `scripts/highlights/missing.py`, the same list in the same
  * order); the page shows one row for each: the thing, the reason and one tip, all in `reelMissing` in messages/.
- * `court_not_found` and `phone_moved` wait for the court finder that is being built: the job sends neither yet.
+ * `court_not_found` and `phone_moved`: the court finder (`court_find.py`) was not sure of this film's lines, so the job
+ * took the court of the camera place, which may not fit (`phone_moved` when the picture moved during the film).
  * The music and the crowd are the player's choices, so they are never a thing missing.
  */
 export const MISSING_CODES = ["fast_by_design", "no_score", "few_points", "no_winners", "no_speed", "court_not_found", "phone_moved", "players_out_of_frame", "far_names_unsure", "no_heart_rate"] as const;

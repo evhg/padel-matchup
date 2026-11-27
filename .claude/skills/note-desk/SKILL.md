@@ -87,10 +87,11 @@ When the desk wakes for a video:
    `received`. Put the line-up right with the players, or make the reel by hand: `fullclips.py` with stretches
    you chose from a sheet of frames, then `fastreel.py --request … --dry` (README, "The same reel from the whole
    film").
-2. **A step failed:** the row is `failed` and the reason is in the wake. The usual cause is a camera place with no
-   court lines (`courts/<venue slug>.json` on the volume): draw them once (`court.py`, README "court lines"). Then
-   start the job again with the request in `work/fastreel/<upload>/request.json`. Each step skips what is already
-   on the store.
+2. **A step failed:** the row is `failed` and the reason is in the wake. A usual cause: the court finder was not
+   sure of the film's lines, and the store has no court of the place. Look at `match/court-find.jpg` and
+   `court-find.json` in the work folder. Draw the lines on this film (`court.py`, README "court lines") and put them
+   in the request as `"court"`. Then start the job again with the request in `work/fastreel/<upload>/request.json`.
+   Each step skips what is already on the store.
 
 Look at a sheet of frames before you call a reel done. Then tell the players on their notes, if they wrote one.
 
