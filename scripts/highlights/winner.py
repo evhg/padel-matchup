@@ -28,6 +28,8 @@ import numpy as np
 
 NET_Y = 10.0                 # the net, in metres from the near back wall (court_map.py)
 VOTES = ('bounce', 'hitter', 'crossed', 'away', 'partners', 'voice')
+# VOTES=<a,b,...> fits and measures other votes too, e.g. those that react.py adds (the 8 s after the point)
+VOTES = tuple(v for v in os.environ.get('VOTES', ','.join(VOTES)).split(',') if v)
 
 
 def half(y):
