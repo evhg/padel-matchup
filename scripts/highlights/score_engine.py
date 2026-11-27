@@ -17,6 +17,11 @@ stand at an even or an odd place of its game. Two serves in a row from one side 
 the reader did not see, and the unseen point goes there. A side that does not fit costs SIDE.
 SIDES=<points files, with commas>: rows that only lend their "side" to a point of the log that has none (a person
 who corrects the winners does not write the sides again).
+
+Each row has "game_margin": how much more (log units) the cheapest count costs that gives its game to the other
+pair (null: no count does). A weak reader still fits the typed score, and the margin says which games rest on it:
+on match2 the readers' games of set 3 had 1.5 to 7.8 and were all right; with winner.py as the reader, the two wrong
+games had 0.16 and 0.5 (README, "Who won the point, with no person"). honest.py shows a game only from log(19) up.
 """
 import sys, os, json, math, itertools
 
@@ -107,15 +112,17 @@ def best_game(points):
     return res
 
 
-def solve_set(games, want):
-    """games: lists of points. want: (games of pair 0, games of pair 1). -> the winner of each game, the total cost."""
-    opts = [best_game(g) for g in games]; n = len(games); setw = 0 if want[0] > want[1] else 1
+def solve_set(games, want, opts=None, force=None):
+    """games: lists of points. want: (games of pair 0, games of pair 1). -> the winner of each game, the total cost.
+    force: (index of a game, its winner), for the cheapest count in which that game goes the other way."""
+    opts = opts or [best_game(g) for g in games]; n = len(games); setw = 0 if want[0] > want[1] else 1
     INF = 1e9; dp = {(0, 0): (0.0, [])}
     for gi in range(n):
         nd = {}
         for (a, b), (c, path) in dp.items():
             for w in (0, 1):
                 if w not in opts[gi]: continue
+                if force and force[0] == gi and w != force[1]: continue
                 if gi == n - 1 and w != setw: continue
                 na, nb = a + (w == 0), b + (w == 1)
                 if na > want[0] or nb > want[1]: continue
@@ -142,17 +149,22 @@ for si, wnt in enumerate(want):
     sol, opts = solve_set(sg, wnt)
     if sol is None: print(f"  set {si + 1}: no way to count it as {wnt[0]}-{wnt[1]}"); ok = False; continue
     cost, winners = sol; gm = [0, 0]; changed = unseen = 0
-    for g, o, w in zip(sg, opts, winners):
+    # how sure each game's winner is: the extra cost (log units) of the cheapest count that gives it to the other pair.
+    # A weak reader still fits the typed score; the margin says which games the fit rests on (honest.py, GAME_SURE).
+    margins = []
+    for k_, w_ in enumerate(winners):
+        alt, _ = solve_set(sg, wnt, opts, (k_, 1 - w_)); margins.append(round(alt[0] - cost, 2) if alt else None)
+    for g, o, w, margin in zip(sg, opts, winners, margins):
         c, ws, mode, miss = o[w]; a = b = 0; k = 0
         for j, x in enumerate(ws):
             real = None if miss == j else g[k]
             before = {'serving': g[0]['st'], 'sets': list(sets), 'games': list(gm), 'p': [a, b]}
             if x == 0: a += 1
             else: b += 1
-            if real is None: unseen += 1; rows.append({'serve_t': None, 'unseen': True, 'set': si + 1, 'server': g[0].get('server'), 'won': x, 'before': before})
+            if real is None: unseen += 1; rows.append({'serve_t': None, 'unseen': True, 'set': si + 1, 'server': g[0].get('server'), 'won': x, 'game_margin': margin, 'before': before})
             else:
                 if real['w'] is not None and real['w'] != x: changed += 1
-                rows.append({'serve_t': real['serve_t'], 'dead_t': real.get('dead_t'), 'set': si + 1, 'server': real.get('server'), 'won': x, 'read': real['w'], 'confidence': real.get('confidence'), 'rule': mode, 'side': real.get('side'), 'side_fits': real.get('side') not in ('R', 'L') or real['side'] == 'RL'[j % 2], 'before': before}); k += 1
+                rows.append({'serve_t': real['serve_t'], 'dead_t': real.get('dead_t'), 'set': si + 1, 'server': real.get('server'), 'won': x, 'read': real['w'], 'confidence': real.get('confidence'), 'rule': mode, 'side': real.get('side'), 'side_fits': real.get('side') not in ('R', 'L') or real['side'] == 'RL'[j % 2], 'game_margin': margin, 'before': before}); k += 1
         gm[w] += 1
     sets[0 if wnt[0] > wnt[1] else 1] += 1
     print(f"  set {si + 1}: counted as {gm[0]}-{gm[1]}; {changed} winners changed against the reader, {unseen} unseen points added")

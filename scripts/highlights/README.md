@@ -42,6 +42,10 @@ a frame or a `match.json`.
 engine: the most probable score history for weak guesses of who won each point, and a simulation of how much
 the rules repair. `score_log.py` turns a log of every point into the score before and after each point and
 checks it against the rules and the final score; `scorebox.py` draws that score on a finished reel.
+`stats.py` gives the numbers of a count (games in a row, breaks, games at 40-40, points won on serve) and the winners
+that the count forces; `honest.py` says, tier by tier, what a reel may claim (sets, games, a point score, a winner
+line). `winner.py` guesses the winner of each point with no person. `python3 test_stats.py` and
+`python3 test_winner.py` are their checks (plain asserts; the gate does not run Python).
 `reel_points.py` builds a reel from points that are already described (serve, dead moment, winner, reaction,
 replay, heard words, a measured number over a head); `review.py` makes a line-call review; `cheers.py` adds the
 sound of an audience.
@@ -634,6 +638,47 @@ What the first one showed (the match of 24 November, 132 candidates between the 
   ask for one, and `score_rows.py` keeps it in the count. A game with a serve from the wrong side for its place
   gets no point score. The winners did not show these faults: the sets, the games and the last point of each
   game all agreed before.
+- **Who won the point, with no person: six signals give 61%, and 95% is far away** (`winner.py`, 27 November
+  2026). The owner wants the score, the winner of each point and the numbers in the full reel with no person. The
+  question was whether a detector can reach 90% to 95% (`score_decode.py simulate2`: 95% gives a correct score on
+  screen nine times in ten). Measured on match2, local files only:
+  - *The split.* Fitted on sets 1 and 2 (102 points; the labels are engine8's winners, which came from the frame
+    readers and the count, so about eight in ten are right). Measured once on held-out points: all 43 points of set 3
+    (a player's answers, `points-S3-owner.json`) and the 8 points of set 4 that a player confirmed (confidence 1.0
+    in engine8). The direction of each reaction vote and the recorder of the near half were chosen on sets 1 and 2.
+  - *Each signal on the 51 held-out points* (right of the points where it votes): the last bounce in the 1.5 s
+    before the dead ball, "that half lost", 15 of 24 (62%); the last hitter lost, 26 of 47 (55%); the last hit
+    stayed in its half or crossed, 22 of 38 (58%); the pair that walks further from the net in the 5 s after the
+    point won (`ident.json`, one picture a second), 29 of 44 (66%); the partners who come closer won, 23 of 39
+    (59%); the recorder of a half heard more words and sounds in the 2 s after the point (Scribe), 13 of 17 (76%).
+    On sets 1 and 2 the bounce had 32 of 40 (80%); why it fell on the held-out sets is not known yet.
+  - *Combined* (a logistic sum, fitted on sets 1 and 2; cross-validated there set against set, 70%): 31 of 51 (61%).
+    Saying "the winner of the set won every point" gives 34 of 51 (67%) on these sets, so the detector alone is
+    worse than a guess from the set score. No point reaches a chance of 0.95; 48 of 181 reach 0.8.
+  - *The count* (the next serve's server and side) gives no winner of a point by itself. It forces the last point
+    of each game and every point of a game of four: 15 of the 51 held-out points, all right when the games are right.
+  - *The engine with the detector as its reader:* set 3 has 27 of 43 points right (63%; the readers gave 34) and 5 of
+    7 games (the readers gave 7 of 7); set 4 (0-6) has all 7 matched sure points and all 6 games, because a 6-0 set
+    forces every game. `score_rows.py` gives a point score at 18 held-out moments, and 3 of them are right.
+  - *A game is sure only by its margin.* The typed set score says how many games each pair won, not which: in a 6-1
+    set any of the first six games can be the one game of the loser. `score_engine.py` now writes `game_margin`: the
+    extra cost of the cheapest count that gives the game to the other pair. The two wrong games of set 3 had 0.16
+    and 0.5; the readers' right games 1.5 and more. `honest.py` shows the games only when every game has log(19) or
+    more, a point score and a forced winner only inside a sure game. With the detector: 16 of 30 games are sure, so
+    the box shows the sets only; 7 winner lines on held-out points, 7 right; 9 point scores, 7 right. With the
+    readers: 27 of 30 games, 9 winner lines (9 right), 15 point scores (15 right).
+  - *What would raise it, in the order of the gain we expect.* (1) The files of a point end 1.5 s after the dead ball:
+    the reaction is cut off. Keep 6 to 8 s after it, with poses of both ends at 10 pictures a second. (2) The ball
+    at the far end and the kind of the end (net, out, glass, second bounce): most errors of the frame readers were
+    balls out or into a glass. (3) The words of the recorders, not their number ("yes", "sorry", "out"), with the
+    list of words that a call is mistaken for. (4) A person for the points that the count does not force and the
+    detector is not sure of: today that is most of a match (133 of 181 points are below a chance of 0.8). Without
+    (4), a full reel can show the sets, the sure games and the forced winners, and nothing else.
+  To repeat: `flight.py <allball> <allwalk> flight.json`; `winner.py feats engine8.json flight.json <allwalk>
+  ident.json feats.json` (with `SCRIBE` and `PHONE`); `winner.py fit feats.json engine8.json 1,2 weights.json`;
+  `winner.py measure feats.json weights.json <truth>`; `winner.py points ... points-det.json`; then
+  `score_engine.py` and `score_rows.py` on it. Weights on match2: bounce 1.07, voice 0.61, partners 0.47, away 0.46,
+  crossed 0.05, hitter -0.04. The serve and the dead moment of each point still come from the readers' files.
 - **A recogniser writes the nearest common sentence, not the padel word** (21 November 2026). A player shouted
   "Golden" before the last point, and a person who watched the reel heard it. Five recognisers did not (Scribe,
   Whisper turbo, Whisper large-v3, Parakeet, and Voxtral, a model that answers questions about a sound), on three
