@@ -371,7 +371,8 @@ def main():
         end = round(min(b - 0.05, dead + 5.0), 2)
         p = {'id': f'c{n}', 'match': f'{M}/match-{c["match"]}.json', 'start_t': start, 'serve_t': round(serve, 2), 'last_t': round(last, 2), 'dead_t': dead,
              'end': end, 'next_serve_t': round(b + 1.05, 2), 'track': trf, 'title': rally_title([h[0] for h in r]),
-             'sub': (f"Match {WORDS[c['match'] - 1] if c['match'] <= len(WORDS) else c['match']}" if multi else f'Point {n + 1}'), 'hits': [h[0] for h in r]}
+             'sub': (f"Match {WORDS[c['match'] - 1] if c['match'] <= len(WORDS) else c['match']}" if multi else f'Point {n + 1}'), 'hits': [h[0] for h in r],
+             'names_sure': c.get('names_sure', True)}
         pts.append(p)
         if os.path.exists(trf):
             tr = json.load(open(trf))

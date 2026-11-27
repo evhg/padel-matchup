@@ -250,8 +250,15 @@ def main():
         ta = ' & '.join(players[j]['name'] for j in range(NP) if tm.get(j) == 0); tb = ' & '.join(players[j]['name'] for j in range(NP) if tm.get(j) == 1)
         mt.update({'pair_a': ta, 'pair_b': tb, 'title_a': m.get('title_a') or ta, 'title_b': m.get('title_b') or tb})
         json.dump(mt, open(f'{M}/match-{mi + 1}.json', 'w'))
-    json.dump({'clips': [{'a': a, 'b': b, 'match': clip_match[s] + 1, 'near': [best[k] for k in near_of[s]], 'far_named': s in far_clips} for s, (a, b) in enumerate(STR)],
-               'far_named': bool(far_named)}, open(f'{M}/clips.json', 'w'), indent=1)
+    # A clip's names are sure only when its near pair are partners (27 November 2026: in five of eight clips of a whole
+    # film the near "pair" was two opponents, because a track held two people, and the clip named the wrong pair).
+    # A clip that is not sure has no names at all: no tag, no name over a close look, no far names (reel_points.py).
+    names_sure = [len(near_of[s]) == 2 and any(all(best[k] in tm for k in near_of[s]) and tm[best[near_of[s][0]]] == tm[best[near_of[s][1]]] for tm in team_of)
+                  for s in range(len(STR))]
+    far_clips = [s for s in far_clips if names_sure[s]]
+    json.dump({'clips': [{'a': a, 'b': b, 'match': clip_match[s] + 1, 'near': [best[k] for k in near_of[s]], 'far_named': s in far_clips, 'names_sure': names_sure[s]}
+                         for s, (a, b) in enumerate(STR)],
+               'far_named': bool(far_clips)}, open(f'{M}/clips.json', 'w'), indent=1)
     ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid, static, cnt, inv, h, STR, clip_match, near_of, best, far_clips, team_of, NP)
     chosen = {}
     for k in range(K):
@@ -310,7 +317,9 @@ def ident_files(M, N, names, fr, box, col, ok, emb, pca, t, st, zn, person, pid,
         for b in range(nb):
             s = next((s for s in S0 if STR[s][0] <= b + 0.5 < STR[s][1]), None)
             if s is None or len(near_of[s]) != 2: continue
-            npair[b] = 0 if sorted(best[k] for k in near_of[s]) == pairs[0] else 1; sure[b] = True
+            nb_ = sorted(best[k] for k in near_of[s])
+            if nb_ not in pairs: continue      # two opponents at one end: a track holds two people, so no end is sure
+            npair[b] = pairs.index(nb_); sure[b] = True
         pre = f'{M}/ident-m{mi + 1}'
         sights = [{'f': str(names[fr[i]]), 't': round(float(t[i]), 2), 'box': [round(float(v), 1) for v in box[i]], 'zone': str(zn[i]), 'id': int(pid[i]),
                    'conf': round(float(P[i, pid[i]]) if pid[i] >= 0 else 0, 3), 'margin': round(float(margin[i]), 2)} for i in range(N) if person[i] and st[i] in S0]
