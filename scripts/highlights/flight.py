@@ -21,6 +21,14 @@ import court_map
 
 S = os.environ.get('HL_HOME') or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SMIN = 16.0; SSEED = 28.0; SMEAN = 26.0          # the strength of a candidate: to count, to start a chain, mean of a chain
+# FAR_Y=<row of the camera file>: above that row the ball is at the far end, a few pixels wide, fainter and slower in the
+# picture. There a chain starts at FAR_S, has a mean of FAR_S + 2 and needs FAR_PX pixels of travel (150 elsewhere).
+# Without FAR_Y nothing changes. On match2 the last flight of a point ended in the far half in 32 of 182 points.
+FAR_Y = float(os.environ['FAR_Y']) if os.environ.get('FAR_Y') else None
+FAR_S = float(os.environ.get('FAR_S', 20.0)); FAR_PX = float(os.environ.get('FAR_PX', 60.0))
+def _far(y): return FAR_Y is not None and y < FAR_Y
+def _seed(v): return FAR_S if _far(v[1]) else SSEED
+def _mean(uv): return FAR_S if all(_far(p[1]) for p in uv) else SMEAN
 G = 9.81; DRAG = 0.0198                          # 1/m: half of air density x drag number 0.55 x area / mass of a padel ball
 
 
@@ -89,10 +97,10 @@ def chains(frames, vmax=230.0):
     T = [f['t'] for f in frames]; used = [np.zeros(len(c), bool) for c in C]; out = []
     for i in range(len(C) - 2):
         for a in (np.argsort(-C[i][:, 2]) if len(C[i]) else []):
-            if used[i][a] or C[i][a, 2] < SSEED: continue
+            if used[i][a] or C[i][a, 2] < _seed(C[i][a]): continue
             best = None
             for b in range(len(C[i + 1])):
-                if used[i + 1][b] or C[i + 1][b, 2] < SSEED: continue
+                if used[i + 1][b] or C[i + 1][b, 2] < _seed(C[i + 1][b]): continue
                 d1 = C[i + 1][b, :2] - C[i][a, :2]; n1 = np.linalg.norm(d1)
                 if n1 < 2 or n1 > vmax: continue
                 for c in range(len(C[i + 2])):
@@ -102,7 +110,7 @@ def chains(frames, vmax=230.0):
             if best is None: continue
             ch = grow(C, used, [(i, a), (i + 1, best[1]), (i + 2, best[2])], 1)
             ch = grow(C, used, ch[::-1], -1)[::-1]
-            if len(ch) >= 6 and np.linalg.norm(C[ch[-1][0]][ch[-1][1], :2] - C[ch[0][0]][ch[0][1], :2]) >= 30 and np.mean([C[f][k, 2] for f, k in ch]) >= SMEAN:
+            if len(ch) >= 6 and np.linalg.norm(C[ch[-1][0]][ch[-1][1], :2] - C[ch[0][0]][ch[0][1], :2]) >= 30 and np.mean([C[f][k, 2] for f, k in ch]) >= _mean([C[f][k] for f, k in ch]):
                 for (fi, k) in ch: used[fi][k] = True
                 out.append({'n': [fi for fi, k in ch], 't': [T[fi] for fi, k in ch], 'uv': [C[fi][k, :2].tolist() for fi, k in ch], 's': [float(C[fi][k, 2]) for fi, k in ch]})
     return sorted(out, key=lambda c: c['t'][0])
@@ -235,7 +243,8 @@ def sd_person(q):
 
 def point(cam, ball, walk):
     fr = ball['frames']; ch = single(join(cam, [p for c in chains(fr) for p in cut(cam, c)])); out = []
-    good = [c for c in ch if len(c['t']) >= 8 and np.linalg.norm(np.subtract(c['uv'][-1], c['uv'][0])) >= 150 and np.mean(c['s']) >= SMEAN + 2]
+    good = [c for c in ch if len(c['t']) >= 8 and np.linalg.norm(np.subtract(c['uv'][-1], c['uv'][0])) >= (FAR_PX if all(_far(p[1]) for p in c['uv']) else 150)
+            and np.mean(c['s']) >= _mean(c['uv']) + 2]
     for c in good:
         uv = np.array(c['uv']); t0, t1 = c['t'][0], c['t'][-1]
         P0 = people(cam, walk, t0); P1 = people(cam, walk, t1); a = who(P0, uv[0]); b = who(P1, uv[-1])
