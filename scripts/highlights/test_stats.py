@@ -15,16 +15,17 @@ def check(cond, what):
     CHECKS += 1
 
 
-def engine(games, ok=True):
+def engine(games, ok=True, margins=None):
     """A count in the shape of score_engine.py: games = [(set, server, serving pair, [winner of each point])]. A winner
-    of None is an unseen point the engine added (it won for the game's winner); the serve times count up by ten."""
+    of None is an unseen point the engine added (it won for the game's winner); the serve times count up by ten.
+    margins: the "game_margin" of each game (default None: no count gives the game to the other pair)."""
     rows = []; t = 100.0; sets = {}
-    for st, server, serving, ws in games:
+    for gi, (st, server, serving, ws) in enumerate(games):
         g = sets.setdefault(st, [0, 0]); a = b = 0; won = [w for w in ws if w is not None]
         gw = max((0, 1), key=lambda k: won.count(k))
         for w in ws:
             x = gw if w is None else w
-            r = {'set': st, 'server': server, 'won': x, 'confidence': 0.8, 'side_fits': True,
+            r = {'set': st, 'server': server, 'won': x, 'confidence': 0.8, 'side_fits': True, 'game_margin': (margins or {}).get(gi),
                  'before': {'serving': serving, 'sets': [0, 0], 'games': list(g), 'p': [a, b]}}
             if w is None: r.update(serve_t=None, unseen=True)
             else: r['serve_t'] = t; t += 10
@@ -81,12 +82,12 @@ check(stats.forced(B).get(100.0) is None and stats.forced(B).get(130.0) is not N
 check(honest.tiers([None], 10)['why'] == 'no_score', 'no score')
 check(honest.tiers(['6-0'], 10)['why'] == 'few_points', 'too few points')
 t0 = honest.tiers(['6-0'], 30)
-check(t0['why'] == 'no_winners' and not t0['sets_games'] and t0['winners'] == {}, 'no count: nothing is shown')
+check(t0['why'] == 'no_winners' and not t0['sets'] and not t0['games'] and t0['winners'] == {}, 'no count: nothing is shown')
 check(honest.tiers(['1-2'], 30, engine=dict(E, ok=False))['why'] == 'no_winners', 'a count that does not fit shows nothing')
 
 rows = {'points': [{'serve_t': 100.0, 'before': {'games': [0, 0], 'points': ['0', '0']}}, {'serve_t': 140.0, 'before': {'games': [1, 0]}}]}
 T = honest.tiers(['1-2'], 30, engine=E, rows=rows, detector={140.0: (1, 0.97), 150.0: (1, 0.97), 160.0: (0, 0.6)})
-check(T['sets_games'] and T['why'] is None, 'a sure count shows the sets and the games')
+check(T['sets'] and T['games'] and T['sure_games'] == [3, 3] and T['why'] is None, 'a sure count shows the sets and the games')
 check(T['points'] == [100.0], 'a point score only where score_rows gives one')
 check(T['winners'][100.0] == [0, 'forced'] and T['winners'][260.0] == [1, 'forced'], 'forced winners stand')
 check(T['winners'][140.0] == [1, 'detector'], 'a sure detector winner that the count keeps stands')
@@ -104,6 +105,21 @@ check('score_box' in P and 'card' in P, 'the box stays when the games are sure')
 check(P['points'][0].get('won') == 0, 'a forced winner stays')
 check('won' not in P['points'][1], 'a winner that differs from the line goes')
 check('won' not in P['points'][2] and gone == ['won:b', 'won:c'], f'a winner with no line goes {gone}')
+
+# a game that the count gives to its winner for a small price only is not sure: no games in the box, no point score
+# and no forced winner in it; the sets and a sure detector winner still stand
+E2 = engine([(1, 'p0', 0, [0, 0, 0, 0]), (1, 'p1', 1, [1, 0, 0, 1, 0, 1, 1, 1]), (1, 'p2', 1, [1, 0, 1, 1, 1])], margins={1: 1.0, 2: 3.5})
+rows2 = {'points': [{'serve_t': 100.0, 'before': {'points': ['0', '0']}}, {'serve_t': 150.0, 'before': {'points': ['15', '0']}}]}
+T2 = honest.tiers(['1-2'], 30, engine=E2, rows=rows2, detector={140.0: (1, 0.97)})
+check(T2['sets'] and not T2['games'] and T2['sure_games'] == [2, 3], f"one unsure game of three {T2['sure_games']}")
+check(T2['points'] == [100.0], 'no point score in the unsure game')
+check(200.0 not in T2['winners'] and 210.0 not in T2['winners'], 'no forced winner in the unsure game')
+check(T2['winners'][260.0] == [1, 'forced'] and T2['winners'][140.0] == [1, 'detector'], 'a sure game forces; a sure detector stands')
+P3 = {'card': {}, 'score_box': True, 'points': [{'id': 'a', 'serve_t': 100.0, 'won': 0}]}
+check(honest.strip(P3, T2) == ['card', 'score_box'] and P3['points'][0]['won'] == 0, 'no box when a game is unsure')
+bare = dict(E, points=[{k: v for k, v in r.items() if k != 'game_margin'} for r in E['points']])
+check(honest.tiers(['1-2'], 30, engine=bare)['sure_games'] == [0, 3], 'a count with no margins has no sure game')
+
 P2 = {'card': {}, 'score_box': True, 'points': [{'id': 'a', 'won': 1}]}
 check(honest.strip(P2) == ['card', 'score_box', 'won:a'] and P2 == {'points': [{'id': 'a'}]}, 'strip with no tier takes all')
 
