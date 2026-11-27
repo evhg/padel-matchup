@@ -12,7 +12,15 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
                 "players": [{"id": "<player id>", "name": "Ana", "team": 1, "sex": "m"}, ... four]}, ...],
                 (team: 1 and 2, 0 and 1, or "a" and "b"; `teams_from_zero` makes them 0 and 1, the engine's count)
    "music": "bounce"?,                                 the track when the player wrote no choices.json
-   "place": "<camera place>"?, "court": {court.json}?, "venue": ""?, "grade": "glass"?}
+   "place": "<camera place>"?, "court": {court.json}?, "venue": ""?, "grade": "glass"?,
+   "whole": true?}                                     the upload is the whole film (the "Full reel"), not a phone's cut
+
+  A whole film (27 November 2026): the same reel, with no person. The step "clips" reads the film's sound only (no
+  picture is decoded: `film_sound`, film_plan.js, the phone's own choice of stretches), then decodes each stretch from
+  the camera file on its own machine (`film_stretch`, `film_join`: film_clips.py, the work of fullclips.py). The steps
+  after it are the fast reel's. The score box, the winner of each point and the numbers go in only when the engine is
+  sure (honest.py); when they stay out, reel.json says why ("score": {"shown": false, "why": "<code>"}) and the post of
+  the finished reel carries "noScore": "<code>", which the match page says in one line.
 
   An upload may hold more than one match of the same four players (24 November 2026: two matches, other pairs). The
   job finds the match of each clip from its near pair. "sex" is optional: with it the man/woman split is evidence.
@@ -30,7 +38,8 @@ answer carries "fastReel" (the start request below), `assemble` starts `make` wi
   of each clip in the film and when the film began) it is the heart-rate box of the reel (fast_points.py, meter_of).
 
 Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report, Bearer <the request's "report">):
-  clips    the joins and the flash-backs of the phone's cut found, a clean 4K file and a 1080p working copy
+  clips    the joins and the flash-backs of the phone's cut found, a clean 4K file and a 1080p working copy (a whole film:
+           its sound read, a first report at 6%, then the stretches decoded from the camera file)
   players  people in 3 frames a second, who is who (who.py). Not sure: the job stops here (see "Names")
   follow   the players through each clip (track.py, one machine for each clip); beside it the ball of each clip (ball.py,
            balllink.py, one machine for each clip) and the openings
@@ -40,7 +49,8 @@ Steps, and what Kicksmash hears after each (POST {KICKSMASH_URL}/api/reel/report
   finish   1080p wide.mp4 and tall.mp4, share.mp4 (the public version: the tall layout without the end card, the match
            sound only; share.py), versus.jpg (1200x630), poster.jpg (720 wide, tall) and reel.json (its matches, and
            "share": true when share.mp4 is there; not served), under reels/<new token>/; then
-           POST {code, host, token} for each match of the upload
+           POST {code, host, token} for each match of the upload, and "noScore": "<code>" for a whole film's reel
+           with no score (honest.py)
   Each progress POST is {code, progress: {pct, minutesLeft, step}}; while the job waits for names it adds
   "waiting": "names" to progress. A step that fails posts {code, failed: "<the error>"} for each match.
 
@@ -77,6 +87,12 @@ PY = ['numpy==2.4.6', 'onnxruntime==1.32.0', 'scikit-learn==1.9.1', 'opencv-pyth
       'pillow==13.0.0', 'tqdm==4.70.1', 'soundfile==0.14.0', 'rembg==2.0.87', 'kokoro-onnx==0.6.1']
 base = modal.Image.from_registry('ubuntu:24.04', add_python='3.11').apt_install('ffmpeg', 'libgl1', 'libglib2.0-0').pip_install(*PY)
 image = base.add_local_dir(HL, '/root/hl', ignore=['__pycache__', 'modal', '*.md', '*.sh', '*.js'])
+# A whole film's sound: the Rally Finder's core in Node, the file the phone loads (public/lab/rf-core.js), and the
+# engine's python files, which every machine of the job imports this file beside.
+sound_image = (modal.Image.from_registry('ubuntu:24.04', add_python='3.11').apt_install('ffmpeg', 'nodejs')
+               .add_local_dir(HL, '/root/hl', ignore=['__pycache__', 'modal', '*.md', '*.sh', '*.js'])
+               .add_local_file(f'{HL}/film_plan.js', '/root/hl/film_plan.js')
+               .add_local_file(f'{os.path.dirname(os.path.dirname(HL))}/public/lab/rf-core.js', '/root/hl/rf-core.js'))
 # who.py's man/woman split: an open image-text model (CLIP, MIT licence), in the image so a run downloads nothing
 who_image = (base.pip_install('torch==2.15.0', index_url='https://download.pytorch.org/whl/cpu').pip_install('transformers==4.57.1')
              .run_commands("python -c \"from transformers import CLIPModel, CLIPProcessor as P; CLIPModel.from_pretrained('openai/clip-vit-base-patch32'); P.from_pretrained('openai/clip-vit-base-patch32')\"")
@@ -186,6 +202,37 @@ def track_of(name):
 
 
 # ---------------------------------------------------------------- step functions
+
+@app.function(image=sound_image, volumes={'/vol': vol}, cpu=2, memory=4096, timeout=1800)
+def film_sound(video):
+    """A whole film's stretches from its sound: the sound track alone (the demuxer skips the picture, so a 4K film of
+    40 GB is not decoded), then film_plan.js, what the phone runs for a fast reel. Answers the plan: the stretches, and
+    every point the sound found ("rallies"), the most the film can hold (honest.py)."""
+    vol.reload(); a = time.time()
+    rate = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=sample_rate', '-of', 'csv=p=0', video], capture_output=True, text=True).stdout.strip()
+    if not rate.isdigit(): raise RuntimeError('the film has no sound: its stretches come from the sound')
+    sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-i', video, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', rate, '-f', 'f32le', '/tmp/sound.raw'])
+    read = round(time.time() - a, 1)
+    t, log = sh(['node', '/root/hl/film_plan.js', '/tmp/sound.raw', rate, '/tmp/plan.json'])
+    plan = json.load(open('/tmp/plan.json')); plan.update(read_s=read, plan_s=t); print(log.strip(), flush=True)
+    return plan
+
+
+@app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=12288, timeout=1800, max_containers=16)
+def film_stretch(job):
+    """One stretch of a whole film, decoded from the camera file: a 4K piece, a 1080p piece, its sound (film_clips.py)."""
+    import sys; sys.path.insert(0, '/root/hl'); import film_clips
+    vol.reload(); r = film_clips.clean_stretch(*job); vol.commit()
+    return r
+
+
+@app.function(image=image, volumes={'/vol': vol}, cpu=4, memory=4096, timeout=1200)
+def film_join(W, stretches, info, parts):
+    """The pieces of a whole film into what the step "clips" writes (film_clips.py, as join_clean)."""
+    import sys; sys.path.insert(0, '/root/hl'); import film_clips
+    vol.reload(); r = film_clips.join(W, stretches, info, parts); vol.commit()
+    return r
+
 
 @app.function(image=image, volumes={'/vol': vol}, cpu=8, memory=4096, timeout=900)
 def cuts(video):
@@ -431,8 +478,8 @@ class Report:
     def fail(self, why):
         for m in self.req.get('matches', []): self.post({'code': m['code'], 'failed': why})
 
-    def step(self, step, waiting=None):
-        pct = DONE[step]; spent = (time.time() - self.t0) / 60
+    def step(self, step, waiting=None, pct=None):
+        pct = pct or DONE[step]; spent = (time.time() - self.t0) / 60
         left = 0 if waiting or pct >= 100 else max(1, round(max(self.total - spent, spent * (100 - pct) / max(pct, 1))))
         for m in self.req['matches']:
             progress = {'pct': pct, 'minutesLeft': left, 'step': step}
@@ -453,7 +500,7 @@ def teams_from_zero(req):
     return req
 
 
-@app.function(image=image, volumes={'/vol': vol}, secrets=SECRETS, cpu=1, memory=2048, timeout=3600)
+@app.function(image=image, volumes={'/vol': vol}, secrets=SECRETS, cpu=1, memory=2048, timeout=5400)
 def make(req):
     """The whole fast reel (`run_make`). A step that fails tells Kicksmash, for each match of the upload, before the
     error goes on: the page then says the reel did not work, and the note desk looks at why (25 November 2026: the
@@ -465,13 +512,32 @@ def make(req):
         raise
 
 
+def whole_film(P, W, M, R):
+    """The step "clips" for a whole film: the stretches from its sound (`film_sound`, kept in match/film-plan.json, so a
+    second run reads no sound again), then each stretch decoded from the camera file on its own machine, then one join."""
+    import sys; sys.path.insert(0, '/root/hl'); import film_clips
+    a = time.time(); fp = f'{M}/film-plan.json'
+    plan = json.load(open(fp)) if os.path.exists(fp) else film_sound.remote(P['video'])
+    json.dump(plan, open(fp, 'w')); vol.commit()
+    try: S = film_clips.checked(plan['stretches'])
+    except ValueError: raise RuntimeError(f"the sound of the film gave no stretch to make a reel of ({plan.get('rallies')} points heard)")
+    print('film:', plan.get('rallies'), 'points heard,', len(S), 'stretches,', round(sum(b - a_ for a_, b in S)), 's', flush=True)
+    R.step('clips', pct=6)
+    info = probe(P['video']); sound = round(time.time() - a)
+    parts = sorted(film_stretch.map([(P['video'], i, s, e, info, W) for i, (s, e) in enumerate(S)]), key=lambda p: p['i'])
+    j = film_join.remote(W, S, info, parts)
+    vol.reload()
+    return {'sound': sound, 'read_s': plan.get('read_s'), 'rallies': plan.get('rallies'), 'stretches': len(S), 'parts': [p['seconds'] for p in parts], 'join': {k: j[k] for k in ('clean4k', 'proxy', 'frames3')}}
+
+
 def run_make(req):
     """The whole fast reel. Each step skips what is already on the store, so `resume` goes on where it stopped."""
     t0 = time.time(); vol.reload(); P = paths(req); W = P['W']; M = f'{W}/match'; os.makedirs(M, exist_ok=True)
     if not P['video'] or not os.path.exists(P['video']): raise RuntimeError('no clips for this request')
     teams_from_zero(req)
     json.dump(req, open(f'{W}/request.json', 'w')); vol.commit()
-    clock = {}; R = Report(req, 25)
+    whole = bool(req.get('whole'))         # the whole film, not a phone's cut: its stretches come from its sound
+    clock = {}; R = Report(req, 30 if whole else 25)
     CH = choices_of(P, req); clock['choices_start'] = CH
     for i, t in enumerate(CH['teams']):       # the team names the player chose are for the upload's own match, the first
         if t: req['matches'][0]['title_a' if i == 0 else 'title_b'] = t
@@ -482,7 +548,9 @@ def run_make(req):
 
     # 1. clips
     a = time.time()
-    if not (os.path.exists(f'{W}/clean4k.mp4') and os.path.exists(f'{M}/stretches.json')):
+    if whole and not (os.path.exists(f'{W}/clean4k.mp4') and os.path.exists(f'{M}/stretches.json')):
+        clock['film'] = whole_film(P, W, M, R)
+    elif not (os.path.exists(f'{W}/clean4k.mp4') and os.path.exists(f'{M}/stretches.json')):
         info = probe(P['video']); c = cuts.remote(P['video']); fps = c['fps']
         drop = c['flashes']; n = c['frames']; joins = c['joins']
         k = max(4, min(12, math.ceil(n / 1200)))                     # about 20 s of 4K for each machine
@@ -534,6 +602,16 @@ def run_make(req):
     sh(['python', '/root/hl/fast_points.py', f'{W}/proxy.mp4', f'{M}/request.json', f'{M}/points.json'], env=env)
     if not CH['numbers']:       # the card of numbers (reel_points.py "card"): fast_points.py writes none yet, and none goes in
         pts = json.load(open(f'{M}/points.json')); pts.pop('card', None); json.dump(pts, open(f'{M}/points.json', 'w'), indent=1)
+    score = None
+    if whole:       # a score, a winner of each point and numbers only when the engine is sure (honest.py)
+        import sys; sys.path.insert(0, '/root/hl'); import honest
+        # the points the sound heard; none counted when a person chose the stretches (fullclips.py by hand)
+        found = json.load(open(f'{M}/film-plan.json')).get('rallies') if os.path.exists(f'{M}/film-plan.json') else None
+        shown, why, need = honest.verdict([m.get('score') for m in req['matches']], found)
+        score = {'shown': shown, 'why': why, 'found': found, 'need': need}
+        if not shown:
+            pts = json.load(open(f'{M}/points.json')); score['stripped'] = honest.strip(pts); json.dump(pts, open(f'{M}/points.json', 'w'), indent=1)
+        json.dump(score, open(f'{M}/score.json', 'w')); clock['score'] = score; print('score', score, flush=True)
     op = ops.get(); clock['portraits'] = op['portraits']; print('\n'.join(op['log']), flush=True)
     for o in op['openings']: print('opening', o, flush=True)     # reel_points.py puts the opening in only when its files are there
     vol.reload(); clock['opening_wait'] = round(time.time() - a)
@@ -568,11 +646,14 @@ def run_make(req):
     sh(['ffmpeg', '-v', 'error', '-nostdin', '-y', '-ss', '4.6', '-i', f'{M}/versus-m1-tall.mp4', '-frames:v', '1', '-vf', 'scale=720:-2:flags=lanczos', '-q:v', '3', f'{d}/poster.jpg'])
     # Which matches the reel is of, for the post to @kicksma.sh (scripts/social/instagram.py): the reel host serves
     # only .mp4, .jpg and names.json, so this file stays on the store.
-    json.dump({'made': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'upload': req.get('upload'), 'share': share,
+    # A whole film's reel says whether it has a score, and why not (honest.py): the match page says it in one line.
+    json.dump({'made': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'upload': req.get('upload'), 'share': share, 'whole': whole,
+               **({'score': {k: score[k] for k in ('shown', 'why', 'found', 'need')}} if score else {}),
                'matches': [{k: m.get(k) for k in ('code', 'title_a', 'title_b', 'score')} for m in req['matches']]}, open(f'{d}/reel.json', 'w'), indent=1)
     vol.commit()
     clock['all'] = round(time.time() - t0)
-    for m in req['matches']: R.post({'code': m['code'], 'host': os.environ['REELS_HOST'], 'token': token})
+    no_score = {'noScore': score['why']} if score and not score['shown'] else {}
+    for m in req['matches']: R.post({'code': m['code'], 'host': os.environ['REELS_HOST'], 'token': token, **no_score})
     if req.get('dry'): json.dump({'clock': clock, 'reel': d}, open(f'{W}/clock.json', 'w'), indent=1); vol.commit()
     return {'state': 'ready', 'reel': d if req.get('dry') else f'reels/{token}', 'clock': clock}
 
