@@ -435,6 +435,17 @@ learning can be a test, a gate step or a script, make it one and put the story i
   run goes red twenty minutes later — which is exactly what happened to `coachBookContents`. Use
   `gt(lessons.startsAt, now)`; `tests/rules.test.ts` now fails on a bare `${now}`-shaped interpolation
   inside a `sql` template, so the gate catches it on the machine that wrote it.
+- **A reel's test request is the request the app would send.** A dry run of a film from 24 November
+  named one match, and the reel put the second match's rallies (other pairs) under the first match's
+  names; the app's own start (`fastReelStart`) names every match of the same people that morning, and
+  with both the job split the film right. Build a dry request from the matches production holds, never
+  by hand from memory.
+- **Measure a reel's timing against the frames, not against another detector.** Serves marked by eye on
+  28 November 2026: the sound hears the first hit 2.9 to 3.8 s after a near serve, so two clips of six
+  opened after the serve. Longer leads (6 and 7 s) were tried and measured the same way: the sound then
+  took the knocks and bounces before the serve as the rally, and two clips opened 7 to 9 s early, which
+  is worse. Shorter no-flight pauses moved serves to the end of the rally (the bounces before a serve
+  are flights to the ball tracker). The serve needs a detector from the picture; no lead fixes it.
 - **"Everybody was told" means everybody with an address.** Erik asked twice in one hour why the
   players got no email for his match. The match's notices all ran through `participantsWithEmail`,
   and six of the fifty-six people in the database have an address at all — so "the line-up is

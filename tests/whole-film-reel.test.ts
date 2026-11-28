@@ -105,7 +105,14 @@ describe("the full reel's plan of a whole film", () => {
     const some = plan.pickLongest(many, 5000, 0);
     expect(some.length).toBeLessThanOrEqual(plan.WHOLE_MAX_CLIPS);
     expect(some.reduce((n, s) => n + (s.end - s.start), 0)).toBeLessThanOrEqual(plan.WHOLE_MAX_SECONDS);
-    expect(Math.min(...some.map((s) => s.end - s.start))).toBeGreaterThanOrEqual(Math.max(...many.filter((r) => !some.some((s) => s.start === r.first - plan.WHOLE_LEAD)).map((r) => r.last - r.first + plan.WHOLE_LEAD + 4)) - 1e-9);
+    // a rally is left out only when the longer ones kept already fill the clips or the seconds (the plan skips a rally
+    // that does not fit and takes a shorter one after it)
+    const len = (r: { first: number; last: number }) => r.last - r.first + plan.WHOLE_LEAD + 4;
+    const kept = (r: { first: number }) => some.some((s) => s.start === r.first - plan.WHOLE_LEAD);
+    for (const r of many.filter((x) => !kept(x))) {
+      const longer = many.filter((x) => kept(x) && x.last - x.first >= r.last - r.first);
+      expect(longer.length >= plan.WHOLE_MAX_CLIPS || longer.reduce((n, x) => n + len(x), 0) + len(r) > plan.WHOLE_MAX_SECONDS).toBe(true);
+    }
     for (let i = 1; i < some.length; i++) expect(some[i].start).toBeGreaterThan(some[i - 1].end);
   });
 

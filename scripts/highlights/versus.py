@@ -56,8 +56,12 @@ def face_again(im, face, m):
         if 0.5 <= f[2] / w <= 2 and d <= 3 and (best is None or d < best[4]): best = (x0 + float(f[0]), y0 + float(f[1]), float(f[2]), float(f[3]), d, float(abs(f[4] - f[6]) / f[2]))
     return best
 def portrait(k, height):
-    """-> the portrait of player k, px(height) high, and the design place of the face inside it."""
-    if FACES[str(k)] and FACES[str(k)][0].get('hi'):
+    """-> the portrait of player k, px(height) high, and the design place of the face inside it; None when the frames of
+    this match hold no face of the player (28 November 2026: a film of two matches, whose first match had one clip, gave
+    one player no face, and the opening failed on an empty list). The name plate then shows alone."""
+    if not FACES.get(str(k)):
+        print(f"portrait {k} {names[k]}: no face in this match's frames; the name plate shows alone"); return None
+    if FACES[str(k)][0].get('hi'):
         # portrait.py chose it (best first): its frame of the camera file, and the face in that frame
         o = FACES[str(k)][0]; hi = o['hi']
         im = cv2.imread(os.path.join(os.path.dirname(os.path.abspath(facesf)), hi['file'])); x, y, w, h = hi['face']
@@ -169,10 +173,11 @@ def frame(t):
     for k in A + B:
         x = e_back((t - T_IN[k]) / 0.36)
         if t < T_IN[k]: continue
-        img, (fx, fy) = P[k]; side = -1 if team[k] == 0 else 1
-        px = SLOT[k][0] - fx + side * (1 - x) * 900 + shake[0]; py = SLOT[k][1] - PH + shake[1]
-        put(c, tint(img, LIME if team[k] == 0 else BLUE), px + side * 18, py)            # a flat shadow in the team's colour
-        put(c, img, px, py)
+        if P[k] is not None:
+            img, (fx, fy) = P[k]; side = -1 if team[k] == 0 else 1
+            px = SLOT[k][0] - fx + side * (1 - x) * 900 + shake[0]; py = SLOT[k][1] - PH + shake[1]
+            put(c, tint(img, LIME if team[k] == 0 else BLUE), px + side * 18, py)            # a flat shadow in the team's colour
+            put(c, img, px, py)
         n = e_back((t - T_IN[k] - 0.22) / 0.2)
         if t >= T_IN[k] + 0.22 and PLATE[k]:
             pl = NAME[k]; s = 1.6 - 0.6 * n; q = pl.resize((int(pl.width * s), int(pl.height * s)), Image.BILINEAR) if s != 1 else pl
