@@ -566,7 +566,7 @@ const RF = (() => {
     return ov / len;
   }
 
-  const POINT_BEFORE = 6, POINT_AFTER = 4, LONE_HIT_GAP = 3, END_IGNORE = 10, POINT_MAX = 40;
+  const POINT_BEFORE = 2, POINT_AFTER = 4, LONE_HIT_GAP = 3, END_IGNORE = 10, POINT_MAX = 40;
   function pointBounds(r, hits) {
     const inside = (hits || []).filter((h) => h.t >= r.start - 0.01 && h.t <= r.end + 0.01).map((h) => h.t).sort((x, y) => x - y);
     let i = 0;

@@ -906,14 +906,11 @@ const RF = (() => {
   // ---- What a clip of a point holds (Erik's notes on his first cut, 13 November 2026) ----
   // The whole point, never its last 10 seconds: "rallies should always capture the point". It ends
   // POINT_AFTER after the last hit, for the reaction ("Jakob screaming and Erik looking smug" came after
-  // the point), and starts POINT_BEFORE before the first hit, because a quiet serve is often not heard: on
-  // the film of 24 November 2026 the first heard hit came 2.9 s and 3.8 s after the serve (by eye, 28
-  // November), so 2 s lost the serve. The reel's job opens the clip on the serve it finds (fast_points.py,
-  // SERVE_LEAD) and trims an empty court, so the extra seconds sent are not seconds shown.
+  // the point), and starts POINT_BEFORE before the first hit, because a quiet serve is often not heard.
   // Players bounce the ball before they serve: a first "hit" that nothing answers within
   // LONE_HIT_GAP is a bounce or a wait, and the clip starts at the next one ("nothing for 4-5 seconds
   // before the serve"). The last END_IGNORE seconds of a recording are the phone being stopped.
-  const POINT_BEFORE = 6, POINT_AFTER = 4, LONE_HIT_GAP = 3, END_IGNORE = 10, POINT_MAX = 40;
+  const POINT_BEFORE = 2, POINT_AFTER = 4, LONE_HIT_GAP = 3, END_IGNORE = 10, POINT_MAX = 40;
   function pointBounds(r, hits) {
     const inside = (hits || []).filter((h) => h.t >= r.start - 0.01 && h.t <= r.end + 0.01).map((h) => h.t).sort((x, y) => x - y);
     let i = 0;

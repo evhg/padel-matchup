@@ -12,7 +12,7 @@ The phone's cut keeps one point in each clip, and its reaction (src/lib/reel/fas
   the near pair shows well after it (`pose_serve`: a still server deep in the near half, an underhand swing, a step
   away), because players who wait, juggle or fetch a ball make the sounds of hits;
 - the ball is dead 0.75 s after the last shot (the person who made the eighth reel set 0.7 to 0.8 s by eye);
-- the clip starts SERVE_LEAD before the serve (or at the start of the phone's clip), and not before two players are on the
+- the clip starts 1.5 s before the serve (or at the start of the phone's clip), and not before two players are on the
   court or the near pair is held, and runs to its end, 5 s after the dead ball at most: the reaction is in it;
 - every clip is a point: a player in each half for most of the rally and the ball in the air (`not_a_point`, from
   the detector's boxes of everyone on the court, `court_counts`); a clip whose near pair the tracker holds too little
@@ -129,9 +129,6 @@ def after_idle(spans, serve, last, gap=6.0):
     return serve
 
 
-SERVE_LEAD = 2.5        # the clip opens this long before the serve it finds. The sound finds a near serve late: on the film of
-                        # 24 November 2026 (by eye, 28 November) 1.8 s and 1.2 s late in two clips of six, and 1.5 s before
-                        # them opened after the serve, with no bounce. 2.5 s shows the bounce; an empty court is trimmed.
 SERVE_DEEP = 0.55       # a server's feet: this share of the way from the net's foot to the bottom of the picture, or lower
 SERVE_STILL = 0.15      # still: the feet move less than this many of the player's heights in the 1.0 s before the hit
 SERVE_SWING = 2.0       # the hit: a wrist under the shoulders at this many heights a second or more
@@ -350,7 +347,7 @@ def main():
         if len(r) < 2 or last - serve < 2.0:
             print(f'c{n} has no rally after the wait: left out'); pts.append(None); left.append({'id': f'c{n}', 'why': 'no_rally'}); continue
         dead = round(min(last + 0.75, b - 0.3), 2)
-        start = max(a + 0.05, serve - SERVE_LEAD)
+        start = max(a + 0.05, serve - 1.5)
         oc = on_court(cc, serve, dead)
         spans = ball_spans(f'{M}/ball/c{n}.npz', a)
         why = not_a_point(oc, None if spans is None else [x for x, _ in spans if serve - 0.5 <= x <= dead], serve, dead)
