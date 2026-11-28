@@ -64,13 +64,15 @@ function planOf(chunks, rate, seconds) {
 // - rallies of WHOLE_MIN_RALLY s or more from the first hit to the last, the longest first, up to WHOLE_MAX_CLIPS
 //   and WHOLE_MAX_SECONDS: more than the reel needs, because a third of a busy hall's "rallies" are not points
 //   (README): the job's picture check (fast_points.py, `not_a_point`) leaves those out and keeps the longest points;
-// - each from WHOLE_LEAD s before its first heard hit (a far serve is quiet, and the first hit heard is often the
-//   return) to POINT_AFTER after its last, at most WHOLE_MAX_RALLY s long.
+// - each from WHOLE_LEAD s before its first heard hit to POINT_AFTER after its last, at most WHOLE_MAX_RALLY s long.
+//   A serve is quiet, and the first hit heard is often the return or the third shot: on the film of 24 November 2026
+//   (checked by eye on 28 November) it came 2.9 s and 3.8 s after the serve, so a lead of 4 s cut the stretch 1.1 s
+//   and 0.2 s before the serve and its bounce were lost. 7 s holds the bounce and the serve.
 const WHOLE_MAX_CLIPS = 12;
 const WHOLE_MAX_SECONDS = 320;
 const WHOLE_MIN_RALLY = 8;
 const WHOLE_MAX_RALLY = 75;
-const WHOLE_LEAD = 4;
+const WHOLE_LEAD = 7;
 const POINT_AFTER = 4;
 const END_IGNORE = 10;
 
